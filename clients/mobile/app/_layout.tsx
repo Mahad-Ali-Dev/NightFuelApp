@@ -20,7 +20,9 @@ import BadgeToast from '@/components/BadgeToast';
 import { getErrorMessage } from '@/utils/validation';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useNotifications } from '@/hooks/useNotifications';
-import { wrap as sentryWrap, setUser as sentrySetUser } from '@/lib/sentry';
+import { wrap as sentryWrap, setUser as sentrySetUser, captureException } from '@/lib/sentry';
+import * as Linking from 'expo-linking';
+import { resolveDeepLink } from '@/lib/deepLinks';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,6 +68,32 @@ function RootLayout() {
   useEffect(() => {
     sentrySetUser(user?.id ?? null);
   }, [user?.id]);
+
+  // Deep-link handling — every incoming URL passes through resolveDeepLink
+  // before we navigate. Anything not on the allowlist is dropped silently
+  // and logged to Sentry as a soft signal so we can spot misconfigured
+  // marketing links / phishing attempts.
+  useEffect(() => {
+    const handle = (url: string | null | undefined) => {
+      if (!url) return;
+      const result = resolveDeepLink(url);
+      if (result.safe) {
+        router.push(result.route as any);
+      } else {
+        captureException(new Error('deep_link_rejected'), {
+          reason: result.reason,
+          // Path only — never the full URL, which may contain auth tokens.
+          path: (() => {
+            try { return new URL(url).pathname; } catch { return '<unparseable>'; }
+          })(),
+        });
+      }
+    };
+
+    Linking.getInitialURL().then(handle);
+    const sub = Linking.addEventListener('url', (e) => handle(e.url));
+    return () => sub.remove();
+  }, [router]);
 
   // Redirect to login when tokens expire irrecoverably
   useEffect(() => {

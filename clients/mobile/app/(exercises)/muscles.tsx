@@ -33,7 +33,14 @@ export default function MuscleMapScreen() {
     const [selectedId, setSelectedId] = useState<string|null>(null);
     const items = tab==='muscles' ? MUSCLE_GROUPS : STRETCHING;
     const sel = items.find(m=>m.id===selectedId);
-    const exQ = useQuery({ queryKey:['muscle-ex',sel?.searchKey], queryFn:()=>searchLibrary(sel!.searchKey), enabled:!!sel });
+    // Use bodyPart filter on the backend so we get every exercise tagged with
+    // the muscle group, not just ones whose NAME contains the keyword.
+    // (Without this, "Chest" matched "Chest Press" but missed "Bench Press".)
+    const exQ = useQuery({
+        queryKey:['muscle-ex', sel?.searchKey],
+        queryFn:() => searchLibrary({ bodyPart: sel!.searchKey, limit: 200 }),
+        enabled:!!sel,
+    });
     const exercises = (exQ.data??[]) as Exercise[];
     return (
         <View style={[s.container,{backgroundColor:colors.background.primary}]}>
@@ -71,17 +78,27 @@ export default function MuscleMapScreen() {
                 </View>
                 {sel&&(
                     <View style={{marginTop:24}}>
-                        <Text style={[typography.heading,{color:colors.text.primary,marginBottom:14}]}>{sel.label} Exercises</Text>
-                        {exQ.isLoading?<ActivityIndicator color={sel.color} style={{marginTop:20}} />:exercises.length===0?<Text style={[typography.body,{color:colors.text.tertiary,textAlign:'center',paddingVertical:20}]}>No exercises found</Text>:exercises.slice(0,6).map((ex)=>(
-                            <TouchableOpacity key={ex.id} style={[s.exRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]} onPress={()=>router.push(`/(exercises)/${ex.id}` as any)} activeOpacity={0.8}>
-                                <Image source={{uri:ex.imageUrl||'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=200&auto=format&fit=crop&q=60'}} style={s.exThumb} contentFit="cover" />
-                                <View style={{flex:1,marginLeft:12}}>
-                                    <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold'}]}>{ex.name}</Text>
-                                    <Text style={[typography.caption,{color:colors.text.tertiary}]}>{ex.equipment} • {ex.difficulty}</Text>
-                                </View>
-                                <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
-                            </TouchableOpacity>
-                        ))}
+                        <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'baseline',marginBottom:14}}>
+                            <Text style={[typography.heading,{color:colors.text.primary}]}>{sel.label} Exercises</Text>
+                            {!exQ.isLoading && exercises.length > 0 && (
+                                <Text style={[typography.caption,{color:colors.text.tertiary}]}>{exercises.length} total</Text>
+                            )}
+                        </View>
+                        {exQ.isLoading
+                            ? <ActivityIndicator color={sel.color} style={{marginTop:20}} />
+                            : exercises.length===0
+                                ? <Text style={[typography.body,{color:colors.text.tertiary,textAlign:'center',paddingVertical:20}]}>No exercises found</Text>
+                                : exercises.map((ex)=>(
+                                    <TouchableOpacity key={ex.id} style={[s.exRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]} onPress={()=>router.push(`/(exercises)/${ex.id}` as any)} activeOpacity={0.8}>
+                                        <Image source={{uri:ex.imageUrl||'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=200&auto=format&fit=crop&q=60'}} style={s.exThumb} contentFit="cover" />
+                                        <View style={{flex:1,marginLeft:12}}>
+                                            <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold'}]}>{ex.name}</Text>
+                                            <Text style={[typography.caption,{color:colors.text.tertiary}]}>{ex.equipment} • {ex.difficulty}</Text>
+                                        </View>
+                                        <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
+                                    </TouchableOpacity>
+                                ))
+                        }
                     </View>
                 )}
             </ScrollView>

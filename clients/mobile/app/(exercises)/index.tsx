@@ -45,36 +45,56 @@ export default function ExerciseLibraryScreen() {
     const [activeCategory, setActiveCategory] = useState<string | null>(
         (params.category as string) || null
     );
+    const [activeMuscle, setActiveMuscle] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const libraryQuery = useQuery({
-        queryKey: ['exercise-library', searchQuery, activeCategory],
-        queryFn: () => searchLibrary(searchQuery || null, activeCategory as AppCategory | undefined),
-        enabled: !!searchQuery || !!activeCategory,
+        queryKey: ['exercise-library', searchQuery, activeCategory, activeMuscle],
+        // Pass the right filter type for each path:
+        //   - Search bar typing      → query (name match)
+        //   - Category card tap      → category
+        //   - Muscle chip tap        → muscleGroup (matches LibraryExercise.muscleGroup,
+        //                              not just exercise NAME, so we don't miss
+        //                              "Bench Press" when filtering for Chest)
+        queryFn: () => searchLibrary({
+            query: searchQuery || null,
+            category: activeCategory,
+            muscleGroup: activeMuscle,
+            limit: 200,
+        }),
+        enabled: !!searchQuery || !!activeCategory || !!activeMuscle,
         staleTime: 5 * 60 * 1000,
     });
 
     const exercises = libraryQuery.data ?? [];
 
-    const showBrowse = !searchQuery && !activeCategory;
+    const showBrowse = !searchQuery && !activeCategory && !activeMuscle;
+
+    const clearAllFilters = () => {
+        setActiveCategory(null);
+        setActiveMuscle(null);
+        setSearchQuery('');
+    };
 
     const onRefresh = useCallback(() => {
-        if (activeCategory || searchQuery) libraryQuery.refetch();
-    }, [activeCategory, searchQuery]);
+        if (activeCategory || searchQuery || activeMuscle) libraryQuery.refetch();
+    }, [activeCategory, searchQuery, activeMuscle]);
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-                {(activeCategory || searchQuery) ? (
+                {(activeCategory || searchQuery || activeMuscle) ? (
                     <TouchableOpacity
                         style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}
-                        onPress={() => { setActiveCategory(null); setSearchQuery(''); }}
+                        onPress={clearAllFilters}
                     >
                         <Ionicons name="arrow-back" size={20} color={colors.accent.coral} />
                         <Text style={[typography.caption, { color: colors.accent.coral, marginLeft: 6, fontWeight: 'bold' }]}>
-                            {activeCategory
-                                ? (CATEGORY_IMAGES.find(c => c.key === activeCategory)?.label.toUpperCase() ?? '') + ' EXERCISES'
-                                : 'BACK'}
+                            {activeMuscle
+                                ? activeMuscle.toUpperCase() + ' EXERCISES'
+                                : activeCategory
+                                    ? (CATEGORY_IMAGES.find(c => c.key === activeCategory)?.label.toUpperCase() ?? '') + ' EXERCISES'
+                                    : 'BACK'}
                         </Text>
                     </TouchableOpacity>
                 ) : null}
@@ -167,7 +187,7 @@ export default function ExerciseLibraryScreen() {
                             <TouchableOpacity
                                 key={muscle}
                                 style={[styles.muscleChip, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
-                                onPress={() => setSearchQuery(muscle)}
+                                onPress={() => setActiveMuscle(muscle)}
                             >
                                 <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold' }]}>
                                     {muscle}
@@ -187,7 +207,7 @@ export default function ExerciseLibraryScreen() {
                     <Text style={[typography.heading, { color: colors.text.secondary, marginTop: 16, textAlign: 'center' }]}>
                         No exercises found
                     </Text>
-                    <TouchableOpacity style={{ marginTop: 16 }} onPress={() => { setSearchQuery(''); setActiveCategory(null); }}>
+                    <TouchableOpacity style={{ marginTop: 16 }} onPress={clearAllFilters}>
                         <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: 'bold' }]}>CLEAR FILTERS</Text>
                     </TouchableOpacity>
                 </View>

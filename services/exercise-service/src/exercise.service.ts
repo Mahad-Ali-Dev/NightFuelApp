@@ -58,9 +58,12 @@ export class ExerciseService {
         }
     }
 
-    async searchLibrary(filters: { query?: string, equipment?: string, muscleGroup?: string, category?: string }, limit = 50) {
+    async searchLibrary(
+        filters: { query?: string, equipment?: string, muscleGroup?: string, bodyPart?: string, category?: string },
+        limit = 50,
+    ) {
         try {
-            const { query, category, equipment, muscleGroup } = filters;
+            const { query, category, equipment, muscleGroup, bodyPart } = filters;
 
             // ── 1. Search the seeded LibraryExercise table first ──────────────
             const where: Record<string, unknown> = {};
@@ -69,6 +72,9 @@ export class ExerciseService {
             }
             if (muscleGroup) {
                 where.muscleGroup = { contains: muscleGroup, mode: 'insensitive' };
+            }
+            if (bodyPart) {
+                where.bodyPart = { contains: bodyPart, mode: 'insensitive' };
             }
             if (equipment) {
                 where.equipment = { contains: equipment, mode: 'insensitive' };

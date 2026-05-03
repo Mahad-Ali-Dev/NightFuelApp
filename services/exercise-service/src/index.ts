@@ -88,14 +88,20 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/library', {
             query: z.string().optional(),
             equipment: z.string().optional(),
             muscleGroup: z.string().optional(),
+            // bodyPart filter for the ExerciseDB body-part keys
+            // (e.g. "upper arms", "waist", "upper legs", "hips")
+            bodyPart: z.string().optional(),
             category: z.string().optional(),
-            limit: z.coerce.number().int().min(1).max(100).default(50)
+            // Bumped max from 100 → 500. The seeded LibraryExercise table
+            // can have many entries per muscle group; capping at 100 was
+            // why the mobile app appeared to "miss" exercises.
+            limit: z.coerce.number().int().min(1).max(500).default(50),
         })
     },
 }, async (request, reply) => {
     try {
-        const { query, equipment, muscleGroup, category, limit } = request.query;
-        return reply.send(await exerciseSvc.searchLibrary({ query, equipment, muscleGroup, category }, limit));
+        const { query, equipment, muscleGroup, bodyPart, category, limit } = request.query;
+        return reply.send(await exerciseSvc.searchLibrary({ query, equipment, muscleGroup, bodyPart, category }, limit));
     } catch (err: any) {
         logger.error(err);
         return reply.code(500).send({ error: err.message });

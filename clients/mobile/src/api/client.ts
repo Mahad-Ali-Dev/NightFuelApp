@@ -69,6 +69,30 @@ function resolveBaseUrl(): string {
 
 export const API_BASE_URL = resolveBaseUrl();
 
+/**
+ * URL prefix policy. The mobile app calls paths like `/v1/auth/login`. Two
+ * deployment targets resolve those differently:
+ *   - Dev via Next.js gateway (port 3000):  /api + /auth/login   (strip /v1)
+ *   - Direct production service:            /v1/auth/login        (keep /v1)
+ *
+ * The previous heuristic was `if (baseURL.includes(':3000')) strip /v1` which
+ * silently broke when staging exposed the gateway on port 443. We now use an
+ * explicit env switch with a port-3000 fallback for backwards compatibility.
+ *
+ * Set EXPO_PUBLIC_API_STRIP_V1_PREFIX=true|false to override; otherwise we
+ * infer from the URL.
+ */
+function shouldStripV1Prefix(baseURL: string): boolean {
+  const explicit = process.env.EXPO_PUBLIC_API_STRIP_V1_PREFIX;
+  if (explicit === 'true') return true;
+  if (explicit === 'false') return false;
+  // Infer: if the baseURL ends in `/api` (the Next.js gateway pattern), the
+  // gateway re-adds the version prefix server-side, so strip on the client.
+  return /\/api\/?$/.test(baseURL) || baseURL.includes(':3000');
+}
+
+const STRIP_V1_PREFIX = shouldStripV1Prefix(API_BASE_URL);
+
 // ---------------------------------------------------------------------------
 // Secure-store token helpers
 // ---------------------------------------------------------------------------
@@ -119,15 +143,16 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // 2. Gateway Proxy Adjustment
-    // If the mobile app hits the Next.js API Gateway (port 3000), 
-    // it expects paths like `/api/auth/login` and proxies them to `/v1/auth/login`.
-    // Stripping `/v1/` from the mobile client request ensures compatibility!
-    if (config.baseURL?.includes(':3000') && config.url?.startsWith('/v1/')) {
+    // 2. Gateway-mode prefix stripping (see shouldStripV1Prefix above).
+    if (STRIP_V1_PREFIX && config.url?.startsWith('/v1/')) {
       config.url = config.url.replace(/^\/v1\//, '/');
     }
 
-    console.log(`[API Request] -> ${config.baseURL} + ${config.url}`);
+    if (__DEV__) {
+      // Dev-only request log. Disabled in prod to avoid leaking URLs to
+      // Android logcat (any app with READ_LOGS can read those).
+      console.log(`[API Request] -> ${config.baseURL} + ${config.url}`);
+    }
 
     return config;
   },
@@ -203,7 +228,7 @@ apiClient.interceptors.response.use(
       }
 
       // Call the refresh endpoint directly (skip interceptors to avoid loops)
-      const refreshPath = API_BASE_URL.includes(':3000') ? '/auth/refresh' : '/v1/auth/refresh';
+      const refreshPath = STRIP_V1_PREFIX ? '/auth/refresh' : '/v1/auth/refresh';
       const { data } = await axios.post<{
         accessToken: string;
         refreshToken: string;

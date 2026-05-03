@@ -102,3 +102,20 @@ export async function getMe() {
   const { data } = await apiClient.get('/v1/users/me');
   return data;
 }
+
+/**
+ * Server-side logout — revokes the refresh token row in the auth-service DB.
+ *
+ * Best-effort: we don't surface failures to the user. If the network is down
+ * or the server returns 5xx, the local SecureStore tokens are still cleared
+ * by `authStore.logout()`. The worst case is a leaked refresh token that's
+ * still valid until its 30-day TTL — a known trade-off, documented in
+ * PRODUCTION_READINESS.md → A5.
+ */
+export async function logout(refreshToken: string): Promise<void> {
+  await apiClient.post(
+    '/v1/auth/logout',
+    { refreshToken },
+    { timeout: 3_000 }, // 3s — don't make the user wait if the server is sluggish
+  );
+}

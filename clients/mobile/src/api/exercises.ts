@@ -51,10 +51,48 @@ export interface OneRepMax {
 // Endpoints
 // ---------------------------------------------------------------------------
 
-export const searchLibrary = async (query?: string | null, category?: string | null): Promise<Exercise[]> => {
-  const params: any = { limit: 50 };
-  if (query) params.query = query;
-  if (category) params.category = category;
+export interface SearchLibraryFilters {
+  /** Free-text name search */
+  query?: string | null;
+  /** App category: gym, home, cardio, kegel */
+  category?: string | null;
+  /** Muscle group label (e.g. "Chest", "Back") — backend does case-insensitive `contains` */
+  muscleGroup?: string | null;
+  /** ExerciseDB body-part key (e.g. "upper arms", "waist", "upper legs") */
+  bodyPart?: string | null;
+  /** Equipment filter (e.g. "barbell", "body weight") */
+  equipment?: string | null;
+  /** Page size — backend supports up to 200 */
+  limit?: number;
+}
+
+/**
+ * Search the exercise library.
+ *
+ * Backwards-compatible: legacy two-positional-arg form still works
+ *   searchLibrary("chest")
+ *   searchLibrary("chest", "gym")
+ *
+ * New filter-object form (preferred):
+ *   searchLibrary({ muscleGroup: "Chest" })
+ *   searchLibrary({ bodyPart: "upper arms", limit: 200 })
+ */
+export const searchLibrary = async (
+  queryOrFilters?: string | SearchLibraryFilters | null,
+  category?: string | null,
+): Promise<Exercise[]> => {
+  // Resolve overloaded args into a single filters object.
+  const filters: SearchLibraryFilters =
+    queryOrFilters && typeof queryOrFilters === 'object'
+      ? queryOrFilters
+      : { query: queryOrFilters as string | null | undefined, category };
+
+  const params: Record<string, string | number> = { limit: filters.limit ?? 200 };
+  if (filters.query) params.query = filters.query;
+  if (filters.category) params.category = filters.category;
+  if (filters.muscleGroup) params.muscleGroup = filters.muscleGroup;
+  if (filters.bodyPart) params.bodyPart = filters.bodyPart;
+  if (filters.equipment) params.equipment = filters.equipment;
 
   const { data } = await apiClient.get<Exercise[]>('/v1/exercises/library', { params });
   return data;

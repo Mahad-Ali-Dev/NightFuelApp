@@ -139,9 +139,16 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
 
   logout: async () => {
     try {
-      // Best-effort — no server logout endpoint wired yet
+      // Best-effort server-side revocation: deletes the refresh-token row
+      // in the auth-service DB so a stolen token can't be reused.
+      const refreshToken = await SecureStore.getItemAsync(TOKEN_KEYS.refresh);
+      if (refreshToken) {
+        await authApi.logout(refreshToken);
+      }
     } catch {
-      // Ignore server errors
+      // Server unreachable / token already revoked / 5xx — proceed with
+      // local logout regardless. Local clearTokens() below is what makes
+      // the device "logged out" from the user's perspective.
     } finally {
       await clearTokens();
       set({
@@ -180,16 +187,30 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
           isLoading: false,
           role: user.role,
         });
-      } catch {
-        // Token might be expired — still mark as authenticated
-        // The apiClient interceptor will handle token refresh
-        set({
-          isAuthenticated: true,
-          isLoading: false,
-        });
+      } catch (err: any) {
+        // Distinguish "token bad" from "couldn't reach server / server 5xx".
+        // - 401: the apiClient interceptor will have already tried (and failed)
+        //   to refresh — clear the session so the user is bounced to /login.
+        //   onSessionExpired in client.ts handles the navigation.
+        // - Anything else (network drop, 502, etc.): keep the cached auth so
+        //   the user can still see their offline-cached UI; we just couldn't
+        //   refresh the profile this time.
+        const status = err?.response?.status;
+        if (status === 401 || status === 403) {
+          await clearTokens();
+          set({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            role: 'user',
+          });
+          return;
+        }
+        // Soft failure: tokens are still valid, just couldn't reach /me.
+        set({ isAuthenticated: true, isLoading: false });
       }
     } catch {
-      // Token expired or invalid — clear everything
+      // Storage / SecureStore access threw — treat as logged out.
       await clearTokens();
       set({
         user: null,

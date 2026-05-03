@@ -15,10 +15,17 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nightfuel.app",
+      "associatedDomains": [
+        "applinks:nightfuel.app",
+        "applinks:www.nightfuel.app"
+      ],
       "infoPlist": {
         "NSCameraUsageDescription": "NightFuel needs camera access for barcode food scanning.",
         "NSHealthShareUsageDescription": "NightFuel reads sleep and activity data to optimize your chrono-nutrition plan.",
-        "NSHealthUpdateUsageDescription": "NightFuel writes workout and nutrition data to Apple Health."
+        "NSHealthUpdateUsageDescription": "NightFuel writes workout and nutrition data to Apple Health.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false
+        }
       }
     },
     "android": {
@@ -27,7 +34,19 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "package": "com.nightfuel.app"
+      "package": "com.nightfuel.app",
+      "usesCleartextTraffic": false,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "nightfuel.app" },
+            { "scheme": "https", "host": "www.nightfuel.app" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",
