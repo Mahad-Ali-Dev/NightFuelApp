@@ -88,7 +88,7 @@ export default function BiologicalDataScreen() {
                     {SEX_OPTIONS.map((s) => {
                         const isSelected = sex === s.value;
                         return (
-                            <TouchableOpacity key={s.value} onPress={() => setSex(s.value as any)} activeOpacity={0.8}>
+                            <TouchableOpacity key={s.value} onPress={() => setSex(sex === s.value ? null : (s.value as any))} activeOpacity={0.8}>
                                 <Card
                                     variant={isSelected ? 'elevated' : 'default'}
                                     style={[

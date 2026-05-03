@@ -124,6 +124,10 @@ export default function RegisterScreen() {
               onRightIconPress={() => setShowPassword(!showPassword)}
             />
 
+            {password.length > 0 && (
+              <PasswordRequirements password={password} />
+            )}
+
             <Input
               label="Confirm Password"
               placeholder="Repeat your password"
@@ -164,6 +168,36 @@ export default function RegisterScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+function PasswordRequirements({ password }: { password: string }) {
+  const { colors } = useTheme();
+  const rules = [
+    { label: 'At least 8 characters', met: password.length >= 8 },
+    { label: 'One uppercase letter (A-Z)', met: /[A-Z]/.test(password) },
+    { label: 'One number (0-9)', met: /[0-9]/.test(password) },
+  ];
+  return (
+    <View style={styles.pwReqs}>
+      {rules.map(rule => (
+        <View key={rule.label} style={styles.pwReqRow}>
+          <Ionicons
+            name={rule.met ? 'checkmark-circle' : 'ellipse-outline'}
+            size={14}
+            color={rule.met ? colors.accent.emerald : colors.text.tertiary}
+          />
+          <Text
+            style={[
+              styles.pwReqText,
+              { color: rule.met ? colors.accent.emerald : colors.text.tertiary },
+            ]}
+          >
+            {rule.label}
+          </Text>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -220,5 +254,19 @@ const styles = StyleSheet.create({
   loginLink: {
     fontSize: 15,
     fontWeight: '600',
+  },
+  pwReqs: {
+    marginTop: -spacing.sm,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.xs,
+    gap: 4,
+  },
+  pwReqRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pwReqText: {
+    fontSize: 12,
   },
 });

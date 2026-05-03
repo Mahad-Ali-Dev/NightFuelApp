@@ -58,7 +58,7 @@ export default function NutritionScreen() {
                     {PREFERENCES.map((d) => {
                         const isSelected = preference === d.value;
                         return (
-                            <TouchableOpacity key={d.value} onPress={() => setPreference(d.value as DietaryPreference)} activeOpacity={0.8}>
+                            <TouchableOpacity key={d.value} onPress={() => setPreference(preference === d.value ? null : (d.value as DietaryPreference))} activeOpacity={0.8}>
                                 <Card
                                     variant={isSelected ? 'elevated' : 'default'}
                                     style={[
@@ -84,7 +84,7 @@ export default function NutritionScreen() {
                     {MODES.map((m) => {
                         const isSelected = mode === m.value;
                         return (
-                            <TouchableOpacity key={m.value} onPress={() => setMode(m.value as DietMode)} activeOpacity={0.8}>
+                            <TouchableOpacity key={m.value} onPress={() => setMode(mode === m.value ? null : (m.value as DietMode))} activeOpacity={0.8}>
                                 <Card
                                     variant={isSelected ? 'elevated' : 'default'}
                                     style={[

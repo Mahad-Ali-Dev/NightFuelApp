@@ -47,7 +47,7 @@ export default function GoalsScreen() {
                             <TouchableOpacity
                                 key={option.value}
                                 activeOpacity={0.8}
-                                onPress={() => setGoal(option.value as FitnessGoal)}
+                                onPress={() => setGoal(goal === option.value ? null : (option.value as FitnessGoal))}
                             >
                                 <Card
                                     variant={isSelected ? 'elevated' : 'default'}

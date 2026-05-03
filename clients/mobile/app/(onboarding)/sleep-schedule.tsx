@@ -90,7 +90,7 @@ export default function LifestyleScreen() {
                 {options.map((opt: any) => (
                     <TouchableOpacity
                         key={opt.value}
-                        onPress={() => onSelect(opt.value)}
+                        onPress={() => onSelect(selected === opt.value ? null : opt.value)}
                         style={[
                             styles.chip,
                             { backgroundColor: colors.background.secondary, borderRadius: borderRadius.full },

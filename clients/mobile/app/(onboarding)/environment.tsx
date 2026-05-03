@@ -61,7 +61,7 @@ export default function EnvironmentScreen() {
                     {LIFESTYLES.map((l) => {
                         const isSelected = lifestyle === l.value;
                         return (
-                            <TouchableOpacity key={l.value} onPress={() => setLifestyle(l.value as ActivityLevel)} activeOpacity={0.8}>
+                            <TouchableOpacity key={l.value} onPress={() => setLifestyle(lifestyle === l.value ? null : (l.value as ActivityLevel))} activeOpacity={0.8}>
                                 <Card
                                     variant={isSelected ? 'elevated' : 'default'}
                                     style={[
