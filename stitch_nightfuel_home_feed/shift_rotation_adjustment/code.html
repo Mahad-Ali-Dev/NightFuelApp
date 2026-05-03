@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Shift Rotation Adjustment</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#ff5d38",
+              "background-light": "#f8f6f5",
+              "background-dark": "#23130f", 
+            },
+            fontFamily: {
+              "display": ["Space Grotesk", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      /* Custom scrollbar for webkit */
+      ::-webkit-scrollbar {
+        width: 0px;
+        background: transparent;
+      }
+      
+      /* Glassmorphism utility */
+      .glass {
+        background: rgba(35, 19, 15, 0.7);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+      }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display antialiased overflow-hidden select-none">
+<!-- Main Container simulating a modal overlay context -->
+<div class="relative flex h-screen w-full flex-col overflow-y-auto">
+<!-- Modal Backdrop / Glass Overlay -->
+<div class="absolute inset-0 z-0 bg-cover bg-center" data-alt="Blurred dark abstract background pattern" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCRD2K4XtDDXDW1FE7W5LPZB1Bu-sbpP0jv_9VR8_TrixZMGI50nqpmbrUksJk3o03UpTehV9WqwvLuHlOryrxt5zAW4DpTC9FbJ5w91dvf1HxnZ8whm9HDnWR9kbecYVi_Z2gStygWAJ8zHHoKFpTYCoMlAaAt8QwOaWWBqGGiqWgCoUjwvf-oery0nraZPKr3YR0GNt-o_Rk0leR75-sw03VP53Riq8GAcA_4slYtF2FrHW-FhFLeMSQuupbCLnn3e7qp_0Ocyac');"></div>
+<div class="absolute inset-0 z-10 glass bg-background-dark/80"></div>
+<!-- Modal Content Card -->
+<div class="relative z-20 m-auto flex w-full max-w-md flex-col min-h-screen sm:min-h-0 sm:h-auto sm:rounded-2xl bg-[#1A1F2B] dark:bg-[#1A1F2B] shadow-2xl overflow-hidden border border-white/10">
+<!-- Header with Close Button -->
+<div class="flex items-center justify-between p-4 bg-gradient-to-b from-primary/10 to-transparent">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-xl">update</span>
+<span class="text-primary text-xs font-bold uppercase tracking-widest">System Alert</span>
+</div>
+<button class="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-slate-100 transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Hero Section -->
+<div class="px-6 pb-6 pt-2">
+<h1 class="text-3xl font-bold leading-tight text-white mb-6 tracking-tight">
+                    New Shift Pattern<br/>
+<span class="text-primary">Detected</span>
+</h1>
+<div class="relative w-full overflow-hidden rounded-xl bg-slate-900 shadow-inner group h-48">
+<div class="absolute inset-0 bg-cover bg-center opacity-80 mix-blend-overlay" data-alt="Abstract spinning clock mechanism with orange highlights" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDNB-5-wkCngfegVsgpnBM8VDLzyAyStgxgkxi1lbP0eLFAl1i6T90qXhTPfY4mjR8Wf2HSLS_Yw1w-Uybzzh-KRCK0LrSqLCPOc89JsoFdp9JVa-_dO0VByxVXwxzrRaYIRY7B6kGgMTg7aqE9PnatjLrcH3HtEKFgWVdtQFQSnhPLnz9hSyo7Lfik6xqGLyiBPSn36D68ZqgqTZzFbubbZcrnmD7i-cbDru9rHTmU9RkDYQ6c__gYItRLfIRhMDUzttw7lcA34TU');"></div>
+<!-- Decorative glowing element -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-primary/30 rounded-full blur-3xl animate-pulse"></div>
+<div class="absolute inset-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-6xl text-white drop-shadow-[0_0_15px_rgba(255,93,56,0.6)]">schedule</span>
+</div>
+</div>
+</div>
+<!-- Comparison Grid -->
+<div class="px-6 py-2">
+<div class="grid grid-cols-2 gap-4">
+<!-- Current Shift -->
+<div class="flex flex-col gap-2 rounded-xl bg-white/5 p-4 border border-white/5">
+<div class="flex items-center gap-2 text-slate-400">
+<span class="material-symbols-outlined text-sm">wb_sunny</span>
+<span class="text-xs font-medium uppercase tracking-wider">Current</span>
+</div>
+<div>
+<p class="text-lg font-bold text-white">Days</p>
+<p class="text-sm font-medium text-slate-400">07:00 - 15:00</p>
+</div>
+</div>
+<!-- New Shift -->
+<div class="flex flex-col gap-2 rounded-xl bg-primary/10 p-4 border border-primary/20 relative overflow-hidden">
+<div class="absolute top-0 right-0 p-1">
+<div class="h-2 w-2 rounded-full bg-primary animate-ping"></div>
+</div>
+<div class="flex items-center gap-2 text-primary">
+<span class="material-symbols-outlined text-sm">bedtime</span>
+<span class="text-xs font-bold uppercase tracking-wider">Incoming</span>
+</div>
+<div>
+<p class="text-lg font-bold text-white">Nights</p>
+<p class="text-sm font-medium text-slate-300">23:00 - 07:00</p>
+</div>
+</div>
+</div>
+<!-- Detail Rows -->
+<div class="mt-4 divide-y divide-white/5 rounded-xl bg-white/5 px-4">
+<div class="flex items-center justify-between py-3">
+<span class="text-sm text-slate-400">Schedule</span>
+<span class="text-sm font-semibold text-slate-200">Mon - Fri</span>
+</div>
+<div class="flex items-center justify-between py-3">
+<span class="text-sm text-slate-400">Rotation</span>
+<span class="text-sm font-semibold text-primary">Weekly Cycle</span>
+</div>
+</div>
+</div>
+<!-- Impact Summary (Purple accent as requested) -->
+<div class="px-6 py-4">
+<div class="relative overflow-hidden rounded-xl bg-[#8B5CF6]/20 p-4 border border-[#8B5CF6]/30">
+<div class="flex items-start gap-3">
+<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#8B5CF6] text-white">
+<span class="material-symbols-outlined text-lg">insights</span>
+</div>
+<div>
+<h3 class="text-sm font-bold text-[#d8b4fe] uppercase tracking-wide mb-1">Impact Summary</h3>
+<p class="text-sm leading-snug text-slate-200">
+                                Shifting caffeine cutoff by <span class="font-bold text-white">+6 hours</span>. Sleep window target moved to <span class="font-bold text-white">08:00 AM</span>.
+                            </p>
+</div>
+</div>
+</div>
+</div>
+<!-- Action Button Area -->
+<div class="mt-auto p-6 pt-2 pb-8">
+<button class="group relative flex w-full items-center justify-center gap-3 rounded-xl bg-primary py-4 px-6 text-white shadow-[0_0_20px_rgba(255,93,56,0.4)] transition-all hover:shadow-[0_0_30px_rgba(255,93,56,0.6)] hover:translate-y-[-2px] active:translate-y-[0px]">
+<span class="absolute inset-0 rounded-xl bg-white/20 opacity-0 transition-opacity group-hover:opacity-100"></span>
+<span class="material-symbols-outlined animate-spin-slow">smart_toy</span>
+<span class="text-lg font-bold tracking-wide">Recalculate AI Plan</span>
+</button>
+<p class="mt-4 text-center text-xs text-slate-500">
+                    Syncs with Apple Health &amp; Oura Ring data
+                </p>
+</div>
+</div>
+</div>
+<style>
+        .animate-spin-slow {
+            animation: spin 3s linear infinite;
+        }
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</body></html>

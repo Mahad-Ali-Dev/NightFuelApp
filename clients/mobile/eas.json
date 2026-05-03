@@ -1,0 +1,28 @@
+{
+  "cli": { "version": ">= 13.0.0" },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": { "simulator": true }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "API_BASE_URL": "https://staging.api.nightfuel.app"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "API_BASE_URL": "https://api.nightfuel.app"
+      },
+      "ios": { "bundleIdentifier": "com.nightfuel.app" },
+      "android": { "package": "com.nightfuel.app" }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

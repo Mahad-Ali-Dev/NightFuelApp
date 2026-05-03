@@ -1,0 +1,170 @@
+import React from 'react';
+import {
+    View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { useTheme } from '@/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
+import { getProfile } from '@/api/users';
+import { Image } from 'expo-image';
+import { useAuthStore } from '@/store/authStore';
+import { useThemeStore } from '@/store/themeStore';
+import Constants from 'expo-constants';
+import { TAB_BAR_H } from './_layout';
+
+export default function MoreScreen() {
+    const { colors, typography, spacing, borderRadius } = useTheme();
+    const insets = useSafeAreaInsets();
+    const router = useRouter();
+
+    const { user } = useAuthStore();
+    const { theme, setTheme } = useThemeStore();
+
+    const { data: profile } = useQuery({
+        queryKey: ['user-profile'],
+        queryFn: getProfile,
+    });
+
+    const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+
+    type SettingItemType = {
+        label: string;
+        icon: string;
+        route?: string;
+        value?: string | boolean;
+        isSwitch?: boolean;
+    };
+
+    const SETTINGS_SECTIONS: { title: string; items: SettingItemType[] }[] = [
+        {
+            title: 'Account',
+            items: [
+                { label: 'My Profile & Preferences', icon: 'person-circle-outline', route: '/(tabs)/profile' },
+                { label: 'Manage Subscription', icon: 'star-outline', route: '/(settings)/subscription', value: 'Pro Tier' },
+            ]
+        },
+        {
+            title: 'Insights & Tools',
+            items: [
+                { label: 'Analytics Dashboard', icon: 'stats-chart-outline', route: '/(tabs)/analytics' },
+                { label: 'Achievements & Badges', icon: 'trophy-outline', route: '/(community)/achievements' },
+                { label: 'AI Workout Planner', icon: 'sparkles-outline', route: '/(exercises)/ai-planner' },
+                { label: 'Calculators (1RM & Macros)', icon: 'calculator-outline', route: '/(exercises)/calculator' },
+            ]
+        },
+        {
+            title: 'App Settings',
+            items: [
+                { label: 'Notification Settings', icon: 'notifications-outline', route: '/(settings)/notification-preferences' },
+                { label: 'Notification History', icon: 'list-outline', route: '/(settings)/notifications' },
+                { label: 'Connected Devices', icon: 'watch-outline', route: '/(settings)/devices' },
+                { label: 'Dark Mode', icon: 'moon-outline', isSwitch: true, value: true },
+            ]
+        },
+        {
+            title: 'Support',
+            items: [
+                { label: 'Help Center', icon: 'help-circle-outline' },
+                { label: 'Terms of Service', icon: 'document-text-outline' },
+            ]
+        }
+    ];
+
+    return (
+        <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+            {/* Header */}
+            <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
+                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 32, fontWeight: '900' }]}>More</Text>
+            </View>
+
+            <ScrollView contentContainerStyle={{ paddingBottom: TAB_BAR_H + 40 }}>
+                {/* Profile Summary */}
+                <View style={[styles.profileCard, { borderBottomColor: colors.border.default }]}>
+                    <Image
+                        source={(profile?.data as any)?.avatarUrl || 'https://i.pravatar.cc/150'}
+                        style={[styles.avatar, { borderColor: colors.border.default }]}
+                    />
+                    <View style={{ marginLeft: 16 }}>
+                        <Text style={[typography.heading, { color: colors.text.primary, fontSize: 22 }]}>
+                            {(profile?.data as any)?.name || user?.name || 'User'}
+                        </Text>
+                        <Text style={[typography.body, { color: colors.text.secondary }]}>
+                            {(profile?.data as any)?.email || user?.email || ''}
+                        </Text>
+                        <View style={[styles.badge, { backgroundColor: `${colors.accent.purple}20` }]}>
+                            <Text style={[typography.caption, { color: colors.accent.purple, fontWeight: '700' }]}>NightFuel User</Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* Settings Sections */}
+                {SETTINGS_SECTIONS.map((section, idx) => (
+                    <View key={idx} style={{ marginTop: spacing.xl }}>
+                        <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: spacing.xl, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }]}>
+                            {section.title}
+                        </Text>
+                        <View style={[styles.sectionGroup, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl, marginHorizontal: spacing.md }]}>
+                            {section.items.map((item, itemIdx) => (
+                                <TouchableOpacity
+                                    key={itemIdx}
+                                    style={[styles.settingItem, itemIdx !== section.items.length - 1 && { borderBottomColor: colors.border.default, borderBottomWidth: 1 }]}
+                                    onPress={() => item.route && router.push(item.route as any)}
+                                    disabled={!item.route && !item.isSwitch}
+                                >
+                                    <View style={styles.itemLeft}>
+                                        <Ionicons name={item.icon as any} size={22} color={colors.text.primary} />
+                                        <Text style={[typography.body, { color: colors.text.primary, marginLeft: 12, fontWeight: '500' }]}>{item.label}</Text>
+                                    </View>
+
+                                    {item.isSwitch ? (
+                                        <Switch
+                                            value={item.label === 'Dark Mode' ? theme === 'dark' : item.value as boolean}
+                                            onValueChange={(val) => {
+                                                if (item.label === 'Dark Mode') setTheme(val ? 'dark' : 'light');
+                                            }}
+                                            trackColor={{ true: colors.accent.purple }}
+                                        />
+                                    ) : (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            {item.value && <Text style={[typography.subhead, { color: colors.text.tertiary, marginRight: 8 }]}>{item.value}</Text>}
+                                            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                ))}
+
+                {/* Logout Button */}
+                <TouchableOpacity
+                    style={[styles.logoutBtn, { borderColor: colors.accent.coral, borderRadius: borderRadius.lg, marginHorizontal: spacing.md }]}
+                    onPress={async () => {
+                        await useAuthStore.getState().logout();
+                        router.replace('/(auth)/login');
+                    }}
+                >
+                    <Text style={[typography.subhead, { color: colors.accent.coral, fontWeight: '700' }]}>Log Out</Text>
+                </TouchableOpacity>
+
+                <Text style={[typography.caption, { color: colors.text.tertiary, textAlign: 'center', marginTop: 32 }]}>
+                    NightFuel v{appVersion}
+                </Text>
+            </ScrollView>
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: { flex: 1 },
+    header: { paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
+    profileCard: { flexDirection: 'row', alignItems: 'center', padding: 24, borderBottomWidth: 1 },
+    avatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 2 },
+    badge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginTop: 8 },
+    sectionGroup: { borderWidth: 1, overflow: 'hidden' },
+    settingItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
+    itemLeft: { flexDirection: 'row', alignItems: 'center' },
+    logoutBtn: { marginTop: 40, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+});

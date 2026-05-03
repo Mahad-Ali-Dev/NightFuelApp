@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("PROGRESS_DATABASE_URL")
+  directUrl = env("PROGRESS_DIRECT_URL")
+}
+
+model DailyProgress {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  date           DateTime  @map("date") @db.Date
+  caloriesTarget Float?    @map("calories_target")
+  caloriesActual Float     @default(0) @map("calories_actual")
+  proteinTarget  Float?    @map("protein_target")
+  proteinActual  Float     @default(0) @map("protein_actual")
+  carbsTarget    Float?    @map("carbs_target")
+  carbsActual    Float     @default(0) @map("carbs_actual")
+  fatTarget      Float?    @map("fat_target")
+  fatActual      Float     @default(0) @map("fat_actual")
+  mealsLogged    Int       @default(0) @map("meals_logged")
+  isAdherent     Boolean   @default(false) @map("is_adherent")
+  fatigueScore   Int       @default(0) @map("fatigue_score")
+  hydrationActual Float     @default(0) @map("hydration_actual")
+  stepCount       Int       @default(0) @map("step_count")
+  source          String    @default("MANUAL") // MANUAL, WEARABLE
+  supplementsLogged Json?     @map("supplements_logged") // List of checkable items
+  lightExposureCompleted Boolean @default(false) @map("light_exposure_completed")
+  planId         String?   @map("plan_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@unique([userId, date])
+  @@index([userId, date(sort: Desc)])
+  @@map("daily_progress")
+}
+
+model Streak {
+  id               String    @id @default(uuid())
+  userId           String    @unique @map("user_id")
+  currentStreak    Int       @default(0) @map("current_streak")
+  longestStreak    Int       @default(0) @map("longest_streak")
+  lastAdherentDate DateTime? @map("last_adherent_date") @db.Date
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@map("streaks")
+}
+
+model BodyMetrics {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  weightKg    Float?   @map("weight_kg")
+  heightCm    Float?   @map("height_cm")
+  bodyFatPct  Float?   @map("body_fat_pct")
+  muscleMassKg Float?  @map("muscle_mass_kg")
+  bmi         Float?
+  chestCm     Float?   @map("chest_cm")
+  waistCm     Float?   @map("waist_cm")
+  hipsCm      Float?   @map("hips_cm")
+  armsCm      Float?   @map("arms_cm")
+  thighsCm    Float?   @map("thighs_cm")
+  calvesCm    Float?   @map("calves_cm")
+  recordedAt  DateTime @default(now()) @map("recorded_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId, recordedAt(sort: Desc)])
+  @@map("body_metrics")
+}
+
+model AiUsageLog {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  action          String   @map("action") // e.g. generate-plan, meal-swap
+  provider        String   @map("provider") // e.g. openai, anthropic
+  promptTokens    Int      @default(0) @map("prompt_tokens")
+  completionTokens Int     @default(0) @map("completion_tokens")
+  totalTokens     Int      @default(0) @map("total_tokens")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("ai_usage_logs")
+}
+
+model HydrationLog {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  amountMl    Int      @map("amount_ml")
+  dailyGoalMl Int      @default(3000) @map("daily_goal_ml")
+  date        DateTime @db.Date
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId, date(sort: Desc)])
+  @@map("hydration_logs")
+}
+
+model PerformanceReport {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  weekRange    String   @map("week_range")
+  score        Int
+  summary      String
+  highlights   Json
+  improvements Json
+  focusArea    String   @map("focus_area")
+  date         DateTime @db.Date
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userId, date(sort: Desc)])
+  @@map("performance_reports")
+}

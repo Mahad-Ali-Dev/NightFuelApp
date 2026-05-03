@@ -1,0 +1,20 @@
+{
+    "name": "@nightfuel/config",
+    "version": "0.0.0",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "lint": "eslint ."
+    },
+    "dependencies": {
+        "@nightfuel/types": "*",
+        "dotenv": "^16.4.5",
+        "pino": "^8.19.0",
+        "zod": "^3.22.4"
+    },
+    "devDependencies": {
+        "typescript": "5.9.2"
+    }
+}

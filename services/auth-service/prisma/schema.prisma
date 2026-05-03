@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                  String   @id @default(uuid())
+  email               String   @unique
+  passwordHash        String   @map("password_hash")
+  displayName         String   @map("display_name")
+  avatarUrl           String?  @map("avatar_url")
+  timezone            String   @default("UTC")
+  locale              String   @default("en-US")
+  region              String
+  role                Role     @default(USER)
+  onboardingCompleted Boolean  @default(false) @map("onboarding_completed")
+  emailVerified       Boolean  @default(false) @map("email_verified")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  deviceId  String   @map("device_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+enum Role {
+  USER
+  COACH
+  TRAINER
+  NUTRITIONIST
+  DIETITIAN
+  ADMIN
+  SUPERADMIN
+}

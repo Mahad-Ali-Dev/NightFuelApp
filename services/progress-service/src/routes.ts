@@ -1,0 +1,427 @@
+
+import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { ProgressService } from './progress.service';
+import {
+    historyQuerySchema,
+    statsQuerySchema,
+    dailyProgressResponseSchema,
+    streakResponseSchema,
+    statsResponseSchema,
+    weeklyStatsResponseSchema,
+} from './schemas';
+import { z } from 'zod';
+
+// 🔥 Global reusable error schema (FIX FOR TS2353)
+const errorResponseSchema = z.object({
+    error: z.string(),
+});
+
+export const progressRoutes: FastifyPluginAsyncZod<{
+    progressService: ProgressService;
+}> = async (fastify, options) => {
+    const { progressService } = options;
+
+    // -------------------------------------------------------------------------
+    // GET /v1/progress/today
+    // Returns today's DailyProgress snapshot for the authenticated user.
+    // -------------------------------------------------------------------------
+    fastify.get('/today', {
+        schema: {
+            response: {
+                200: dailyProgressResponseSchema,
+                500: errorResponseSchema, // ✅ FIX
+            },
+        },
+        preHandler: [fastify.authenticate],
+    }, async (request, reply) => {
+        try {
+            // @ts-ignore
+            const userId: string =
+                (request.user as any).id || (request.user as any).userId;
+
+            const result = await progressService.getTodayProgress(userId);
+            return reply.status(200).send(result as any);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply
+                .status(500)
+                .send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // GET /v1/progress/history?days=7
+    // Returns the last N days of daily progress records (newest first).
+    // -------------------------------------------------------------------------
+    fastify.get('/history', {
+        schema: {
+            querystring: historyQuerySchema,
+            response: {
+                200: z.array(dailyProgressResponseSchema),
+                500: errorResponseSchema, // ✅ FIX
+            },
+        },
+        preHandler: [fastify.authenticate],
+    }, async (request, reply) => {
+        try {
+            // @ts-ignore
+            const userId: string =
+                (request.user as any).id || (request.user as any).userId;
+
+            const { days } = request.query as { days: number };
+            const result = await progressService.getProgressHistory(userId, days);
+
+            return reply.status(200).send(result as any);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply
+                .status(500)
+                .send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // GET /v1/progress/streak
+    // Returns current and longest streak for the authenticated user.
+    // -------------------------------------------------------------------------
+    fastify.get('/streak', {
+        schema: {
+            response: {
+                200: streakResponseSchema,
+                500: errorResponseSchema, // ✅ FIX
+            },
+        },
+        preHandler: [fastify.authenticate],
+    }, async (request, reply) => {
+        try {
+            // @ts-ignore
+            const userId: string =
+                (request.user as any).id || (request.user as any).userId;
+
+            const result = await progressService.getStreak(userId);
+            return reply.status(200).send(result as any);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply
+                .status(500)
+                .send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // GET /v1/progress/stats?days=30
+    // Returns aggregate adherence stats and average macros over the last N days.
+    // -------------------------------------------------------------------------
+    fastify.get('/stats', {
+        schema: {
+            querystring: statsQuerySchema,
+            response: {
+                200: statsResponseSchema,
+                500: errorResponseSchema, // ✅ FIX
+            },
+        },
+        preHandler: [fastify.authenticate],
+    }, async (request, reply) => {
+        try {
+            // @ts-ignore
+            const userId: string =
+                (request.user as any).id || (request.user as any).userId;
+
+            const { days } = request.query as { days: number };
+            const result = await progressService.getStats(userId, days);
+
+            return reply.status(200).send(result as any);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply
+                .status(500)
+                .send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // POST /v1/progress/metrics — log a body metrics snapshot
+    // -------------------------------------------------------------------------
+    fastify.post('/metrics', {
+        schema: {
+            body: z.object({
+                weightKg: z.number().positive().optional(),
+                bodyFatPct: z.number().min(1).max(70).optional(),
+                muscleMassKg: z.number().positive().optional(),
+                waistCm: z.number().positive().optional(),
+                hipsCm: z.number().positive().optional(),
+                chestCm: z.number().positive().optional(),
+                armsCm: z.number().positive().optional(),
+                thighsCm: z.number().positive().optional(),
+                calvesCm: z.number().positive().optional(),
+                notes: z.string().max(500).optional(),
+            }),
+            response: {
+                201: z.any(),
+                500: errorResponseSchema, // ✅ FIX (optional but recommended)
+            },
+        },
+        preHandler: [fastify.authenticate],
+    }, async (request, reply) => {
+        try {
+            // @ts-ignore
+            const userId: string =
+                (request.user as any).id || (request.user as any).userId;
+
+            const result = await progressService.logBodyMetrics(
+                userId,
+                request.body as any
+            );
+
+            return reply.status(201).send(result);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply
+                .status(500)
+                .send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // GET /v1/progress/metrics?days=90 — body metrics history
+    // -------------------------------------------------------------------------
+    fastify.get('/metrics', {
+        schema: {
+            querystring: z.object({
+                days: z.coerce.number().int().min(1).max(365).default(90),
+            }),
+            response: {
+                // IMPORTANT: result is an array, not a single object
+                200: z.array(z.any()),
+                500: errorResponseSchema,
+            },
+        },
+        preHandler: [fastify.authenticate],
+    }, async (request, reply) => {
+        try {
+            // @ts-ignore
+            const userId: string =
+                (request.user as any).id || (request.user as any).userId;
+
+            const { days } = request.query as { days: number };
+            const result = await progressService.getBodyMetricsHistory(
+                userId,
+                days
+            );
+
+            return reply.status(200).send(result as any[]);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply
+                .status(500)
+                .send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // GET /v1/progress/weekly-stats
+    // Returns consolidated 7-day stats for charts.
+    // -------------------------------------------------------------------------
+    fastify.get('/weekly-stats', {
+        schema: {
+            response: {
+                200: weeklyStatsResponseSchema,
+                500: errorResponseSchema,
+            },
+        },
+        preHandler: [fastify.authenticate],
+    }, async (request, reply) => {
+        try {
+            // @ts-ignore
+            const userId: string = (request.user as any).id || (request.user as any).userId;
+            const result = await progressService.getWeeklyStats(userId);
+            return reply.status(200).send(result);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // GET /v1/progress/reports
+    // Retrieves historical AI Performance Reports for the authenticated user.
+    // -------------------------------------------------------------------------
+    fastify.get('/reports', {
+        schema: {
+            response: {
+                200: z.array(z.any()),
+                500: errorResponseSchema,
+            },
+        },
+        preHandler: [fastify.authenticate],
+    }, async (request, reply) => {
+        try {
+            // @ts-ignore
+            const userId: string = (request.user as any).id || (request.user as any).userId;
+            const result = await progressService.getReports(userId);
+            return reply.status(200).send(result);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // POST /v1/progress/weekly-audit
+    // Triggers an AI-generated coaching summary based on the last 7 days.
+    // -------------------------------------------------------------------------
+    fastify.post('/weekly-audit', {
+        schema: {
+            response: {
+                200: z.any(),
+                500: errorResponseSchema,
+            },
+        },
+        preHandler: [fastify.authenticate],
+    }, async (request, reply) => {
+        try {
+            // @ts-ignore
+            const userId: string = (request.user as any).id || (request.user as any).userId;
+            const result = await progressService.generateWeeklyAudit(userId);
+            return reply.status(200).send(result);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // POST /v1/progress/hydration
+    // -------------------------------------------------------------------------
+    fastify.post('/hydration', {
+        schema: {
+            body: z.object({ amount: z.number().positive() }),
+            response: {
+                200: dailyProgressResponseSchema,
+                500: errorResponseSchema,
+            },
+        },
+        preHandler: [fastify.authenticate],
+    }, async (request, reply) => {
+        try {
+            // @ts-ignore
+            const userId: string = (request.user as any).id || (request.user as any).userId;
+            const { amount } = request.body as { amount: number };
+            const result = await progressService.logHydration(userId, amount);
+            return reply.status(200).send(result as any);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // POST /v1/progress/supplements
+    // -------------------------------------------------------------------------
+    fastify.post('/supplements', {
+        schema: {
+            body: z.object({ supplementName: z.string(), isTaken: z.boolean() }),
+            response: {
+                200: dailyProgressResponseSchema,
+                500: errorResponseSchema,
+            },
+        },
+        preHandler: [fastify.authenticate],
+    }, async (request, reply) => {
+        try {
+            // @ts-ignore
+            const userId: string = (request.user as any).id || (request.user as any).userId;
+            const { supplementName, isTaken } = request.body as { supplementName: string; isTaken: boolean };
+            const result = await progressService.toggleSupplement(userId, supplementName, isTaken);
+            return reply.status(200).send(result as any);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // POST /v1/progress/light-exposure
+    // -------------------------------------------------------------------------
+    fastify.post('/light-exposure', {
+        schema: {
+            body: z.object({ completed: z.boolean() }),
+            response: {
+                200: dailyProgressResponseSchema,
+                500: errorResponseSchema,
+            },
+        },
+        preHandler: [fastify.authenticate],
+    }, async (request, reply) => {
+        try {
+            // @ts-ignore
+            const userId: string = (request.user as any).id || (request.user as any).userId;
+            const { completed } = request.body as { completed: boolean };
+            const result = await progressService.updateLightExposure(userId, completed);
+            return reply.status(200).send(result as any);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // POST /v1/progress/wearable/sync
+    // Syncs steps from Apple Health / Google Fit
+    // -------------------------------------------------------------------------
+    fastify.post('/wearable/sync', {
+        schema: {
+            body: z.object({
+                steps: z.number().int().min(0),
+                source: z.string().optional().default('WEARABLE')
+            }),
+            response: {
+                200: dailyProgressResponseSchema,
+                500: errorResponseSchema,
+            },
+        },
+        preHandler: [fastify.authenticate],
+    }, async (request, reply) => {
+        try {
+            // @ts-ignore
+            const userId: string = (request.user as any).id || (request.user as any).userId;
+            const { steps, source } = request.body as { steps: number; source: string };
+            const result = await progressService.logSteps(userId, steps, source);
+            return reply.status(200).send(result as any);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+
+    // -------------------------------------------------------------------------
+    // POST /v1/progress/ai-usage
+    // Internal Service Endpoint for tracking AI LLM cost telemetry
+    // -------------------------------------------------------------------------
+    fastify.post('/ai-usage', {
+        schema: {
+            body: z.object({
+                userId: z.string(),
+                action: z.string(),
+                provider: z.string(),
+                promptTokens: z.number().int().min(0),
+                completionTokens: z.number().int().min(0),
+                totalTokens: z.number().int().min(0),
+            }),
+            response: {
+                201: z.any(),
+                500: errorResponseSchema,
+            },
+        },
+        // Intentionally omitting preHandler: [fastify.authenticate] because this is a server-to-server call from Python
+    }, async (request, reply) => {
+        try {
+            const body = request.body as any;
+            const result = await progressService.logAiUsage(body);
+            return reply.status(201).send(result);
+        } catch (err: any) {
+            request.log.error(err);
+            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+        }
+    });
+};

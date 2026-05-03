@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("EXERCISE_DATABASE_URL")
+  directUrl = env("EXERCISE_DIRECT_URL")
+}
+
+model Workout {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  type           String    // WorkoutType: STRENGTH, CARDIO, HIIT, MOBILITY, SPORTS, YOGA
+  title          String
+  duration       Int       // minutes
+  intensity      String    // WorkoutIntensity: LOW, MODERATE, HIGH, MAX
+  splitType      String?   @map("split_type") // SplitType: FULL_BODY, PUSH_PULL_LEGS, etc.
+  muscleGroups   String[]  @map("muscle_groups")
+  caloriesBurned Int?      @map("calories_burned")
+  totalVolume    Float?    @map("total_volume")
+  notes          String?
+  scheduledAt    DateTime? @map("scheduled_at")
+  completedAt    DateTime  @default(now()) @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  exercises Exercise[]
+
+  @@index([userId])
+  @@index([userId, completedAt(sort: Desc)])
+  @@map("workouts")
+}
+
+model Exercise {
+  id           String  @id @default(uuid())
+  workoutId    String  @map("workout_id")
+  name         String
+  muscleGroup  String  @default("FULL_BODY") @map("muscle_group")
+  sets         Int?
+  reps         Int?
+  weightKg     Float?  @map("weight_kg")
+  distanceKm   Float?  @map("distance_km")
+  durationSecs Int?    @map("duration_secs")
+  restSecs     Int?    @map("rest_secs")
+  order        Int     @default(0)
+
+  workout Workout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+
+  @@map("exercises")
+}
+
+model LibraryExercise {
+  id               String   @id @default(uuid())
+  name             String   @unique
+  muscleGroup      String   @map("muscle_group")
+  equipment        String?
+  instructions     String?
+  imageUrl         String?  @map("image_url")
+  difficulty       String?  @default("intermediate")
+  bodyPart         String?  @map("body_part")
+  category         String?  // "gym" | "home" | "cardio" | "kegel"
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("library_exercises")
+}
+
+model WorkoutRoutine {
+  id           String   @id @default(uuid())
+  userId       String?  @map("user_id") // Null if global template
+  title        String
+  description  String?
+  splitType    String?  @map("split_type")
+  muscleGroups String[] @map("muscle_groups")
+  exercises    Json     // Array of configured exercises
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("workout_routines")
+}
+
+model OneRepMaxLog {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  exerciseName   String   @map("exercise_name")
+  weightKg       Float    @map("weight_kg")
+  estimated1RMKg Float    @map("estimated_1rm_kg")
+  date           DateTime @db.Date
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([userId, exerciseName, date(sort: Desc)])
+  @@map("1rm_logs")
+}
+
+model WorkoutSession {
+  id                  String       @id @default(uuid())
+  userId              String       @map("user_id")
+  routineId           String?      @map("routine_id")
+  status              String       @default("active") // "active", "completed", "cancelled"
+  startedAt           DateTime     @default(now()) @map("started_at")
+  endedAt             DateTime?    @map("ended_at")
+  currentExerciseIndex Int         @default(0) @map("current_exercise_index")
+
+  logs                ExerciseLog[]
+
+  @@index([userId])
+  @@map("workout_sessions")
+}
+
+model ExerciseLog {
+  id           String         @id @default(uuid())
+  sessionId    String         @map("session_id")
+  exerciseName String         @map("exercise_name")
+  sets         Int            @default(0)
+  reps         Int            @default(0)
+  weightKg     Float          @default(0) @map("weight_kg")
+  durationSecs Int            @default(0) @map("duration_secs")
+  completedAt  DateTime       @default(now()) @map("completed_at")
+
+  session      WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("exercise_logs")
+}

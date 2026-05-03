@@ -1,0 +1,35 @@
+{
+    "name": "community-service",
+    "version": "0.0.0",
+    "private": true,
+    "scripts": {
+        "build": "tsc",
+        "dev": "nodemon --watch src --exec \"ts-node src/index.ts\"",
+        "db:push": "prisma db push",
+        "db:generate": "prisma generate",
+        "lint": "eslint .",
+        "start": "node dist/index.js"
+    },
+    "dependencies": {
+        "@fastify/cors": "^10.0.1",
+        "@fastify/helmet": "^12.0.1",
+        "@fastify/proxy-addr": "^5.1.0",
+        "@fastify/rate-limit": "^10.1.1",
+        "@nightfuel/config": "*",
+        "@nightfuel/events": "*",
+        "@nightfuel/types": "*",
+        "@prisma/client": "^5.22.0",
+        "fastify": "^5.0.0",
+        "fastify-type-provider-zod": "^4.0.2",
+        "jsonwebtoken": "^9.0.3",
+        "zod": "^3.23.8"
+    },
+    "devDependencies": {
+        "@types/jsonwebtoken": "^9.0.10",
+        "@types/node": "^22.0.0",
+        "nodemon": "^3.1.0",
+        "prisma": "^5.22.0",
+        "ts-node": "^10.9.2",
+        "typescript": "5.9.2"
+    }
+}

@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("MEAL_DATABASE_URL")
+  directUrl = env("MEAL_DIRECT_URL")
+}
+
+model FoodItem {
+  id            String   @id @default(uuid())
+  name          String
+  calories      Float
+  protein       Float
+  carbs         Float
+  fat           Float
+  fiber         Float    @default(0)
+  sugar         Float    @default(0)
+  sodiumMg      Float    @default(0) @map("sodium_mg")
+  servingSize   String   @map("serving_size")
+  glycemicIndex Int?     @map("glycemic_index")
+  isVegan       Boolean  @default(false) @map("is_vegan")
+  isGlutenFree  Boolean  @default(false) @map("is_gluten_free")
+  isHalal       Boolean  @default(false) @map("is_halal")
+  region        String?  // 'us', 'eu', 'ap'
+  cuisineTags   String[] @default([]) @map("cuisine_tags")
+  source        String   @default("OPENFOODFACTS")  // OPENFOODFACTS | FOODB | CUSTOM
+  foodGroup     String?  @map("food_group")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@map("food_items")
+}
+
+model MealLog {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  loggedAt      DateTime @default(now()) @map("logged_at")
+  mealType      MealType @map("meal_type")
+  foodItems     Json     @map("food_items")
+  totalCalories Float    @map("total_calories")
+  totalProtein  Float    @map("total_protein")
+  totalCarbs    Float    @map("total_carbs")
+  totalFat      Float    @map("total_fat")
+  isAdherent    Boolean  @map("is_adherent")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([userId, loggedAt(sort: Desc)])
+  @@map("meal_logs")
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+model Recipe {
+  id            String   @id @default(uuid())
+  title         String
+  description   String?
+  prepTimeMins  Int      @default(0) @map("prep_time_mins")
+  cookTimeMins  Int      @default(0) @map("cook_time_mins")
+  servings      Int      @default(1)
+  calories      Float    @default(0)
+  protein       Float    @default(0)
+  carbs         Float    @default(0)
+  fat           Float    @default(0)
+  ingredients   Json     @default("[]") // Array of { name, amount, unit }
+  instructions  Json     @default("[]") // Array of strings
+  tags          String[] @default([])
+  image         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("recipes")
+}
+
+model FastingLog {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  startTime     DateTime  @map("start_time")
+  endTime       DateTime? @map("end_time")
+  targetHours   Int       @map("target_hours") @default(16)
+  status        String    @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, startTime(sort: Desc)])
+  @@map("fasting_logs")
+}

@@ -1,0 +1,190 @@
+├── .env.local
+├── .env.local.example
+├── .gitignore
+├── .turbo
+│   ├── turbo-build.log
+│   └── turbo-check-types.log
+├── app
+│   ├── admin
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── api
+│   │   ├── exercises-free
+│   │   │   └── route.ts
+│   │   └── food-search
+│   │       └── route.ts
+│   ├── coach
+│   │   └── dashboard
+│   │       └── page.tsx
+│   ├── dashboard
+│   │   ├── coaches
+│   │   │   ├── chat
+│   │   │   │   └── page.tsx
+│   │   │   └── page.tsx
+│   │   ├── community
+│   │   │   ├── challenges
+│   │   │   │   └── page.tsx
+│   │   │   ├── page.tsx
+│   │   │   └── user
+│   │   │       └── [id]
+│   │   │           └── page.tsx
+│   │   ├── exercise
+│   │   │   └── page.tsx
+│   │   ├── exercises
+│   │   │   ├── analytics
+│   │   │   │   └── page.tsx
+│   │   │   ├── calculator
+│   │   │   │   └── page.tsx
+│   │   │   ├── history
+│   │   │   │   └── page.tsx
+│   │   │   ├── muscles
+│   │   │   │   └── page.tsx
+│   │   │   ├── page.tsx
+│   │   │   ├── report
+│   │   │   │   └── page.tsx
+│   │   │   ├── routines
+│   │   │   │   └── page.tsx
+│   │   │   └── [id]
+│   │   │       └── page.tsx
+│   │   ├── layout.tsx
+│   │   ├── meals
+│   │   │   ├── encyclopedia
+│   │   │   │   └── page.tsx
+│   │   │   ├── page.tsx
+│   │   │   ├── planner
+│   │   │   │   └── page.tsx
+│   │   │   └── recipes
+│   │   │       └── page.tsx
+│   │   ├── messages
+│   │   │   └── page.tsx
+│   │   ├── page.tsx
+│   │   ├── performance
+│   │   │   ├── measurements
+│   │   │   │   └── page.tsx
+│   │   │   ├── page.tsx
+│   │   │   ├── photos
+│   │   │   │   └── page.tsx
+│   │   │   └── reports
+│   │   │       └── page.tsx
+│   │   ├── plan
+│   │   │   └── page.tsx
+│   │   ├── profile
+│   │   │   └── page.tsx
+│   │   ├── settings
+│   │   │   └── page.tsx
+│   │   ├── sleep
+│   │   │   └── page.tsx
+│   │   ├── specialist
+│   │   │   └── page.tsx
+│   │   └── training
+│   │       ├── complete
+│   │       │   └── page.tsx
+│   │       ├── onboarding
+│   │       │   └── page.tsx
+│   │       ├── page.tsx
+│   │       └── workout
+│   │           └── page.tsx
+│   ├── favicon.ico
+│   ├── fonts
+│   │   ├── GeistMonoVF.woff
+│   │   └── GeistVF.woff
+│   ├── globals.css
+│   ├── layout.tsx
+│   ├── login
+│   │   └── page.tsx
+│   ├── onboarding
+│   │   └── page.tsx
+│   ├── page.module.css
+│   ├── page.tsx
+│   ├── providers.tsx
+│   ├── register
+│   │   └── page.tsx
+│   ├── settings
+│   │   ├── layout.tsx
+│   │   ├── notifications
+│   │   │   └── page.tsx
+│   │   ├── preferences
+│   │   │   └── page.tsx
+│   │   ├── profile
+│   │   │   └── page.tsx
+│   │   └── subscription
+│   │       └── page.tsx
+│   └── shifts
+│       ├── new
+│       │   └── page.tsx
+│       └── [id]
+│           └── edit
+│               └── page.tsx
+├── build_error.log
+├── build_log.txt
+├── build_log_v2.txt
+├── build_log_v3.txt
+├── build_log_v4.txt
+├── build_log_v5.txt
+├── build_log_v6.txt
+├── build_output.txt
+├── components
+│   ├── BarcodeScannerModal.tsx
+│   ├── BodyMetricsLog.tsx
+│   ├── dashboard
+│   │   └── InteractiveAICoach.tsx
+│   ├── health
+│   │   └── KegelTrainer.tsx
+│   ├── InteractiveTrackingHub.tsx
+│   ├── nutrition
+│   │   ├── FastingTimer.tsx
+│   │   ├── MealInsightsPanel.tsx
+│   │   ├── TrackMacros.tsx
+│   │   └── WaterTracker.tsx
+│   ├── progress
+│   │   ├── ActivityHeatmap.tsx
+│   │   └── HabitChallenges.tsx
+│   ├── StepTracker.tsx
+│   ├── StrengthAnalytics.tsx
+│   ├── ui
+│   │   ├── button.tsx
+│   │   ├── card.tsx
+│   │   ├── input.tsx
+│   │   ├── label.tsx
+│   │   └── progress.tsx
+│   ├── workout
+│   │   ├── ExerciseLibraryModal.tsx
+│   │   ├── GuidedPlayer.tsx
+│   │   ├── MuscleBodyMap.tsx
+│   │   ├── PlateMathModal.tsx
+│   │   ├── RestTimerOverlay.tsx
+│   │   └── WorkoutSummaryModal.tsx
+│   └── WorkoutLogHub.tsx
+├── context
+│   ├── auth-context.tsx
+│   └── workout-context.tsx
+├── Dockerfile
+├── errors.txt
+├── eslint.config.js
+├── lib
+│   ├── api.ts
+│   ├── exercisedb.ts
+│   ├── socket.tsx
+│   └── utils.ts
+├── next-env.d.ts
+├── next.config.js
+├── out.txt
+├── package.json
+├── postcss.config.js
+├── proxy.ts
+├── public
+│   ├── file-text.svg
+│   ├── globe.svg
+│   ├── next.svg
+│   ├── turborepo-dark.svg
+│   ├── turborepo-light.svg
+│   ├── vercel.svg
+│   └── window.svg
+├── README.md
+├── store
+│   ├── authStore.ts
+│   ├── shiftStore.ts
+│   └── workoutStore.ts
+├── tsconfig.json
+├── ts_errors.log
+└── ts_out.txt

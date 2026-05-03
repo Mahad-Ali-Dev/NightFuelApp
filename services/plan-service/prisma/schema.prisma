@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("PLAN_DATABASE_URL")
+  directUrl = env("PLAN_DIRECT_URL")
+}
+
+model DayPlan {
+  id                  String     @id @default(uuid())
+  userId              String     @map("user_id")
+  planDate            DateTime   @map("plan_date") @db.Date
+  shiftId             String?    @map("shift_id")
+  circadianProfileId  String?    @map("circadian_profile_id")
+  protocolId          String?    @map("protocol_id")
+  planVersion         Int        @default(1) @map("plan_version")
+  plan                Json
+  generationModel     String     @map("generation_model")
+  generationLatencyMs Int?       @map("generation_latency_ms")
+  generationTokens    Int?       @map("generation_tokens")
+  userRating          Int?       @map("user_rating")
+  status              PlanStatus @default(ACTIVE)
+  createdAt           DateTime   @default(now()) @map("created_at")
+  updatedAt           DateTime   @updatedAt @map("updated_at")
+
+  protocol ProtocolTemplate? @relation(fields: [protocolId], references: [id])
+
+  @@unique([userId, planDate, planVersion])
+  @@index([userId, planDate(sort: Desc)])
+  @@map("day_plans")
+}
+
+model ProtocolTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  creatorId   String   @map("creator_id") // Specialist userId
+  parameters  Json     // { calories, protein_g, volume_modifier, deload, etc. }
+  isPublic    Boolean  @default(false) @map("is_public")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  plans DayPlan[]
+
+  @@map("protocol_templates")
+}
+
+enum PlanStatus {
+  DRAFT
+  PUBLISHED
+  ACTIVE
+  ADJUSTED
+  SUPERSEDED
+  INVALIDATED
+  EXPIRED
+  DELETED
+}

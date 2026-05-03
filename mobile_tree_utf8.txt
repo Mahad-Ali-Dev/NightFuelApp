@@ -1,0 +1,223 @@
+├── .env.example
+├── .gitignore
+├── app
+│   ├── (admin)
+│   │   ├── index.tsx
+│   │   └── _layout.tsx
+│   ├── (auth)
+│   │   ├── forgot-password.tsx
+│   │   ├── login.tsx
+│   │   ├── register.tsx
+│   │   └── _layout.tsx
+│   ├── (coach)
+│   │   ├── dashboard.tsx
+│   │   └── _layout.tsx
+│   ├── (community)
+│   │   ├── challenges.tsx
+│   │   ├── index.tsx
+│   │   ├── leaderboard.tsx
+│   │   ├── [postId].tsx
+│   │   └── _layout.tsx
+│   ├── (exercises)
+│   │   ├── analytics.tsx
+│   │   ├── calculator.tsx
+│   │   ├── history.tsx
+│   │   ├── index.tsx
+│   │   ├── muscles.tsx
+│   │   ├── report.tsx
+│   │   ├── routines.tsx
+│   │   ├── [id].tsx
+│   │   └── _layout.tsx
+│   ├── (meals)
+│   │   ├── encyclopedia.tsx
+│   │   ├── fasting.tsx
+│   │   ├── grocery.tsx
+│   │   ├── log-meal.tsx
+│   │   ├── planner.tsx
+│   │   ├── recipes.tsx
+│   │   └── _layout.tsx
+│   ├── (modals)
+│   │   ├── active-workout.tsx
+│   │   ├── ai-coach.tsx
+│   │   ├── barcode-scanner.tsx
+│   │   ├── build-plate.tsx
+│   │   ├── create-post.tsx
+│   │   ├── log-sleep.tsx
+│   │   ├── meal-detail.tsx
+│   │   ├── premium.tsx
+│   │   └── _layout.tsx
+│   ├── (onboarding)
+│   │   ├── ai-optimization.tsx
+│   │   ├── dietary-needs.tsx
+│   │   ├── environment.tsx
+│   │   ├── metrics-goals.tsx
+│   │   ├── permissions.tsx
+│   │   ├── profile-summary.tsx
+│   │   ├── shift-type.tsx
+│   │   ├── sleep-schedule.tsx
+│   │   └── _layout.tsx
+│   ├── (performance)
+│   │   ├── body-metrics.tsx
+│   │   ├── calendar.tsx
+│   │   ├── hydration.tsx
+│   │   ├── index.tsx
+│   │   ├── photos.tsx
+│   │   ├── reports.tsx
+│   │   └── _layout.tsx
+│   ├── (settings)
+│   │   ├── index.tsx
+│   │   ├── notifications.tsx
+│   │   ├── preferences.tsx
+│   │   ├── subscription.tsx
+│   │   └── _layout.tsx
+│   ├── (shifts)
+│   │   ├── index.tsx
+│   │   ├── sleep-optimizer.tsx
+│   │   └── _layout.tsx
+│   ├── (tabs)
+│   │   ├── analytics.tsx
+│   │   ├── circadian.tsx
+│   │   ├── community.tsx
+│   │   ├── index.tsx
+│   │   ├── nutrition.tsx
+│   │   ├── profile
+│   │   │   ├── edit.tsx
+│   │   │   └── preferences.tsx
+│   │   ├── profile.tsx
+│   │   ├── schedule.tsx
+│   │   ├── training.tsx
+│   │   └── _layout.tsx
+│   ├── coaches
+│   │   └── browse.tsx
+│   ├── index.tsx
+│   ├── messages
+│   │   └── [id].tsx
+│   ├── training
+│   │   ├── complete.tsx
+│   │   ├── onboarding.tsx
+│   │   ├── workout.tsx
+│   │   └── _layout.tsx
+│   └── _layout.tsx
+├── app.json
+├── assets
+│   └── images
+│       ├── adaptive-icon.png
+│       ├── android-icon-background.png
+│       ├── android-icon-foreground.png
+│       ├── android-icon-monochrome.png
+│       ├── favicon.png
+│       ├── icon.png
+│       ├── notification-icon.png
+│       └── splash-icon.png
+├── babel.config.js
+├── eas.json
+├── expo-env.d.ts
+├── metro.config.js
+├── package.json
+├── README.md
+├── src
+│   ├── api
+│   │   ├── admin.ts
+│   │   ├── ai.ts
+│   │   ├── auth.ts
+│   │   ├── chat.ts
+│   │   ├── circadian.ts
+│   │   ├── client.ts
+│   │   ├── community.ts
+│   │   ├── exercises.ts
+│   │   ├── meals.ts
+│   │   ├── notifications.ts
+│   │   ├── plans.ts
+│   │   ├── profile.ts
+│   │   ├── progress.ts
+│   │   ├── shifts.ts
+│   │   ├── sleep.ts
+│   │   ├── subscriptions.ts
+│   │   └── users.ts
+│   ├── components
+│   │   ├── ActivityHeatmap.tsx
+│   │   ├── chat
+│   │   │   ├── ChatBubble.tsx
+│   │   │   ├── QuickReplies.tsx
+│   │   │   ├── RichMediaCard.tsx
+│   │   │   └── VoiceInput.tsx
+│   │   ├── coach
+│   │   │   ├── AlertBanner.tsx
+│   │   │   ├── ClientCard.tsx
+│   │   │   └── PlanBuilder.tsx
+│   │   ├── dashboard
+│   │   │   ├── CircadianClock.tsx
+│   │   │   ├── HydrationWidget.tsx
+│   │   │   ├── NextMealCard.tsx
+│   │   │   ├── QuickActions.tsx
+│   │   │   ├── ScheduleTimeline.tsx
+│   │   │   ├── ShiftCountdown.tsx
+│   │   │   └── SleepWindowCard.tsx
+│   │   ├── ErrorBoundary.tsx
+│   │   ├── NetworkStatusBar.tsx
+│   │   ├── nutrition
+│   │   │   ├── FastingTimer.tsx
+│   │   │   ├── FoodSearchSheet.tsx
+│   │   │   ├── MacroRings.tsx
+│   │   │   ├── MealLogCard.tsx
+│   │   │   └── PlateBuilder.tsx
+│   │   ├── RiaCoachFAB.tsx
+│   │   ├── ui
+│   │   │   ├── Avatar.tsx
+│   │   │   ├── Badge.tsx
+│   │   │   ├── Button.tsx
+│   │   │   ├── Card.tsx
+│   │   │   ├── CircularProgress.tsx
+│   │   │   ├── FAB.tsx
+│   │   │   ├── index.ts
+│   │   │   ├── Input.tsx
+│   │   │   ├── ProgressBar.tsx
+│   │   │   └── SearchBar.tsx
+│   │   ├── WeeklyRecap.tsx
+│   │   └── workout
+│   │       ├── ExerciseRow.tsx
+│   │       ├── RestTimer.tsx
+│   │       ├── SetLogger.tsx
+│   │       ├── StrengthChart.tsx
+│   │       └── WorkoutCard.tsx
+│   ├── hooks
+│   │   ├── useAuth.ts
+│   │   ├── useChat.ts
+│   │   ├── useCircadian.ts
+│   │   ├── useCommunity.ts
+│   │   ├── useHydration.ts
+│   │   ├── useNotifications.ts
+│   │   ├── useNutrition.ts
+│   │   ├── useOfflineSync.ts
+│   │   ├── usePlan.ts
+│   │   ├── useProgress.ts
+│   │   ├── useShift.ts
+│   │   ├── useSleep.ts
+│   │   ├── useTheme.ts
+│   │   └── useWorkout.ts
+│   ├── store
+│   │   ├── authStore.ts
+│   │   ├── offlineStore.ts
+│   │   ├── onboardingStore.ts
+│   │   ├── shiftStore.ts
+│   │   └── themeStore.ts
+│   ├── theme
+│   │   ├── colors.ts
+│   │   ├── index.ts
+│   │   ├── shadows.ts
+│   │   ├── spacing.ts
+│   │   ├── typography.ts
+│   │   └── utils.ts
+│   ├── types
+│   │   ├── api.ts
+│   │   └── navigation.ts
+│   └── utils
+│       ├── circadian.ts
+│       ├── formatters.ts
+│       ├── offline.ts
+│       ├── storage.ts
+│       ├── validation.ts
+│       └── validators.ts
+├── tsconfig.json
+├── tsc_output.txt
+└── tsc_output_utf8.txt

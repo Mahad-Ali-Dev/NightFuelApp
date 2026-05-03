@@ -1,0 +1,121 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("USER_DATABASE_URL")
+  directUrl = env("USER_DIRECT_URL")
+}
+
+model UserProfile {
+  id                  String        @id @default(uuid())
+  userId              String        @unique @map("user_id")
+  displayName         String        @map("display_name")
+  avatarUrl           String?       @map("avatar_url")
+  dateOfBirth         DateTime?     @map("date_of_birth") @db.Date
+  heightCm            Float?        @map("height_cm")
+  weightKg            Float?        @map("weight_kg")
+  biologicalSex       String?       @map("biological_sex")
+  timezone            String        @default("UTC")
+  region              String        @default("us") // 'us', 'eu', 'ap'
+  onboardingCompleted Boolean       @default(false) @map("onboarding_completed")
+  onboardingStep      Int           @default(0) @map("onboarding_step")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  preferences UserPreferences?
+  status      UserStatus?
+
+  @@map("user_profiles")
+}
+
+model UserPreferences {
+  id                String   @id @default(uuid())
+  userId            String   @unique @map("user_id")
+  primaryGoal       String   @default("GENERAL_HEALTH") @map("primary_goal")   // FitnessGoal enum
+  dietaryPreference String   @default("NONE") @map("dietary_preference")        // DietaryPreference enum
+  targetCalories    Float?   @map("target_calories")
+  targetProteinG    Float?   @map("target_protein_g")
+  targetCarbsG      Float?   @map("target_carbs_g")
+  targetFatG        Float?   @map("target_fat_g")
+  activityLevel     String   @default("MODERATELY_ACTIVE") @map("activity_level") // ActivityLevel enum
+  experienceLevel   String   @default("BEGINNER") @map("experience_level")        // ExperienceLevel enum
+  lifestyleType     String   @default("OFFICE_WORKER") @map("lifestyle_type")     // LifestyleType enum
+  sleepWindowStart  String?  @map("sleep_window_start")
+  sleepWindowEnd    String?  @map("sleep_window_end")
+  allergies         String[] @default([])
+  healthConditions  String[] @default([]) @map("health_conditions")
+  dietMode          String   @default("BALANCED") @map("diet_mode") // BUDGET, ACNE_SAFE, RAMADAN, MASS_GAIN, CUTTING, BALANCED
+  workoutEnvironment String?  @default("GYM") @map("workout_environment")
+  availableEquipment String[] @default([]) @map("available_equipment")
+  isBodybuilderMode  Boolean  @default(false) @map("is_bodybuilder_mode")
+  isInjurySafeMode   Boolean  @default(false) @map("is_injury_safe_mode")
+  workoutDurationPreference Int @default(60) @map("workout_duration_preference")
+  splitPreference    String   @default("FULL_BODY") @map("split_preference")
+  activeProtocolId   String?  @map("active_protocol_id")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  profile UserProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model CoachProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique @map("user_id")
+  specializations  String[] @default([]) // e.g. ['nutrition', 'strength', 'night-shift']
+  bio              String?
+  certifications   String[] @default([])
+  isAvailable      Boolean  @default(false) @map("is_available")
+  monthlyRateUsd   Float?   @map("monthly_rate_usd")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  clients CoachClientRelation[] @relation("CoachRelations")
+
+  @@map("coach_profiles")
+}
+
+model CoachClientRelation {
+  id            String    @id @default(uuid())
+  coachUserId   String    @map("coach_user_id")
+  clientUserId  String    @map("client_user_id")
+  status        String    @default("PENDING") // CoachRelationStatus enum
+  startedAt     DateTime  @default(now()) @map("started_at")
+  endedAt       DateTime? @map("ended_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  coach CoachProfile @relation("CoachRelations", fields: [coachUserId], references: [userId], onDelete: Cascade)
+
+  @@unique([coachUserId, clientUserId])
+  @@index([clientUserId])
+  @@map("coach_client_relations")
+}
+
+model UserStatus {
+  id                String   @id @default(uuid())
+  userId            String   @unique @map("user_id")
+  
+  // Biological State
+  fatigueScore      Float    @default(0) @map("fatigue_score")
+  circadianPeakTime String?  @map("circadian_peak_time")
+  circadianLowTime  String?  @map("circadian_low_time")
+  
+  // Adherence & Performance
+  adherenceRate     Float    @default(0) @map("adherence_rate")
+  currentStreak     Int      @default(0) @map("current_streak")
+  
+  // Metabolism
+  currentTdee       Float?   @map("current_tdee")
+  weightTrend       String?  @map("weight_trend") // "STABLE", "UP", "DOWN"
+  
+  // Operation Context
+  lastUpdatedBy     String?  @map("last_updated_by")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  profile UserProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("user_statuses")
+}

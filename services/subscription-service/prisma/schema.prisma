@@ -1,0 +1,62 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// NightFuel – subscription-service Prisma Schema
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("SUB_DATABASE_URL")
+  directUrl = env("SUB_DIRECT_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  PREMIUM
+  ENTERPRISE
+}
+
+enum SubStatus {
+  ACTIVE
+  CANCELLED
+  PAST_DUE
+  TRIALING
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model Subscription {
+  id                 String           @id @default(uuid())
+  userId             String           @unique @map("user_id")
+  tier               SubscriptionTier @default(FREE)
+  status             SubStatus        @default(ACTIVE)
+  currentPeriodStart DateTime         @map("current_period_start")
+  currentPeriodEnd   DateTime?        @map("current_period_end")
+  cancelAtPeriodEnd  Boolean          @default(false) @map("cancel_at_period_end")
+  stripeCustomerId   String?          @map("stripe_customer_id")
+  stripeSubId        String?          @map("stripe_sub_id")
+  stripeConnectId    String?          @map("stripe_connect_id")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  @@map("subscriptions")
+}
+
+model SubscriptionEvent {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  eventType String   @map("event_type")
+  fromTier  String?  @map("from_tier")
+  toTier    String?  @map("to_tier")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("subscription_events")
+}

@@ -1,0 +1,29 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("STATE_DATABASE_URL")
+  directUrl = env("STATE_DIRECT_URL")
+}
+
+model UserState {
+  id                   String   @id @default(uuid())
+  userId               String   @unique @map("user_id")
+  last7DaysAdherence   Float    @default(1.0) @map("last_7_days_adherence")
+  avgSleepQuality      Float    @default(7.0) @map("avg_sleep_quality")
+  fatigueLevel         Float    @default(3.0) @map("fatigue_level")
+  currentWeightKg      Float?   @map("current_weight_kg")
+  targetWeightKg       Float?   @map("target_weight_kg")
+  currentCalorieTarget Float?   @map("current_calorie_target")
+  currentProteinTargetG Float?   @map("current_protein_target_g")
+  trainingPhase        String   @default("HYPERTROPHY") @map("training_phase")
+  cycleWeek            Int      @default(1) @map("cycle_week")
+  lastEventId          String?  @map("last_event_id")
+  lastProcessedAt      DateTime @default(now()) @map("last_processed_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("user_states")
+}

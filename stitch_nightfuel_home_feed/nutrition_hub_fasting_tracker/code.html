@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nutrition Hub &amp; Fasting Tracker</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#FF5E3A", // Electric Orange from description
+                        "background-light": "#f8f6f5",
+                        "background-dark": "#0E1117", // Updated to match description
+                        emerald: "#10B981",
+                        cyan: "#22D3EE",
+                        purple: "#8B5CF6",
+                        surface: "#1C1F26" // Slightly lighter than background for cards
+                    },
+                    fontFamily: {
+                        display: ["Space Grotesk", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "1rem",
+                        lg: "1.5rem", 
+                        xl: "2rem",
+                        full: "9999px",
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
+<!-- Header -->
+<div class="sticky top-0 z-20 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+<div class="flex items-center justify-between">
+<button class="flex items-center justify-center w-10 h-10 rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-surface transition-colors">
+<span class="material-symbols-outlined">arrow_back</span>
+</button>
+<h1 class="text-lg font-bold tracking-tight">Nutrition Hub</h1>
+<button class="flex items-center justify-center w-10 h-10 rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-surface transition-colors">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+</div>
+<!-- Main Content -->
+<div class="flex-1 px-4 py-6 flex flex-col gap-6 overflow-y-auto pb-24">
+<!-- Hero Section with Meal Image -->
+<div class="relative w-full h-48 rounded-xl overflow-hidden shadow-lg group">
+<div class="absolute inset-0 bg-gradient-to-t from-background-dark via-transparent to-transparent z-10"></div>
+<img alt="Healthy high protein meal bowl" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" data-alt="Healthy high protein meal bowl" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAttW7B60lmvxsvej_gJlZiAYzHqCk0--B7Zoe8NM-qSTKRV5oce0GYSz2GlunYtylwd7urI8AnQl4uQ8x8NlcWjPPjmbyQcZNayX8wcOufoqcpiEVQyCPnFXzUYlgboUFvAkYnn1TGslen3d0WXQuXk8BZlwL9eHa6sslGMaIQSlu5kpzDWR6P_quNHppVBlm6qNLAZvvJvCN0NrsnNWT0ElFkbj5i3Yp5K7SamMi7lOgXYAFQagNekfnGXO3OojzMRIOy0y8TVCg"/>
+<div class="absolute bottom-0 left-0 p-4 z-20">
+<p class="text-xs font-medium text-emerald uppercase tracking-wider mb-1">Daily Goal</p>
+<h2 class="text-2xl font-bold text-white">2,450 kcal</h2>
+<div class="w-full h-1 bg-slate-700 mt-2 rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[65%] rounded-full shadow-[0_0_10px_rgba(255,94,58,0.5)]"></div>
+</div>
+<p class="text-xs text-slate-300 mt-1">1,600 kcal consumed</p>
+</div>
+</div>
+<!-- Macro Rings -->
+<div class="grid grid-cols-3 gap-3">
+<!-- Protein -->
+<div class="bg-surface p-4 rounded-xl border border-slate-800 flex flex-col items-center gap-3 shadow-md">
+<div class="relative w-16 h-16 flex items-center justify-center">
+<svg class="transform -rotate-90 w-16 h-16">
+<circle class="text-slate-800" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-width="4"></circle>
+<circle class="text-emerald drop-shadow-[0_0_4px_rgba(16,185,129,0.5)]" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-dasharray="175.9" stroke-dashoffset="26" stroke-width="4"></circle>
+</svg>
+<span class="absolute text-xs font-bold text-emerald">85%</span>
+</div>
+<div class="text-center">
+<p class="text-sm font-medium text-slate-300">Protein</p>
+<p class="text-lg font-bold text-white leading-none">145g</p>
+</div>
+</div>
+<!-- Carbs -->
+<div class="bg-surface p-4 rounded-xl border border-slate-800 flex flex-col items-center gap-3 shadow-md">
+<div class="relative w-16 h-16 flex items-center justify-center">
+<svg class="transform -rotate-90 w-16 h-16">
+<circle class="text-slate-800" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-width="4"></circle>
+<circle class="text-emerald drop-shadow-[0_0_4px_rgba(16,185,129,0.5)]" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-dasharray="175.9" stroke-dashoffset="105" stroke-width="4"></circle>
+</svg>
+<span class="absolute text-xs font-bold text-emerald">40%</span>
+</div>
+<div class="text-center">
+<p class="text-sm font-medium text-slate-300">Carbs</p>
+<p class="text-lg font-bold text-white leading-none">60g</p>
+</div>
+</div>
+<!-- Fats -->
+<div class="bg-surface p-4 rounded-xl border border-slate-800 flex flex-col items-center gap-3 shadow-md">
+<div class="relative w-16 h-16 flex items-center justify-center">
+<svg class="transform -rotate-90 w-16 h-16">
+<circle class="text-slate-800" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-width="4"></circle>
+<circle class="text-emerald drop-shadow-[0_0_4px_rgba(16,185,129,0.5)]" cx="32" cy="32" fill="transparent" r="28" stroke="currentColor" stroke-dasharray="175.9" stroke-dashoffset="61" stroke-width="4"></circle>
+</svg>
+<span class="absolute text-xs font-bold text-emerald">65%</span>
+</div>
+<div class="text-center">
+<p class="text-sm font-medium text-slate-300">Fats</p>
+<p class="text-lg font-bold text-white leading-none">55g</p>
+</div>
+</div>
+</div>
+<!-- Fasting Timer Card -->
+<div class="bg-surface rounded-xl p-6 border border-slate-800 relative overflow-hidden">
+<!-- Decorative gradient for "data-driven" look -->
+<div class="absolute top-0 right-0 w-32 h-32 bg-cyan/5 rounded-full blur-2xl -mr-10 -mt-10"></div>
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-cyan">timer</span>
+<h3 class="text-lg font-bold text-white">Fasting Timer</h3>
+</div>
+<span class="px-3 py-1 bg-cyan/10 text-cyan text-xs font-medium rounded-full border border-cyan/20">16:8 Protocol</span>
+</div>
+<div class="flex items-center gap-6">
+<!-- Circular Countdown -->
+<div class="relative w-24 h-24 flex-shrink-0">
+<svg class="transform -rotate-90 w-24 h-24">
+<circle class="text-slate-800" cx="48" cy="48" fill="transparent" r="42" stroke="currentColor" stroke-width="6"></circle>
+<!-- progress -->
+<circle class="text-cyan drop-shadow-[0_0_8px_rgba(34,211,238,0.6)]" cx="48" cy="48" fill="transparent" r="42" stroke="currentColor" stroke-dasharray="263.8" stroke-dashoffset="80" stroke-linecap="round" stroke-width="6"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="material-symbols-outlined text-cyan text-xl">bolt</span>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<p class="text-sm text-slate-400">Current Window</p>
+<p class="text-3xl font-display font-bold text-white tracking-tighter">14:22</p>
+<p class="text-sm text-cyan font-medium">Remaining until feast</p>
+</div>
+</div>
+<div class="mt-4 flex gap-2">
+<button class="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg transition-colors">Adjust</button>
+<button class="flex-1 py-2 bg-cyan/20 hover:bg-cyan/30 text-cyan text-sm font-medium rounded-lg border border-cyan/30 transition-colors">End Fast</button>
+</div>
+</div>
+<!-- Build Plate CTA -->
+<button class="w-full bg-primary hover:bg-orange-600 text-white font-bold py-4 px-6 rounded-xl shadow-[0_4px_20px_rgba(255,94,58,0.4)] flex items-center justify-center gap-3 transition-all active:scale-95 group">
+<span class="material-symbols-outlined text-2xl group-hover:rotate-12 transition-transform">restaurant</span>
+<span class="text-lg">Build Your Plate</span>
+</button>
+</div>
+<!-- AI Coach FAB -->
+<div class="fixed bottom-24 right-4 z-30">
+<button class="w-14 h-14 rounded-full bg-purple flex items-center justify-center shadow-[0_0_15px_rgba(139,92,246,0.6)] hover:shadow-[0_0_25px_rgba(139,92,246,0.8)] hover:scale-105 transition-all">
+<span class="material-symbols-outlined text-white text-2xl">smart_toy</span>
+</button>
+</div>
+<!-- Bottom Nav Bar -->
+<div class="fixed bottom-0 left-0 w-full z-40 border-t border-slate-800 bg-background-dark/95 backdrop-blur-md px-4 pb-6 pt-3">
+<div class="flex justify-between items-end">
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-slate-400 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]">dashboard</span>
+<p class="text-[10px] font-medium leading-normal tracking-wide">Dashboard</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-primary" href="#">
+<span class="material-symbols-outlined text-[24px] font-variation-settings-'FILL'1">restaurant_menu</span>
+<p class="text-[10px] font-medium leading-normal tracking-wide">Nutrition</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-slate-400 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]">pool</span>
+<p class="text-[10px] font-medium leading-normal tracking-wide">Workouts</p>
+</a>
+<a class="flex flex-1 flex-col items-center justify-end gap-1 text-slate-400 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[24px]">person</span>
+<p class="text-[10px] font-medium leading-normal tracking-wide">Profile</p>
+</a>
+</div>
+</div>
+</body></html>

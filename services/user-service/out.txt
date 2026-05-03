@@ -1,0 +1,14 @@
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "postgres", schema "public" at "aws-1-ap-northeast-2.pooler.supabase.com:5432"
+
+⚠️  There might be data loss when applying the changes:
+
+  • You are about to drop the `refresh_tokens` table, which is not empty (4 rows).
+
+  • You are about to drop the `users` table, which is not empty (4 rows).
+
+
+
+[?25l[2K[1G[36m?[39m [1mDo you want to ignore the warning(s)?[22m [90m»[39m [90m(y/N)[39m[2K[1G[2K[1G[32m√[39m [1mDo you want to ignore the warning(s)?[22m [90m...[39m no
+[?25hPush cancelled.

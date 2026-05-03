@@ -1,0 +1,179 @@
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { Image } from 'expo-image';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useTheme } from '@/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { logMeal, searchFoods, getFoodById, getRecipe, FoodItem } from '@/api/meals';
+import { LinearGradient } from 'expo-linear-gradient';
+import { withAlpha } from '@/theme/utils';
+const MT = [
+    { id:'BREAKFAST', label:'Breakfast', img:'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=300&q=70', color:'#F59E0B' },
+    { id:'LUNCH', label:'Lunch', img:'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&q=70', color:'#2ECC71' },
+    { id:'DINNER', label:'Dinner', img:'https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?w=300&q=70', color:'#A855F7' },
+    { id:'SNACK', label:'Snack', img:'https://images.unsplash.com/photo-1574116813310-adc5f95a4fe4?w=300&q=70', color:'#00D4FF' },
+];
+type PlateItem = {name:string;calories:number;protein:number;carbs:number;fat:number;qty:number};
+export default function LogMealScreen() {
+    const { colors, typography } = useTheme();
+    const insets = useSafeAreaInsets();
+    const router = useRouter();
+    const qc = useQueryClient();
+    const params = useLocalSearchParams<{
+        foodId?: string;
+        recipeId?: string;
+        preset?: string;
+        // Populated by barcode-scanner when it resolves a product via Open Food Facts
+        barcodeName?: string;
+        barcodeCalories?: string;
+        barcodeProtein?: string;
+        barcodeCarbs?: string;
+        barcodeFat?: string;
+    }>();
+    const [mealType, setMealType] = useState('BREAKFAST');
+    const [sq, setSq] = useState('');
+    const [plate, setPlate] = useState<PlateItem[]>([]);
+    const foodQ = useQuery({ queryKey:['log-food',params.foodId], queryFn:()=>getFoodById(params.foodId!), enabled:!!params.foodId });
+    const recipeQ = useQuery({ queryKey:['log-recipe',params.recipeId], queryFn:()=>getRecipe(params.recipeId!), enabled:!!params.recipeId });
+    const searchQ = useQuery({ queryKey:['meal-search',sq], queryFn:()=>searchFoods({q:sq,limit:20}), enabled:sq.length>2 });
+    const logM = useMutation({
+        mutationFn:(payload:any)=>logMeal(payload),
+        onSuccess:()=>{ qc.invalidateQueries({queryKey:['meal-logs']}); qc.invalidateQueries({queryKey:['daily-progress']}); router.push('/(tabs)/nutrition' as any); },
+        onError:(err:any)=>Alert.alert('Error', err.message||'Could not log meal.'),
+    });
+    const totals = useMemo(()=>plate.reduce((a,i)=>({calories:a.calories+i.calories*i.qty,protein:a.protein+i.protein*i.qty,carbs:a.carbs+i.carbs*i.qty,fat:a.fat+i.fat*i.qty}),{calories:0,protein:0,carbs:0,fat:0}),[plate]);
+    const addToPlate = (item:FoodItem) => {
+        if(plate.find(p=>p.name===item.name)) return;
+        setPlate(prev=>[...prev,{name:item.name,calories:item.calories,protein:item.protein,carbs:item.carbs,fat:item.fat,qty:1}]);
+        setSq('');
+    };
+    // Pre-populate from foodId / recipeId params
+    React.useEffect(()=>{
+        const preItem = foodQ.data||recipeQ.data;
+        if(preItem&&plate.length===0){
+            const isRecipe = 'title' in preItem;
+            setPlate([{name:isRecipe?(preItem as any).title:preItem.name,calories:preItem.calories,protein:preItem.protein,carbs:preItem.carbs,fat:preItem.fat,qty:1}]);
+        }
+    },[foodQ.data,recipeQ.data]);
+
+    // Pre-populate from barcode-scanner (Open Food Facts resolved product)
+    React.useEffect(()=>{
+        if(params.barcodeName && plate.length===0){
+            setPlate([{
+                name:     params.barcodeName,
+                calories: Number(params.barcodeCalories ?? 0),
+                protein:  Number(params.barcodeProtein  ?? 0),
+                carbs:    Number(params.barcodeCarbs    ?? 0),
+                fat:      Number(params.barcodeFat      ?? 0),
+                qty:      1,
+            }]);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    },[params.barcodeName]);
+    const mc = MT.find(m=>m.id===mealType)!;
+    const handleLog = () => {
+        if(!mc||plate.length===0) return;
+        logM.mutate({ mealType, foodItems:plate.map(i=>({name:i.name,quantity:i.qty,calories:i.calories*i.qty,protein:i.protein*i.qty,carbs:i.carbs*i.qty,fat:i.fat*i.qty})) });
+    };
+    return (
+        <View style={[s.container,{backgroundColor:colors.background.primary}]}>
+            <View style={[s.header,{paddingTop:insets.top+16,borderBottomColor:colors.border.default}]}>
+                <TouchableOpacity onPress={()=>router.back()}><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></TouchableOpacity>
+                <Text style={[typography.heading,{color:colors.text.primary,fontSize:20}]}>Log Meal</Text>
+                <View style={{width:24}} />
+            </View>
+            <ScrollView contentContainerStyle={{paddingBottom:120}} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Text style={[typography.caption,{color:colors.text.tertiary,fontWeight:'bold',paddingHorizontal:20,marginTop:20,marginBottom:12}]}>SELECT MEAL TYPE</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal:20,gap:12,marginBottom:24}}>
+                    {MT.map((mt)=>(
+                        <TouchableOpacity key={mt.id} style={[s.mealCard,mealType===mt.id&&{borderColor:mt.color,borderWidth:2}]} activeOpacity={0.85} onPress={()=>setMealType(mt.id)}>
+                            <Image source={{uri:mt.img}} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+                            <LinearGradient colors={['rgba(0,0,0,0.05)','rgba(0,0,0,0.75)']} style={StyleSheet.absoluteFillObject} />
+                            {mealType===mt.id&&<View style={[s.mealChk,{backgroundColor:mt.color}]}><Ionicons name="checkmark" size={12} color="#FFF" /></View>}
+                            <Text style={[typography.caption,{color:'#FFF',fontWeight:'bold',fontSize:11,zIndex:1}]}>{mt.label.toUpperCase()}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+                <Text style={[typography.caption,{color:colors.text.tertiary,fontWeight:'bold',paddingHorizontal:20,marginBottom:12}]}>ADD FOOD</Text>
+                <View style={[s.searchBox,{backgroundColor:colors.background.secondary,borderColor:colors.border.default,marginHorizontal:20,marginBottom:12}]}>
+                    <Ionicons name="search" size={18} color={colors.text.tertiary} />
+                    <TextInput style={[s.searchIn,{color:colors.text.primary}]} placeholder="Search food..." placeholderTextColor={colors.text.tertiary} value={sq} onChangeText={setSq} />
+                    {sq.length>0&&<TouchableOpacity onPress={()=>setSq('')}><Ionicons name="close-circle" size={18} color={colors.text.tertiary} /></TouchableOpacity>}
+                </View>
+                {searchQ.isLoading&&<ActivityIndicator color={colors.accent.coral} style={{marginTop:8}} />}
+                {sq.length>2&&(searchQ.data as FoodItem[]||[]).length>0&&(
+                    <View style={{marginHorizontal:20,marginBottom:16}}>
+                        {(searchQ.data as FoodItem[]).slice(0,6).map((item)=>(
+                            <TouchableOpacity key={item.id} style={[s.searchResult,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]} onPress={()=>addToPlate(item)}>
+                                <View style={{flex:1}}>
+                                    <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold'}]}>{item.name}</Text>
+                                    <Text style={[typography.caption,{color:colors.text.tertiary}]}>{Math.round(item.calories)} kcal per serving</Text>
+                                </View>
+                                <Ionicons name="add-circle" size={24} color={colors.accent.coral} />
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                )}
+                {plate.length>0&&(
+                    <View style={{paddingHorizontal:20}}>
+                        <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                            <Text style={[typography.heading,{color:colors.text.primary,fontSize:16}]}>Your Plate</Text>
+                            <Text style={[typography.caption,{color:colors.text.tertiary}]}>{plate.length} item{plate.length>1?'s':''}</Text>
+                        </View>
+                        {plate.map((item,idx)=>(
+                            <View key={idx} style={[s.plateRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
+                                <View style={[s.plateAccent,{backgroundColor:mc?.color||colors.accent.coral}]} />
+                                <View style={{flex:1,paddingLeft:12}}>
+                                    <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold'}]} numberOfLines={1}>{item.name}</Text>
+                                    <Text style={[typography.caption,{color:colors.text.tertiary}]}>{Math.round(item.calories*item.qty)} kcal • P:{Math.round(item.protein*item.qty)}g</Text>
+                                </View>
+                                <View style={s.qtyRow}>
+                                    <TouchableOpacity onPress={()=>setPlate(plate.map((p,i)=>i===idx?{...p,qty:Math.max(0.5,p.qty-0.5)}:p))}><Ionicons name="remove-circle-outline" size={20} color={colors.text.tertiary} /></TouchableOpacity>
+                                    <Text style={[typography.caption,{color:colors.text.primary,fontWeight:'bold',marginHorizontal:6}]}>{item.qty}x</Text>
+                                    <TouchableOpacity onPress={()=>setPlate(plate.map((p,i)=>i===idx?{...p,qty:p.qty+0.5}:p))}><Ionicons name="add-circle-outline" size={20} color={colors.accent.coral} /></TouchableOpacity>
+                                </View>
+                                <TouchableOpacity style={{paddingLeft:8}} onPress={()=>setPlate(plate.filter((_,i)=>i!==idx))}><Ionicons name="trash-outline" size={18} color={colors.accent.coral} /></TouchableOpacity>
+                            </View>
+                        ))}
+                        <View style={[s.macroRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
+                            {[{l:'KCAL',v:Math.round(totals.calories),c:colors.accent.coral},{l:'PROTEIN',v:Math.round(totals.protein),c:colors.accent.emerald},{l:'CARBS',v:Math.round(totals.carbs),c:colors.accent.cyan},{l:'FAT',v:Math.round(totals.fat),c:colors.accent.amber}].map((m)=>(
+                                <View key={m.l} style={{alignItems:'center',flex:1}}>
+                                    <Text style={[typography.heading,{color:m.c,fontSize:18,fontWeight:'900'}]}>{m.v}</Text>
+                                    <Text style={[typography.caption,{color:colors.text.tertiary,fontSize:9}]}>{m.l}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    </View>
+                )}
+                {plate.length===0&&sq.length===0&&(
+                    <View style={[s.emptyPlate,{borderColor:colors.border.default,marginHorizontal:20}]}>
+                        <Ionicons name="restaurant-outline" size={36} color={colors.text.tertiary} />
+                        <Text style={[typography.body,{color:colors.text.tertiary,marginTop:8,textAlign:'center'}]}>Search and add food to your plate</Text>
+                    </View>
+                )}
+            </ScrollView>
+            <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,20)}]}>
+                <TouchableOpacity style={[s.logBtn,{backgroundColor:plate.length>0?(mc?.color||colors.accent.coral):colors.background.secondary}]} onPress={handleLog} disabled={plate.length===0||logM.isPending} activeOpacity={0.85}>
+                    {logM.isPending?<ActivityIndicator color="#FFF" />:<><Ionicons name="checkmark-circle" size={22} color={plate.length>0?'#FFF':colors.text.tertiary} /><Text style={[typography.subhead,{color:plate.length>0?'#FFF':colors.text.tertiary,fontWeight:'900',marginLeft:8,fontSize:16}]}>LOG MEAL</Text></>}
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+}
+const s = StyleSheet.create({
+    container:{flex:1}, header:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:20,paddingBottom:16,borderBottomWidth:1},
+    mealCard:{width:88,height:96,borderRadius:14,overflow:'hidden',justifyContent:'flex-end',padding:10,borderWidth:1,borderColor:'transparent'},
+    mealChk:{position:'absolute',top:6,right:6,width:20,height:20,borderRadius:10,alignItems:'center',justifyContent:'center'},
+    searchBox:{flexDirection:'row',alignItems:'center',borderWidth:1,borderRadius:14,paddingHorizontal:14,height:48,gap:8},
+    searchIn:{flex:1,fontSize:15},
+    searchResult:{flexDirection:'row',alignItems:'center',padding:14,marginBottom:8,borderRadius:12,borderWidth:1},
+    plateRow:{flexDirection:'row',alignItems:'center',padding:12,marginBottom:10,borderRadius:14,borderWidth:1,overflow:'hidden'},
+    plateAccent:{width:4,alignSelf:'stretch',borderRadius:2},
+    qtyRow:{flexDirection:'row',alignItems:'center'},
+    macroRow:{flexDirection:'row',borderWidth:1,borderRadius:14,padding:14,marginTop:10,marginBottom:24},
+    emptyPlate:{borderWidth:1,borderStyle:'dashed',borderRadius:20,padding:40,alignItems:'center',marginTop:8},
+    footer:{position:'absolute',bottom:0,left:0,right:0,paddingHorizontal:20},
+    logBtn:{height:60,flexDirection:'row',alignItems:'center',justifyContent:'center',borderRadius:30},
+});

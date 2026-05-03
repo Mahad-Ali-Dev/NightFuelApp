@@ -1,0 +1,7 @@
+BUG IN MOBILE APP
+-Password complexity requirements(UI)
+-On step 3 once you select any thing you are unable to unselect it.
+-Not allowing to set circadian rhythms(Prefrences)
+-Same issue with Metabolic Prefrences as in step 3
+
+

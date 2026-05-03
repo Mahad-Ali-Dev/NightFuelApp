@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("NOTIF_DATABASE_URL")
+  directUrl = env("NOTIF_DIRECT_URL")
+}
+
+model NotificationPreference {
+  id                      String   @id @default(uuid())
+  userId                  String   @unique @map("user_id")
+  mealReminderEnabled     Boolean  @default(true) @map("meal_reminder_enabled")
+  workoutReminderEnabled  Boolean  @default(true) @map("workout_reminder_enabled")
+  sleepReminderEnabled    Boolean  @default(true) @map("sleep_reminder_enabled")
+  shiftAlertEnabled       Boolean  @default(true) @map("shift_alert_enabled")
+  planReadyEnabled        Boolean  @default(true) @map("plan_ready_enabled")
+  adherenceAlertEnabled   Boolean  @default(true) @map("adherence_alert_enabled")
+  streakUpdateEnabled     Boolean  @default(true) @map("streak_update_enabled")
+  weeklyReportEnabled     Boolean  @default(true) @map("weekly_report_enabled")
+  coachMessageEnabled     Boolean  @default(true) @map("coach_message_enabled")
+  quietHoursStart         String   @default("22:00") @map("quiet_hours_start")
+  quietHoursEnd           String   @default("07:00") @map("quiet_hours_end")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@map("notification_preferences")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ── Web Push / Expo push token storage ───────────────────────────────────────
+model PushSubscription {
+  id        String       @id @default(uuid())
+  userId    String       @map("user_id")
+  endpoint  String       @unique
+  p256dh    String?      @map("p256dh")
+  auth      String?
+  platform  PushPlatform @default(WEB)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+enum PushPlatform {
+  WEB
+  EXPO
+}
+
+enum NotificationType {
+  MEAL_REMINDER
+  WORKOUT_REMINDER
+  SLEEP_REMINDER
+  SHIFT_ALERT
+  PLAN_READY
+  ADHERENCE_ALERT
+  STREAK_UPDATE
+  WEEKLY_REPORT
+  COACH_MESSAGE
+  GOAL_ACHIEVED
+  SYSTEM
+}

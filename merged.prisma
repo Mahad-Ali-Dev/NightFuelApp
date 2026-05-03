@@ -1,0 +1,1175 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("MERGED_DB_URL")
+  directUrl = env("MERGED_DIRECT_URL")
+}
+
+
+model User {
+  id                  String   @id @default(uuid())
+  email               String   @unique
+  passwordHash        String   @map("password_hash")
+  displayName         String   @map("display_name")
+  avatarUrl           String?  @map("avatar_url")
+  timezone            String   @default("UTC")
+  locale              String   @default("en-US")
+  region              String
+  role                Role     @default(USER)
+  onboardingCompleted Boolean  @default(false) @map("onboarding_completed")
+  emailVerified       Boolean  @default(false) @map("email_verified")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  deviceId  String   @map("device_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model CoachProfile {
+  id         String   @id @default(uuid())
+  userId     String   @unique @map("user_id")
+  specialty  String
+  bio        String   @db.Text
+  hourlyRate Float    @map("hourly_rate")
+  rating     Float    @default(5.0)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("coach_profiles")
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  participantA String @map("participant_a")
+  participantB String @map("participant_b")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  messages  Message[]
+
+  @@unique([participantA, participantB])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String       @map("conversation_id")
+  senderId       String       @map("sender_id")
+  text           String
+  isRead         Boolean      @default(false) @map("is_read")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt(sort: Asc)])
+  @@map("messages")
+}
+
+model Post {
+  id        String   @id @default(uuid())
+  authorId  String   @map("author_id")
+  content   String
+  imageUrl  String?  @map("image_url")
+  likes     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  comments  Comment[]
+
+  @@index([createdAt(sort: Desc)])
+  @@map("posts")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  authorId  String   @map("author_id")
+  text      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("comments")
+}
+
+model UserScore {
+  userId String @id @map("user_id")
+  xp     Int    @default(0)
+  level  Int    @default(1)
+
+  @@index([xp(sort: Desc)])
+  @@map("user_scores")
+}
+
+model Badge {
+  id          String      @id @default(uuid())
+  key         String      @unique  // e.g. "first_post", "challenge_champion"
+  name        String
+  description String
+  iconEmoji   String      @map("icon_emoji")
+  tier        String      @default("bronze") // bronze | silver | gold | platinum
+  xpReward    Int         @default(0) @map("xp_reward")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  userBadges  UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  badgeId    String   @map("badge_id")
+  awardedAt  DateTime @default(now()) @map("awarded_at")
+  seen       Boolean  @default(false) // for "new badge" notification
+
+  badge      Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@map("user_badges")
+}
+
+model Challenge {
+  id           String   @id @default(uuid())
+  title        String
+  description  String
+  xpReward     Int      @map("xp_reward")
+  startDate    DateTime @map("start_date")
+  endDate      DateTime @map("end_date")
+  
+  participants ChallengeParticipant[]
+
+  @@map("challenges")
+}
+
+model ChallengeParticipant {
+  id          String   @id @default(uuid())
+  challengeId String   @map("challenge_id")
+  userId      String   @map("user_id")
+  progress    Int      @default(0)
+  completed   Boolean  @default(false)
+  joinedAt    DateTime @default(now()) @map("joined_at")
+
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@map("challenge_participants")
+}
+
+model Workout {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  type           String    // WorkoutType: STRENGTH, CARDIO, HIIT, MOBILITY, SPORTS, YOGA
+  title          String
+  duration       Int       // minutes
+  intensity      String    // WorkoutIntensity: LOW, MODERATE, HIGH, MAX
+  splitType      String?   @map("split_type") // SplitType: FULL_BODY, PUSH_PULL_LEGS, etc.
+  muscleGroups   String[]  @map("muscle_groups")
+  caloriesBurned Int?      @map("calories_burned")
+  totalVolume    Float?    @map("total_volume")
+  notes          String?
+  scheduledAt    DateTime? @map("scheduled_at")
+  completedAt    DateTime  @default(now()) @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  exercises Exercise[]
+
+  @@index([userId])
+  @@index([userId, completedAt(sort: Desc)])
+  @@map("workouts")
+}
+
+model Exercise {
+  id           String  @id @default(uuid())
+  workoutId    String  @map("workout_id")
+  name         String
+  muscleGroup  String  @default("FULL_BODY") @map("muscle_group")
+  sets         Int?
+  reps         Int?
+  weightKg     Float?  @map("weight_kg")
+  distanceKm   Float?  @map("distance_km")
+  durationSecs Int?    @map("duration_secs")
+  restSecs     Int?    @map("rest_secs")
+  order        Int     @default(0)
+
+  workout Workout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+
+  @@map("exercises")
+}
+
+model LibraryExercise {
+  id               String   @id @default(uuid())
+  name             String   @unique
+  muscleGroup      String   @map("muscle_group")
+  equipment        String?
+  instructions     String?
+  imageUrl         String?  @map("image_url")
+  difficulty       String?  @default("intermediate")
+  bodyPart         String?  @map("body_part")
+  category         String?  // "gym" | "home" | "cardio" | "kegel"
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("library_exercises")
+}
+
+model WorkoutRoutine {
+  id           String   @id @default(uuid())
+  userId       String?  @map("user_id") // Null if global template
+  title        String
+  description  String?
+  splitType    String?  @map("split_type")
+  muscleGroups String[] @map("muscle_groups")
+  exercises    Json     // Array of configured exercises
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("workout_routines")
+}
+
+model OneRepMaxLog {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  exerciseName   String   @map("exercise_name")
+  weightKg       Float    @map("weight_kg")
+  estimated1RMKg Float    @map("estimated_1rm_kg")
+  date           DateTime @db.Date
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([userId, exerciseName, date(sort: Desc)])
+  @@map("1rm_logs")
+}
+
+model WorkoutSession {
+  id                  String       @id @default(uuid())
+  userId              String       @map("user_id")
+  routineId           String?      @map("routine_id")
+  status              String       @default("active") // "active", "completed", "cancelled"
+  startedAt           DateTime     @default(now()) @map("started_at")
+  endedAt             DateTime?    @map("ended_at")
+  currentExerciseIndex Int         @default(0) @map("current_exercise_index")
+
+  logs                ExerciseLog[]
+
+  @@index([userId])
+  @@map("workout_sessions")
+}
+
+model ExerciseLog {
+  id           String         @id @default(uuid())
+  sessionId    String         @map("session_id")
+  exerciseName String         @map("exercise_name")
+  sets         Int            @default(0)
+  reps         Int            @default(0)
+  weightKg     Float          @default(0) @map("weight_kg")
+  durationSecs Int            @default(0) @map("duration_secs")
+  completedAt  DateTime       @default(now()) @map("completed_at")
+
+  session      WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("exercise_logs")
+}
+
+model FoodItem {
+  id            String   @id @default(uuid())
+  name          String
+  calories      Float
+  protein       Float
+  carbs         Float
+  fat           Float
+  fiber         Float    @default(0)
+  sugar         Float    @default(0)
+  sodiumMg      Float    @default(0) @map("sodium_mg")
+  servingSize   String   @map("serving_size")
+  glycemicIndex Int?     @map("glycemic_index")
+  isVegan       Boolean  @default(false) @map("is_vegan")
+  isGlutenFree  Boolean  @default(false) @map("is_gluten_free")
+  isHalal       Boolean  @default(false) @map("is_halal")
+  region        String?  // 'us', 'eu', 'ap'
+  cuisineTags   String[] @default([]) @map("cuisine_tags")
+  source        String   @default("OPENFOODFACTS")  // OPENFOODFACTS | FOODB | CUSTOM
+  foodGroup     String?  @map("food_group")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@map("food_items")
+}
+
+model MealLog {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  loggedAt      DateTime @default(now()) @map("logged_at")
+  mealType      MealType @map("meal_type")
+  foodItems     Json     @map("food_items")
+  totalCalories Float    @map("total_calories")
+  totalProtein  Float    @map("total_protein")
+  totalCarbs    Float    @map("total_carbs")
+  totalFat      Float    @map("total_fat")
+  isAdherent    Boolean  @map("is_adherent")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([userId, loggedAt(sort: Desc)])
+  @@map("meal_logs")
+}
+
+model Recipe {
+  id            String   @id @default(uuid())
+  title         String
+  description   String?
+  prepTimeMins  Int      @default(0) @map("prep_time_mins")
+  cookTimeMins  Int      @default(0) @map("cook_time_mins")
+  servings      Int      @default(1)
+  calories      Float    @default(0)
+  protein       Float    @default(0)
+  carbs         Float    @default(0)
+  fat           Float    @default(0)
+  ingredients   Json     @default("[]") // Array of { name, amount, unit }
+
+model FastingLog {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  startTime     DateTime  @map("start_time")
+  endTime       DateTime? @map("end_time")
+  targetHours   Int       @map("target_hours") @default(16)
+  status        String    @default("ACTIVE") // ACTIVE, COMPLETED, CANCELLED
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, startTime(sort: Desc)])
+  @@map("fasting_logs")
+}
+
+model NotificationPreference {
+  id                      String   @id @default(uuid())
+  userId                  String   @unique @map("user_id")
+  mealReminderEnabled     Boolean  @default(true) @map("meal_reminder_enabled")
+  workoutReminderEnabled  Boolean  @default(true) @map("workout_reminder_enabled")
+  sleepReminderEnabled    Boolean  @default(true) @map("sleep_reminder_enabled")
+  shiftAlertEnabled       Boolean  @default(true) @map("shift_alert_enabled")
+  planReadyEnabled        Boolean  @default(true) @map("plan_ready_enabled")
+  adherenceAlertEnabled   Boolean  @default(true) @map("adherence_alert_enabled")
+  streakUpdateEnabled     Boolean  @default(true) @map("streak_update_enabled")
+  weeklyReportEnabled     Boolean  @default(true) @map("weekly_report_enabled")
+  coachMessageEnabled     Boolean  @default(true) @map("coach_message_enabled")
+  quietHoursStart         String   @default("22:00") @map("quiet_hours_start")
+  quietHoursEnd           String   @default("07:00") @map("quiet_hours_end")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@map("notification_preferences")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+model PushSubscription {
+  id        String       @id @default(uuid())
+  userId    String       @map("user_id")
+  endpoint  String       @unique
+  p256dh    String?      @map("p256dh")
+  auth      String?
+  platform  PushPlatform @default(WEB)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+model DayPlan {
+  id                  String     @id @default(uuid())
+  userId              String     @map("user_id")
+  planDate            DateTime   @map("plan_date") @db.Date
+  shiftId             String?    @map("shift_id")
+  circadianProfileId  String?    @map("circadian_profile_id")
+  protocolId          String?    @map("protocol_id")
+  planVersion         Int        @default(1) @map("plan_version")
+  plan                Json
+  generationModel     String     @map("generation_model")
+  generationLatencyMs Int?       @map("generation_latency_ms")
+  generationTokens    Int?       @map("generation_tokens")
+  userRating          Int?       @map("user_rating")
+  status              PlanStatus @default(ACTIVE)
+  createdAt           DateTime   @default(now()) @map("created_at")
+  updatedAt           DateTime   @updatedAt @map("updated_at")
+
+  protocol ProtocolTemplate? @relation(fields: [protocolId], references: [id])
+
+  @@unique([userId, planDate, planVersion])
+  @@index([userId, planDate(sort: Desc)])
+  @@map("day_plans")
+}
+
+model ProtocolTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  creatorId   String   @map("creator_id") // Specialist userId
+  parameters  Json     // { calories, protein_g, volume_modifier, deload, etc. }
+
+model DailyProgress {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  date           DateTime  @map("date") @db.Date
+  caloriesTarget Float?    @map("calories_target")
+  caloriesActual Float     @default(0) @map("calories_actual")
+  proteinTarget  Float?    @map("protein_target")
+  proteinActual  Float     @default(0) @map("protein_actual")
+  carbsTarget    Float?    @map("carbs_target")
+  carbsActual    Float     @default(0) @map("carbs_actual")
+  fatTarget      Float?    @map("fat_target")
+  fatActual      Float     @default(0) @map("fat_actual")
+  mealsLogged    Int       @default(0) @map("meals_logged")
+  isAdherent     Boolean   @default(false) @map("is_adherent")
+  fatigueScore   Int       @default(0) @map("fatigue_score")
+  hydrationActual Float     @default(0) @map("hydration_actual")
+  stepCount       Int       @default(0) @map("step_count")
+  source          String    @default("MANUAL") // MANUAL, WEARABLE
+  supplementsLogged Json?     @map("supplements_logged") // List of checkable items
+  lightExposureCompleted Boolean @default(false) @map("light_exposure_completed")
+  planId         String?   @map("plan_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@unique([userId, date])
+  @@index([userId, date(sort: Desc)])
+  @@map("daily_progress")
+}
+
+model Streak {
+  id               String    @id @default(uuid())
+  userId           String    @unique @map("user_id")
+  currentStreak    Int       @default(0) @map("current_streak")
+  longestStreak    Int       @default(0) @map("longest_streak")
+  lastAdherentDate DateTime? @map("last_adherent_date") @db.Date
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@map("streaks")
+}
+
+model BodyMetrics {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  weightKg    Float?   @map("weight_kg")
+  heightCm    Float?   @map("height_cm")
+  bodyFatPct  Float?   @map("body_fat_pct")
+  muscleMassKg Float?  @map("muscle_mass_kg")
+  bmi         Float?
+  chestCm     Float?   @map("chest_cm")
+  waistCm     Float?   @map("waist_cm")
+  hipsCm      Float?   @map("hips_cm")
+  armsCm      Float?   @map("arms_cm")
+  thighsCm    Float?   @map("thighs_cm")
+  calvesCm    Float?   @map("calves_cm")
+  recordedAt  DateTime @default(now()) @map("recorded_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId, recordedAt(sort: Desc)])
+  @@map("body_metrics")
+}
+
+model AiUsageLog {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  action          String   @map("action") // e.g. generate-plan, meal-swap
+  provider        String   @map("provider") // e.g. openai, anthropic
+  promptTokens    Int      @default(0) @map("prompt_tokens")
+  completionTokens Int     @default(0) @map("completion_tokens")
+  totalTokens     Int      @default(0) @map("total_tokens")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("ai_usage_logs")
+}
+
+model HydrationLog {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  amountMl    Int      @map("amount_ml")
+  dailyGoalMl Int      @default(3000) @map("daily_goal_ml")
+  date        DateTime @db.Date
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId, date(sort: Desc)])
+  @@map("hydration_logs")
+}
+
+model PerformanceReport {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  weekRange    String   @map("week_range")
+  score        Int
+  summary      String
+  highlights   Json
+  improvements Json
+  focusArea    String   @map("focus_area")
+  date         DateTime @db.Date
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([userId, date(sort: Desc)])
+  @@map("performance_reports")
+}
+
+model Shift {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  shiftDate        DateTime  @map("shift_date") @db.Date
+  startTime        DateTime  @map("start_time") @db.Timestamptz()
+  endTime          DateTime  @map("end_time") @db.Timestamptz()
+  shiftType        ShiftType @map("shift_type")
+  sleepWindowStart DateTime? @map("sleep_window_start") @db.Timestamptz()
+  sleepWindowEnd   DateTime? @map("sleep_window_end") @db.Timestamptz()
+  workIntensity    Intensity @default(MODERATE) @map("work_intensity")
+  commuteMinutes   Int       @default(0) @map("commute_minutes")
+  isDayOff         Boolean   @default(false) @map("is_day_off")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@unique([userId, shiftDate])
+  @@index([userId, shiftDate(sort: Desc)])
+  @@map("shifts")
+}
+
+model RotationPattern {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  patternName String   @default("Default") @map("pattern_name")
+  cycleDays   Int      @map("cycle_days")
+  pattern     Json // [{day: 1, type: 'night', start: '21:00', end: '05:00'}
+
+model SleepSession {
+  id                      String    @id @default(uuid())
+  userId                  String    @map("user_id")
+  startTime               DateTime  @map("start_time")
+  endTime                 DateTime? @map("end_time")
+  durationMins            Int?      @map("duration_mins")
+  quality                 Int?
+  disturbances            Int       @default(0)
+  source                  String    @default("MANUAL")
+  circadianAlignmentScore Int?      @map("circadian_alignment_score")
+  notes                   String?
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+
+  @@map("sleep_sessions")
+}
+
+model SleepPreference {
+  id                String   @id @default(uuid())
+  userId            String   @unique @map("user_id")
+  targetDuration    Int      @default(480) @map("target_duration")
+  windDownDuration  Int      @default(30) @map("wind_down_duration")
+  temperatureTarget Float?   @map("temperature_target")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("sleep_preferences")
+}
+
+model body_metrics {
+  id             String   @id
+  user_id        String
+  weight_kg      Float?
+  height_cm      Float?
+  body_fat_pct   Float?
+  muscle_mass_kg Float?
+  bmi            Float?
+  recorded_at    DateTime @default(now())
+  created_at     DateTime @default(now())
+}
+
+model coach_client_relations {
+  id             String         @id
+  coach_user_id  String
+  client_user_id String
+  status         String         @default("PENDING")
+  started_at     DateTime       @default(now())
+  ended_at       DateTime?
+  created_at     DateTime       @default(now())
+  users          users          @relation(fields: [client_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  coach_profiles coach_profiles @relation(fields: [coach_user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([coach_user_id, client_user_id])
+}
+
+model coach_profiles {
+  id                     String                   @id
+  user_id                String                   @unique
+  specializations        String[]                 @default([])
+  bio                    String?
+  certifications         String[]                 @default([])
+  is_available           Boolean                  @default(false)
+  monthly_rate_usd       Float?
+  created_at             DateTime                 @default(now())
+  updated_at             DateTime
+  coach_client_relations coach_client_relations[]
+  users                  users                    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model daily_progress {
+  id                       String   @id
+  user_id                  String
+  date                     DateTime @db.Date
+  calories_target          Float?
+  calories_actual          Float    @default(0)
+  protein_target           Float?
+  protein_actual           Float    @default(0)
+  carbs_target             Float?
+  carbs_actual             Float    @default(0)
+  fat_target               Float?
+  fat_actual               Float    @default(0)
+  meals_logged             Int      @default(0)
+  is_adherent              Boolean  @default(false)
+  fatigue_score            Int      @default(0)
+  hydration_actual         Float    @default(0)
+  step_count               Int      @default(0)
+  source                   String   @default("MANUAL")
+  supplements_logged       Json?
+  light_exposure_completed Boolean  @default(false)
+  plan_id                  String?
+  created_at               DateTime @default(now())
+  updated_at               DateTime
+
+  @@unique([user_id, date])
+}
+
+model day_plans {
+  id                    String              @id
+  user_id               String
+  plan_date             DateTime            @db.Date
+  shift_id              String?
+  circadian_profile_id  String?
+  protocol_id           String?
+  plan_version          Int                 @default(1)
+  plan                  Json
+  generation_model      String
+  generation_latency_ms Int?
+  generation_tokens     Int?
+  user_rating           Int?
+  status                PlanStatus          @default(ACTIVE)
+  created_at            DateTime            @default(now())
+  updated_at            DateTime
+  protocol_templates    protocol_templates? @relation(fields: [protocol_id], references: [id], onUpdate: NoAction)
+
+  @@unique([user_id, plan_date, plan_version])
+}
+
+model exercises {
+  id            String   @id
+  workout_id    String
+  name          String
+  muscle_group  String   @default("FULL_BODY")
+  sets          Int?
+  reps          Int?
+  weight_kg     Float?
+  distance_km   Float?
+  duration_secs Int?
+  rest_secs     Int?
+  order         Int      @default(0)
+  workouts      workouts @relation(fields: [workout_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model food_items {
+  id             String   @id
+  name           String   @unique
+  calories       Float
+  protein        Float
+  carbs          Float
+  fat            Float
+  serving_size   String
+  glycemic_index Int?
+  is_vegan       Boolean  @default(false)
+  is_gluten_free Boolean  @default(false)
+  is_halal       Boolean  @default(false)
+  region         String?
+  cuisine_tags   String[] @default([])
+  created_at     DateTime @default(now())
+}
+
+model library_exercises {
+  id           String   @id
+  name         String   @unique
+  muscle_group String
+  equipment    String?
+  instructions String?
+  created_at   DateTime @default(now())
+}
+
+model meal_logs {
+  id             String   @id
+  user_id        String
+  logged_at      DateTime @default(now())
+  meal_type      MealType
+  food_items     Json
+  total_calories Float
+  total_protein  Float
+  total_carbs    Float
+  total_fat      Float
+  is_adherent    Boolean
+  created_at     DateTime @default(now())
+  updated_at     DateTime
+}
+
+model notification_preferences {
+  id                       String   @id
+  user_id                  String   @unique
+  meal_reminder_enabled    Boolean  @default(true)
+  workout_reminder_enabled Boolean  @default(true)
+  sleep_reminder_enabled   Boolean  @default(true)
+  shift_alert_enabled      Boolean  @default(true)
+  plan_ready_enabled       Boolean  @default(true)
+  adherence_alert_enabled  Boolean  @default(true)
+  streak_update_enabled    Boolean  @default(true)
+  weekly_report_enabled    Boolean  @default(true)
+  coach_message_enabled    Boolean  @default(true)
+  quiet_hours_start        String   @default("22:00")
+  quiet_hours_end          String   @default("07:00")
+  created_at               DateTime @default(now())
+  updated_at               DateTime
+}
+
+model notifications {
+  id         String           @id
+  user_id    String
+  type       NotificationType
+  title      String
+  body       String
+  data       Json?
+  is_read    Boolean          @default(false)
+  created_at DateTime         @default(now())
+}
+
+model protocol_templates {
+  id          String      @id
+  name        String
+  description String?
+  creator_id  String
+  parameters  Json
+  is_public   Boolean     @default(false)
+  created_at  DateTime    @default(now())
+  updated_at  DateTime
+  day_plans   day_plans[]
+}
+
+model refresh_tokens {
+  id         String   @id
+  user_id    String
+  token_hash String   @unique
+  device_id  String
+  expires_at DateTime
+  created_at DateTime @default(now())
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model rotation_patterns {
+  id           String   @id
+  user_id      String
+  pattern_name String   @default("Default")
+  cycle_days   Int
+  pattern      Json
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+}
+
+model shifts {
+  id                 String    @id
+  user_id            String
+  shift_date         DateTime  @db.Date
+  start_time         DateTime  @db.Timestamptz(6)
+  end_time           DateTime  @db.Timestamptz(6)
+  shift_type         ShiftType
+  sleep_window_start DateTime? @db.Timestamptz(6)
+  sleep_window_end   DateTime? @db.Timestamptz(6)
+  work_intensity     Intensity @default(MODERATE)
+  commute_minutes    Int       @default(0)
+  is_day_off         Boolean   @default(false)
+  created_at         DateTime  @default(now())
+  updated_at         DateTime
+
+  @@unique([user_id, shift_date])
+}
+
+model streaks {
+  id                 String    @id
+  user_id            String    @unique
+  current_streak     Int       @default(0)
+  longest_streak     Int       @default(0)
+  last_adherent_date DateTime? @db.Date
+  updated_at         DateTime
+}
+
+model subscription_events {
+  id         String   @id
+  user_id    String
+  event_type String
+  from_tier  String?
+  to_tier    String?
+  metadata   Json?
+  created_at DateTime @default(now())
+}
+
+model subscriptions {
+  id                   String           @id
+  user_id              String           @unique
+  tier                 SubscriptionTier @default(FREE)
+  status               SubStatus        @default(ACTIVE)
+  current_period_start DateTime
+  current_period_end   DateTime?
+  cancel_at_period_end Boolean          @default(false)
+  stripe_customer_id   String?
+  stripe_sub_id        String?
+  created_at           DateTime         @default(now())
+  updated_at           DateTime
+}
+
+model user_preferences {
+  id                          String        @id
+  user_id                     String        @unique
+  primary_goal                String        @default("GENERAL_HEALTH")
+  dietary_preference          String        @default("NONE")
+  target_calories             Float?
+  target_protein_g            Float?
+  target_carbs_g              Float?
+  target_fat_g                Float?
+  activity_level              String        @default("MODERATELY_ACTIVE")
+  experience_level            String        @default("BEGINNER")
+  lifestyle_type              String        @default("OFFICE_WORKER")
+  sleep_window_start          String?
+  sleep_window_end            String?
+  allergies                   String[]      @default([])
+  health_conditions           String[]      @default([])
+  diet_mode                   String        @default("BALANCED")
+  workout_environment         String?       @default("GYM")
+  available_equipment         String[]      @default([])
+  is_bodybuilder_mode         Boolean       @default(false)
+  is_injury_safe_mode         Boolean       @default(false)
+  workout_duration_preference Int           @default(60)
+  split_preference            String        @default("FULL_BODY")
+  active_protocol_id          String?
+  updated_at                  DateTime
+  user_profiles               user_profiles @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_profiles {
+  id                   String            @id
+  user_id              String            @unique
+  display_name         String
+  avatar_url           String?
+  date_of_birth        DateTime?         @db.Date
+  height_cm            Float?
+  weight_kg            Float?
+  biological_sex       String?
+  timezone             String            @default("UTC")
+  region               String            @default("us")
+  onboarding_completed Boolean           @default(false)
+  onboarding_step      Int               @default(0)
+  created_at           DateTime          @default(now())
+  updated_at           DateTime
+  user_preferences     user_preferences?
+  users                users             @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user_statuses        user_statuses?
+}
+
+model user_statuses {
+  id                  String        @id
+  user_id             String        @unique
+  fatigue_score       Float         @default(0)
+  circadian_peak_time String?
+  circadian_low_time  String?
+  adherence_rate      Float         @default(0)
+  current_streak      Int           @default(0)
+  current_tdee        Float?
+  weight_trend        String?
+  last_updated_by     String?
+  updated_at          DateTime
+  user_profiles       user_profiles @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model users {
+  id                     String                   @id
+  email                  String                   @unique
+  password_hash          String
+  display_name           String
+  avatar_url             String?
+  timezone               String                   @default("UTC")
+  locale                 String                   @default("en-US")
+  region                 String
+  role                   Role                     @default(USER)
+  onboarding_completed   Boolean                  @default(false)
+  email_verified         Boolean                  @default(false)
+  created_at             DateTime                 @default(now())
+  updated_at             DateTime
+  coach_client_relations coach_client_relations[]
+  coach_profiles         coach_profiles?
+  refresh_tokens         refresh_tokens[]
+  user_profiles          user_profiles?
+}
+
+model workouts {
+  id              String      @id
+  user_id         String
+  type            String
+  title           String
+  duration        Int
+  intensity       String
+  split_type      String?
+  muscle_groups   String[]
+  calories_burned Int?
+  notes           String?
+  scheduled_at    DateTime?
+  completed_at    DateTime    @default(now())
+  created_at      DateTime    @default(now())
+  updated_at      DateTime
+  exercises       exercises[]
+}
+
+model UserState {
+  id                   String   @id @default(uuid())
+  userId               String   @unique @map("user_id")
+  last7DaysAdherence   Float    @default(1.0) @map("last_7_days_adherence")
+  avgSleepQuality      Float    @default(7.0) @map("avg_sleep_quality")
+  fatigueLevel         Float    @default(3.0) @map("fatigue_level")
+  currentWeightKg      Float?   @map("current_weight_kg")
+  targetWeightKg       Float?   @map("target_weight_kg")
+  currentCalorieTarget Float?   @map("current_calorie_target")
+  currentProteinTargetG Float?   @map("current_protein_target_g")
+  trainingPhase        String   @default("HYPERTROPHY") @map("training_phase")
+  cycleWeek            Int      @default(1) @map("cycle_week")
+  lastEventId          String?  @map("last_event_id")
+  lastProcessedAt      DateTime @default(now()) @map("last_processed_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("user_states")
+}
+
+model Subscription {
+  id                 String           @id @default(uuid())
+  userId             String           @unique @map("user_id")
+  tier               SubscriptionTier @default(FREE)
+  status             SubStatus        @default(ACTIVE)
+  currentPeriodStart DateTime         @map("current_period_start")
+  currentPeriodEnd   DateTime?        @map("current_period_end")
+  cancelAtPeriodEnd  Boolean          @default(false) @map("cancel_at_period_end")
+  stripeCustomerId   String?          @map("stripe_customer_id")
+  stripeSubId        String?          @map("stripe_sub_id")
+  stripeConnectId    String?          @map("stripe_connect_id")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  @@map("subscriptions")
+}
+
+model SubscriptionEvent {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  eventType String   @map("event_type")
+  fromTier  String?  @map("from_tier")
+  toTier    String?  @map("to_tier")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("subscription_events")
+}
+
+model UserProfile {
+  id                  String        @id @default(uuid())
+  userId              String        @unique @map("user_id")
+  displayName         String        @map("display_name")
+  avatarUrl           String?       @map("avatar_url")
+  dateOfBirth         DateTime?     @map("date_of_birth") @db.Date
+  heightCm            Float?        @map("height_cm")
+  weightKg            Float?        @map("weight_kg")
+  biologicalSex       String?       @map("biological_sex")
+  timezone            String        @default("UTC")
+  region              String        @default("us") // 'us', 'eu', 'ap'
+  onboardingCompleted Boolean       @default(false) @map("onboarding_completed")
+  onboardingStep      Int           @default(0) @map("onboarding_step")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  preferences UserPreferences?
+  status      UserStatus?
+
+  @@map("user_profiles")
+}
+
+model UserPreferences {
+  id                String   @id @default(uuid())
+  userId            String   @unique @map("user_id")
+  primaryGoal       String   @default("GENERAL_HEALTH") @map("primary_goal")   // FitnessGoal enum
+  dietaryPreference String   @default("NONE") @map("dietary_preference")        // DietaryPreference enum
+  targetCalories    Float?   @map("target_calories")
+  targetProteinG    Float?   @map("target_protein_g")
+  targetCarbsG      Float?   @map("target_carbs_g")
+  targetFatG        Float?   @map("target_fat_g")
+  activityLevel     String   @default("MODERATELY_ACTIVE") @map("activity_level") // ActivityLevel enum
+  experienceLevel   String   @default("BEGINNER") @map("experience_level")        // ExperienceLevel enum
+  lifestyleType     String   @default("OFFICE_WORKER") @map("lifestyle_type")     // LifestyleType enum
+  sleepWindowStart  String?  @map("sleep_window_start")
+  sleepWindowEnd    String?  @map("sleep_window_end")
+  allergies         String[] @default([])
+  healthConditions  String[] @default([]) @map("health_conditions")
+  dietMode          String   @default("BALANCED") @map("diet_mode") // BUDGET, ACNE_SAFE, RAMADAN, MASS_GAIN, CUTTING, BALANCED
+  workoutEnvironment String?  @default("GYM") @map("workout_environment")
+  availableEquipment String[] @default([]) @map("available_equipment")
+  isBodybuilderMode  Boolean  @default(false) @map("is_bodybuilder_mode")
+  isInjurySafeMode   Boolean  @default(false) @map("is_injury_safe_mode")
+  workoutDurationPreference Int @default(60) @map("workout_duration_preference")
+  splitPreference    String   @default("FULL_BODY") @map("split_preference")
+  activeProtocolId   String?  @map("active_protocol_id")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  profile UserProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+model CoachClientRelation {
+  id            String    @id @default(uuid())
+  coachUserId   String    @map("coach_user_id")
+  clientUserId  String    @map("client_user_id")
+  status        String    @default("PENDING") // CoachRelationStatus enum
+  startedAt     DateTime  @default(now()) @map("started_at")
+  endedAt       DateTime? @map("ended_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  coach CoachProfile @relation("CoachRelations", fields: [coachUserId], references: [userId], onDelete: Cascade)
+
+  @@unique([coachUserId, clientUserId])
+  @@index([clientUserId])
+  @@map("coach_client_relations")
+}
+
+model UserStatus {
+  id                String   @id @default(uuid())
+  userId            String   @unique @map("user_id")
+  
+  // Biological State
+  fatigueScore      Float    @default(0) @map("fatigue_score")
+  circadianPeakTime String?  @map("circadian_peak_time")
+  circadianLowTime  String?  @map("circadian_low_time")
+  
+  // Adherence & Performance
+  adherenceRate     Float    @default(0) @map("adherence_rate")
+  currentStreak     Int      @default(0) @map("current_streak")
+  
+  // Metabolism
+  currentTdee       Float?   @map("current_tdee")
+  weightTrend       String?  @map("weight_trend") // "STABLE", "UP", "DOWN"
+  
+  // Operation Context
+  lastUpdatedBy     String?  @map("last_updated_by")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  profile UserProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("user_statuses")
+}
+
+enum Role {
+  USER
+  COACH
+  TRAINER
+  NUTRITIONIST
+  DIETITIAN
+  ADMIN
+  SUPERADMIN
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACK
+}
+
+enum PushPlatform {
+  WEB
+  EXPO
+}
+
+enum NotificationType {
+  MEAL_REMINDER
+  WORKOUT_REMINDER
+  SLEEP_REMINDER
+  SHIFT_ALERT
+  PLAN_READY
+  ADHERENCE_ALERT
+  STREAK_UPDATE
+  WEEKLY_REPORT
+  COACH_MESSAGE
+  GOAL_ACHIEVED
+  SYSTEM
+}
+
+enum PlanStatus {
+  DRAFT
+  PUBLISHED
+  ACTIVE
+  ADJUSTED
+  SUPERSEDED
+  INVALIDATED
+  EXPIRED
+  DELETED
+}
+
+enum ShiftType {
+  FIXED_NIGHT
+  ROTATING
+  SPLIT
+  IRREGULAR
+  TWELVE_HOUR
+}
+
+enum Intensity {
+  SEDENTARY
+  MODERATE
+  DEMANDING
+}
+
+enum SubStatus {
+  ACTIVE
+  CANCELLED
+  PAST_DUE
+  TRIALING
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  PREMIUM
+  ENTERPRISE
+}

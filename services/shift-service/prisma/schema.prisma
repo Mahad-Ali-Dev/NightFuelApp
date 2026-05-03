@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Shift {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  shiftDate        DateTime  @map("shift_date") @db.Date
+  startTime        DateTime  @map("start_time") @db.Timestamptz()
+  endTime          DateTime  @map("end_time") @db.Timestamptz()
+  shiftType        ShiftType @map("shift_type")
+  sleepWindowStart DateTime? @map("sleep_window_start") @db.Timestamptz()
+  sleepWindowEnd   DateTime? @map("sleep_window_end") @db.Timestamptz()
+  workIntensity    Intensity @default(MODERATE) @map("work_intensity")
+  commuteMinutes   Int       @default(0) @map("commute_minutes")
+  isDayOff         Boolean   @default(false) @map("is_day_off")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@unique([userId, shiftDate])
+  @@index([userId, shiftDate(sort: Desc)])
+  @@map("shifts")
+}
+
+model RotationPattern {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  patternName String   @default("Default") @map("pattern_name")
+  cycleDays   Int      @map("cycle_days")
+  pattern     Json // [{day: 1, type: 'night', start: '21:00', end: '05:00'}]
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("rotation_patterns")
+}
+
+enum ShiftType {
+  FIXED_NIGHT
+  ROTATING
+  SPLIT
+  IRREGULAR
+  TWELVE_HOUR
+}
+
+enum Intensity {
+  SEDENTARY
+  MODERATE
+  DEMANDING
+}

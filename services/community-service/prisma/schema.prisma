@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("COMMUNITY_DATABASE_URL")
+  directUrl = env("COMMUNITY_DIRECT_URL")
+}
+
+model Post {
+  id        String   @id @default(uuid())
+  authorId  String   @map("author_id")
+  content   String
+  imageUrl  String?  @map("image_url")
+  likes     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  comments  Comment[]
+
+  @@index([createdAt(sort: Desc)])
+  @@map("posts")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  authorId  String   @map("author_id")
+  text      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@map("comments")
+}
+
+model UserScore {
+  userId String @id @map("user_id")
+  xp     Int    @default(0)
+  level  Int    @default(1)
+
+  @@index([xp(sort: Desc)])
+  @@map("user_scores")
+}
+
+model Badge {
+  id          String      @id @default(uuid())
+  key         String      @unique  // e.g. "first_post", "challenge_champion"
+  name        String
+  description String
+  iconEmoji   String      @map("icon_emoji")
+  tier        String      @default("bronze") // bronze | silver | gold | platinum
+  xpReward    Int         @default(0) @map("xp_reward")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  userBadges  UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  badgeId    String   @map("badge_id")
+  awardedAt  DateTime @default(now()) @map("awarded_at")
+  seen       Boolean  @default(false) // for "new badge" notification
+
+  badge      Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId])
+  @@map("user_badges")
+}
+
+model Challenge {
+  id           String   @id @default(uuid())
+  title        String
+  description  String
+  xpReward     Int      @map("xp_reward")
+  startDate    DateTime @map("start_date")
+  endDate      DateTime @map("end_date")
+  
+  participants ChallengeParticipant[]
+
+  @@map("challenges")
+}
+
+model ChallengeParticipant {
+  id          String   @id @default(uuid())
+  challengeId String   @map("challenge_id")
+  userId      String   @map("user_id")
+  progress    Int      @default(0)
+  completed   Boolean  @default(false)
+  joinedAt    DateTime @default(now()) @map("joined_at")
+
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@map("challenge_participants")
+}
