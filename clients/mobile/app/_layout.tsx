@@ -1,3 +1,7 @@
+// Side-effect import: initializes Sentry at module load, before any React code.
+// Must be the first import so SDK is up before anything else can throw.
+import '@/lib/sentry';
+
 import React, { useEffect } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -16,6 +20,7 @@ import BadgeToast from '@/components/BadgeToast';
 import { getErrorMessage } from '@/utils/validation';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useNotifications } from '@/hooks/useNotifications';
+import { wrap as sentryWrap, setUser as sentrySetUser } from '@/lib/sentry';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -31,7 +36,7 @@ const queryClient = new QueryClient({
   },
 });
 
-export default function RootLayout() {
+function RootLayout() {
   const systemScheme = useColorScheme();
   const { isDarkTheme } = useThemeStore();
   const scheme = (isDarkTheme(systemScheme) ? 'dark' : 'light') as ColorScheme;
@@ -46,7 +51,7 @@ export default function RootLayout() {
     shadows,
   };
 
-  const { loadSession } = useAuthStore();
+  const { loadSession, user } = useAuthStore();
   const router = useRouter();
 
   useOfflineSync();    // Drains offline queue when connectivity is restored
@@ -55,6 +60,12 @@ export default function RootLayout() {
   useEffect(() => {
     loadSession();
   }, []);
+
+  // Tag Sentry events with the current user id (never email or name —
+  // those are PII and get scrubbed by `beforeSend` anyway).
+  useEffect(() => {
+    sentrySetUser(user?.id ?? null);
+  }, [user?.id]);
 
   // Redirect to login when tokens expire irrecoverably
   useEffect(() => {
@@ -104,3 +115,9 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+// Sentry.wrap adds an error boundary at the very root + Sentry profiling
+// hooks. Our custom <ErrorBoundary> still wraps the navigator below — the two
+// are complementary: Sentry.wrap catches errors in the providers themselves,
+// our ErrorBoundary catches errors below the navigator and shows a recovery UI.
+export default sentryWrap(RootLayout);

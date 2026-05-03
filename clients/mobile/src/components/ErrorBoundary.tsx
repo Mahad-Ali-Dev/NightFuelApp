@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
+import { captureException } from '@/lib/sentry';
 
 interface Props {
   children: ReactNode;
@@ -21,13 +22,15 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    // Always send to Sentry (it's a no-op in dev since SDK is gated on !__DEV__).
+    // Component stack goes into a custom context so it's searchable in Sentry.
+    captureException(error, {
+      componentStack: info.componentStack,
+      source: 'ErrorBoundary',
+    });
+
     if (__DEV__) {
       console.error('[ErrorBoundary] Caught error:', error, info.componentStack);
-    } else {
-      // Production crash reporting — integrate Sentry when ready:
-      // import * as Sentry from '@sentry/react-native';
-      // Sentry.captureException(error, { extra: { componentStack: info.componentStack } });
-      console.error('[ErrorBoundary]', error?.message);
     }
   }
 

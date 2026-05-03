@@ -4,19 +4,28 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "ios": { "simulator": true }
+      "ios": { "simulator": true },
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "development"
+      }
     },
     "preview": {
       "distribution": "internal",
       "android": { "buildType": "apk" },
       "env": {
-        "API_BASE_URL": "https://staging.api.nightfuel.app"
+        "API_BASE_URL": "https://staging.api.nightfuel.app",
+        "EXPO_PUBLIC_NF_API_BASE_URL": "https://staging.api.nightfuel.app",
+        "EXPO_PUBLIC_APP_ENV": "preview",
+        "EXPO_PUBLIC_SENTRY_DSN": ""
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "API_BASE_URL": "https://api.nightfuel.app"
+        "API_BASE_URL": "https://api.nightfuel.app",
+        "EXPO_PUBLIC_NF_API_BASE_URL": "https://api.nightfuel.app",
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_SENTRY_DSN": ""
       },
       "ios": { "bundleIdentifier": "com.nightfuel.app" },
       "android": { "package": "com.nightfuel.app" }
