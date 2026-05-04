@@ -23,6 +23,10 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { wrap as sentryWrap, setUser as sentrySetUser, captureException } from '@/lib/sentry';
 import * as Linking from 'expo-linking';
 import { resolveDeepLink } from '@/lib/deepLinks';
+import {
+  MedicalDisclaimerScreen,
+  hasAcknowledgedMedicalDisclaimer,
+} from '@/components/MedicalDisclaimer';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,6 +59,15 @@ function RootLayout() {
 
   const { loadSession, user } = useAuthStore();
   const router = useRouter();
+  const [disclaimerVisible, setDisclaimerVisible] = React.useState(false);
+
+  // Apple guideline 1.4.1 — show medical disclaimer on first launch.
+  // Persists acknowledgement to AsyncStorage so we never re-prompt.
+  useEffect(() => {
+    hasAcknowledgedMedicalDisclaimer().then((acked) => {
+      if (!acked) setDisclaimerVisible(true);
+    });
+  }, []);
 
   useOfflineSync();    // Drains offline queue when connectivity is restored
   useNotifications(); // Registers push token with backend
@@ -136,6 +149,10 @@ function RootLayout() {
                 <Stack.Screen name="(shifts)" options={{ animation: 'slide_from_right' }} />
                 <Stack.Screen name="(admin)" options={{ animation: 'slide_from_right' }} />
               </Stack>
+              <MedicalDisclaimerScreen
+                visible={disclaimerVisible}
+                onAcknowledge={() => setDisclaimerVisible(false)}
+              />
             </ErrorBoundary>
           </ThemeContext.Provider>
         </QueryClientProvider>
