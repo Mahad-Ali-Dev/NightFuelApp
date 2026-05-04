@@ -27,6 +27,7 @@ import {
   MedicalDisclaimerScreen,
   hasAcknowledgedMedicalDisclaimer,
 } from '@/components/MedicalDisclaimer';
+import { checkAndReportCompromise } from '@/lib/jailDetect';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,6 +68,13 @@ function RootLayout() {
     hasAcknowledgedMedicalDisclaimer().then((acked) => {
       if (!acked) setDisclaimerVisible(true);
     });
+  }, []);
+
+  // Soft jailbreak/root detection — logs a Sentry tag if the device looks
+  // compromised. Doesn't block the user; just gives us aggregate visibility
+  // for abuse pattern analysis.
+  useEffect(() => {
+    void checkAndReportCompromise();
   }, []);
 
   useOfflineSync();    // Drains offline queue when connectivity is restored
