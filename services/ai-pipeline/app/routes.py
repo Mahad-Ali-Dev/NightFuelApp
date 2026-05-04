@@ -141,7 +141,10 @@ async def meal_score(
     )
 
 from .chains.coach_chat import generate_chat_response
+from .chains.coach_chat_stream import generate_chat_response_stream
 from .models import CoachChatRequest
+from fastapi.responses import StreamingResponse
+import json as _json
 
 @router.post("/chat")
 async def chat_with_coach(
@@ -150,12 +153,12 @@ async def chat_with_coach(
 ):
     logger.info("Handling chat request", extra={"userId": payload.userId})
     await check_rate_limit(payload.userId)
-    
+
     try:
         active_provider = LLMProvider(provider.lower())
     except ValueError:
         active_provider = LLMProvider.OPENAI
-        
+
     response_text = await generate_chat_response(
         user_id=payload.userId,
         message=payload.message,
@@ -163,5 +166,58 @@ async def chat_with_coach(
         context=payload.context,
         provider=active_provider
     )
-    
+
     return {"reply": response_text}
+
+
+@router.post("/chat/stream")
+async def chat_with_coach_stream(payload: CoachChatRequest, provider: str = "openai"):
+    """
+    Server-Sent Events streaming variant of /chat.
+
+    The mobile client opens an EventSource against this URL with the JSON
+    payload as POST body. We yield SSE-formatted lines:
+
+        data: {"type": "token", "delta": "Hi"}\\n\\n
+        data: {"type": "token", "delta": " there"}\\n\\n
+        ...
+        data: {"type": "done", "tokens": ..., "cost_usd": ..., "model": "..."}\\n\\n
+        data: [DONE]\\n\\n
+
+    The trailing `[DONE]` is for clients that prefer a sentinel string
+    over parsing the structured "done" event — both are emitted.
+
+    Closes M1, M5, M6 from PRODUCTION_READINESS.md.
+    """
+    logger.info("Handling streaming chat request", extra={"userId": payload.userId})
+    await check_rate_limit(payload.userId)
+
+    try:
+        active_provider = LLMProvider(provider.lower())
+    except ValueError:
+        active_provider = LLMProvider.OPENAI
+
+    async def event_generator():
+        async for event in generate_chat_response_stream(
+            user_id=payload.userId,
+            message=payload.message,
+            history=payload.history,
+            context=payload.context,
+            provider=active_provider,
+        ):
+            # SSE: "data: <line>\n\n". JSON inside; one event per chunk.
+            yield f"data: {_json.dumps(event)}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            # Disable nginx buffering for long-lived streams. The gateway
+            # config also needs `proxy_buffering off` for the /v1/ai/chat/stream
+            # location — see infra/docker/nginx/nginx.conf.
+            "X-Accel-Buffering": "no",
+        },
+    )
