@@ -8,6 +8,11 @@ import {
   type UpgradeBody,
   type SubscriptionTier,
 } from './schemas';
+import {
+  validateAppleReceipt,
+  validateGoogleReceipt,
+  productIdToTier as iapProductIdToTier,
+} from './iap-validator';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper — extract userId from the JWT payload attached by @fastify/jwt.
@@ -379,6 +384,132 @@ export async function subscriptionRoutes(
 
         log.error({ userId, err }, 'routes: POST /cancel – unexpected error');
         return reply.status(500).send({ statusCode: 500, error: 'Internal Server Error', message: 'Failed to cancel subscription' });
+      }
+    },
+  );
+
+  // ── POST /v1/subscriptions/iap/validate ───────────────────────────────────
+  // Apple guideline 3.1.1 + Google Play policy: server-side validation of an
+  // IAP receipt is REQUIRED. The mobile client submits the receipt; we hit
+  // Apple verifyReceipt or Google Play Developer API; on success, we flip the
+  // user's tier and respond with the new state.
+  fastify.post(
+    '/v1/subscriptions/iap/validate',
+    {
+      preHandler: [(fastify as any).authenticate],
+      schema: {
+        description: 'Validate an iOS / Android IAP receipt and update the user\'s tier.',
+        tags: ['subscriptions'],
+        security: [{ bearerAuth: [] }],
+        body: {
+          type: 'object',
+          required: ['platform', 'receipt', 'productId'],
+          properties: {
+            platform: { type: 'string', enum: ['ios', 'android'] },
+            receipt: { type: 'string', minLength: 1 },
+            productId: { type: 'string', minLength: 1 },
+            transactionId: { type: 'string' },
+            originalTransactionId: { type: 'string' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              valid: { type: 'boolean' },
+              tier: { type: 'string' },
+              currentPeriodEnd: { type: 'string' },
+              errorCode: { type: 'string' },
+              errorMessage: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      let userId: string;
+      try {
+        userId = extractUserId(request);
+      } catch (err) {
+        log.warn({ err }, 'routes: failed to extract userId from JWT');
+        return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid token payload' });
+      }
+
+      const { platform, receipt, productId } = request.body as {
+        platform: 'ios' | 'android';
+        receipt: string;
+        productId: string;
+        transactionId?: string;
+        originalTransactionId?: string;
+      };
+
+      // Defense in depth: require the claimed product ID to map to a known
+      // tier BEFORE we hit Apple/Google. Saves a verifyReceipt round-trip on
+      // garbage input and prevents an attacker from spamming Apple with
+      // unknown SKUs.
+      const claimedTier = iapProductIdToTier(productId);
+      if (!claimedTier) {
+        return reply.status(400).send({
+          valid: false,
+          errorCode: 'product_id_mismatch',
+          errorMessage: `Unknown product ${productId}`,
+        });
+      }
+
+      try {
+        const result =
+          platform === 'ios'
+            ? await validateAppleReceipt(receipt)
+            : await validateGoogleReceipt(receipt, productId);
+
+        if (!result.valid || !result.tier) {
+          return reply.status(200).send({
+            valid: false,
+            errorCode: result.errorCode,
+            errorMessage: result.errorMessage,
+          });
+        }
+
+        // Verified tier from Apple/Google MUST match the productId the
+        // client asked us about. Mismatch = potential receipt-replay
+        // attack (an old PRO receipt being submitted for a PREMIUM call).
+        if (result.tier !== claimedTier) {
+          log.warn({ userId, claimedTier, verifiedTier: result.tier }, 'IAP claimed tier mismatch');
+          return reply.status(200).send({
+            valid: false,
+            errorCode: 'product_id_mismatch',
+            errorMessage: 'Receipt does not match claimed product',
+          });
+        }
+
+        // Persist the new tier. upgradeTier emits the tier-updated event
+        // for the rest of the system (notification-service, user-service, etc.).
+        const { subscription, fromTier } = await subscriptionService.upgradeTier({
+          userId,
+          targetTier: result.tier as SubscriptionTier,
+        });
+
+        if (fromTier !== result.tier) {
+          void publishTierUpdated(eventBus, log, {
+            userId,
+            fromTier: fromTier ?? null,
+            toTier: result.tier,
+            subscriptionId: subscription.id,
+          });
+        }
+
+        return reply.status(200).send({
+          valid: true,
+          tier: result.tier,
+          currentPeriodEnd: result.expiresAt,
+        });
+      } catch (err) {
+        log.error({ err, userId, platform }, 'IAP validation failed');
+        return reply.status(500).send({
+          valid: false,
+          errorCode: 'server_error',
+          errorMessage: 'Could not validate receipt',
+        });
       }
     },
   );
