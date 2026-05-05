@@ -1,37 +1,68 @@
 {
-  "cli": { "version": ">= 13.0.0" },
+  "cli": {
+    "version": ">= 13.0.0",
+    "appVersionSource": "remote"
+  },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "ios": { "simulator": true },
+      "channel": "development",
+      "ios": { "simulator": true, "resourceClass": "m-medium" },
+      "android": { "resourceClass": "medium" },
       "env": {
         "EXPO_PUBLIC_APP_ENV": "development"
       }
     },
     "preview": {
       "distribution": "internal",
-      "android": { "buildType": "apk" },
+      "channel": "preview",
+      "android": { "buildType": "apk", "resourceClass": "medium" },
+      "ios": { "resourceClass": "m-medium" },
       "env": {
-        "API_BASE_URL": "https://staging.api.nightfuel.app",
         "EXPO_PUBLIC_NF_API_BASE_URL": "https://staging.api.nightfuel.app",
         "EXPO_PUBLIC_APP_ENV": "preview",
-        "EXPO_PUBLIC_SENTRY_DSN": ""
+        "EXPO_PUBLIC_SENTRY_DSN": "",
+        "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false"
       }
     },
     "production": {
       "autoIncrement": true,
+      "channel": "production",
+      "distribution": "store",
+      "ios": {
+        "bundleIdentifier": "com.nightfuel.app",
+        "resourceClass": "m-medium"
+      },
+      "android": {
+        "package": "com.nightfuel.app",
+        "buildType": "app-bundle",
+        "resourceClass": "medium"
+      },
       "env": {
-        "API_BASE_URL": "https://api.nightfuel.app",
         "EXPO_PUBLIC_NF_API_BASE_URL": "https://api.nightfuel.app",
         "EXPO_PUBLIC_APP_ENV": "production",
-        "EXPO_PUBLIC_SENTRY_DSN": ""
-      },
-      "ios": { "bundleIdentifier": "com.nightfuel.app" },
-      "android": { "package": "com.nightfuel.app" }
+        "EXPO_PUBLIC_SENTRY_DSN": "",
+        "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleTeamId": "REPLACE_WITH_APPLE_TEAM_ID",
+        "ascAppId": "REPLACE_WITH_APP_STORE_CONNECT_APP_ID"
+      },
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    },
+    "preview": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
+    }
   }
 }

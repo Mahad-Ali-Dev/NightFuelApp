@@ -1,0 +1,101 @@
+name: Security scan
+
+# Runs on every push and PR. Closes S7 from PRODUCTION_READINESS.md by
+# enforcing secret scanning + dependency vulnerability checks at the CI
+# layer (GitHub's native push-protection covers a smaller set of secret
+# patterns; this workflow runs gitleaks for full coverage).
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  # Weekly scan to catch newly-disclosed CVEs in stable dependencies.
+  schedule:
+    - cron: '0 7 * * 1'  # 07:00 UTC every Monday
+
+permissions:
+  contents: read
+  security-events: write  # for SARIF upload to GitHub Security tab
+
+jobs:
+  gitleaks:
+    name: GitLeaks (secret scan)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          # gitleaks needs the full history to scan past commits, not just
+          # the diff against the base.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config-path: .gitleaks.toml
+
+  npm-audit:
+    name: npm audit (mobile + web + services)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # We deliberately don't run `npm install` here — audit can run from
+      # package-lock.json without installing, which is much faster and
+      # avoids the install-flakiness that's plagued local dev.
+      - name: Audit (high+critical only)
+        run: |
+          npm audit --audit-level=high --omit=dev || {
+            echo ""
+            echo "⚠️  Security advisory found at high or critical severity."
+            echo "   Triage with: npm audit --json | jq '.vulnerabilities'"
+            echo "   Most can be fixed with: npm audit fix"
+            exit 1
+          }
+
+  python-audit:
+    name: pip-audit (Python services)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [ai-pipeline, circadian-engine]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pip-audit
+        run: pip install pip-audit
+      - name: Audit ${{ matrix.service }}
+        run: |
+          if [ -f services/${{ matrix.service }}/requirements.txt ]; then
+            pip-audit -r services/${{ matrix.service }}/requirements.txt --strict
+          else
+            echo "No requirements.txt for ${{ matrix.service }}, skipping"
+          fi
+
+  codeql:
+    name: CodeQL static analysis (TypeScript / Python)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, python]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+      - name: Analyze
+        uses: github/codeql-action/analyze@v3

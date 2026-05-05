@@ -1,0 +1,24 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "REPLACE_WITH_APPLE_TEAM_ID.com.nightfuel.app",
+        "paths": [
+          "/reset",
+          "/reset-password",
+          "/verify",
+          "/verify-email",
+          "/coach/invite/*",
+          "/subscription/return",
+          "/share/workout/*"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "REPLACE_WITH_APPLE_TEAM_ID.com.nightfuel.app"
+    ]
+  }
+}

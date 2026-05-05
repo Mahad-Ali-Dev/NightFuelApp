@@ -1,0 +1,32 @@
+#!/usr/bin/env sh
+# Pre-commit hook — runs before `git commit` finalizes.
+# Skip with `git commit --no-verify` ONLY if you've manually verified the
+# diff is clean. The Stitch key incident is why we have this hook.
+
+set -e
+
+# 1. GitLeaks: scan staged changes for hardcoded secrets.
+if command -v gitleaks > /dev/null 2>&1; then
+  echo "→ Scanning staged files for secrets…"
+  gitleaks protect --staged --config .gitleaks.toml --redact --no-banner
+else
+  echo "⚠️  gitleaks not installed — install with:"
+  echo "      brew install gitleaks         (macOS)"
+  echo "      scoop install gitleaks        (Windows)"
+  echo "      apt install gitleaks          (Debian/Ubuntu — needs ppa)"
+  echo "    or download from https://github.com/gitleaks/gitleaks/releases"
+  echo "    Skipping secret scan — run gitleaks manually before pushing."
+fi
+
+# 2. detect-secrets baseline check (if a baseline exists)
+if [ -f ".secrets.baseline" ] && command -v detect-secrets > /dev/null 2>&1; then
+  echo "→ Checking against detect-secrets baseline…"
+  detect-secrets-hook --baseline .secrets.baseline $(git diff --cached --name-only) || {
+    echo "❌ detect-secrets found new potential secrets."
+    echo "   Review with: detect-secrets audit .secrets.baseline"
+    echo "   Or update baseline if false positive: detect-secrets scan --update .secrets.baseline"
+    exit 1
+  }
+fi
+
+echo "✅ pre-commit checks passed"

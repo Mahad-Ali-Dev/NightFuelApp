@@ -1,0 +1,116 @@
+# GitLeaks configuration — runs both as a pre-commit hook AND in CI.
+#
+# Closes S7 from PRODUCTION_READINESS.md. The Stitch GCP key incident
+# (rotated, scrubbed from history) was the prompting reason. This config
+# extends the default ruleset with a few NightFuel-specific patterns and
+# allowlists known false positives.
+#
+# Usage:
+#   gitleaks detect --config .gitleaks.toml
+#   gitleaks protect --config .gitleaks.toml --staged   # pre-commit hook
+
+# Inherit the maintainer-curated default rules.
+[extend]
+useDefault = true
+
+# ─────────────────────────────────────────────────────────────────────
+# Custom rules — patterns specific to our stack
+# ─────────────────────────────────────────────────────────────────────
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic Claude API key"
+regex = '''sk-ant-[A-Za-z0-9_-]{40,}'''
+keywords = ["sk-ant-"]
+
+[[rules]]
+id = "anthropic-admin-key"
+description = "Anthropic admin / org-scoped key"
+regex = '''sk-ant-admin01-[A-Za-z0-9_-]{40,}'''
+keywords = ["sk-ant-admin"]
+
+[[rules]]
+id = "stripe-live-key"
+description = "Stripe LIVE secret key"
+regex = '''sk_live_[A-Za-z0-9]{24,}'''
+keywords = ["sk_live_"]
+
+[[rules]]
+id = "stripe-restricted-key"
+description = "Stripe restricted key"
+regex = '''rk_live_[A-Za-z0-9]{24,}'''
+keywords = ["rk_live_"]
+
+[[rules]]
+id = "google-stitch-mcp-key"
+description = "Google Stitch / GCP MCP API key (the leak we already had)"
+regex = '''AQ\.Ab[A-Za-z0-9_-]{30,}'''
+keywords = ["AQ.Ab"]
+
+[[rules]]
+id = "supabase-service-role"
+description = "Supabase service-role key (NEVER ship to client — server only)"
+regex = '''eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+'''
+keywords = ["service_role", "supabase"]
+# JWT shape — narrow to contexts where it likely IS a service role
+[rules.allowlist]
+description = "Allow signed JWTs in test fixtures"
+paths = [
+  '''__tests__/.*''',
+  '''.*\.test\.ts''',
+  '''.*\.spec\.ts''',
+]
+
+[[rules]]
+id = "apple-app-shared-secret"
+description = "Apple App-Specific Shared Secret (32-char hex, used for verifyReceipt)"
+regex = '''APPLE_SHARED_SECRET\s*=\s*[a-f0-9]{32}'''
+keywords = ["APPLE_SHARED_SECRET"]
+
+[[rules]]
+id = "apple-asc-api-key"
+description = "App Store Connect API key (.p8 file content)"
+regex = '''-----BEGIN PRIVATE KEY-----'''
+keywords = ["BEGIN PRIVATE KEY"]
+
+# ─────────────────────────────────────────────────────────────────────
+# Allowlist — paths and patterns that are intentional placeholders
+# ─────────────────────────────────────────────────────────────────────
+
+[allowlist]
+description = "Project-wide false-positive suppression"
+
+paths = [
+  # Build / install artifacts that may contain encoded blobs that
+  # match secret patterns by coincidence.
+  '''node_modules/''',
+  '''\.expo/''',
+  '''ios/Pods/''',
+  '''android/build/''',
+  '''dist/''',
+  '''.next/''',
+  # Generated Prisma client files contain large binary-encoded blobs.
+  '''services/.*/src/generated/''',
+  # Tree dumps and log files
+  '''mobile_tree.*\.txt''',
+  '''web_tree.*\.txt''',
+  '''.*\.log''',
+]
+
+regexes = [
+  # Placeholders in .env.example
+  '''sk-ant-api03-REPLACE_ME''',
+  '''sk_test_REPLACE_ME''',
+  '''sk_test_placeholder''',
+  '''mock-key''',
+  '''sk-ant-\.\.\.''',
+  '''sk-\.\.\.''',
+  '''change-me-in-production''',
+  # Bracketed placeholders in docs
+  '''<paste-token-here>''',
+  '''<paste-current-pin-here>''',
+  '''<paste-backup-pin-here>''',
+  '''REPLACE_WITH_.*''',
+  # The deliberate test secret in tests/aiSafety
+  '''sk-ant-abcdefghijklmnop1234567890''',
+]
