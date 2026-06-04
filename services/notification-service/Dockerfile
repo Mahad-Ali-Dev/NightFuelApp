@@ -1,104 +1,47 @@
-# ============================================================================
-# Stage 1 — deps
-# Install all workspace dependencies (including devDependencies needed to
-# build TypeScript and run prisma generate).
-# ============================================================================
-FROM node:22-alpine AS deps
+# syntax=docker/dockerfile:1
+FROM node:22-alpine AS base
+RUN npm install -g turbo@2
 
-# Install pnpm globally — matches the monorepo toolchain
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# ── Pruner stage: extract only notification-service and its workspace deps ────
+FROM base AS pruner
+WORKDIR /app
+COPY . .
+RUN turbo prune notification-service --docker
 
+# ── Installer stage: install pruned dependencies ──────────────────────────────
+FROM base AS installer
 WORKDIR /app
 
-# Copy workspace manifests so pnpm can link internal packages
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+# Copy pruned lockfile + package manifests
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/package-lock.json ./package-lock.json
 
-# Copy shared package manifests
-COPY packages/types/package.json        ./packages/types/package.json
-COPY packages/events/package.json       ./packages/events/package.json
-COPY packages/config/package.json       ./packages/config/package.json
+RUN npm install
 
-# Copy service manifest
-COPY services/notification-service/package.json ./services/notification-service/package.json
+# Copy pruned source files
+COPY --from=pruner /app/out/full/ .
 
-# Install all dependencies (includes devDependencies for build)
-RUN pnpm install --frozen-lockfile
+# Generate Prisma client targeting the notification-service schema
+RUN npx --workspace=notification-service prisma generate
 
-# ============================================================================
-# Stage 2 — builder
-# Build shared packages, generate Prisma client, compile TypeScript.
-# ============================================================================
-FROM deps AS builder
+# Build TypeScript
+RUN turbo run build --filter=notification-service
 
-WORKDIR /app
-
-# Copy shared package sources
-COPY packages/types/   ./packages/types/
-COPY packages/events/  ./packages/events/
-COPY packages/config/  ./packages/config/
-
-# Build shared packages in dependency order
-RUN pnpm --filter @nightfuel/types build \
-    && pnpm --filter @nightfuel/events build \
-    && pnpm --filter @nightfuel/config build
-
-# Copy the notification-service source
-COPY services/notification-service/ ./services/notification-service/
-
-WORKDIR /app/services/notification-service
-
-# Generate Prisma client (outputs to src/generated/prisma)
-RUN pnpm prisma generate
-
-# Compile TypeScript → dist/
-RUN pnpm build
-
-# ============================================================================
-# Stage 3 — runner (production image)
-# Lean final image with only the compiled output and production dependencies.
-# ============================================================================
+# ── Runner stage ──────────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
-
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-# Non-root user for security
-RUN addgroup --system --gid 1001 nightfuel \
-    && adduser --system --uid 1001 --ingroup nightfuel notifuser
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
-# Copy workspace-level manifests (needed for pnpm to resolve the workspace)
-COPY --from=builder /app/package.json          ./package.json
-COPY --from=builder /app/pnpm-workspace.yaml   ./pnpm-workspace.yaml
-COPY --from=builder /app/pnpm-lock.yaml        ./pnpm-lock.yaml
+# Copy built output and runtime node_modules
+COPY --from=installer --chown=appuser:appgroup /app/services/notification-service/dist ./dist
+COPY --from=installer --chown=appuser:appgroup /app/services/notification-service/node_modules ./node_modules
+COPY --from=installer --chown=appuser:appgroup /app/node_modules ./root_node_modules
+COPY --from=installer --chown=appuser:appgroup /app/services/notification-service/prisma ./prisma
 
-# Copy shared package build artifacts
-COPY --from=builder /app/packages/types/dist   ./packages/types/dist
-COPY --from=builder /app/packages/types/package.json ./packages/types/package.json
-
-COPY --from=builder /app/packages/events/dist  ./packages/events/dist
-COPY --from=builder /app/packages/events/package.json ./packages/events/package.json
-
-COPY --from=builder /app/packages/config/dist  ./packages/config/dist
-COPY --from=builder /app/packages/config/package.json ./packages/config/package.json
-
-# Copy notification-service compiled output and Prisma artefacts
-COPY --from=builder /app/services/notification-service/dist              ./services/notification-service/dist
-COPY --from=builder /app/services/notification-service/src/generated     ./services/notification-service/src/generated
-COPY --from=builder /app/services/notification-service/prisma            ./services/notification-service/prisma
-COPY --from=builder /app/services/notification-service/package.json      ./services/notification-service/package.json
-
-# Install production-only dependencies
-RUN pnpm install --prod --frozen-lockfile
-
-# Ensure the runtime user owns the application files
-RUN chown -R notifuser:nightfuel /app
-
-USER notifuser
-
-WORKDIR /app/services/notification-service
+USER appuser
 
 EXPOSE 3008
 
 # Run Prisma migrations then start the service
-CMD ["sh", "-c", "node -e \"require('./dist/index.js')\""]
+CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]

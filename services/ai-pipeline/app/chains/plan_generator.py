@@ -13,6 +13,7 @@ from langchain_openai import ChatOpenAI
 from ..prompts.prompts import SYSTEM_PROMPT, build_user_context
 from ..validators import generate_skeleton, validate_plan_against_skeleton
 from ..logger import logger
+from ..llm_config import ANTHROPIC_MODEL_FAST, OPENAI_MODEL_FAST
 
 class LLMProvider(str, Enum):
     ANTHROPIC = "anthropic"
@@ -23,7 +24,7 @@ def get_llm(provider: LLMProvider):
     if provider == LLMProvider.ANTHROPIC:
         key = os.environ.get("ANTHROPIC_API_KEY", "mock-key")
         return ChatAnthropic(
-            model="claude-haiku-4-5",
+            model=ANTHROPIC_MODEL_FAST,
             anthropic_api_key=key,
             temperature=0.2,
             max_tokens=4096
@@ -31,7 +32,7 @@ def get_llm(provider: LLMProvider):
     elif provider == LLMProvider.OPENAI:
         key = os.environ.get("OPENAI_API_KEY", "mock-key")
         return ChatOpenAI(
-            model="gpt-4o-mini",
+            model=OPENAI_MODEL_FAST,
             openai_api_key=key,
             temperature=0.2,
             max_tokens=4096

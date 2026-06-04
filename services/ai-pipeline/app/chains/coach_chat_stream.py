@@ -34,6 +34,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage
 
 from .plan_generator import get_llm, LLMProvider
+from ..llm_config import ANTHROPIC_MODEL_FAST, OPENAI_MODEL_FAST
 from ..prompts.prompts import SYSTEM_PROMPT
 from ..telemetry import TokenTelemetryHandler
 from ..logger import logger
@@ -145,7 +146,11 @@ async def generate_chat_response_stream(
 
 
 def _model_name_for_provider(provider: LLMProvider) -> str:
-    """Best-effort model identity when handler doesn't have one."""
+    """Best-effort model identity when handler doesn't have one.
+
+    Must mirror the model get_llm() actually instantiates (the fast model),
+    otherwise telemetry reports a model that was never called.
+    """
     if provider == LLMProvider.ANTHROPIC:
-        return os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
-    return os.environ.get("OPENAI_MODEL", "gpt-4o")
+        return ANTHROPIC_MODEL_FAST
+    return OPENAI_MODEL_FAST

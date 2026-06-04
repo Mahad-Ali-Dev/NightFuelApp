@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import {
     ChevronLeft, Send, Phone, Video, MoreVertical, Search,
@@ -137,7 +137,7 @@ function renderMessageText(text: string) {
     return <p className="text-sm whitespace-pre-wrap">{text}</p>;
 }
 
-export default function MessagesPage() {
+function MessagesContent() {
     const queryClient = useQueryClient();
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -490,5 +490,17 @@ export default function MessagesPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+export default function MessagesPage() {
+    return (
+        <Suspense fallback={
+            <div className="h-[calc(100vh-64px)] md:h-screen flex items-center justify-center text-zinc-500">
+                <Loader2 className="h-8 w-8 animate-spin opacity-50" />
+            </div>
+        }>
+            <MessagesContent />
+        </Suspense>
     );
 }

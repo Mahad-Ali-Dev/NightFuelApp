@@ -3,7 +3,7 @@
     "version": "0.0.0",
     "private": true,
     "scripts": {
-        "build": "tsc",
+        "build": "prisma generate && tsc",
         "dev": "nodemon --watch src --exec \"ts-node src/index.ts\"",
         "db:generate": "prisma generate",
         "db:migrate": "prisma migrate dev",
@@ -21,6 +21,7 @@
         "@nightfuel/events": "*",
         "@nightfuel/types": "*",
         "@prisma/client": "^5.22.0",
+        "prisma": "^5.22.0",
         "fastify": "^4.26.1",
         "fastify-socket.io": "^5.1.0",
         "fastify-type-provider-zod": "^1.1.9",
@@ -32,7 +33,6 @@
         "@types/node": "^22.0.0",
         "@types/web-push": "^3.6.3",
         "nodemon": "^3.1.0",
-        "prisma": "^5.22.0",
         "ts-node": "^10.9.2",
         "typescript": "5.9.2"
     }

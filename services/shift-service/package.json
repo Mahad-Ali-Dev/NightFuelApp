@@ -3,7 +3,7 @@
     "version": "0.0.0",
     "private": true,
     "scripts": {
-        "build": "tsc",
+        "build": "prisma generate && tsc",
         "dev": "nodemon --watch src --exec \"ts-node src/index.ts\"",
         "db:migrate": "prisma migrate dev",
         "db:studio": "prisma studio",

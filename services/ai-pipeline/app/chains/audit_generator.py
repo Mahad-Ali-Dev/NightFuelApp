@@ -5,6 +5,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from ..logger import logger
 from .plan_generator import LLMProvider
+from ..llm_config import ANTHROPIC_MODEL, OPENAI_MODEL
 
 AUDIT_SYSTEM_PROMPT = """
 You are NightFuel, an elite chrono-nutrition AI coach. 
@@ -34,9 +35,9 @@ async def generate_weekly_audit(
 ) -> Dict[str, Any]:
     try:
         if provider == LLMProvider.ANTHROPIC:
-            llm = ChatAnthropic(model_name="claude-3-5-sonnet-20240620", temperature=0.3)
+            llm = ChatAnthropic(model_name=ANTHROPIC_MODEL, temperature=0.3)
         else:
-            llm = ChatOpenAI(model_name="gpt-4o", temperature=0.3)
+            llm = ChatOpenAI(model_name=OPENAI_MODEL, temperature=0.3)
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", AUDIT_SYSTEM_PROMPT),
