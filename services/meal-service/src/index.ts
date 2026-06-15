@@ -13,7 +13,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 
 const envSchema = z.object({
     MEAL_PORT: z.string().default('3006'),
-    JWT_SECRET: z.string(),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     REDIS_URL: z.string().url(),
     PLAN_SERVICE_URL: z.string().url(),
 });

@@ -13,15 +13,18 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { spacing, borderRadius } from '@/theme/spacing';
-import { Skeleton } from '@/components/ui';
+import { Skeleton, EmptyState } from '@/components/ui';
 // Per-meal accent stripes use canonical Aurora theme accent hexes (module scope
 // can't read the hook): amber / emerald / purple / cyan from '@/theme/colors'.
 const MEAL_COLORS: Record<string,string> = { breakfast:'#FFB300', lunch:'#10B981', dinner:'#7C4DFF', snack:'#00D4AA' };
-const MEAL_IMGS: Record<string,string> = {
-    breakfast:'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=200&q=60',
-    lunch:'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&q=60',
-    dinner:'https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?w=200&q=60',
-    snack:'https://images.unsplash.com/photo-1574116813310-adc5f95a4fe4?w=200&q=60',
+// Bundled Aurora meal art (dark-glass) so the timeline thumbnails never depend
+// on an external host (no 404 / rate-limit). '@/*' resolves to ./src, so assets
+// are required by relative path (same pattern as the exercise fallbacks).
+const MEAL_IMGS: Record<string,number> = {
+    breakfast:require('../../assets/images/meal-breakfast.png'),
+    lunch:require('../../assets/images/meal-lunch.png'),
+    dinner:require('../../assets/images/meal-dinner.png'),
+    snack:require('../../assets/images/meal-snack.png'),
 };
 export default function MealPlannerScreen() {
     const { colors, typography } = useTheme();
@@ -84,6 +87,15 @@ export default function MealPlannerScreen() {
                         ))}
                     </View>
                 ):
+                planQ.isError?(
+                    <EmptyState
+                        icon="cloud-offline-outline"
+                        title="Couldn't load your plan"
+                        subtitle="Something went wrong reaching the Ria nutrition engine. Check your connection and try again."
+                        actionLabel="Retry"
+                        onAction={()=>planQ.refetch()}
+                    />
+                ):
                 !plan?(
                     <View style={s.emptyState}>
                         <View style={[s.emptyIcon,{backgroundColor:withAlpha(colors.accent.purple,0.12),borderColor:withAlpha(colors.accent.purple,0.24),borderWidth:1},shadows.glow(colors.accent.purple)]}><Ionicons name="sparkles" size={48} color={colors.accent.purple} /></View>
@@ -119,7 +131,7 @@ export default function MealPlannerScreen() {
                                         {idx<plan.meals.length-1&&<View style={[s.timeline,{backgroundColor:colors.border.default}]} />}
                                     </View>
                                     <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={meal.label} style={[s.mealCard,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]} onPress={()=>router.push({pathname:'/(meals)/log-meal',params:{preset:meal.label}})}>
-                                        <Image source={{uri:mi}} style={s.mealThumb} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                                        <Image source={mi} style={s.mealThumb} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                                         <View style={[s.mealAccent,{backgroundColor:mc}]} />
                                         <View style={{flex:1,paddingLeft:12}}>
                                             <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold'}]}>{meal.label}</Text>

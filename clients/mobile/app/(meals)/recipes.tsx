@@ -12,6 +12,10 @@ import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { spacing, borderRadius } from '@/theme/spacing';
 import { Skeleton, EmptyState } from '@/components/ui';
+// Bundled Aurora dark-glass placeholder so imageless recipes never depend on an
+// external host (no 404 / rate-limit). '@/*' resolves to ./src, so the asset is
+// required by relative path (same pattern as the exercise fallbacks).
+const RECIPE_FALLBACK = require('../../assets/images/recipe-fallback.png');
 // Filter accents map to canonical Aurora theme tokens. Module scope can't read
 // the hook, so we use the exact accent hex values from '@/theme/colors'.
 const TAGS = [
@@ -73,7 +77,7 @@ export default function RecipesScreen() {
                 <ScrollView contentContainerStyle={{padding:20,paddingBottom:100}} showsVerticalScrollIndicator={false}>
                     {recipes.map((r)=>(
                         <TouchableOpacity key={r.id} accessibilityRole="button" accessibilityLabel={r.title} style={[s.recCard,{borderColor:colors.border.default},shadows.lg]} activeOpacity={0.9} onPress={()=>setDetailId(r.id)}>
-                            <Image source={{uri:r.image||'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80'}} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                            <Image source={r.image ? { uri: r.image } : RECIPE_FALLBACK} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                             <LinearGradient colors={['rgba(0,0,0,0.05)','rgba(0,0,0,0.88)']} style={StyleSheet.absoluteFillObject} />
                             <View style={s.topRow}>
                                 <View style={[s.badge,{backgroundColor:'rgba(0,0,0,0.5)'}]}><Ionicons name="time-outline" size={12} color="#FFF" /><Text style={[typography.caption,{color:'#FFF',fontWeight:'bold',fontSize:11,marginLeft:4}]}>{(r.prepTimeMins||0)+(r.cookTimeMins||0)}m</Text></View>
@@ -115,7 +119,7 @@ export default function RecipesScreen() {
                             </View>
                         ):detailQ.data?(
                             <ScrollView showsVerticalScrollIndicator={false}>
-                                <Image source={{uri:detailQ.data.image||'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80'}} style={s.modalHero} contentFit="cover" cachePolicy="memory-disk" transition={300} />
+                                <Image source={detailQ.data.image ? { uri: detailQ.data.image } : RECIPE_FALLBACK} style={s.modalHero} contentFit="cover" cachePolicy="memory-disk" transition={300} />
                                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close" style={[s.closeBtn,{backgroundColor:'rgba(0,0,0,0.5)',top:insets.top+12}]} onPress={()=>setDetailId(null)}><Ionicons name="close" size={24} color="#FFF" /></TouchableOpacity>
                                 <View style={s.modalBody}>
                                     <Text style={[typography.display,{color:colors.text.primary,fontSize:26,fontWeight:'900'}]}>{detailQ.data.title}</Text>

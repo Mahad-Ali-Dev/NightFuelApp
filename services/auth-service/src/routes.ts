@@ -68,6 +68,7 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
     fastify.withTypeProvider<ZodTypeProvider>().post(
         '/refresh',
         {
+            config: authRateLimit,
             schema: {
                 body: refreshTokenSchema,
             },

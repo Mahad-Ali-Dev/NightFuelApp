@@ -118,14 +118,10 @@ export const userRoutes = async (
                 const userId = extractUserId(request, reply);
                 if (!userId) return;
 
-                // DEBUG (remove later)
-                console.log('UPDATE PROFILE BODY:', request.body);
-
                 const profile = await service.updateProfile(userId, request.body);
                 return reply.code(200).send(profile);
             } catch (err: any) {
                 request.log.error(err);
-                console.error('PUT /me ERROR:', err); // ← IMPORTANT
 
                 if (err.message === 'Profile not found') {
                     return reply.code(404).send({ error: err.message });
@@ -285,7 +281,7 @@ export const userRoutes = async (
             } catch (err: any) {
                 request.log.error(err);
                 if (err.message.includes('Unauthorized')) {
-                    return reply.code(403).send({ error: err.message });
+                    return reply.code(403).send({ error: 'Forbidden' });
                 }
                 return reply.code(500).send({ error: 'Internal server error' });
             }

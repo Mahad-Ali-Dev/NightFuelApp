@@ -22,7 +22,7 @@ import fastifySocketIO from 'fastify-socket.io';
 // ---------------------------------------------------------------------------
 const envSchema = z.object({
     NOTIF_PORT: z.string().default('3008'),
-    JWT_SECRET: z.string().min(1),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     // Override: the notification service uses NOTIF_DATABASE_URL as primary,
     // but @nightfuel/config baseEnvSchema requires DATABASE_URL to be present.
     // Both are in .env, so this is satisfied automatically.

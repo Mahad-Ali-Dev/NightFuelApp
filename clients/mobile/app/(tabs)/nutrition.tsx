@@ -15,13 +15,18 @@ import { getToday as getTodayProgress } from '@/api/progress';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Card } from '@/components/ui/Card';
-import { Skeleton } from '@/components/ui';
+import { Skeleton, EmptyState } from '@/components/ui';
 import { format } from 'date-fns';
 import { withAlpha } from '@/theme/utils';
 import { colors as themeColors } from '@/theme/colors';
 import { TAB_BAR_H } from './_layout';
 
 const { width } = Dimensions.get('window');
+
+// Bundled Aurora dark-glass art (no external host → offline-safe, no 404 /
+// rate-limit). '@/*' resolves to ./src, so assets are required by relative path
+// — same module-scope require pattern as (tabs)/training.tsx.
+const HERO_NUTRITION = require('../../assets/images/hero-nutrition.png');
 
 export default function NutritionHubScreen() {
     const { colors, typography, spacing, borderRadius, shadows } = useTheme();
@@ -84,7 +89,7 @@ export default function NutritionHubScreen() {
     return (
         <ImageBackground
             blurRadius={4}
-            source={{ uri: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&auto=format&fit=crop&q=80' }}
+            source={HERO_NUTRITION}
             style={[styles.container, { backgroundColor: colors.background.primary }]}
             imageStyle={{ opacity: 0.25 }}
         >
@@ -184,6 +189,22 @@ export default function NutritionHubScreen() {
                                 <Skeleton key={i} width="100%" height={72} radius={borderRadius.xl} />
                             ))}
                         </View>
+                    ) : planQuery.isError ? (
+                        // Distinct error tone (never falls through to the empty
+                        // "Generate plan" CTA). Retry re-runs every query feeding
+                        // this tab so a transient failure recovers in one tap.
+                        <EmptyState
+                            icon="cloud-offline-outline"
+                            title="Couldn't load nutrition"
+                            subtitle="Check your connection and try again."
+                            actionLabel="Retry"
+                            onAction={() => {
+                                planQuery.refetch();
+                                logsQuery.refetch();
+                                progressQuery.refetch();
+                                fastingQuery.refetch();
+                            }}
+                        />
                     ) : !plan || !((plan.meals || []).some((m: any) => m && (m.label || m.name))) ? (
                         <TouchableOpacity
                             activeOpacity={0.85}

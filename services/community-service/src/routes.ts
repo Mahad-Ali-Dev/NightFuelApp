@@ -29,7 +29,7 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
     });
 
     fastify.post('/v1/community/post', {
-        schema: { body: z.object({ content: z.string().min(1), imageUrl: z.string().optional() }) },
+        schema: { body: z.object({ content: z.string().min(1).max(5000), imageUrl: z.string().url().max(2048).optional() }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         try {
@@ -37,7 +37,7 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
             const { content, imageUrl } = request.body as any;
             return reply.code(201).send(await communityService.createPost(userId, content, imageUrl));
         } catch (err: any) {
-            console.error('Crash in createPost:', err);
+            request.log.error({ err }, 'createPost failed');
             return reply.code(500).send({ error: 'An unexpected error occurred' });
         }
     });
@@ -53,7 +53,7 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
     fastify.post('/v1/community/post/:id/comment', {
         schema: {
             params: z.object({ id: z.string().uuid() }),
-            body: z.object({ text: z.string().min(1) })
+            body: z.object({ text: z.string().min(1).max(2000) })
         },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
@@ -85,7 +85,7 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
     fastify.put('/v1/community/post/:id', {
         schema: {
             params: z.object({ id: z.string().uuid() }),
-            body: z.object({ content: z.string().min(1) })
+            body: z.object({ content: z.string().min(1).max(5000) })
         },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {

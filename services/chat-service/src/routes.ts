@@ -4,6 +4,14 @@ import { z } from 'zod';
 import { ChatService } from './chat.service';
 import jwt from 'jsonwebtoken';
 
+// Inbound WebSocket frame schema. senderId is intentionally absent — the
+// sender is derived from the verified JWT, never from the client payload.
+const wsFrameSchema = z.object({
+    type: z.literal('send_message'),
+    conversationId: z.string().uuid(),
+    text: z.string().min(1).max(4000)
+});
+
 export default async function (fastify: FastifyInstance, opts: { chatService: ChatService, jwtSecret: string }) {
     const { chatService, jwtSecret } = opts;
 
@@ -120,26 +128,48 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
 
     // ── WebSocket route for real-time chat ──────────────────────────────────
     (fastify as any).get('/v1/chat/ws', { websocket: true }, (connection: any, req: any) => {
+        // Authenticate the upgrade from the Bearer token. Unlike the dev-fallback
+        // `authenticate` decorator, the socket MUST close on a bad/missing token —
+        // the sender identity below is trusted to come from this verified payload.
+        const token = (req.headers?.authorization as string | undefined)?.replace('Bearer ', '');
+        let wsUser: any;
+        try {
+            if (!token) throw new Error('missing');
+            wsUser = jwt.verify(token, jwtSecret);
+        } catch {
+            try { connection.socket.close(4401, 'Unauthorized'); } catch {}
+            return;
+        }
+
         connection.socket.on('message', async (message: Buffer) => {
             try {
-                const data = JSON.parse(message.toString()) as {
-                    type: string;
-                    conversationId: string;
-                    senderId: string;
-                    text: string;
-                };
-                if (data.type === 'send_message') {
-                    const savedMessage = await chatService.saveMessage(
-                        data.conversationId,
-                        data.senderId,
-                        data.text
-                    );
-
-                    connection.socket.send(JSON.stringify({
-                        type: 'new_message',
-                        data: savedMessage
-                    }));
+                let raw: unknown;
+                try {
+                    raw = JSON.parse(message.toString());
+                } catch {
+                    connection.socket.send(JSON.stringify({ type: 'error', error: 'invalid_frame' }));
+                    return;
                 }
+
+                const parsed = wsFrameSchema.safeParse(raw);
+                if (!parsed.success) {
+                    connection.socket.send(JSON.stringify({ type: 'error', error: 'invalid_frame' }));
+                    return;
+                }
+
+                // Sender comes from the verified token only — any client-supplied
+                // senderId is ignored (and not part of the schema).
+                const senderId = wsUser.userId ?? wsUser.id ?? wsUser.sub;
+                const savedMessage = await chatService.saveMessage(
+                    parsed.data.conversationId,
+                    senderId,
+                    parsed.data.text
+                );
+
+                connection.socket.send(JSON.stringify({
+                    type: 'new_message',
+                    data: savedMessage
+                }));
             } catch (err) {
                 fastify.log.error({ err }, 'WebSocket Error');
             }

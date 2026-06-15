@@ -17,7 +17,7 @@ export default function RoutinesScreen() {
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const qc = useQueryClient();
-    const { routines, isLoadingRoutines } = useWorkout();
+    const { routines, isLoadingRoutines, isErrorRoutines, refetchRoutines } = useWorkout();
     const [showCreate, setShowCreate] = useState(false);
     const [newName, setNewName] = useState('');
     const [selEx, setSelEx] = useState<Array<{name:string;sets:number;reps:number}>>([]);
@@ -76,7 +76,16 @@ export default function RoutinesScreen() {
                         })}
                     </View>
                 )}
-                {!isLoadingRoutines&&routines.length===0&&(
+                {!isLoadingRoutines&&isErrorRoutines&&(
+                    <EmptyState
+                        icon="cloud-offline-outline"
+                        title="Couldn't load routines"
+                        subtitle="We couldn't reach your routines. Check your connection and try again."
+                        actionLabel="Retry"
+                        onAction={()=>refetchRoutines()}
+                    />
+                )}
+                {!isLoadingRoutines&&!isErrorRoutines&&routines.length===0&&(
                     <EmptyState
                         icon="barbell-outline"
                         title="No routines yet"

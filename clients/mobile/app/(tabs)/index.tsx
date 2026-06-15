@@ -31,13 +31,28 @@ const H_PAD = 20;
 const CARD_GAP = 12;
 const MINI_W = (width - H_PAD * 2 - CARD_GAP) / 2;
 
+// Bundled Aurora dark-glass art (no external host → works offline, no 404 /
+// rate-limit / privacy leak). '@/*' resolves to ./src, so assets are required
+// by relative path — same module-scope require pattern as (exercises)/index.tsx.
+const QA_MEAL = require('../../assets/images/qa-meal.png');
+const QA_WORKOUT = require('../../assets/images/qa-workout.png');
+const QA_SLEEP = require('../../assets/images/qa-sleep.png');
+const QA_STATS = require('../../assets/images/qa-stats.png');
+const HERO_TRAINING = require('../../assets/images/hero-training.png');
+const CAT_GYM_IMG = require('../../assets/images/cat-gym.png');
+const CAT_HOME_IMG = require('../../assets/images/cat-home.png');
+const CAT_CARDIO_IMG = require('../../assets/images/cat-cardio.png');
+const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
+const MUSCLE_SHOULDERS_IMG = require('../../assets/images/muscle-shoulders.png');
+const MUSCLE_ARMS_IMG = require('../../assets/images/muscle-arms.png');
+
 // ─── Static data ─────────────────────────────────────────────────────────────
 
 const QUICK_ACTIONS = [
-    { id: 'meal', label: 'Log Meal', icon: 'restaurant', color: palette.accent.cyan, image: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=400&q=80', route: '/(tabs)/nutrition' },
-    { id: 'workout', label: 'Log Workout', icon: 'flame', color: palette.accent.coral, image: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=400&q=80', route: '/(tabs)/training' },
-    { id: 'sleep', label: 'Log Sleep', icon: 'moon', color: palette.accent.purple, image: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=400&q=80', route: '/(modals)/log-sleep' },
-    { id: 'stats', label: 'Progress', icon: 'stats-chart', color: palette.accent.blue, image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&q=80', route: '/(performance)' },
+    { id: 'meal', label: 'Log Meal', icon: 'restaurant', color: palette.accent.cyan, image: QA_MEAL, route: '/(tabs)/nutrition' },
+    { id: 'workout', label: 'Log Workout', icon: 'flame', color: palette.accent.coral, image: QA_WORKOUT, route: '/(tabs)/training' },
+    { id: 'sleep', label: 'Log Sleep', icon: 'moon', color: palette.accent.purple, image: QA_SLEEP, route: '/(modals)/log-sleep' },
+    { id: 'stats', label: 'Progress', icon: 'stats-chart', color: palette.accent.blue, image: QA_STATS, route: '/(performance)' },
 ] as const;
 
 // Exercise categories shown as image cards
@@ -46,7 +61,7 @@ const EXERCISE_CATEGORY_META = [
         id: 'gym',
         label: 'Gym Workout',
         fallbackCount: '500+',
-        image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&q=80',
+        image: CAT_GYM_IMG,
         accent: palette.accent.coral,
         filter: 'gym',
     },
@@ -54,7 +69,7 @@ const EXERCISE_CATEGORY_META = [
         id: 'home',
         label: 'Home Workout',
         fallbackCount: '200+',
-        image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&q=80',
+        image: CAT_HOME_IMG,
         accent: palette.accent.cyan,
         filter: 'home',
     },
@@ -62,7 +77,7 @@ const EXERCISE_CATEGORY_META = [
         id: 'cardio',
         label: 'Cardio',
         fallbackCount: '80+',
-        image: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=400&q=80',
+        image: CAT_CARDIO_IMG,
         accent: palette.accent.blue,
         filter: 'cardio',
     },
@@ -70,7 +85,7 @@ const EXERCISE_CATEGORY_META = [
         id: 'kegel',
         label: 'Kegel / Pelvic',
         fallbackCount: '5',
-        image: 'https://images.unsplash.com/photo-1506629082955-511b1aa562c8?w=400&q=80',
+        image: CAT_RECOVERY_IMG,
         accent: palette.accent.purple,
         filter: 'kegel',
     },
@@ -78,12 +93,12 @@ const EXERCISE_CATEGORY_META = [
 
 // More Features shown as image cards on Home
 const MORE_FEATURES = [
-    { id: 'shifts', label: 'Shifts', image: 'https://images.unsplash.com/photo-1506784365847-bbad939e9335?w=400&q=80', accent: palette.accent.amber, route: '/(shifts)' },
-    { id: 'sleep', label: 'Sleep Tracker', image: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=400&q=80', accent: palette.accent.purple, route: '/(modals)/log-sleep' },
-    { id: 'community', label: 'Community', image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=400&q=80', accent: palette.accent.blue, route: '/(community)' },
-    { id: 'coaches', label: 'Coaches', image: 'https://images.unsplash.com/photo-1526506114866-2679df30dc0c?w=400&q=80', accent: palette.accent.coral, route: '/coaches/browse' },
-    { id: 'circadian', label: 'Circadian', image: 'https://images.unsplash.com/photo-1621508643809-b69a941ea13e?w=400&q=80', accent: palette.accent.purpleLight, route: '/(tabs)/circadian' },
-    { id: 'settings', label: 'Settings', image: 'https://images.unsplash.com/photo-1555448248-2571daf6344b?w=400&q=80', accent: palette.text.secondary, route: '/(settings)' },
+    { id: 'shifts', label: 'Shifts', image: HERO_TRAINING, accent: palette.accent.amber, route: '/(shifts)' },
+    { id: 'sleep', label: 'Sleep Tracker', image: QA_SLEEP, accent: palette.accent.purple, route: '/(modals)/log-sleep' },
+    { id: 'community', label: 'Community', image: MUSCLE_SHOULDERS_IMG, accent: palette.accent.blue, route: '/(community)' },
+    { id: 'coaches', label: 'Coaches', image: MUSCLE_ARMS_IMG, accent: palette.accent.coral, route: '/coaches/browse' },
+    { id: 'circadian', label: 'Circadian', image: CAT_RECOVERY_IMG, accent: palette.accent.purpleLight, route: '/(tabs)/circadian' },
+    { id: 'settings', label: 'Settings', image: CAT_HOME_IMG, accent: palette.text.secondary, route: '/(settings)' },
 ] as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -278,7 +293,7 @@ export default function DashboardScreen() {
     return (
         <ImageBackground
             blurRadius={3} // Slight atmospheric blur on the raw image
-            source={{ uri: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=800&auto=format&fit=crop&q=80' }}
+            source={HERO_TRAINING}
             style={[s.root, { backgroundColor: colors.background.primary }]}
             imageStyle={{ opacity: 0.4 }}
         >
@@ -540,7 +555,7 @@ export default function DashboardScreen() {
                             style={{ width: MINI_W, height: 110, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}
                         >
                             <Image
-                                source={{ uri: a.image }}
+                                source={a.image}
                                 style={StyleSheet.absoluteFillObject}
                                 contentFit="cover"
                                 cachePolicy="memory-disk"
@@ -578,7 +593,7 @@ export default function DashboardScreen() {
                             accessibilityLabel={`${cat.label}, ${cat.count} exercises`}
                         >
                             <Image
-                                source={{ uri: cat.image }}
+                                source={cat.image}
                                 style={StyleSheet.absoluteFillObject}
                                 contentFit="cover"
                                 cachePolicy="memory-disk"
@@ -614,7 +629,7 @@ export default function DashboardScreen() {
                             accessibilityLabel={feat.label}
                         >
                             <Image
-                                source={{ uri: feat.image }}
+                                source={feat.image}
                                 style={StyleSheet.absoluteFillObject}
                                 contentFit="cover"
                                 cachePolicy="memory-disk"

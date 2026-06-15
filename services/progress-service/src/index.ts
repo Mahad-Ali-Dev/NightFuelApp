@@ -14,7 +14,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 
 const envSchema = z.object({
     PROGRESS_PORT: z.string().default('3007'),
-    JWT_SECRET: z.string(),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     REDIS_URL: z.string().url(),
     USER_SERVICE_URL: z.string().url(),
     AI_PIPELINE_URL: z.string().url().optional(),

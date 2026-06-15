@@ -15,7 +15,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 // ── Environment validation ────────────────────────────────────────────────────
 const envSchema = z.object({
     USER_PORT: z.string().default('3009'),
-    JWT_SECRET: z.string(),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     USER_DATABASE_URL: z.string().url(),
     USER_DIRECT_URL: z.string().url(),
 });

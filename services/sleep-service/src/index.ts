@@ -13,7 +13,7 @@ import { SleepService } from './sleep.service';
 
 const envSchema = z.object({
     SLEEP_PORT: z.string().default('3012'),
-    JWT_SECRET: z.string().min(1),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     REDIS_URL: z.string().url(),
 });
 

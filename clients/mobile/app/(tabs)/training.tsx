@@ -14,21 +14,32 @@ import { getRoutines, getActiveSession, Routine } from '@/api/exercises';
 import { Skeleton, EmptyState } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 const { width } = Dimensions.get('window');
+// Bundled Aurora dark-glass art (no external host → offline-safe, no 404 /
+// rate-limit). '@/*' resolves to ./src, so assets are required by relative path
+// — same module-scope require pattern as (exercises)/index.tsx.
+const HERO_TRAINING = require('../../assets/images/hero-training.png');
+const CAT_GYM_IMG = require('../../assets/images/cat-gym.png');
+const CAT_HOME_IMG = require('../../assets/images/cat-home.png');
+const CAT_CARDIO_IMG = require('../../assets/images/cat-cardio.png');
+const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
+const QA_WORKOUT_IMG = require('../../assets/images/qa-workout.png');
+const MUSCLE_CHEST_IMG = require('../../assets/images/muscle-chest.png');
+const MUSCLE_BACK_IMG = require('../../assets/images/muscle-back.png');
 // Category accents map to canonical Aurora theme tokens (module scope can't read
 // the hook, so we use the exact accent hex values from '@/theme/colors').
 const CATS = [
-    { id:'gym', title:'Gym', img:'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&q=70', route:'/(exercises)?category=gym', color:'#FF6B35' },
-    { id:'home', title:'Home', img:'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&q=70', route:'/(exercises)?category=home', color:'#00D4AA' },
-    { id:'cardio', title:'Cardio', img:'https://images.unsplash.com/photo-1538805060514-97d9cc17730c?w=400&q=70', route:'/(exercises)?category=cardio', color:'#10B981' },
-    { id:'recover', title:'Recovery', img:'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=400&q=70', route:'/(exercises)?category=kegel', color:'#7C4DFF' },
+    { id:'gym', title:'Gym', img:CAT_GYM_IMG, route:'/(exercises)?category=gym', color:'#FF6B35' },
+    { id:'home', title:'Home', img:CAT_HOME_IMG, route:'/(exercises)?category=home', color:'#00D4AA' },
+    { id:'cardio', title:'Cardio', img:CAT_CARDIO_IMG, route:'/(exercises)?category=cardio', color:'#10B981' },
+    { id:'recover', title:'Recovery', img:CAT_RECOVERY_IMG, route:'/(exercises)?category=kegel', color:'#7C4DFF' },
 ];
 // Static routine-card artwork (constant — hoisted out of render to avoid
-// re-allocating this array on every routine row).
+// re-allocating this array on every routine row). Bundled, rotated by index%4.
 const ROUTINE_IMGS = [
-    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&q=60',
-    'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=400&q=60',
-    'https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?w=400&q=60',
-    'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=400&q=60',
+    QA_WORKOUT_IMG,
+    MUSCLE_CHEST_IMG,
+    MUSCLE_BACK_IMG,
+    CAT_GYM_IMG,
 ];
 type TTab = 'train'|'plan';
 export default function TrainingHubScreen() {
@@ -45,7 +56,7 @@ export default function TrainingHubScreen() {
     useFocusEffect(useCallback(() => { sessionQ.refetch(); }, []));
     const activePlan = routines[0] ?? null;
     return (
-        <ImageBackground blurRadius={4} source={{uri:'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=70'}} style={[s.container,{backgroundColor:colors.background.primary}]} imageStyle={{opacity:0.35}}>
+        <ImageBackground blurRadius={4} source={HERO_TRAINING} style={[s.container,{backgroundColor:colors.background.primary}]} imageStyle={{opacity:0.35}}>
             <LinearGradient colors={['rgba(10,10,13,0.8)',colors.background.primary]} style={StyleSheet.absoluteFillObject} />
             <View style={[s.hdr,{paddingTop:insets.top+20}]}>
                 <View><Text style={[typography.display,{color:colors.text.primary,fontSize:34}]}>Training</Text><Text style={[typography.body,{color:colors.text.secondary,marginTop:2}]}>Level up your strength today.</Text></View>
@@ -85,7 +96,7 @@ export default function TrainingHubScreen() {
                     <View style={s.catGrid}>
                         {CATS.map((cat)=>(
                             <TouchableOpacity key={cat.id} accessibilityRole="button" accessibilityLabel={`${cat.title} workouts`} style={[s.catCard,{borderRadius:borderRadius.xl}]} activeOpacity={0.85} onPress={()=>router.push(cat.route as any)}>
-                                <Image source={{uri:cat.img}} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                                <Image source={cat.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                                 <LinearGradient colors={['rgba(0,0,0,0.05)','rgba(0,0,0,0.78)']} style={[StyleSheet.absoluteFillObject,{borderRadius:borderRadius.xl}]} />
                                 <View style={[s.catBadge,{backgroundColor:withAlpha(cat.color,0.25),borderColor:cat.color}]}><Text style={[typography.caption,{color:cat.color,fontWeight:'bold',fontSize:9}]}>{cat.title.toUpperCase()}</Text></View>
                                 <Text style={[typography.heading,{color:'#FFF',fontSize:17,fontWeight:'900',zIndex:1}]}>{cat.title}</Text>
@@ -107,7 +118,7 @@ export default function TrainingHubScreen() {
                             const ac=[colors.accent.coral,colors.accent.cyan,colors.accent.emerald,colors.accent.purple][idx%4]!;
                             return (
                                 <TouchableOpacity key={r.id||idx} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={r.name||r.title} style={[s.routCard,{borderRadius:borderRadius.xl}]} onPress={()=>router.push({pathname:'/training/onboarding',params:{routineId:r.id}})}>
-                                    <Image source={{uri:imgs}} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                                    <Image source={imgs} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                                     <LinearGradient colors={['rgba(0,0,0,0.1)','rgba(0,0,0,0.85)']} style={StyleSheet.absoluteFillObject} />
                                     <View style={[s.routContent,{zIndex:1}]}>
                                         <View style={[s.routTag,{backgroundColor:ac}]}><Text style={s.tagTxt}>{r.splitType||'STRENGTH'}</Text></View>
@@ -132,7 +143,7 @@ export default function TrainingHubScreen() {
                         activePlan ? (
                             <View>
                                 <View style={[s.planCard,{marginBottom:24}]}>
-                                    <Image source={{uri:'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&q=70'}} style={s.planImg} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                                    <Image source={HERO_TRAINING} style={s.planImg} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                                     <LinearGradient colors={['transparent','rgba(0,0,0,0.92)']} style={StyleSheet.absoluteFillObject} />
                                     <View style={s.planOvr}>
                                         <View style={[s.planBadge,{backgroundColor:withAlpha(colors.accent.coral,0.3),borderColor:colors.accent.coral}]}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold',fontSize:10}]}>ACTIVE ROUTINE</Text></View>

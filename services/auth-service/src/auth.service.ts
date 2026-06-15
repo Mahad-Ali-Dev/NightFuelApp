@@ -41,8 +41,13 @@ export class AuthService {
     ) { }
 
     async register(body: RegisterBody): Promise<{ user: User; accessToken: string; refreshToken: string }> {
+        // Normalize the email so lookups and stored values are canonical
+        // (case-insensitive, no surrounding whitespace). Matches the mobile
+        // client and prevents case/whitespace-variant duplicate accounts.
+        const email = body.email.trim().toLowerCase();
+
         const existingUser = await this.prisma.user.findUnique({
-            where: { email: body.email },
+            where: { email },
         });
 
         if (existingUser) {
@@ -53,7 +58,7 @@ export class AuthService {
 
         const user = await this.prisma.user.create({
             data: {
-                email: body.email,
+                email,
                 passwordHash,
                 displayName: body.displayName,
                 region: body.region,
@@ -86,7 +91,11 @@ export class AuthService {
     }
 
     async login(body: LoginBody): Promise<{ user: User; accessToken: string; refreshToken: string }> {
-        const lockoutKey = body.email.toLowerCase();
+        // Normalize the email so the lockout key and the user lookup use the
+        // same canonical form (case-insensitive, no surrounding whitespace),
+        // matching how register() stores it and how the mobile client sends it.
+        const email = body.email.trim().toLowerCase();
+        const lockoutKey = email;
 
         // Reject early if this account is currently locked out from too many
         // recent failures. Generic message (no enumeration: applies whether or
@@ -96,7 +105,7 @@ export class AuthService {
         }
 
         const user = await this.prisma.user.findUnique({
-            where: { email: body.email },
+            where: { email },
         });
 
         if (!user) {

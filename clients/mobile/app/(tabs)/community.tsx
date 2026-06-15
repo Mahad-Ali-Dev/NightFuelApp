@@ -16,6 +16,11 @@ import { formatDistanceToNow } from 'date-fns';
 
 const { width } = Dimensions.get('window');
 
+// Bundled Aurora dark-glass art (no external host → offline-safe, no 404 /
+// rate-limit). '@/*' resolves to ./src, so assets are required by relative path
+// — same module-scope require pattern as (tabs)/training.tsx.
+const HERO_COMMUNITY = require('../../assets/images/hero-community.png');
+
 /** Safe relative-time formatter — guards against missing/invalid `createdAt`
  * so a single bad timestamp can't throw "Invalid time value" and blank the feed. */
 function timeAgo(createdAt?: string): string {
@@ -104,7 +109,7 @@ export default function CommunityTab() {
     return (
         <ImageBackground
             blurRadius={5}
-            source={{ uri: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=800&auto=format&fit=crop&q=80' }}
+            source={HERO_COMMUNITY}
             style={[styles.container, { backgroundColor: colors.background.primary }]}
             imageStyle={{ opacity: 0.35 }}
         >

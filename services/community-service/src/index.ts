@@ -11,7 +11,7 @@ import routes from './routes';
 
 const envSchema = z.object({
     COMMUNITY_PORT: z.string().default('3013'),
-    JWT_SECRET: z.string(),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     USER_SERVICE_URL: z.string().default('http://user-service:3009'),
 });
 

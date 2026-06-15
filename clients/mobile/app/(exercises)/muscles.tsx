@@ -11,20 +11,32 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { Skeleton, EmptyState } from '@/components/ui';
+// Bundled Aurora dark-glass art (no external host → offline-safe, no 404 /
+// rate-limit). '@/*' resolves to ./src, so assets are required by relative path
+// — same module-scope require pattern as (exercises)/index.tsx ([id].tsx FALLBACK).
+const MUSCLE_CHEST_IMG = require('../../assets/images/muscle-chest.png');
+const MUSCLE_BACK_IMG = require('../../assets/images/muscle-back.png');
+const MUSCLE_SHOULDERS_IMG = require('../../assets/images/muscle-shoulders.png');
+const MUSCLE_ARMS_IMG = require('../../assets/images/muscle-arms.png');
+const MUSCLE_LEGS_IMG = require('../../assets/images/muscle-legs.png');
+const MUSCLE_CORE_IMG = require('../../assets/images/muscle-core.png');
+const CAT_CARDIO_IMG = require('../../assets/images/cat-cardio.png');
+const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
+const EXERCISE_FALLBACK_IMG = require('../../assets/images/exercise-detail-fallback.png');
 const MUSCLE_GROUPS = [
-    { id:'chest', label:'Chest', searchKey:'chest', color:'#FF6B35', image:'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=400&auto=format&fit=crop&q=80' },
-    { id:'back', label:'Back', searchKey:'back', color:'#00D4FF', image:'https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?w=400&auto=format&fit=crop&q=80' },
-    { id:'shoulders', label:'Shoulders', searchKey:'shoulders', color:'#A855F7', image:'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&auto=format&fit=crop&q=80' },
-    { id:'arms', label:'Arms', searchKey:'upper arms', color:'#F59E0B', image:'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=400&auto=format&fit=crop&q=80' },
-    { id:'core', label:'Core & Abs', searchKey:'waist', color:'#2ECC71', image:'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=400&auto=format&fit=crop&q=80' },
-    { id:'legs', label:'Legs', searchKey:'upper legs', color:'#EF4444', image:'https://images.unsplash.com/photo-1434682772747-f16d3ea162c3?w=400&auto=format&fit=crop&q=80' },
-    { id:'glutes', label:'Glutes', searchKey:'hips', color:'#EC4899', image:'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=400&auto=format&fit=crop&q=80' },
-    { id:'cardio', label:'Cardio', searchKey:'cardio', color:'#06B6D4', image:'https://images.unsplash.com/photo-1538805060514-97d9cc17730c?w=400&auto=format&fit=crop&q=80' },
+    { id:'chest', label:'Chest', searchKey:'chest', color:'#FF6B35', image:MUSCLE_CHEST_IMG },
+    { id:'back', label:'Back', searchKey:'back', color:'#00D4FF', image:MUSCLE_BACK_IMG },
+    { id:'shoulders', label:'Shoulders', searchKey:'shoulders', color:'#A855F7', image:MUSCLE_SHOULDERS_IMG },
+    { id:'arms', label:'Arms', searchKey:'upper arms', color:'#F59E0B', image:MUSCLE_ARMS_IMG },
+    { id:'core', label:'Core & Abs', searchKey:'waist', color:'#2ECC71', image:MUSCLE_CORE_IMG },
+    { id:'legs', label:'Legs', searchKey:'upper legs', color:'#EF4444', image:MUSCLE_LEGS_IMG },
+    { id:'glutes', label:'Glutes', searchKey:'hips', color:'#EC4899', image:MUSCLE_LEGS_IMG },
+    { id:'cardio', label:'Cardio', searchKey:'cardio', color:'#06B6D4', image:CAT_CARDIO_IMG },
 ];
 const STRETCHING = [
-    { id:'s-upper', label:'Upper Body Stretch', searchKey:'stretch chest', color:'#A855F7', image:'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=400&auto=format&fit=crop&q=80' },
-    { id:'s-lower', label:'Lower Body Stretch', searchKey:'stretch legs', color:'#2ECC71', image:'https://images.unsplash.com/photo-1552196563-55cd4e45efb3?w=400&auto=format&fit=crop&q=80' },
-    { id:'s-yoga', label:'Yoga & Mobility', searchKey:'yoga', color:'#F59E0B', image:'https://images.unsplash.com/photo-1599901860904-17e6ed7083a0?w=400&auto=format&fit=crop&q=80' },
+    { id:'s-upper', label:'Upper Body Stretch', searchKey:'stretch chest', color:'#A855F7', image:MUSCLE_SHOULDERS_IMG },
+    { id:'s-lower', label:'Lower Body Stretch', searchKey:'stretch legs', color:'#2ECC71', image:MUSCLE_LEGS_IMG },
+    { id:'s-yoga', label:'Yoga & Mobility', searchKey:'yoga', color:'#F59E0B', image:CAT_RECOVERY_IMG },
 ];
 type T = 'muscles'|'stretching';
 export default function MuscleMapScreen() {
@@ -64,7 +76,7 @@ export default function MuscleMapScreen() {
                         const isSel = selectedId===m.id;
                         return (
                             <TouchableOpacity key={m.id} accessibilityRole="button" accessibilityState={{ selected: isSel }} accessibilityLabel={m.label} style={[s.card, isSel&&{borderColor:m.color,borderWidth:2}]} activeOpacity={0.85} onPress={()=>setSelectedId(isSel?null:m.id)}>
-                                <Image source={{uri:m.image}} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                                <Image source={m.image} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                                 <LinearGradient colors={[isSel?withAlpha(m.color,0.5):'transparent','rgba(0,0,0,0.8)']} style={StyleSheet.absoluteFillObject} />
                                 {isSel&&<View style={[s.chk,{backgroundColor:m.color}]}><Ionicons name="checkmark" size={12} color="#FFF" /></View>}
                                 <View style={s.cardContent}>
@@ -102,7 +114,7 @@ export default function MuscleMapScreen() {
                                     ? <EmptyState icon="barbell-outline" title="No exercises found" subtitle={`We don't have any ${sel.label.toLowerCase()} exercises tagged yet. Try another group.`} />
                                     : exercises.map((ex)=>(
                                     <TouchableOpacity key={ex.id} accessibilityRole="button" accessibilityLabel={ex.name} style={[s.exRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]} onPress={()=>router.push(`/(exercises)/${ex.id}` as any)} activeOpacity={0.8}>
-                                        <Image source={{uri:ex.imageUrl||'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=200&auto=format&fit=crop&q=60'}} style={s.exThumb} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                                        <Image source={ex.imageUrl?{uri:ex.imageUrl}:EXERCISE_FALLBACK_IMG} style={s.exThumb} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                                         <View style={{flex:1,marginLeft:12}}>
                                             <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold'}]}>{ex.name}</Text>
                                             <Text style={[typography.caption,{color:colors.text.secondary}]}>{ex.equipment} • {ex.difficulty}</Text>

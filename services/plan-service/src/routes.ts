@@ -237,7 +237,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
             } catch (err: any) {
                 logger.error(err);
                 const status = err.message.includes('not found') ? 404 : 403;
-                return reply.code(status).send({ error: err.message });
+                return status === 404 ? reply.code(404).send({ error: 'Not found' }) : reply.code(403).send({ error: 'Forbidden' });
             }
         }
     );
@@ -262,7 +262,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
             } catch (err: any) {
                 logger.error(err);
                 const status = err.message.includes('not found') ? 404 : 403;
-                return reply.code(status).send({ error: err.message });
+                return status === 404 ? reply.code(404).send({ error: 'Not found' }) : reply.code(403).send({ error: 'Forbidden' });
             }
         }
     );
@@ -286,7 +286,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
             } catch (err: any) {
                 logger.error(err);
                 const status = err.message.includes('not found') ? 404 : 403;
-                return reply.code(status).send({ error: err.message });
+                return status === 404 ? reply.code(404).send({ error: 'Not found' }) : reply.code(403).send({ error: 'Forbidden' });
             }
         }
     );

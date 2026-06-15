@@ -15,7 +15,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 
 const envSchema = z.object({
     PLAN_PORT: z.string().default('3005'),
-    JWT_SECRET: z.string(),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     AI_PIPELINE_URL: z.string().url(),
     USER_SERVICE_URL: z.string().url(),
     STATE_SERVICE_URL: z.string().url(),

@@ -12,13 +12,18 @@ import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { borderRadius } from '@/theme/spacing';
 import { Skeleton, EmptyState } from '@/components/ui';
+// Bundled Aurora dark-glass placeholder so the browse tiles never depend on an
+// external host (no 404 / rate-limit). '@/*' resolves to ./src, so the asset is
+// required by relative path (same pattern as the exercise fallbacks). The
+// per-category color bar + label differentiate the tiles visually.
+const FOOD_FALLBACK = require('../../assets/images/food-fallback.png');
 const FOOD_CATS = [
-    { id:'fruits', label:'Fruits', key:'fruit', color:'#F59E0B', img:'https://images.unsplash.com/photo-1490474418585-ba9bad8fd0ea?w=300&q=70' },
-    { id:'vegs', label:'Vegetables', key:'vegetable', color:'#2ECC71', img:'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=300&q=70' },
-    { id:'protein', label:'Proteins', key:'meat', color:'#EF4444', img:'https://images.unsplash.com/photo-1529692236671-f1f6cf9683ba?w=300&q=70' },
-    { id:'dairy', label:'Dairy', key:'dairy', color:'#00D4FF', img:'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=300&q=70' },
-    { id:'grains', label:'Grains', key:'grain', color:'#A855F7', img:'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=300&q=70' },
-    { id:'snacks', label:'Snacks', key:'snack', color:'#FF6B35', img:'https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=300&q=70' },
+    { id:'fruits', label:'Fruits', key:'fruit', color:'#F59E0B', img:FOOD_FALLBACK },
+    { id:'vegs', label:'Vegetables', key:'vegetable', color:'#2ECC71', img:FOOD_FALLBACK },
+    { id:'protein', label:'Proteins', key:'meat', color:'#EF4444', img:FOOD_FALLBACK },
+    { id:'dairy', label:'Dairy', key:'dairy', color:'#00D4FF', img:FOOD_FALLBACK },
+    { id:'grains', label:'Grains', key:'grain', color:'#A855F7', img:FOOD_FALLBACK },
+    { id:'snacks', label:'Snacks', key:'snack', color:'#FF6B35', img:FOOD_FALLBACK },
 ];
 export default function FoodEncyclopediaScreen() {
     const { colors, typography } = useTheme();
@@ -79,7 +84,7 @@ export default function FoodEncyclopediaScreen() {
                     <View style={s.catGrid}>
                         {FOOD_CATS.map((cat)=>(
                             <TouchableOpacity key={cat.id} accessibilityRole="button" accessibilityLabel={cat.label} style={[s.catCard,{borderColor:colors.border.default},shadows.md]} activeOpacity={0.85} onPress={()=>setSelGroup(cat.key)}>
-                                <Image source={{uri:cat.img}} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                                <Image source={cat.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                                 <LinearGradient colors={['transparent','rgba(0,0,0,0.82)']} style={StyleSheet.absoluteFillObject} />
                                 <View style={[s.catBar,{backgroundColor:cat.color}]} />
                                 <Text style={[typography.subhead,{color:'#FFF',fontWeight:'bold',fontSize:13}]}>{cat.label}</Text>

@@ -11,7 +11,7 @@ import routes from './routes';
 
 const envSchema = z.object({
     CHAT_PORT: z.string().default('3014'),
-    JWT_SECRET: z.string(),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
 });
 
 const config = loadConfig(envSchema);
