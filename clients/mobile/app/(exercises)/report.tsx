@@ -23,7 +23,7 @@ export default function WorkoutReportScreen() {
     const router = useRouter();
     const { workoutId } = useLocalSearchParams<{ workoutId: string }>();
 
-    const { data: workout, isLoading } = useQuery({
+    const { data: workout, isLoading, isError, refetch } = useQuery({
         queryKey: ['workout-report', workoutId],
         queryFn: () => getWorkout(workoutId!),
         enabled: !!workoutId,
@@ -73,6 +73,29 @@ export default function WorkoutReportScreen() {
                     {[0, 1, 2].map((i) => (
                         <Skeleton key={i} width="100%" height={108} radius={borderRadius.xl} style={{ marginBottom: spacing.lg }} />
                     ))}
+                </View>
+            </View>
+        );
+    }
+
+    if (isError) {
+        return (
+            <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+                <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border.default }]}>
+                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={styles.backBtn}>
+                        <Ionicons name="close" size={24} color={colors.text.primary} />
+                    </TouchableOpacity>
+                    <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Workout Summary</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <View style={{ flex: 1, justifyContent: 'center' }}>
+                    <EmptyState
+                        icon="cloud-offline-outline"
+                        title="Couldn't load report"
+                        subtitle="We couldn't reach your workout data. Check your connection and try again."
+                        actionLabel="Try Again"
+                        onAction={() => refetch()}
+                    />
                 </View>
             </View>
         );

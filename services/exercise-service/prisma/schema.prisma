@@ -59,6 +59,7 @@ model LibraryExercise {
   equipment        String?
   instructions     String?
   imageUrl         String?  @map("image_url")
+  demoUrl          String?  @map("demo_url")
   difficulty       String?  @default("intermediate")
   bodyPart         String?  @map("body_part")
   category         String?  // "gym" | "home" | "cardio" | "kegel"

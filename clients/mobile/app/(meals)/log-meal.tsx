@@ -12,11 +12,12 @@ import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { borderRadius } from '@/theme/spacing';
 import { Skeleton, EmptyState } from '@/components/ui';
+import { getErrorMessage } from '@/utils/validation';
 const MT = [
-    { id:'BREAKFAST', label:'Breakfast', img:'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=300&q=70', color:'#F59E0B' },
-    { id:'LUNCH', label:'Lunch', img:'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&q=70', color:'#2ECC71' },
-    { id:'DINNER', label:'Dinner', img:'https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?w=300&q=70', color:'#A855F7' },
-    { id:'SNACK', label:'Snack', img:'https://images.unsplash.com/photo-1574116813310-adc5f95a4fe4?w=300&q=70', color:'#00D4FF' },
+    { id:'BREAKFAST', label:'Breakfast', img:require('../../assets/images/meal-breakfast.png'), color:'#F59E0B' },
+    { id:'LUNCH', label:'Lunch', img:require('../../assets/images/meal-lunch.png'), color:'#2ECC71' },
+    { id:'DINNER', label:'Dinner', img:require('../../assets/images/meal-dinner.png'), color:'#A855F7' },
+    { id:'SNACK', label:'Snack', img:require('../../assets/images/meal-snack.png'), color:'#00D4FF' },
 ];
 type PlateItem = {name:string;calories:number;protein:number;carbs:number;fat:number;qty:number};
 export default function LogMealScreen() {
@@ -44,7 +45,7 @@ export default function LogMealScreen() {
     const logM = useMutation({
         mutationFn:(payload:any)=>logMeal(payload),
         onSuccess:()=>{ qc.invalidateQueries({queryKey:['meal-logs']}); qc.invalidateQueries({queryKey:['daily-progress']}); router.push('/(tabs)/nutrition' as any); },
-        onError:(err:any)=>Alert.alert('Error', err.message||'Could not log meal.'),
+        onError:(err:any)=>Alert.alert('Error', getErrorMessage(err)),
     });
     const totals = useMemo(()=>plate.reduce((a,i)=>({calories:a.calories+i.calories*i.qty,protein:a.protein+i.protein*i.qty,carbs:a.carbs+i.carbs*i.qty,fat:a.fat+i.fat*i.qty}),{calories:0,protein:0,carbs:0,fat:0}),[plate]);
     const addToPlate = (item:FoodItem) => {
@@ -92,7 +93,7 @@ export default function LogMealScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal:20,gap:12,marginBottom:24}}>
                     {MT.map((mt)=>(
                         <TouchableOpacity key={mt.id} accessibilityRole="button" accessibilityState={{ selected: mealType===mt.id }} accessibilityLabel={mt.label} style={[s.mealCard,mealType===mt.id&&{borderColor:mt.color,borderWidth:2}]} activeOpacity={0.85} onPress={()=>setMealType(mt.id)}>
-                            <Image source={{uri:mt.img}} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                            <Image source={mt.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                             <LinearGradient colors={['rgba(0,0,0,0.05)','rgba(0,0,0,0.75)']} style={StyleSheet.absoluteFillObject} />
                             {mealType===mt.id&&<View style={[s.mealChk,{backgroundColor:mt.color}]}><Ionicons name="checkmark" size={12} color="#FFF" /></View>}
                             <Text style={[typography.caption,{color:'#FFF',fontWeight:'bold',fontSize:11,zIndex:1}]}>{mt.label.toUpperCase()}</Text>

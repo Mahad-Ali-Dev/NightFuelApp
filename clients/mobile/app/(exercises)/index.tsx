@@ -18,19 +18,28 @@ import { TAB_BAR_H } from '../(tabs)/_layout';
 
 const { width } = Dimensions.get('window');
 
+// Bundled category art (dark-glass, accent-glow). Bundled so the browse tiles
+// and imageless cards never depend on an external host (no 404 / rate-limit).
+// NOTE: '@/*' resolves to ./src, so assets are required by relative path
+// (same pattern as [id].tsx's FALLBACK_IMAGE).
+const CAT_GYM_IMG = require('../../assets/images/cat-gym.png');
+const CAT_HOME_IMG = require('../../assets/images/cat-home.png');
+const CAT_CARDIO_IMG = require('../../assets/images/cat-cardio.png');
+const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
+
 const CATEGORY_IMAGES = [
-    { key: 'gym', label: 'Gym', image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=500&auto=format&fit=crop&q=80', color: '#FF6B35', description: 'Barbell · Dumbbell · Machines' },
-    { key: 'home', label: 'Home', image: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=500&auto=format&fit=crop&q=80', color: '#00D4FF', description: 'Bodyweight · Anywhere' },
-    { key: 'cardio', label: 'Cardio', image: 'https://images.unsplash.com/photo-1538805060514-97d9cc17730c?w=500&auto=format&fit=crop&q=80', color: '#2ECC71', description: 'HIIT · Endurance · Fat Burn' },
-    { key: 'kegel', label: 'Recovery', image: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=500&auto=format&fit=crop&q=80', color: '#A855F7', description: 'Pelvic Floor · Stability' },
+    { key: 'gym', label: 'Gym', image: CAT_GYM_IMG, color: '#FF6B35', description: 'Barbell · Dumbbell · Machines' },
+    { key: 'home', label: 'Home', image: CAT_HOME_IMG, color: '#00D4FF', description: 'Bodyweight · Anywhere' },
+    { key: 'cardio', label: 'Cardio', image: CAT_CARDIO_IMG, color: '#2ECC71', description: 'HIIT · Endurance · Fat Burn' },
+    { key: 'kegel', label: 'Recovery', image: CAT_RECOVERY_IMG, color: '#A855F7', description: 'Pelvic Floor · Stability' },
 ];
 
-// Category-specific placeholder when exercise has no wger image
-const CATEGORY_FALLBACK: Record<string, string> = {
-    gym: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&auto=format&fit=crop&q=80',
-    home: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=400&auto=format&fit=crop&q=80',
-    cardio: 'https://images.unsplash.com/photo-1538805060514-97d9cc17730c?w=400&auto=format&fit=crop&q=80',
-    kegel: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=400&auto=format&fit=crop&q=80',
+// Category-specific placeholder (bundled) when an exercise has no wger image.
+const CATEGORY_FALLBACK: Record<string, number> = {
+    gym: CAT_GYM_IMG,
+    home: CAT_HOME_IMG,
+    cardio: CAT_CARDIO_IMG,
+    kegel: CAT_RECOVERY_IMG,
 };
 
 const MUSCLE_GROUPS = ['Chest', 'Back', 'Shoulders', 'Arms', 'Core', 'Legs', 'Glutes', 'Full Body'];
@@ -84,9 +93,12 @@ export default function ExerciseLibraryScreen() {
     const keyExtractor = useCallback((item: any) => item.id || item.name, []);
 
     const renderItem = useCallback(({ item }: any) => {
-        const fallbackImg = CATEGORY_FALLBACK[item.category ?? activeCategory ?? '']
+        // Bundled category art as the fallback module (number from require()).
+        const fallbackImg = CATEGORY_FALLBACK[item.category ?? activeCategory ?? 'gym']
             ?? CATEGORY_FALLBACK.gym;
-        const imgSrc = item.imageUrl || fallbackImg;
+        // Real wger image -> remote { uri }; otherwise the bundled module.
+        // expo-image's `source` accepts both a require-number and a { uri }.
+        const imgSrc = item.imageUrl ? { uri: item.imageUrl } : fallbackImg;
         return (
             <TouchableOpacity
                 style={[styles.exCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
@@ -97,7 +109,7 @@ export default function ExerciseLibraryScreen() {
             >
                 <View style={styles.exImageWrapper}>
                     <Image
-                        source={{ uri: imgSrc }}
+                        source={imgSrc}
                         style={styles.exImage}
                         contentFit="cover"
                         cachePolicy="memory-disk"
@@ -216,7 +228,7 @@ export default function ExerciseLibraryScreen() {
                                 onPress={() => setActiveCategory(cat.key)}
                             >
                                 <Image
-                                    source={{ uri: cat.image }}
+                                    source={cat.image}
                                     style={StyleSheet.absoluteFillObject}
                                     contentFit="cover"
                                     cachePolicy="memory-disk"

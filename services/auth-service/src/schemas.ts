@@ -3,9 +3,19 @@ import { z } from 'zod';
 // Roles a user can self-assign at registration. Admin/Superadmin are system-assigned only.
 const SelfAssignableRole = z.enum(['USER', 'COACH', 'TRAINER', 'NUTRITIONIST']).default('USER');
 
+// Strong-password rule for NEW passwords (register + reset). Mirrors the mobile
+// client's isStrongPassword check: at least 8 chars, one uppercase, one digit.
+// NOTE: deliberately NOT applied to loginSchema.password so legacy/weaker
+// existing passwords can still authenticate.
+const strongPassword = z
+    .string()
+    .min(8)
+    .regex(/[A-Z]/, 'Password must contain an uppercase letter')
+    .regex(/[0-9]/, 'Password must contain a number');
+
 export const registerSchema = z.object({
     email:       z.string().email(),
-    password:    z.string().min(8),
+    password:    strongPassword,
     displayName: z.string().min(2),
     region:      z.string().length(2), // ISO 3166-1 alpha-2: 'us', 'gb', 'pk', etc.
     timezone:    z.string().optional().default('UTC'),
@@ -30,7 +40,7 @@ export const forgotPasswordSchema = z.object({
 
 export const resetPasswordSchema = z.object({
     token:       z.string().min(1),
-    newPassword: z.string().min(8),
+    newPassword: strongPassword,
 });
 
 export type RegisterBody = z.infer<typeof registerSchema>;

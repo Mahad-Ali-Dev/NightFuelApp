@@ -10,6 +10,31 @@ export function isStrongPassword(pw: string): boolean {
   return pw.length >= 8 && /[A-Z]/.test(pw) && /[0-9]/.test(pw);
 }
 
+/**
+ * Normalize an email the same way the backend does before persisting/looking
+ * it up: trim surrounding whitespace and lowercase. Keeping this identical to
+ * the server prevents the client from submitting a value the server would
+ * store/match differently (e.g. ' Me@Example.COM ' -> 'me@example.com').
+ */
+export function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+/**
+ * Return the labels of the password rules that are NOT yet satisfied, ordered
+ * to match the inline PasswordRequirements checklist. An empty array means the
+ * password passes every rule (equivalent to `isStrongPassword` returning true).
+ * Wording mirrors the backend rejection copy so the client never surfaces a
+ * different message than the server would.
+ */
+export function passwordIssues(pw: string): string[] {
+  const issues: string[] = [];
+  if (pw.length < 8) issues.push('At least 8 characters');
+  if (!/[A-Z]/.test(pw)) issues.push('One uppercase letter (A-Z)');
+  if (!/[0-9]/.test(pw)) issues.push('One number (0-9)');
+  return issues;
+}
+
 /** Strip HTML tags and trim whitespace. */
 export function sanitizeInput(text: string): string {
   return text.trim().replace(/<[^>]*>/g, '');

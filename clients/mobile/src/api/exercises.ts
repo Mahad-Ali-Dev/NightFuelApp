@@ -16,6 +16,10 @@ export interface Exercise {
   bodyPart?: string;
   /** App category: "gym" | "home" | "cardio" | "kegel" */
   category?: string;
+  /** Deep-link / watch URL for a demo video. Null/undefined when unknown. */
+  demoUrl?: string;
+  /** Secondary muscles worked (from wger), when available. */
+  secondaryMuscles?: string[];
 }
 
 export interface WorkoutSession {

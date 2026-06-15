@@ -17,7 +17,7 @@ import { useTheme } from '@/theme';
 import { spacing, borderRadius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { withAlpha } from '@/theme/utils';
-import { isValidEmail, isStrongPassword, sanitizeInput } from '@/utils/validation';
+import { isValidEmail, isStrongPassword, sanitizeInput, normalizeEmail } from '@/utils/validation';
 
 export default function RegisterScreen() {
   const { colors } = useTheme();
@@ -35,7 +35,10 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     const cleanName = sanitizeInput(name);
-    const cleanEmail = sanitizeInput(email);
+    // Lowercase + trim the email exactly like the backend does before it is
+    // stored/looked up, so the client never submits a value the server would
+    // normalize differently. sanitizeInput first strips any stray HTML.
+    const cleanEmail = normalizeEmail(sanitizeInput(email));
     if (!cleanName || !cleanEmail || !password) {
       setError('Please fill in all fields');
       return;

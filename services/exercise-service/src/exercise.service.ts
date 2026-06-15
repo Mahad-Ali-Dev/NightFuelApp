@@ -13,6 +13,60 @@ import {
 
 const logger = createLogger('exercise-service');
 
+// ── Curated exercise demo videos ──────────────────────────────────────────────
+// Keyed by the exact LibraryExercise.name. Verified full YouTube *watch* URLs.
+// This mirrors prisma/demo-urls.ts (the canonical map used by the seeder); it is
+// duplicated here only because the service tsconfig pins `rootDir` to `src/`,
+// which forbids importing files from `prisma/`. Keep the two in sync when editing.
+// The service prefers the stored `demo_url` column and falls back to this map so
+// demo links work before the catalog is re-seeded.
+const DEMO_URLS: Record<string, string> = {
+    // Gym
+    'Barbell Bench Press': 'https://www.youtube.com/watch?v=rT7DgCr-3pg',
+    'Barbell Deadlift': 'https://www.youtube.com/watch?v=op9kVnSso6Q',
+    'Barbell Back Squat': 'https://www.youtube.com/watch?v=ultWZbUMPL8',
+    'Overhead Press': 'https://www.youtube.com/watch?v=2yjwXTZQDDI',
+    'Pull-Up': 'https://www.youtube.com/watch?v=eGo4IYlbE5g',
+    'Dumbbell Incline Press': 'https://www.youtube.com/watch?v=8iPEnn-ltC8',
+    'Cable Lat Pulldown': 'https://www.youtube.com/watch?v=CAwf7n6Luuc',
+    'Dumbbell Lateral Raise': 'https://www.youtube.com/watch?v=3VcKaXpzqRo',
+    'Barbell Row': 'https://www.youtube.com/watch?v=9efgcAjQe7E',
+    'Leg Press': 'https://www.youtube.com/watch?v=IZxyjW7MPJQ',
+    'Romanian Deadlift': 'https://www.youtube.com/watch?v=JCXUYuzwNrM',
+    'Dumbbell Bicep Curl': 'https://www.youtube.com/watch?v=ykJmrZ5v0Oo',
+    'Tricep Pushdown': 'https://www.youtube.com/watch?v=2-LAMcpzODU',
+    // Home
+    'Push-Up': 'https://www.youtube.com/watch?v=IODxDxX7oi4',
+    'Bodyweight Squat': 'https://www.youtube.com/watch?v=aclHkVaku9U',
+    'Plank': 'https://www.youtube.com/watch?v=pSHjTRCQxIw',
+    'Burpee': 'https://www.youtube.com/watch?v=TU8QYVW0gDU',
+    'Lunges': 'https://www.youtube.com/watch?v=QOVaHwm-Q6U',
+    'Pike Push-Up': 'https://www.youtube.com/watch?v=x7_I6gZDeBk',
+    'Mountain Climbers': 'https://www.youtube.com/watch?v=nmwgirgXLYM',
+    'Tricep Dips': 'https://www.youtube.com/watch?v=6kALZikXxLc',
+    'Glute Bridge': 'https://www.youtube.com/watch?v=OUgsJ8-Vi0E',
+    'Superman': 'https://www.youtube.com/watch?v=cc6UVRS7PW4',
+    // Cardio
+    'Jumping Jacks': 'https://www.youtube.com/watch?v=c4DAnQ6DtF8',
+    'High Knees': 'https://www.youtube.com/watch?v=oDdkytliOqE',
+    'Jump Rope': 'https://www.youtube.com/watch?v=u3zgHI8QnqE',
+    'Box Jump': 'https://www.youtube.com/watch?v=52r_Ul5k03g',
+    // Pelvic floor (Kegel)
+    'Basic Kegel Squeeze': 'https://www.youtube.com/watch?v=PMHc5W2YO9o',
+    'Quick-Flick Kegels': 'https://www.youtube.com/watch?v=lFKYltA2tA8',
+    'Elevator Kegel': 'https://www.youtube.com/watch?v=jWj4iBxQ0Xc',
+};
+
+const DEMO_URLS_LC: Record<string, string> = Object.fromEntries(
+    Object.entries(DEMO_URLS).map(([name, url]) => [name.toLowerCase(), url]),
+);
+
+/** Resolve a curated demo video URL by exercise name (case-insensitive, trimmed). */
+function resolveDemoUrl(name: string | null | undefined): string | null {
+    if (!name) return null;
+    return DEMO_URLS_LC[name.trim().toLowerCase()] ?? null;
+}
+
 export interface CreateWorkoutInput {
     userId: string;
     type: string;
@@ -107,6 +161,7 @@ export class ExerciseService {
                     difficulty: ex.difficulty ?? 'intermediate',
                     instructions: ex.instructions ?? undefined,
                     imageUrl: ex.imageUrl ?? undefined,
+                    demoUrl: ex.demoUrl ?? resolveDemoUrl(ex.name) ?? undefined,
                     category: ex.category ?? undefined,
                     bodyPart: ex.bodyPart ?? undefined,
                 }));
@@ -134,6 +189,7 @@ export class ExerciseService {
                 difficulty: 'intermediate',
                 instructions: Array.isArray(ex.instructions) ? ex.instructions.join('\n') : ex.instructions,
                 imageUrl: ex.gifUrl || undefined,
+                demoUrl: resolveDemoUrl(ex.name) ?? undefined,
             }));
         } catch (err) {
             logger.error({ err, filters }, 'Failed to search exercise library');
@@ -153,6 +209,7 @@ export class ExerciseService {
                 difficulty: dbEx.difficulty ?? 'intermediate',
                 instructions: dbEx.instructions ?? undefined,
                 imageUrl: dbEx.imageUrl ?? undefined,
+                demoUrl: dbEx.demoUrl ?? resolveDemoUrl(dbEx.name) ?? undefined,
                 bodyPart: dbEx.bodyPart ?? undefined,
                 category: dbEx.category ?? undefined,
             };
@@ -171,6 +228,7 @@ export class ExerciseService {
                 ? ex.instructions.join('\n')
                 : (ex.instructions as string | undefined),
             imageUrl: ex.gifUrl || undefined,
+            demoUrl: resolveDemoUrl(ex.name) ?? undefined,
             bodyPart: ex.bodyPart,
             category: undefined as string | undefined,
         };

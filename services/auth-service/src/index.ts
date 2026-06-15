@@ -9,11 +9,16 @@ import { authRoutes } from './routes';
 import { setupEventSubscribers } from './events';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCors from '@fastify/cors';
+import fastifyHelmet from '@fastify/helmet';
+import fastifyRateLimit from '@fastify/rate-limit';
 
 const envSchema = z.object({
     AUTH_PORT: z.string().default('3001'),
     JWT_SECRET: z.string(),
     REDIS_URL: z.string().url(),
+    // Comma-separated list of allowed web origins. Falls back to localhost dev
+    // origins. Never use '*' here — credentials:true forbids a wildcard origin.
+    CORS_ORIGINS: z.string().optional(),
 });
 
 const config = loadConfig(envSchema);
@@ -33,9 +38,25 @@ fastify.setSerializerCompiler(serializerCompiler);
 
 fastify.withTypeProvider<ZodTypeProvider>();
 
-// Register CORS — allow the web client origin
+// Security headers — register before routes so every response is covered.
+fastify.register(fastifyHelmet);
+
+// Global rate limit — a generous ceiling across all routes; the auth-sensitive
+// endpoints (login/register/forgot/reset) tighten this per-route in routes.ts.
+fastify.register(fastifyRateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+});
+
+// Register CORS — allow the configured web client origins. Origins come from
+// CORS_ORIGINS (comma-separated) when set, otherwise the localhost dev origins.
+// credentials:true means we must never send a wildcard origin.
+const corsOrigins = config.CORS_ORIGINS
+    ? config.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+    : ['http://localhost:3000', 'http://127.0.0.1:3000'];
+
 fastify.register(fastifyCors, {
-    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    origin: corsOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,

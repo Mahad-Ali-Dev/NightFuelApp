@@ -7,9 +7,30 @@ import { AuthService } from './auth.service';
 export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = async (fastify, opts) => {
     const service = opts.authService;
 
+    // Tight per-route rate limit for the credential-handling endpoints. The
+    // @fastify/rate-limit plugin (registered globally in index.ts) reads this
+    // route config and automatically replies 429 + Retry-After once exceeded.
+    // Key on IP + email (when the body carries one) so a single attacker IP
+    // can't churn through many accounts and a single account can't be hammered
+    // from one host, while still allowing legitimate distinct users to proceed.
+    const authRateLimit = {
+        rateLimit: {
+            max: 7,
+            timeWindow: '1 minute',
+            keyGenerator: (request: any) => {
+                const email =
+                    request.body && typeof request.body.email === 'string'
+                        ? request.body.email.toLowerCase()
+                        : '';
+                return `${request.ip}:${email}`;
+            },
+        },
+    };
+
     fastify.withTypeProvider<ZodTypeProvider>().post(
         '/register',
         {
+            config: authRateLimit,
             schema: {
                 body: registerSchema,
             },
@@ -28,6 +49,7 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
     fastify.withTypeProvider<ZodTypeProvider>().post(
         '/login',
         {
+            config: authRateLimit,
             schema: {
                 body: loginSchema,
             },
@@ -64,6 +86,7 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
     fastify.withTypeProvider<ZodTypeProvider>().post(
         '/forgot-password',
         {
+            config: authRateLimit,
             schema: {
                 body: forgotPasswordSchema,
             },
@@ -85,6 +108,7 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
     fastify.withTypeProvider<ZodTypeProvider>().post(
         '/reset-password',
         {
+            config: authRateLimit,
             schema: {
                 body: resetPasswordSchema,
             },

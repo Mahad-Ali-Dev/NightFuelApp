@@ -23,7 +23,7 @@ export default function RoutinesScreen() {
     const [selEx, setSelEx] = useState<Array<{name:string;sets:number;reps:number}>>([]);
     const [showPicker, setShowPicker] = useState(false);
     const [sq, setSq] = useState('');
-    const { data: sr, isLoading: isSrch } = useQuery({ queryKey:['ex-search',sq], queryFn:()=>searchLibrary(sq), enabled:showPicker&&sq.length>1 });
+    const { data: sr, isLoading: isSrch, isError: isSrchErr, refetch: refetchSrch } = useQuery({ queryKey:['ex-search',sq], queryFn:()=>searchLibrary(sq), enabled:showPicker&&sq.length>1 });
     const createM = useMutation({
         mutationFn:()=>createRoutine({title:newName,exercises:selEx}),
         onSuccess:()=>{ qc.invalidateQueries({queryKey:['workout-routines']}); qc.invalidateQueries({queryKey:['routines']}); setShowCreate(false); setNewName(''); setSelEx([]); },
@@ -119,7 +119,15 @@ export default function RoutinesScreen() {
                                 </View>
                                 <Skeleton width={24} height={24} radius={12} />
                             </View>
-                          ))}</View>:(
+                          ))}</View>:(isSrchErr&&sq.length>1)?(
+                            <EmptyState
+                                icon="cloud-offline-outline"
+                                title="Search failed"
+                                subtitle="Couldn't reach the exercise library. Check your connection and try again."
+                                actionLabel="Try Again"
+                                onAction={()=>refetchSrch()}
+                            />
+                          ):(
                             <FlatList data={sr} keyExtractor={pickerKeyExtractor} renderItem={renderPickerItem} removeClippedSubviews={Platform.OS === 'android'} initialNumToRender={10} maxToRenderPerBatch={10} windowSize={7} ListEmptyComponent={<View style={{padding:40,alignItems:'center'}}><Text style={[typography.caption,{color:colors.text.secondary}]}>{sq.length>1?'No results':'Start typing...'}</Text></View>} />
                         )}
                     </View>
