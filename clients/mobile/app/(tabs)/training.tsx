@@ -107,6 +107,12 @@ export default function TrainingHubScreen() {
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal:20,gap:16,paddingBottom:8}}>
                         {routinesQ.isLoading?
                         [0,1,2].map((i)=><Skeleton key={i} width={180} height={150} radius={borderRadius.xl} />):
+                        routinesQ.isError?
+                        <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Couldn't load routines, touch to retry" onPress={()=>routinesQ.refetch()} style={[s.emptyR,{backgroundColor:colors.background.secondary,borderWidth:1,borderColor:colors.border.default,borderRadius:borderRadius.xl}]}>
+                            <View style={[s.emptyRIcon,{backgroundColor:withAlpha(colors.accent.coral,0.12),borderColor:withAlpha(colors.accent.coral,0.24)}]}><Ionicons name="cloud-offline-outline" size={24} color={colors.accent.coral} /></View>
+                            <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold',marginTop:10}]}>Couldn't load routines</Text>
+                            <Text style={[typography.caption,{color:colors.text.secondary,textAlign:'center',marginTop:2}]}>Tap to try again</Text>
+                        </TouchableOpacity>:
                         routines.length===0?
                         <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="New routine, build your first split" onPress={()=>router.push('/(exercises)/routines' as any)} style={[s.emptyR,{backgroundColor:colors.background.secondary,borderWidth:1,borderColor:colors.border.default,borderRadius:borderRadius.xl}]}>
                             <View style={[s.emptyRIcon,{backgroundColor:withAlpha(colors.accent.coral,0.12),borderColor:withAlpha(colors.accent.coral,0.24)}]}><Ionicons name="add" size={24} color={colors.accent.coral} /></View>
@@ -139,6 +145,14 @@ export default function TrainingHubScreen() {
                             {[0,1,2,3].map((i)=><Skeleton key={i} width="100%" height={52} radius={borderRadius.lg} style={{marginBottom:spacing.md}} />)}
                             <Skeleton width="100%" height={56} radius={borderRadius.full} style={{marginTop:spacing.sm}} />
                         </View>
+                    ):routinesQ.isError?(
+                        <EmptyState
+                            icon="cloud-offline-outline"
+                            title="Couldn't load your plan"
+                            subtitle="Check your connection and try again."
+                            actionLabel="Try Again"
+                            onAction={()=>routinesQ.refetch()}
+                        />
                     ):(
                         activePlan ? (
                             <View>

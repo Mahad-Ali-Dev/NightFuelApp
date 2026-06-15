@@ -53,8 +53,18 @@ export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }
     return list.filter((u, i) => i === 0 || u !== list[i - 1]);
   }, [frames, gifUrl]);
 
-  const hasDemo = demoFrames.length > 0;
-  const animated = demoFrames.length > 1;
+  // Frame URLs that have 404'd / failed to load. Dropped from the live list so a
+  // missing CDN slug silently disappears instead of flashing a broken image.
+  const [failed, setFailed] = useState<Set<string>>(new Set());
+
+  // The frames we'll actually render: demoFrames minus any that have failed.
+  const liveFrames = useMemo<string[]>(
+    () => demoFrames.filter((u) => !failed.has(u)),
+    [demoFrames, failed],
+  );
+
+  const hasDemo = liveFrames.length > 0;
+  const animated = liveFrames.length > 1;
 
   const [frameIdx, setFrameIdx] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -69,6 +79,9 @@ export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }
     prevIdxRef.current = 0;
     fade.setValue(1);
     setPaused(false);
+    // A genuinely new source gets a clean slate — past failures shouldn't carry
+    // over and pre-hide a frame that exists for this exercise.
+    setFailed(new Set());
   }, [demoFrames.join('|')]);
 
   // Drive the loop. Pure JS timer (no native driver needed for the index swap);
@@ -78,11 +91,11 @@ export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }
     const t = setInterval(() => {
       setFrameIdx((cur) => {
         prevIdxRef.current = cur;
-        return (cur + 1) % demoFrames.length;
+        return (cur + 1) % liveFrames.length;
       });
     }, FRAME_MS);
     return () => clearInterval(t);
-  }, [animated, paused, demoFrames.length]);
+  }, [animated, paused, liveFrames.length]);
 
   // Cross-fade the incoming frame in over the outgoing one whenever the index
   // advances. Snap instantly when paused (no half-faded frame left on screen).
@@ -106,6 +119,13 @@ export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }
   const openTutorial = () => {
     if (tutorialUrl) Linking.openURL(tutorialUrl).catch(() => {});
   };
+
+  // A frame failed to load (e.g. a 404'd CDN slug). Mark it so `liveFrames` drops
+  // it on the next render — the loop continues with the survivors, or falls back
+  // to the still/"coming soon" branch once every frame has failed. The `has`
+  // guard skips a redundant state update when the same uri errors twice.
+  const markFailed = (uri: string) =>
+    setFailed((prev) => (prev.has(uri) ? prev : new Set(prev).add(uri)));
 
   // ── No demo media: static image + honest "coming soon" state ──────────────
   if (!hasDemo) {
@@ -148,11 +168,12 @@ export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }
   }
 
   // ── Demo media: animated loop (or single still) ───────────────────────────
-  // `hasDemo` guarantees a frame at index 0; fall back to it if an index ever
-  // drifts out of bounds (e.g. mid-source-swap) so `uri` is always a string.
-  const firstUri = demoFrames[0] as string;
-  const topUri = demoFrames[frameIdx] ?? firstUri;
-  const underUri = demoFrames[prevIdxRef.current] ?? topUri;
+  // `hasDemo` guarantees a live frame at index 0; fall back to it if an index
+  // ever drifts out of bounds (mid-source-swap, or a frame dropping out after a
+  // 404 shrinks the list) so `uri` is always a string that exists on the CDN.
+  const firstUri = liveFrames[0] as string;
+  const topUri = liveFrames[frameIdx] ?? firstUri;
+  const underUri = liveFrames[prevIdxRef.current] ?? topUri;
 
   return (
     <Pressable
@@ -169,6 +190,7 @@ export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }
           style={styles.media}
           contentFit="cover"
           cachePolicy="memory-disk"
+          onError={() => markFailed(underUri)}
         />
       ) : null}
       {/* Top (current) frame, faded in over the previous one. */}
@@ -180,6 +202,7 @@ export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }
           contentFit="cover"
           cachePolicy="memory-disk"
           transition={animated ? 0 : 400}
+          onError={() => markFailed(topUri)}
         />
       </Animated.View>
 

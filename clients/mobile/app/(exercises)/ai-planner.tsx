@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { GeneratingSteps } from '@/components/ui';
+import { getErrorMessage } from '@/utils/validation';
 
 // Staged status lines shown while Coach Ria builds the routine (10–30s).
 const WORKOUT_GEN_STEPS = [
@@ -71,12 +72,14 @@ export default function AIWorkoutPlannerScreen() {
     const [days, setDays]           = useState(3);
     const [focusAreas, setFocus]    = useState<string[]>([]);
     const [equipment, setEquipment] = useState('Full Gym');
+    const [genError, setGenError]   = useState<string | null>(null);
 
     const selectedGoal = GOALS.find(g => g.key === goal)!;
 
     const generateMutation = useMutation({
         mutationFn: () => generateRoutineWithAI({ goal, level, daysPerWeek: days, focusAreas, equipment }),
         onSuccess: (routine) => {
+            setGenError(null);
             qc.invalidateQueries({ queryKey: ['routines'] });
             qc.invalidateQueries({ queryKey: ['workout-routines'] });
             Alert.alert(
@@ -85,10 +88,16 @@ export default function AIWorkoutPlannerScreen() {
                 [{ text: 'View Routines', onPress: () => router.replace('/(exercises)/routines' as any) }],
             );
         },
-        onError: (err: any) => {
-            Alert.alert('Generation Failed', err?.response?.data?.error ?? err?.message ?? 'Could not connect to Coach Ria. Please try again.');
+        onError: (err: unknown) => {
+            setGenError(getErrorMessage(err));
         },
     });
+
+    // Clear any prior error and kick off generation (used by CTA + Try Again).
+    const runGenerate = () => {
+        setGenError(null);
+        generateMutation.mutate();
+    };
 
     const toggleFocus = (area: string) => {
         setFocus(prev =>
@@ -312,9 +321,40 @@ export default function AIWorkoutPlannerScreen() {
 
             {/* Generate CTA */}
             <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+                {/* Persistent, retryable inline error — survives until a retry succeeds. */}
+                {!!genError && !generateMutation.isPending && (
+                    <View
+                        style={[s.errorCard, { backgroundColor: withAlpha(selectedGoal.color, 0.08), borderColor: withAlpha(selectedGoal.color, 0.35) }]}
+                        accessibilityRole="alert"
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                            <Ionicons name="alert-circle" size={20} color={selectedGoal.color} style={{ marginTop: 1 }} />
+                            <View style={{ flex: 1, marginLeft: 10 }}>
+                                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>
+                                    Generation Failed
+                                </Text>
+                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2, lineHeight: 18 }]}>
+                                    {genError}
+                                </Text>
+                            </View>
+                        </View>
+                        <TouchableOpacity
+                            style={[s.tryAgainBtn, { borderColor: selectedGoal.color }]}
+                            onPress={runGenerate}
+                            accessibilityRole="button"
+                            accessibilityLabel="Try again"
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="refresh" size={16} color={selectedGoal.color} />
+                            <Text style={[typography.caption, { color: selectedGoal.color, fontWeight: '700', marginLeft: 6 }]}>
+                                Try Again
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
                 <TouchableOpacity
                     style={[s.generateBtn, shadows.glow(selectedGoal.color), { backgroundColor: selectedGoal.color, opacity: generateMutation.isPending ? 0.7 : 1 }]}
-                    onPress={() => generateMutation.mutate()}
+                    onPress={runGenerate}
                     disabled={generateMutation.isPending}
                     accessibilityRole="button"
                     accessibilityLabel="Generate my plan"
@@ -409,6 +449,12 @@ const s = StyleSheet.create({
         paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 1.5,
     },
     summaryCard: { borderRadius: 16, borderWidth: 1, padding: 16 },
+    errorCard: { borderRadius: 16, borderWidth: 1, padding: 16, marginBottom: 12 },
+    tryAgainBtn: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        alignSelf: 'flex-start', marginTop: 12,
+        paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5,
+    },
     footer: {
         position: 'absolute', bottom: 0, left: 0, right: 0,
         paddingHorizontal: 20,

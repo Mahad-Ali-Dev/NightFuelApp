@@ -276,3 +276,123 @@ describe('demoCoverage — catalogue coverage far exceeds the ~24 baseline', () 
     expect(demoCoverage([])).toEqual({ matched: 0, total: 0 });
   });
 });
+
+// ---------------------------------------------------------------------------
+// P1 lock-in: the precise FEDB name→slug demo-resolver guarantees the brief
+// enumerates. These pin the contract the rest of the exercise-media feature
+// builds on, so a regression in the regex / slug index / normalisation is
+// caught here rather than as a silently-blank demo in the app.
+// ---------------------------------------------------------------------------
+
+describe('resolveDemoFrames — both CDN hosts map to the IDENTICAL canonical frames', () => {
+  // The seeder may emit either the jsDelivr mirror or the raw.githubusercontent
+  // origin; both must collapse to the same canonical raw [0.jpg, 1.jpg] pair so
+  // the in-app player behaves identically regardless of which host was stored.
+  test('jsDelivr and raw.githubusercontent inputs for the SAME slug yield the same output', () => {
+    const slug = 'Barbell_Deadlift';
+    const fromJsDelivr = resolveDemoFrames({ name: 'Unmapped A', imageUrl: `${JSDELIVR_BASE}/${slug}/0.jpg` });
+    const fromRaw = resolveDemoFrames({ name: 'Unmapped B', imageUrl: `${RAW_BASE}/${slug}/1.jpg` });
+
+    const expected = [`${RAW_BASE}/${slug}/0.jpg`, `${RAW_BASE}/${slug}/1.jpg`];
+    expect(fromJsDelivr).toEqual(expected);
+    expect(fromRaw).toEqual(expected);
+    // The load-bearing guarantee: the two hosts are interchangeable on input.
+    expect(fromJsDelivr).toEqual(fromRaw);
+  });
+
+  test('a versioned jsDelivr @ref and the unversioned raw ref both normalise to the raw main base', () => {
+    const slug = 'Goblet_Squat';
+    const fromPinnedJsDelivr = resolveDemoFrames({
+      name: 'Unmapped',
+      imageUrl: `https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@v1.2.3/exercises/${slug}/0.jpg`,
+    });
+    const fromRaw = resolveDemoFrames({ name: 'Unmapped', imageUrl: `${RAW_BASE}/${slug}/0.jpg` });
+    expect(fromPinnedJsDelivr).toEqual([`${RAW_BASE}/${slug}/0.jpg`, `${RAW_BASE}/${slug}/1.jpg`]);
+    expect(fromPinnedJsDelivr).toEqual(fromRaw);
+  });
+});
+
+describe('resolveDemoFrames — non-FEDB image URLs yield null (still-image fallback)', () => {
+  // Anything whose host is not one of the two yuhonas/free-exercise-db CDNs must
+  // NOT be treated as a derivable demo frame — the caller falls back to the
+  // static image instead of fabricating a /0.jpg,/1.jpg pair off a foreign host.
+  test.each([
+    ['a look-alike host with the FEDB path shape', 'https://evil.example/exercises/Barbell_Squat/0.jpg'],
+    ['a different GitHub repo on raw.githubusercontent', 'https://raw.githubusercontent.com/someone/other-db/main/exercises/Barbell_Squat/0.jpg'],
+    ['a different jsDelivr gh repo', 'https://cdn.jsdelivr.net/gh/someone/other-db@main/exercises/Barbell_Squat/0.jpg'],
+    ['an unrelated CDN image', 'https://example.com/some/other/image.jpg'],
+  ])('non-FEDB imageUrl (%s) with an unknown name resolves to null', (_label, imageUrl) => {
+    expect(resolveDemoFrames({ name: 'Totally Unknown Movement 9000', imageUrl })).toBeNull();
+  });
+});
+
+describe('resolveDemoFrames — representative names resolve with EXACT slug casing', () => {
+  // A curated app-name → hand-picked FEDB slug (DEMO_FRAMES). These deliberately
+  // differ from the generic name index, so they prove the curated map wins and
+  // its exact directory casing is preserved.
+  const CURATED_CASES: ReadonlyArray<readonly [string, string]> = [
+    ['Barbell Back Squat', 'Barbell_Full_Squat'],
+    ['Cable Lat Pulldown', 'Wide-Grip_Lat_Pulldown'],
+    ['Tricep Pushdown', 'Triceps_Pushdown'],
+    ['Pike Push-Up', 'Handstand_Push-Ups'],
+  ];
+
+  // Names resolved purely through the bundled FEDB_SLUGS index (no imageUrl, not
+  // in the curated map). Casing/hyphenation here is exactly what free-exercise-db
+  // ships, so an off-by-one in normalisation would surface as a 404-prone URL.
+  const INDEXED_CASES: ReadonlyArray<readonly [string, string]> = [
+    ['Goblet Squat', 'Goblet_Squat'],
+    ['EZ-Bar Curl', 'EZ-Bar_Curl'],
+    ['Calves-SMR', 'Calves-SMR'],
+    ['Otis-Up', 'Otis-Up'],
+    ['One-Arm Kettlebell Swings', 'One-Arm_Kettlebell_Swings'],
+    ['Triceps Pushdown - V-Bar Attachment', 'Triceps_Pushdown_-_V-Bar_Attachment'],
+  ];
+
+  test.each([...CURATED_CASES, ...INDEXED_CASES])(
+    '%s resolves to /exercises/%s/{0,1}.jpg with exact casing',
+    (name, slug) => {
+      const frames = resolveDemoFrames({ name });
+      expect(frames).toEqual([`${RAW_BASE}/${slug}/0.jpg`, `${RAW_BASE}/${slug}/1.jpg`]);
+      // Assert the exact slug segment & extensions explicitly (casing-sensitive),
+      // independent of the RAW_BASE prefix.
+      expect(frames![0]).toContain(`/exercises/${slug}/0.jpg`);
+      expect(frames![1]).toContain(`/exercises/${slug}/1.jpg`);
+    },
+  );
+});
+
+describe('resolveDemoFrames — normalizeExerciseName edge cases (via the name index)', () => {
+  // Punctuation the normaliser must fold away before hitting FEDB_SLUGS: an
+  // apostrophe, a slash, and the apostrophe+digit combination.
+  test.each([
+    ["Farmer's Walk", 'Farmers_Walk'], // apostrophe collapsed
+    ['3/4 Sit-Up', '3_4_Sit-Up'], // slash → separator, hyphen preserved in slug
+    ["Landmine 180's", 'Landmine_180s'], // apostrophe adjacent to digits
+  ])('%s normalises to slug %s', (name, slug) => {
+    expect(resolveDemoFrames({ name })).toEqual([`${RAW_BASE}/${slug}/0.jpg`, `${RAW_BASE}/${slug}/1.jpg`]);
+  });
+});
+
+describe('resolveDemoFrames — every emitted frame URL is HTTPS', () => {
+  // ATS-safety: no derivation path (curated, imageUrl-derived on either host, or
+  // name-indexed) may ever emit a non-HTTPS URL.
+  const SAMPLES: ReadonlyArray<{ name?: string; imageUrl?: string }> = [
+    { name: 'Barbell Back Squat' }, // curated
+    { name: 'Goblet Squat' }, // name index
+    { name: "Farmer's Walk" }, // normalised name index
+    { name: 'Unmapped', imageUrl: `${JSDELIVR_BASE}/Barbell_Squat/0.jpg` }, // jsDelivr-derived
+    { name: 'Unmapped', imageUrl: `${RAW_BASE}/Front_Box_Jump/1.jpg` }, // raw-derived
+    { name: 'Unmapped', imageUrl: 'http://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Plank/0.jpg' }, // http input upgraded
+  ];
+
+  test('all derivation paths emit only https:// frame URLs', () => {
+    for (const sample of SAMPLES) {
+      const frames = resolveDemoFrames(sample);
+      expect(frames).not.toBeNull();
+      for (const url of frames!) {
+        expect(url.startsWith('https://')).toBe(true);
+      }
+    }
+  });
+});

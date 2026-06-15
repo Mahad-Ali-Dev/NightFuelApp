@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { clamp } from '@/utils/validation';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -194,8 +195,75 @@ export const getRoutines = async (): Promise<Routine[]> => {
   return data;
 };
 
-export const createRoutine = async (payload: any): Promise<Routine> => {
-  const { data } = await apiClient.post<Routine>('/v1/exercises/routines', payload);
+/** A single exercise entry accepted by {@link shapeCreateRoutine}. */
+export interface RoutineExerciseInput {
+  name: string;
+  sets?: number;
+  reps?: number;
+}
+
+/** A whitelisted routine payload accepted by `POST /v1/exercises/routines`. */
+export interface CreateRoutineInput {
+  /** Display title (required). Sent as `title` to match the backend schema. */
+  title: string;
+  description?: string;
+  splitType?: string;
+  exercises: RoutineExerciseInput[];
+}
+
+/**
+ * Round to an integer and clamp into `[min, max]`, mapping NaN/non-finite to 0.
+ * Mirrors the backend's `z.number().int().min(min).max(max)` on routine sets/reps
+ * so the client never POSTs a value the server would reject.
+ */
+function clampInt(value: unknown, min: number, max: number): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return 0;
+  return clamp(n, min, max);
+}
+
+/**
+ * Build a clean, bounded create-routine payload from untrusted caller input.
+ *
+ * Mirrors the backend `createRoutineSchema` (exercise-service): `title` is
+ * required (min 1 char), the `exercises` array is capped at 50, and each
+ * exercise's `sets`/`reps` are integer-clamped to 0-100 / 0-1000. Any field not
+ * on the whitelist (`title`/`description`/`splitType`/`exercises`, and per
+ * exercise `name`/`sets`/`reps`) is stripped, so a caller cannot smuggle extra
+ * keys (e.g. `isAdmin`) straight into the request body.
+ *
+ * @throws Error when the resolved title is empty/whitespace-only.
+ */
+export function shapeCreateRoutine(input: unknown): CreateRoutineInput {
+  const src = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>;
+
+  // Backend requires `title`; tolerate a legacy `name` alias as a fallback.
+  const rawTitle = src.title ?? src.name;
+  const title = (typeof rawTitle === 'string' ? rawTitle : String(rawTitle ?? '')).trim();
+  if (!title) throw new Error('Routine title is required');
+
+  const shaped: CreateRoutineInput = {
+    title,
+    exercises: (Array.isArray(src.exercises) ? src.exercises : [])
+      .slice(0, 50)
+      .map((e): RoutineExerciseInput => {
+        const ex = (e && typeof e === 'object' ? e : {}) as Record<string, unknown>;
+        return {
+          name: (typeof ex.name === 'string' ? ex.name : String(ex.name ?? '')).trim(),
+          sets: clampInt(ex.sets, 0, 100),
+          reps: clampInt(ex.reps, 0, 1000),
+        };
+      }),
+  };
+
+  if (typeof src.description === 'string') shaped.description = src.description;
+  if (typeof src.splitType === 'string') shaped.splitType = src.splitType;
+
+  return shaped;
+}
+
+export const createRoutine = async (input: unknown): Promise<Routine> => {
+  const { data } = await apiClient.post<Routine>('/v1/exercises/routines', shapeCreateRoutine(input));
   return data;
 };
 

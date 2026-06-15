@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Card, Button, Skeleton, EmptyState } from '@/components/ui';
 import { shadows } from '@/theme';
 import { withAlpha } from '@/theme/utils';
+import { safeImageUri } from '@/lib/imageUrl';
 import { formatDistanceToNow } from 'date-fns';
 
 const { width } = Dimensions.get('window');
@@ -190,12 +191,16 @@ export default function CommunityFeedScreen() {
 
 function PostItem({ post, onLike, onComment, onShare }: { post: Post, onLike: () => void, onComment: () => void, onShare: () => void }) {
     const { colors, typography, borderRadius } = useTheme();
+    // Trust-gate user-supplied URLs before handing them to <Image>; non-https /
+    // malformed values fall back to the placeholder (person icon / card bg).
+    const avatarUri = safeImageUri(post.author?.avatarUrl);
+    const imageUri = safeImageUri(post.imageUrl);
     return (
         <Card variant="glass" style={[styles.postCard, { borderColor: colors.border.default, borderRadius: borderRadius['2xl'] }]}>
             <View style={styles.postHeader}>
                 <View style={[styles.avatarMini, { backgroundColor: colors.background.tertiary }]}>
-                    {post.author?.avatarUrl ? (
-                        <Image source={{ uri: post.author.avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 16 }} cachePolicy="memory-disk" transition={200} />
+                    {avatarUri ? (
+                        <Image source={{ uri: avatarUri }} style={{ width: '100%', height: '100%', borderRadius: 16 }} cachePolicy="memory-disk" transition={200} />
                     ) : (
                         <Ionicons name="person" size={16} color={colors.text.tertiary} />
                     )}
@@ -212,8 +217,8 @@ function PostItem({ post, onLike, onComment, onShare }: { post: Post, onLike: ()
                 {post.content}
             </Text>
 
-            {post.imageUrl && (
-                <Image source={{ uri: post.imageUrl }} style={[styles.postImg, { borderRadius: borderRadius.lg }]} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+            {imageUri && (
+                <Image source={{ uri: imageUri }} style={[styles.postImg, { borderRadius: borderRadius.lg }]} contentFit="cover" cachePolicy="memory-disk" transition={200} />
             )}
 
             <View style={[styles.postActions, { borderTopColor: colors.border.default }]}>

@@ -11,6 +11,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { addComment, getComments, getPostById, Post, Comment } from '@/api/community';
 import { colors as themeColors } from '@/theme/colors';
 import { withAlpha } from '@/theme/utils';
+import { safeImageUri } from '@/lib/imageUrl';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Card, Button, Skeleton, EmptyState } from '@/components/ui';
@@ -129,8 +130,8 @@ export default function PostDetailScreen() {
                 <View style={styles.postContent}>
                     <View style={styles.authorRow}>
                         <View style={[styles.avatarMini, { backgroundColor: colors.background.tertiary }]}>
-                            {post.author?.avatarUrl ? (
-                                <Image source={{ uri: post.author.avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 16 }} cachePolicy="memory-disk" transition={200} />
+                            {safeImageUri(post.author?.avatarUrl) ? (
+                                <Image source={{ uri: safeImageUri(post.author?.avatarUrl) }} style={{ width: '100%', height: '100%', borderRadius: 16 }} cachePolicy="memory-disk" transition={200} />
                             ) : (
                                 <Ionicons name="person" size={16} color={colors.text.tertiary} />
                             )}
@@ -147,8 +148,8 @@ export default function PostDetailScreen() {
                         {post.content}
                     </Text>
 
-                    {post.imageUrl && (
-                        <Image source={{ uri: post.imageUrl }} style={[styles.postImg, { borderRadius: borderRadius.xl }]} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                    {safeImageUri(post.imageUrl) && (
+                        <Image source={{ uri: safeImageUri(post.imageUrl) }} style={[styles.postImg, { borderRadius: borderRadius.xl }]} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                     )}
 
                     <View style={[styles.divider, { backgroundColor: colors.border.default }]} />
@@ -174,8 +175,8 @@ export default function PostDetailScreen() {
                         comments.map((c: Comment) => (
                             <View key={c.id} style={[styles.commentItem, { borderBottomColor: colors.border.default }]}>
                                 <View style={[styles.avatarMini, { backgroundColor: colors.background.tertiary }]}>
-                                    {c.author?.avatarUrl ? (
-                                        <Image source={{ uri: c.author.avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 16 }} cachePolicy="memory-disk" transition={200} />
+                                    {safeImageUri(c.author?.avatarUrl) ? (
+                                        <Image source={{ uri: safeImageUri(c.author?.avatarUrl) }} style={{ width: '100%', height: '100%', borderRadius: 16 }} cachePolicy="memory-disk" transition={200} />
                                     ) : (
                                         <Ionicons name="person" size={14} color={colors.text.tertiary} />
                                     )}

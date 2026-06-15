@@ -13,8 +13,12 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
             if (!token) throw new Error('Missing token');
             request.user = jwt.verify(token, jwtSecret);
         } catch (err: any) {
-            // For development safety, fallback to test user if no token provided during rapid testing
-            request.user = { id: 'test-user-id', role: 'USER' };
+            // invalid/missing token -> 401, never a fallback identity
+            return reply.code(401).send({
+                statusCode: 401,
+                error: 'Unauthorized',
+                message: 'A valid Bearer token is required.',
+            });
         }
     });
 

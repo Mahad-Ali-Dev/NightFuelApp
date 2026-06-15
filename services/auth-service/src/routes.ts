@@ -7,6 +7,21 @@ import { AuthService } from './auth.service';
 export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = async (fastify, opts) => {
     const service = opts.authService;
 
+    // Allowlist of the exact user-facing strings AuthService is known to throw.
+    // Any other error (DB/Prisma/network/etc.) is an unexpected internal failure
+    // and must NOT be reflected to the client verbatim — it gets the per-route
+    // generic fallback instead, while the real error is still logged server-side.
+    const ALLOWED = new Set<string>([
+        'User already exists',
+        'Account temporarily locked',
+        'Invalid credentials',
+        'Invalid refresh token',
+        'Refresh token expired',
+        'Invalid or expired reset token',
+    ]);
+    const safeMsg = (err: any, fallback: string) =>
+        typeof err?.message === 'string' && ALLOWED.has(err.message) ? err.message : fallback;
+
     // Tight per-route rate limit for the credential-handling endpoints. The
     // @fastify/rate-limit plugin (registered globally in index.ts) reads this
     // route config and automatically replies 429 + Retry-After once exceeded.
@@ -41,7 +56,7 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
                 reply.code(201).send(result);
             } catch (err: any) {
                 request.log.error(err);
-                reply.code(400).send({ error: err.message });
+                reply.code(400).send({ error: safeMsg(err, 'Unable to complete request') });
             }
         }
     );
@@ -60,7 +75,7 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
                 reply.send(result);
             } catch (err: any) {
                 request.log.error(err);
-                reply.code(401).send({ error: err.message });
+                reply.code(401).send({ error: safeMsg(err, 'Invalid credentials') });
             }
         }
     );
@@ -79,7 +94,7 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
                 reply.send(result);
             } catch (err: any) {
                 request.log.error(err);
-                reply.code(401).send({ error: err.message });
+                reply.code(401).send({ error: safeMsg(err, 'Invalid refresh token') });
             }
         }
     );
@@ -120,7 +135,7 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
                 reply.send({ message: 'Password has been reset' });
             } catch (err: any) {
                 request.log.error(err);
-                reply.code(400).send({ error: err.message });
+                reply.code(400).send({ error: safeMsg(err, 'Unable to reset password') });
             }
         }
     );

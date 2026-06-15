@@ -15,13 +15,18 @@ const wsFrameSchema = z.object({
 export default async function (fastify: FastifyInstance, opts: { chatService: ChatService, jwtSecret: string }) {
     const { chatService, jwtSecret } = opts;
 
+    // invalid/missing token -> 401, never a fallback identity
     fastify.decorate('authenticate', async (request: any, reply: any) => {
         try {
             const token = request.headers.authorization?.replace('Bearer ', '');
             if (!token) throw new Error('Missing token');
             request.user = jwt.verify(token, jwtSecret);
         } catch (err: any) {
-            request.user = { id: 'test-user-id', role: 'USER' };
+            return reply.code(401).send({
+                statusCode: 401,
+                error: 'Unauthorized',
+                message: 'A valid Bearer token is required.',
+            });
         }
     });
 
