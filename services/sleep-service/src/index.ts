@@ -7,7 +7,7 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler } from '@nightfuel/config';
+import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized } from '@nightfuel/config';
 import { z } from 'zod';
 import { SleepService } from './sleep.service';
 
@@ -43,7 +43,7 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
     try {
         await request.jwtVerify();
     } catch (err) {
-        reply.send(err);
+        return sendUnauthorized(reply, request, err);
     }
 });
 

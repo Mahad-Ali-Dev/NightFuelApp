@@ -66,6 +66,16 @@ export const DEMO_FALLBACK: Record<string, string> = {
   'Basic Kegel Squeeze': 'https://www.youtube.com/watch?v=PMHc5W2YO9o',
   'Quick-Flick Kegels': 'https://www.youtube.com/watch?v=lFKYltA2tA8',
   'Elevator Kegel': 'https://www.youtube.com/watch?v=jWj4iBxQ0Xc',
+
+  // ── Widened tranche ───────────────────────────────────────────────────────
+  // Common catalogue movements whose names ALSO exist in the FEDB slug index
+  // (so the in-app frames resolve too). Additive: kept key-for-key in sync with
+  // the backend `DEMO_URLS` map (demo-urls.ts). Each value is a verified watch URL.
+  'Hammer Curls': 'https://www.youtube.com/watch?v=tjyraFISkbg',
+  'Hanging Leg Raise': 'https://www.youtube.com/watch?v=Pr1ieGZ5atk',
+  'Face Pull': 'https://www.youtube.com/watch?v=rep-qVOkqgk',
+  'Goblet Squat': 'https://www.youtube.com/watch?v=MeIiIdhvXT4',
+  'Barbell Hip Thrust': 'https://www.youtube.com/watch?v=LM8XHLYJoYs',
 };
 
 // Pre-lowercased index for case-insensitive, whitespace-trimmed lookups.

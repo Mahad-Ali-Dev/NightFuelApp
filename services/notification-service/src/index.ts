@@ -8,7 +8,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig } from '@nightfuel/config';
+import { createLogger, loadConfig, sendUnauthorized } from '@nightfuel/config';
 import { NotificationService } from './notification.service';
 import { PushService } from './push.service';
 import { notificationRoutes } from './routes';
@@ -119,7 +119,7 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
     try {
         await request.jwtVerify();
     } catch (err) {
-        reply.send(err);
+        return sendUnauthorized(reply, request, err);
     }
 });
 

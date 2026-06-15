@@ -16,7 +16,16 @@
  * Pure data/logic — no React, no network. The catalogue fixture mirrors how the
  * backend seeds `imageUrl` (jsDelivr CDN path embedding the FEDB slug dir).
  */
-import { resolveDemoFrames, resolveDemoGif, demoCoverage } from '@/constants/exerciseDemos';
+import * as fs from 'fs';
+import * as path from 'path';
+
+import {
+  resolveDemoFrames,
+  resolveDemoGif,
+  demoCoverage,
+  fedbSlugFromImageUrl,
+  DEMO_FALLBACK,
+} from '@/constants/exerciseDemos';
 
 const RAW_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
 const JSDELIVR_BASE = 'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises';
@@ -394,5 +403,204 @@ describe('resolveDemoFrames — every emitted frame URL is HTTPS', () => {
         expect(url.startsWith('https://')).toBe(true);
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fedbSlugFromImageUrl — the slug extractor the whole derivation hinges on.
+// Pins that the regex accepts BOTH CDN hosts (jsDelivr with/without an @ref and
+// raw.githubusercontent) and rejects anything else, so a foreign URL can never
+// be mistaken for a free-exercise-db frame source.
+// ---------------------------------------------------------------------------
+describe('fedbSlugFromImageUrl — slug-directory extraction', () => {
+  test('jsDelivr WITH @ref (pinned) → slug dir', () => {
+    expect(
+      fedbSlugFromImageUrl(`${JSDELIVR_BASE}/Barbell_Deadlift/0.jpg`), // @main is the ref
+    ).toBe('Barbell_Deadlift');
+    expect(
+      fedbSlugFromImageUrl(
+        'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@v1.2.3/exercises/Goblet_Squat/1.jpg',
+      ),
+    ).toBe('Goblet_Squat');
+  });
+
+  test('jsDelivr WITHOUT @ref (bare repo) → slug dir', () => {
+    expect(
+      fedbSlugFromImageUrl(
+        'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db/exercises/Romanian_Deadlift/0.jpg',
+      ),
+    ).toBe('Romanian_Deadlift');
+  });
+
+  test('raw.githubusercontent → slug dir', () => {
+    expect(fedbSlugFromImageUrl(`${RAW_BASE}/Plank/1.jpg`)).toBe('Plank');
+  });
+
+  test('a bare slug dir with no trailing /<n>.jpg still extracts', () => {
+    expect(fedbSlugFromImageUrl(`${RAW_BASE}/Face_Pull`)).toBe('Face_Pull');
+  });
+
+  test.each([
+    ['a youtube watch URL', 'https://www.youtube.com/watch?v=op9kVnSso6Q'],
+    ['an unrelated CDN image', 'https://example.com/some/other/image.jpg'],
+    ['a look-alike host with the FEDB path shape', 'https://evil.example/exercises/Barbell_Squat/0.jpg'],
+    ['a different GitHub repo on raw.githubusercontent', 'https://raw.githubusercontent.com/someone/other-db/main/exercises/Barbell_Squat/0.jpg'],
+    ['a different jsDelivr gh repo', 'https://cdn.jsdelivr.net/gh/someone/other-db@main/exercises/Barbell_Squat/0.jpg'],
+    ['an empty string', ''],
+  ])('returns null for a non-FEDB URL (%s)', (_label, url) => {
+    expect(fedbSlugFromImageUrl(url)).toBeNull();
+  });
+
+  test('returns null for null / undefined', () => {
+    expect(fedbSlugFromImageUrl(null)).toBeNull();
+    expect(fedbSlugFromImageUrl(undefined)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveDemoFrames — the demoGifUrl > imageUrl > curated > name precedence
+// ladder, asserted one rung at a time so a regression pinpoints which source
+// stopped winning. (Companion to the precedence block at the top of the file.)
+// ---------------------------------------------------------------------------
+describe('resolveDemoFrames — precedence ladder, one rung each', () => {
+  // Same exercise resolvable at EVERY rung, so each case isolates exactly one.
+  const NAME = 'Barbell Deadlift'; // curated DEMO_FRAMES + FEDB name index entry
+  const CURATED = [`${RAW_BASE}/Barbell_Deadlift/0.jpg`, `${RAW_BASE}/Barbell_Deadlift/1.jpg`];
+
+  test('1) demoGifUrl wins over imageUrl + curated + name', () => {
+    expect(
+      resolveDemoFrames({
+        name: NAME,
+        demoGifUrl: 'https://cdn.example.com/explicit.gif',
+        imageUrl: `${JSDELIVR_BASE}/Goblet_Squat/0.jpg`,
+      }),
+    ).toEqual(['https://cdn.example.com/explicit.gif']);
+  });
+
+  test('2) imageUrl wins over curated + name when no demoGifUrl', () => {
+    // imageUrl points at a DIFFERENT slug than the curated/name slug for NAME,
+    // proving the derived frames come from imageUrl, not the curated map.
+    expect(
+      resolveDemoFrames({ name: NAME, imageUrl: `${JSDELIVR_BASE}/Goblet_Squat/0.jpg` }),
+    ).toEqual([`${RAW_BASE}/Goblet_Squat/0.jpg`, `${RAW_BASE}/Goblet_Squat/1.jpg`]);
+  });
+
+  test('3) curated map wins over the name index when no demoGifUrl/imageUrl', () => {
+    // "Barbell Back Squat" → curated slug Barbell_Full_Squat, which the generic
+    // name index does NOT hold under that name — so a curated hit is provable.
+    expect(resolveDemoFrames({ name: 'Barbell Back Squat' })).toEqual([
+      `${RAW_BASE}/Barbell_Full_Squat/0.jpg`,
+      `${RAW_BASE}/Barbell_Full_Squat/1.jpg`,
+    ]);
+  });
+
+  test('4) name index is the last resort (no demoGifUrl/imageUrl/curated)', () => {
+    // "Goblet Squat" is NOT in the curated DEMO_FRAMES map, so resolution can
+    // only come from the bundled FEDB name index.
+    expect(resolveDemoFrames({ name: 'Goblet Squat' })).toEqual([
+      `${RAW_BASE}/Goblet_Squat/0.jpg`,
+      `${RAW_BASE}/Goblet_Squat/1.jpg`,
+    ]);
+  });
+
+  test('emits the canonical raw.githubusercontent 0.jpg / 1.jpg pair', () => {
+    const frames = resolveDemoFrames({ name: NAME });
+    expect(frames).toEqual(CURATED);
+    expect(frames![0]).toBe(`${RAW_BASE}/Barbell_Deadlift/0.jpg`);
+    expect(frames![1]).toBe(`${RAW_BASE}/Barbell_Deadlift/1.jpg`);
+  });
+});
+
+describe('resolveDemoFrames — real catalogue names resolve to a frame pair', () => {
+  test.each([
+    ['Barbell Deadlift', 'Barbell_Deadlift'],
+    ['Plank', 'Plank'],
+    ['Romanian Deadlift', 'Romanian_Deadlift'],
+    ['Goblet Squat', 'Goblet_Squat'],
+  ])('%s → non-null [0.jpg, 1.jpg] pair', (name, slug) => {
+    const frames = resolveDemoFrames({ name });
+    expect(frames).not.toBeNull();
+    expect(frames).toHaveLength(2);
+    expect(frames).toEqual([`${RAW_BASE}/${slug}/0.jpg`, `${RAW_BASE}/${slug}/1.jpg`]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DEMO_FALLBACK (curated YouTube deep-links) — shape + cross-package sync guard.
+//
+// Shape: every value must be a YouTube *watch* URL (a specific video), never a
+// search/results page, or the "Watch demo" deep-link opens the wrong thing.
+//
+// Sync: the mobile DEMO_FALLBACK and the backend DEMO_URLS (the source the
+// exercise-service serves from) must stay key-for-key identical. We assert this
+// by reading the backend file's source text at test time (a plain fs read — no
+// cross-package module import, so no bundler/tsc coupling between the packages)
+// and parsing out its curated keys. If the two drift, this fails loudly.
+// ---------------------------------------------------------------------------
+const WATCH_URL_RE = /^https:\/\/www\.youtube\.com\/watch\?v=[\w-]{6,}$/;
+
+/**
+ * Parse the string keys of the backend `DEMO_URLS` object literal straight from
+ * its source file, without importing across package boundaries. Scoped to the
+ * `DEMO_URLS` block so the derived `DEMO_URLS_LC` map / comments can't leak in.
+ */
+function backendDemoUrlsKeys(): string[] {
+  const file = path.resolve(__dirname, '../../../../services/exercise-service/prisma/demo-urls.ts');
+  const src = fs.readFileSync(file, 'utf8');
+  const open = src.indexOf('export const DEMO_URLS');
+  expect(open).toBeGreaterThanOrEqual(0); // backend map must still exist & be named
+  const braceStart = src.indexOf('{', open);
+  const blockEnd = src.indexOf('\n};', braceStart);
+  expect(blockEnd).toBeGreaterThan(braceStart);
+  const body = src.slice(braceStart, blockEnd);
+  // Match `'<key>':` / `"<key>":` entries (keys may contain spaces, hyphens, /).
+  const keys: string[] = [];
+  const entryRe = /(['"])((?:\\.|(?!\1).)*?)\1\s*:/g;
+  let m: RegExpExecArray | null;
+  while ((m = entryRe.exec(body)) !== null) {
+    if (m[2] !== undefined) keys.push(m[2]);
+  }
+  return keys;
+}
+
+describe('DEMO_FALLBACK — every value is a YouTube watch URL', () => {
+  test('no entry is a search/results page or malformed', () => {
+    const entries = Object.entries(DEMO_FALLBACK);
+    expect(entries.length).toBeGreaterThan(0);
+    for (const [name, url] of entries) {
+      expect(`${name} → ${url}`).toMatch(
+        new RegExp(`^.+ → https://www\\.youtube\\.com/watch\\?v=[\\w-]{6,}$`),
+      );
+      expect(url).toMatch(WATCH_URL_RE);
+      expect(url).not.toContain('/results'); // never a search page
+      expect(url).not.toContain('search_query');
+    }
+  });
+
+  test('the widened tranche is present and also resolves to in-app frames', () => {
+    // These names were added to BOTH maps and exist in the FEDB slug index, so
+    // each one must yield a watch URL AND a non-null demo-frame pair.
+    const WIDENED = ['Hammer Curls', 'Hanging Leg Raise', 'Face Pull', 'Goblet Squat', 'Barbell Hip Thrust'];
+    for (const name of WIDENED) {
+      expect(DEMO_FALLBACK[name]).toMatch(WATCH_URL_RE);
+      expect(resolveDemoFrames({ name })).not.toBeNull();
+    }
+  });
+});
+
+describe('DEMO_FALLBACK ↔ backend DEMO_URLS — key-for-key identical', () => {
+  test('the two curated maps share the exact same key set', () => {
+    const mobileKeys = Object.keys(DEMO_FALLBACK).sort();
+    const backendKeys = backendDemoUrlsKeys().sort();
+
+    // Guard the parse itself: comparable size, both non-trivial.
+    expect(backendKeys.length).toBeGreaterThan(20);
+    expect(mobileKeys.length).toBe(backendKeys.length);
+
+    // Surface any drift explicitly (which side is missing which key).
+    const onlyInMobile = mobileKeys.filter((k) => !backendKeys.includes(k));
+    const onlyInBackend = backendKeys.filter((k) => !mobileKeys.includes(k));
+    expect({ onlyInMobile, onlyInBackend }).toEqual({ onlyInMobile: [], onlyInBackend: [] });
+    expect(mobileKeys).toEqual(backendKeys);
   });
 });

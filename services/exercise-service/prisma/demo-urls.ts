@@ -52,6 +52,16 @@ export const DEMO_URLS: Record<string, string> = {
     'Basic Kegel Squeeze': 'https://www.youtube.com/watch?v=PMHc5W2YO9o',
     'Quick-Flick Kegels': 'https://www.youtube.com/watch?v=lFKYltA2tA8',
     'Elevator Kegel': 'https://www.youtube.com/watch?v=jWj4iBxQ0Xc',
+
+    // ── Widened tranche (also in the FEDB slug index for in-app frames) ────────
+    // Additive curated set, kept key-for-key in sync with the mobile
+    // `DEMO_FALLBACK` map (clients/mobile/src/constants/exerciseDemos.ts). Each
+    // value is a verified full YouTube watch URL, never a search/results page.
+    'Hammer Curls': 'https://www.youtube.com/watch?v=tjyraFISkbg',
+    'Hanging Leg Raise': 'https://www.youtube.com/watch?v=Pr1ieGZ5atk',
+    'Face Pull': 'https://www.youtube.com/watch?v=rep-qVOkqgk',
+    'Goblet Squat': 'https://www.youtube.com/watch?v=MeIiIdhvXT4',
+    'Barbell Hip Thrust': 'https://www.youtube.com/watch?v=LM8XHLYJoYs',
 };
 
 // Pre-lowercased index for case-insensitive lookups.

@@ -179,3 +179,72 @@ describe('shapeCreateRoutine — well-formed passthrough', () => {
     });
   });
 });
+
+describe('shapeCreateRoutine — boundary exactness', () => {
+  // These pin the inclusive edges that must match the backend createRoutineSchema
+  // (`z.number().int().min(0).max(100)` on sets, `.max(1000)` on reps): the max is
+  // kept as-is, and exactly one over the max clamps down to the max.
+  test('sets at the max (100) is kept; one over (101) clamps to 100', () => {
+    const atMax = shapeCreateRoutine({
+      title: 'Edge',
+      exercises: [{ name: 'A', sets: 100, reps: 5 }],
+    });
+    expect(atMax.exercises[0]).toEqual({ name: 'A', sets: 100, reps: 5 });
+
+    const overMax = shapeCreateRoutine({
+      title: 'Edge',
+      exercises: [{ name: 'A', sets: 101, reps: 5 }],
+    });
+    expect(overMax.exercises[0]).toEqual({ name: 'A', sets: 100, reps: 5 });
+  });
+
+  test('reps at the max (1000) is kept; one over (1001) clamps to 1000', () => {
+    const atMax = shapeCreateRoutine({
+      title: 'Edge',
+      exercises: [{ name: 'B', sets: 3, reps: 1000 }],
+    });
+    expect(atMax.exercises[0]).toEqual({ name: 'B', sets: 3, reps: 1000 });
+
+    const overMax = shapeCreateRoutine({
+      title: 'Edge',
+      exercises: [{ name: 'B', sets: 3, reps: 1001 }],
+    });
+    expect(overMax.exercises[0]).toEqual({ name: 'B', sets: 3, reps: 1000 });
+  });
+
+  test('sets at the min (0) is kept exactly at 0', () => {
+    const atMin = shapeCreateRoutine({
+      title: 'Edge',
+      exercises: [{ name: 'C', sets: 0, reps: 0 }],
+    });
+    expect(atMin.exercises[0]).toEqual({ name: 'C', sets: 0, reps: 0 });
+  });
+});
+
+describe('shapeCreateRoutine — deep-strip & missing fields', () => {
+  test('a missing exercise name resolves to an empty string (not undefined / no throw)', () => {
+    let out!: ReturnType<typeof shapeCreateRoutine>;
+    // Only the routine *title* is required; a nameless exercise must still shape.
+    expect(() => {
+      out = shapeCreateRoutine({
+        title: 'Nameless Entry',
+        exercises: [{ sets: 3, reps: 8 }],
+      });
+    }).not.toThrow();
+
+    expect(out.exercises[0]).toEqual({ name: '', sets: 3, reps: 8 });
+    expect(out.exercises[0]!.name).toBe('');
+    expect(typeof out.exercises[0]!.name).toBe('string');
+  });
+
+  test('a deeply-nested smuggled object on an exercise is reduced to exactly {name,sets,reps}', () => {
+    const out = shapeCreateRoutine({
+      title: 'Smuggle',
+      exercises: [{ name: 'X', sets: 3, reps: 5, meta: { evil: true } }],
+    });
+
+    expect(out.exercises[0]).toEqual({ name: 'X', sets: 3, reps: 5 });
+    expect(Object.keys(out.exercises[0]!).sort()).toEqual(['name', 'reps', 'sets']);
+    expect(out.exercises[0]).not.toHaveProperty('meta');
+  });
+});
