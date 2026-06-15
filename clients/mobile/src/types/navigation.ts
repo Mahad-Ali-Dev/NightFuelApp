@@ -42,7 +42,6 @@ export type TabRoutes = {
 export type ModalRoutes = {
     '(modals)/ai-coach': undefined;
     '(modals)/active-workout': { routineId?: string };
-    '(modals)/meal-detail': { mealId: string };
     '(modals)/build-plate': { planMealIndex?: number };
     '(modals)/premium': undefined;
 };

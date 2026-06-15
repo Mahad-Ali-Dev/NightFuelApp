@@ -88,7 +88,7 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/sleep', {
         return reply.send(await sleepSvc.listSessions(userId, limit));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -102,7 +102,7 @@ fastify.get('/v1/sleep/quality', {
         return reply.send(await sleepSvc.getQuality(userId));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -115,7 +115,7 @@ fastify.get('/v1/sleep/analytics', {
         return reply.send(await sleepSvc.getAnalytics(userId));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -131,7 +131,7 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/sleep/:id', {
         return reply.send(session);
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -146,7 +146,7 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/sleep', {
         return reply.code(201).send(session);
     } catch (err: any) {
         logger.error({ err, body: request.body, stack: err.stack }, 'POST /v1/sleep failed');
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -164,8 +164,10 @@ fastify.withTypeProvider<ZodTypeProvider>().patch('/v1/sleep/:id', {
         return reply.send(session);
     } catch (err: any) {
         logger.error(err);
-        const status = err.message.includes('not found') ? 404 : 500;
-        return reply.code(status).send({ error: err.message });
+        if (err.message.includes('not found')) {
+            return reply.code(404).send({ error: err.message });
+        }
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -178,7 +180,7 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/sleep/preferences', {
         return reply.send(await sleepSvc.getPreferences(userId));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -192,7 +194,7 @@ fastify.withTypeProvider<ZodTypeProvider>().put('/v1/sleep/preferences', {
         return reply.send(await sleepSvc.updatePreferences(userId, request.body));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 

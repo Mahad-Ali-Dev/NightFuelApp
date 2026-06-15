@@ -99,6 +99,10 @@ export default function ExerciseLibraryScreen() {
         // Real wger image -> remote { uri }; otherwise the bundled module.
         // expo-image's `source` accepts both a require-number and a { uri }.
         const imgSrc = item.imageUrl ? { uri: item.imageUrl } : fallbackImg;
+        // Browse-time demo affordance: derived purely from the already-fetched
+        // library item (no extra request). Shown when the backend supplied a
+        // demo video / GIF for this exercise.
+        const hasDemo = !!(item.demoGifUrl || item.demoUrl);
         return (
             <TouchableOpacity
                 style={[styles.exCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
@@ -119,7 +123,14 @@ export default function ExerciseLibraryScreen() {
                         colors={['transparent', 'rgba(0,0,0,0.55)']}
                         style={StyleSheet.absoluteFillObject}
                     />
-
+                    {hasDemo && (
+                        <View
+                            style={[styles.demoBadge, { backgroundColor: withAlpha(colors.accent.coral, 0.9) }]}
+                            accessibilityLabel="Has demo video"
+                        >
+                            <Ionicons name="play" size={11} color="#FFF" />
+                        </View>
+                    )}
                 </View>
                 <View style={styles.exInfo}>
                     <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', fontSize: 13 }]} numberOfLines={2}>
@@ -345,6 +356,17 @@ const styles = StyleSheet.create({
     exCard: { width: CARD_W, borderRadius: 16, overflow: 'hidden', borderWidth: 1 },
     exImageWrapper: { position: 'relative', width: '100%', height: 130 },
     exImage: { width: '100%', height: 130 },
+    demoBadge: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingLeft: 1, // optically center the play glyph
+    },
     exInfo: { padding: 10 },
     equipPill: { alignSelf: 'flex-start', marginTop: 5, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 4, borderWidth: 1, backgroundColor: 'transparent' },
 });

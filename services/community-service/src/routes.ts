@@ -38,7 +38,7 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
             return reply.code(201).send(await communityService.createPost(userId, content, imageUrl));
         } catch (err: any) {
             console.error('Crash in createPost:', err);
-            return reply.code(500).send({ error: err.message, stack: err.stack });
+            return reply.code(500).send({ error: 'An unexpected error occurred' });
         }
     });
 

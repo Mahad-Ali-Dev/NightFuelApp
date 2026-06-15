@@ -56,6 +56,7 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
 
     // ── Send message in a conversation ──────────────────────────────────────
     fastify.post('/v1/coaches/conversations/:conversationId/messages', {
+        schema: { body: z.object({ text: z.string().min(1).max(4000) }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const { conversationId } = request.params as any;
@@ -91,8 +92,22 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
     fastify.post('/v1/chat/ria/send', {
         schema: {
             body: z.object({
-                message: z.string().min(1).max(2000),
-                context: z.record(z.unknown()).optional(),
+                message: z.string().min(1).max(4000),
+                // context is forwarded verbatim to the AI pipeline — keep it a
+                // plain object and bound its serialized size to limit abuse.
+                context: z
+                    .record(z.unknown())
+                    .refine(
+                        (c) => {
+                            try {
+                                return JSON.stringify(c).length <= 16_000;
+                            } catch {
+                                return false;
+                            }
+                        },
+                        { message: 'context is too large' }
+                    )
+                    .optional(),
             })
         },
         preHandler: [(fastify as any).authenticate]

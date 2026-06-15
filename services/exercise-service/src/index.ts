@@ -50,30 +50,33 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
 });
 
 // ── Shared exercise body schema ───────────────────────────────────────────────
+// Numeric fields are positive and capped: additive upper bounds only, so valid
+// app payloads stay valid while absurd/abusive values (negatives already blocked
+// by positive(); now also gigantic numbers) are rejected with a 400.
 const exerciseItemSchema = z.object({
-    name: z.string().min(1),
-    muscleGroup: z.string().optional(),
-    sets: z.number().int().positive().optional().nullable(),
-    reps: z.number().int().positive().optional().nullable(),
-    weightKg: z.number().positive().optional().nullable(),
-    distanceKm: z.number().positive().optional().nullable(),
-    durationSecs: z.number().int().positive().optional().nullable(),
-    restSecs: z.number().int().positive().optional().nullable(),
-    order: z.number().int().optional(),
+    name: z.string().min(1).max(120),
+    muscleGroup: z.string().max(120).optional(),
+    sets: z.number().int().positive().max(100).optional().nullable(),
+    reps: z.number().int().positive().max(1000).optional().nullable(),
+    weightKg: z.number().positive().max(1000).optional().nullable(),
+    distanceKm: z.number().positive().max(1000).optional().nullable(),
+    durationSecs: z.number().int().positive().max(86400).optional().nullable(),
+    restSecs: z.number().int().positive().max(86400).optional().nullable(),
+    order: z.number().int().min(0).max(1000).optional(),
 });
 
 const createWorkoutSchema = z.object({
-    type: z.string(),
-    title: z.string().min(1),
-    duration: z.number().int().positive(),
-    intensity: z.string(),
-    splitType: z.string().optional().nullable(),
-    muscleGroups: z.array(z.string()).optional(),
-    caloriesBurned: z.number().int().positive().optional().nullable(),
+    type: z.string().min(1).max(60),
+    title: z.string().min(1).max(120),
+    duration: z.number().int().positive().max(86400),
+    intensity: z.string().min(1).max(60),
+    splitType: z.string().max(60).optional().nullable(),
+    muscleGroups: z.array(z.string().max(60)).max(50).optional(),
+    caloriesBurned: z.number().int().positive().max(100000).optional().nullable(),
     notes: z.string().max(1000).optional().nullable(),
     scheduledAt: z.string().datetime().optional().nullable(),
     completedAt: z.string().datetime().optional().nullable(),
-    exercises: z.array(exerciseItemSchema).min(1),
+    exercises: z.array(exerciseItemSchema).min(1).max(100),
 });
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -104,7 +107,7 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/library', {
         return reply.send(await exerciseSvc.searchLibrary({ query, equipment, muscleGroup, bodyPart, category }, limit));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -121,7 +124,7 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/library/:id', {
         return reply.send(ex);
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -136,7 +139,7 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises', {
         return reply.send(await exerciseSvc.listWorkouts(userId, limit));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -153,7 +156,7 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/:id', {
         return reply.send(workout);
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -168,7 +171,7 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises', {
         return reply.code(201).send(workout);
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -185,7 +188,7 @@ fastify.withTypeProvider<ZodTypeProvider>().delete('/v1/exercises/:id', {
         return reply.code(204).send();
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -199,7 +202,7 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/history/heatmap',
         return reply.send(await exerciseSvc.getHeatmap(userId));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -213,18 +216,29 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/analytics/:exerci
         return reply.send(await exerciseSvc.getExerciseAnalytics(userId, exerciseName));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
 // ── Routines ──────────────────────────────────────────────────────────────────
 
+// A configured routine exercise. Bounded fields close the abuse surface where
+// the client `exercises` array used to be z.array(z.any()) and was spread blind
+// into Prisma. `.passthrough()` keeps any extra app-supplied display fields, but
+// the array length and the known numeric fields are now bounded.
+const routineExerciseSchema = z.object({
+    name: z.string().min(1).max(120),
+    sets: z.number().int().min(0).max(100).optional(),
+    reps: z.number().int().min(0).max(1000).optional(),
+    weightKg: z.number().min(0).max(1000).optional(),
+}).passthrough();
+
 const createRoutineSchema = z.object({
-    title: z.string().min(1),
-    description: z.string().optional().nullable(),
-    splitType: z.string().optional().nullable(),
-    muscleGroups: z.array(z.string()).optional(),
-    exercises: z.array(z.any()),
+    title: z.string().min(1).max(120),
+    description: z.string().max(2000).optional().nullable(),
+    splitType: z.string().max(60).optional().nullable(),
+    muscleGroups: z.array(z.string().max(60)).max(50).optional(),
+    exercises: z.array(routineExerciseSchema).max(50).optional(),
 });
 
 fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/routines', {
@@ -235,7 +249,7 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/routines', {
         return reply.send(await exerciseSvc.getRoutines(userId));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -248,7 +262,7 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines', {
         return reply.code(201).send(await exerciseSvc.createRoutine(userId, request.body));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -358,7 +372,7 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/1rm', {
         return reply.send(await exerciseSvc.getOneRepMaxes(userId));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -371,7 +385,7 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/1rm', {
         return reply.code(201).send(await exerciseSvc.logOneRepMax(userId, request.body));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -390,7 +404,7 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/session/start', 
         return reply.code(201).send(await exerciseSvc.startSession(userId, request.body.routineId));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -404,7 +418,7 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/session/active', 
         return reply.send(session);
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -435,7 +449,7 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/session/:id/exer
         ));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 
@@ -448,7 +462,7 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/session/:id/end'
         return reply.send(await exerciseSvc.endSession(id));
     } catch (err: any) {
         logger.error(err);
-        return reply.code(500).send({ error: err.message });
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });
 

@@ -67,6 +67,63 @@ function resolveDemoUrl(name: string | null | undefined): string | null {
     return DEMO_URLS_LC[name.trim().toLowerCase()] ?? null;
 }
 
+/**
+ * Compute workout streaks from a set of active calendar days (each "YYYY-MM-DD").
+ *
+ * - `longestStreak`  = the maximum run of consecutive calendar days in the set.
+ * - `currentStreak`  = the run of consecutive days ending **today**, or, if the
+ *   user hasn't logged today yet, the run ending **yesterday** (so a streak is
+ *   not reported as broken before today's workout is logged). Returns 0 if the
+ *   most recent active day is older than yesterday.
+ *
+ * `todayKey` is injected so the function is pure and unit-testable; callers pass
+ * the current date's YYYY-MM-DD. Day-keys are compared via UTC midnight, matching
+ * how `getHeatmap` derives them from `completedAt.toISOString()`.
+ */
+export function computeStreaks(
+    activeDayKeys: Iterable<string>,
+    todayKey: string,
+): { currentStreak: number; longestStreak: number } {
+    const days = Array.from(new Set(activeDayKeys)).sort(); // ascending YYYY-MM-DD
+    if (days.length === 0) return { currentStreak: 0, longestStreak: 0 };
+
+    const MS_PER_DAY = 86_400_000;
+    const toMidnightMs = (key: string) => Date.parse(`${key}T00:00:00.000Z`);
+    const dayCount = (key: string) => Math.round(toMidnightMs(key) / MS_PER_DAY);
+
+    // ── longestStreak: longest run of consecutive day numbers ─────────────────
+    let longestStreak = 1;
+    let run = 1;
+    for (let i = 1; i < days.length; i++) {
+        if (dayCount(days[i]) - dayCount(days[i - 1]) === 1) {
+            run += 1;
+        } else {
+            run = 1;
+        }
+        if (run > longestStreak) longestStreak = run;
+    }
+
+    // ── currentStreak: run ending today (or yesterday) ────────────────────────
+    const todayNum = dayCount(todayKey);
+    const lastNum = dayCount(days[days.length - 1]);
+    const gapFromToday = todayNum - lastNum;
+
+    let currentStreak = 0;
+    // Only count a "current" streak if the latest active day is today or yesterday.
+    if (gapFromToday === 0 || gapFromToday === 1) {
+        currentStreak = 1;
+        for (let i = days.length - 1; i > 0; i--) {
+            if (dayCount(days[i]) - dayCount(days[i - 1]) === 1) {
+                currentStreak += 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    return { currentStreak, longestStreak };
+}
+
 export interface CreateWorkoutInput {
     userId: string;
     type: string;
@@ -362,11 +419,17 @@ export class ExerciseService {
             };
         });
 
+        // Derive real streaks from the same set of active YYYY-MM-DD day-keys.
+        // `todayKey` uses the same UTC ISO-date basis as the keys above so the
+        // "ending today/yesterday" comparison is consistent.
+        const todayKey = new Date().toISOString().split('T')[0];
+        const { currentStreak, longestStreak } = computeStreaks(map.keys(), todayKey);
+
         // Return activeDays logic for UI
         return {
             activeDays: data.filter(d => d.count > 0).length,
-            currentStreak: 0, // Simplified for now
-            longestStreak: 0,
+            currentStreak,
+            longestStreak,
             heatmapData: data.sort((a, b) => a.date - b.date)
         };
     }
@@ -406,12 +469,19 @@ export class ExerciseService {
     }
 
     async createRoutine(userId: string, data: any) {
+        // Explicit whitelist: never blind-spread client `data` into Prisma. Only
+        // these named columns of WorkoutRoutine are accepted; anything else the
+        // client sends (e.g. id, userId override, createdAt) is dropped.
+        const { title, description, splitType, muscleGroups, exercises } = data ?? {};
         return this.prisma.workoutRoutine.create({
             data: {
-                ...data,
+                title,
+                description: description ?? null,
+                splitType: splitType ?? null,
+                muscleGroups: muscleGroups ?? [],
                 userId,
-                // Ensure exercises is proper JSON array
-                exercises: data.exercises || []
+                // Ensure exercises is a proper JSON array
+                exercises: exercises ?? []
             }
         });
     }

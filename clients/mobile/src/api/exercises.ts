@@ -18,6 +18,8 @@ export interface Exercise {
   category?: string;
   /** Deep-link / watch URL for a demo video. Null/undefined when unknown. */
   demoUrl?: string;
+  /** Animated GIF demonstrating the movement, when available. */
+  demoGifUrl?: string;
   /** Secondary muscles worked (from wger), when available. */
   secondaryMuscles?: string[];
 }
@@ -36,6 +38,42 @@ export interface SessionExercise {
   reps: number;
   weightKg: number;
   durationSecs: number;
+}
+
+/** A single exercise entry within a logged workout. */
+export interface WorkoutExercise {
+  name: string;
+  sets: number;
+  reps: number;
+  weightKg: number;
+}
+
+/**
+ * A completed workout log as returned by `GET /v1/exercises` (getRecent) and
+ * created by `POST /v1/exercises` (logWorkout). Fields are optional because the
+ * backend log shape is sparse — consumers (history, heatmap) guard each one.
+ */
+export interface Workout {
+  id: string;
+  type?: string;
+  title?: string;
+  duration?: number;
+  intensity?: string;
+  totalVolume?: number;
+  exercises?: WorkoutExercise[];
+  startedAt?: string;
+  completedAt?: string;
+  createdAt?: string;
+  date?: string;
+}
+
+/** Payload accepted by `POST /v1/exercises` to log a completed workout. */
+export interface LogWorkoutPayload {
+  type?: string;
+  title?: string;
+  duration?: number;
+  intensity?: string;
+  exercises?: WorkoutExercise[];
 }
 
 export interface Routine {
@@ -102,18 +140,18 @@ export const searchLibrary = async (
   return data;
 };
 
-export const getRecent = async (limit = 10) => {
-  const { data } = await apiClient.get(`/v1/exercises`, { params: { limit } });
+export const getRecent = async (limit = 10): Promise<Workout[]> => {
+  const { data } = await apiClient.get<Workout[]>(`/v1/exercises`, { params: { limit } });
   return data;
 };
 
-export const getById = async (id: string) => {
-  const { data } = await apiClient.get(`/v1/exercises/library/${id}`);
+export const getById = async (id: string): Promise<Exercise> => {
+  const { data } = await apiClient.get<Exercise>(`/v1/exercises/library/${id}`);
   return data;
 };
 
-export const logWorkout = async (payload: any) => {
-  const { data } = await apiClient.post('/v1/exercises', payload);
+export const logWorkout = async (payload: LogWorkoutPayload): Promise<Workout> => {
+  const { data } = await apiClient.post<Workout>('/v1/exercises', payload);
   return data;
 };
 

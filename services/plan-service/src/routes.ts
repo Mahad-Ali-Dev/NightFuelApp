@@ -31,7 +31,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.send(plan);
             } catch (err: any) {
                 logger.error(err);
-                return reply.code(500).send({ error: err.message });
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -63,7 +63,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.code(201).send(plan);
             } catch (err: any) {
                 logger.error(err);
-                return reply.code(500).send({ error: err.message });
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -95,7 +95,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.code(201).send(plan);
             } catch (err: any) {
                 logger.error(err);
-                return reply.code(500).send({ error: err.message });
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -114,7 +114,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.send(plans);
             } catch (err: any) {
                 logger.error(err);
-                return reply.code(500).send({ error: err.message });
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -139,8 +139,10 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.code(200).send({ success: true });
             } catch (err: any) {
                 logger.error(err);
-                const status = err.message.includes('not found') ? 404 : 500;
-                return reply.code(status).send({ error: err.message });
+                if (err.message.includes('not found')) {
+                    return reply.code(404).send({ error: err.message });
+                }
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -192,7 +194,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.code(201).send(protocol);
             } catch (err: any) {
                 logger.error(err);
-                return reply.code(500).send({ error: err.message });
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -211,7 +213,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.send(protocols);
             } catch (err: any) {
                 logger.error(err);
-                return reply.code(500).send({ error: err.message });
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );

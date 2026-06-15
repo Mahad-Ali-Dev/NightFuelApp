@@ -1,0 +1,235 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, Linking, Animated, Easing } from 'react-native';
+import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme } from '@/theme';
+import { withAlpha } from '@/theme/utils';
+
+const HEIGHT = 320;
+// How long each frame is held before cross-fading to the next. Slow enough that
+// a 2-frame start↔end sequence reads as a deliberate movement, not a flicker.
+const FRAME_MS = 900;
+const FADE_MS = 320;
+
+export interface ExerciseDemoProps {
+  /**
+   * Ordered HTTPS frame URLs (start → end of the rep). 2+ frames animate as an
+   * in-app loop; a single frame renders as a still. Preferred over `gifUrl`.
+   */
+  frames?: readonly string[] | null;
+  /** Single demo image URL. Used when `frames` is absent (treated as one frame). */
+  gifUrl?: string | null;
+  /** The exercise's own header image, shown when no demo frames are available. */
+  imageUrl?: string | null;
+  /** Bundled neutral placeholder (require(...)) — the last-resort, no-network image. */
+  fallback: any;
+  /** Curated full-tutorial link (e.g. YouTube). Shown as a secondary row only. */
+  tutorialUrl?: string | null;
+}
+
+/**
+ * Presentational, self-contained exercise demo "player".
+ *
+ * - With 2+ frames it cross-fades between them on a timer to animate the
+ *   movement entirely in-app (no browser hand-off, no extra dependency — just
+ *   expo-image). Tapping pauses on the current frame with a ▶ overlay.
+ * - With one frame / `gifUrl` it shows that still.
+ * - With neither it shows `imageUrl` (or the bundled `fallback`) plus an inline
+ *   "Video demo coming soon" note, and a "Full tutorial" link if one exists.
+ *
+ * It NEVER renders an empty or broken player.
+ */
+export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }: ExerciseDemoProps) {
+  const { colors, typography } = useTheme();
+
+  // Normalise the demo source into an ordered, de-duped, non-empty frame list.
+  const demoFrames = useMemo<string[]>(() => {
+    const list = (frames && frames.length > 0 ? frames : gifUrl ? [gifUrl] : []).filter(
+      (u): u is string => typeof u === 'string' && u.trim().length > 0,
+    );
+    // Drop accidental consecutive duplicates so a 1-real-frame source doesn't
+    // "animate" between two identical images.
+    return list.filter((u, i) => i === 0 || u !== list[i - 1]);
+  }, [frames, gifUrl]);
+
+  const hasDemo = demoFrames.length > 0;
+  const animated = demoFrames.length > 1;
+
+  const [frameIdx, setFrameIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
+  // Opacity of the "top" (incoming) frame; the previous frame sits underneath.
+  const fade = useRef(new Animated.Value(1)).current;
+  const prevIdxRef = useRef(0);
+
+  // Reset when the source changes (e.g. navigating between exercises that reuse
+  // this mounted component).
+  useEffect(() => {
+    setFrameIdx(0);
+    prevIdxRef.current = 0;
+    fade.setValue(1);
+    setPaused(false);
+  }, [demoFrames.join('|')]);
+
+  // Drive the loop. Pure JS timer (no native driver needed for the index swap);
+  // the cross-fade itself uses the native driver for smoothness.
+  useEffect(() => {
+    if (!animated || paused) return;
+    const t = setInterval(() => {
+      setFrameIdx((cur) => {
+        prevIdxRef.current = cur;
+        return (cur + 1) % demoFrames.length;
+      });
+    }, FRAME_MS);
+    return () => clearInterval(t);
+  }, [animated, paused, demoFrames.length]);
+
+  // Cross-fade the incoming frame in over the outgoing one whenever the index
+  // advances. Snap instantly when paused (no half-faded frame left on screen).
+  useEffect(() => {
+    if (!animated) return;
+    if (paused) {
+      fade.setValue(1);
+      return;
+    }
+    fade.setValue(0);
+    const anim = Animated.timing(fade, {
+      toValue: 1,
+      duration: FADE_MS,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: true,
+    });
+    anim.start();
+    return () => anim.stop();
+  }, [frameIdx, animated, paused]);
+
+  const openTutorial = () => {
+    if (tutorialUrl) Linking.openURL(tutorialUrl).catch(() => {});
+  };
+
+  // ── No demo media: static image + honest "coming soon" state ──────────────
+  if (!hasDemo) {
+    return (
+      <View style={styles.wrap} accessibilityLabel="Exercise demo">
+        <Image
+          source={imageUrl ? { uri: imageUrl } : fallback}
+          placeholder={fallback}
+          style={styles.media}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={400}
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.7)', colors.background.primary]}
+          style={StyleSheet.absoluteFillObject}
+          pointerEvents="none"
+        />
+        <View style={styles.comingSoonRow} pointerEvents="box-none">
+          <View style={[styles.pill, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
+            <Ionicons name="videocam-outline" size={14} color={colors.text.secondary} />
+            <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: '700', fontSize: 11 }]}>
+              Video demo coming soon
+            </Text>
+          </View>
+          {tutorialUrl ? (
+            <Pressable
+              onPress={openTutorial}
+              accessibilityRole="link"
+              accessibilityLabel="Open full tutorial"
+              style={({ pressed }) => [styles.pill, { backgroundColor: 'rgba(0,0,0,0.6)', opacity: pressed ? 0.7 : 1 }]}
+            >
+              <Ionicons name="open-outline" size={14} color={colors.accent.coral} />
+              <Text style={[typography.caption, { color: '#FFF', fontWeight: '700', fontSize: 11 }]}>Full tutorial</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    );
+  }
+
+  // ── Demo media: animated loop (or single still) ───────────────────────────
+  // `hasDemo` guarantees a frame at index 0; fall back to it if an index ever
+  // drifts out of bounds (e.g. mid-source-swap) so `uri` is always a string.
+  const firstUri = demoFrames[0] as string;
+  const topUri = demoFrames[frameIdx] ?? firstUri;
+  const underUri = demoFrames[prevIdxRef.current] ?? topUri;
+
+  return (
+    <Pressable
+      onPress={() => animated && setPaused((p) => !p)}
+      accessibilityRole="image"
+      accessibilityLabel="Exercise demo"
+      accessibilityHint={animated ? 'Double tap to pause or resume the looping demo' : undefined}
+      style={styles.wrap}
+    >
+      {/* Underlying (previous) frame — only meaningful while a cross-fade runs. */}
+      {animated ? (
+        <Image
+          source={{ uri: underUri }}
+          style={styles.media}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+        />
+      ) : null}
+      {/* Top (current) frame, faded in over the previous one. */}
+      <Animated.View style={[StyleSheet.absoluteFillObject, animated ? { opacity: fade } : null]}>
+        <Image
+          source={{ uri: topUri }}
+          placeholder={fallback}
+          style={styles.media}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={animated ? 0 : 400}
+        />
+      </Animated.View>
+
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.7)', colors.background.primary]}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      />
+
+      {/* Paused overlay: dim + ▶ so a stopped loop never looks broken. */}
+      {animated && paused ? (
+        <View style={[StyleSheet.absoluteFillObject, styles.pausedOverlay]} pointerEvents="none">
+          <View style={[styles.playBadge, { backgroundColor: withAlpha(colors.accent.coral, 0.92) }]}>
+            <Ionicons name="play" size={26} color="#FFF" style={{ marginLeft: 3 }} />
+          </View>
+        </View>
+      ) : null}
+
+      {/* Bottom-left "Demo" status tag so the inline loop reads as intentional.
+          The full-tutorial link lives on the screen's header button while a demo
+          plays (it is surfaced in-player only in the no-demo fallback above). */}
+      {animated ? (
+        <View style={styles.comingSoonRow} pointerEvents="none">
+          <View style={[styles.pill, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+            <Ionicons name={paused ? 'pause' : 'sync'} size={13} color={colors.accent.cyan} />
+            <Text style={[typography.caption, { color: '#FFF', fontWeight: '700', fontSize: 11 }]}>
+              {paused ? 'Paused' : 'Demo'}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+    </Pressable>
+  );
+}
+
+export default ExerciseDemo;
+
+const styles = StyleSheet.create({
+  wrap: { width: '100%', height: HEIGHT, backgroundColor: '#000' },
+  media: { width: '100%', height: HEIGHT },
+  pausedOverlay: { alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.35)' },
+  playBadge: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+  comingSoonRow: {
+    position: 'absolute',
+    left: 16,
+    bottom: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
+});

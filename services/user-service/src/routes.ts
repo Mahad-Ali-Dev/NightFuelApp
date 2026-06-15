@@ -131,10 +131,7 @@ export const userRoutes = async (
                     return reply.code(404).send({ error: err.message });
                 }
 
-                // Return actual error during dev (instead of hiding it)
-                return reply.code(500).send({
-                    error: err.message || 'Internal server error',
-                });
+                return reply.code(500).send({ error: 'Internal server error' });
             }
         }
     );
@@ -287,8 +284,10 @@ export const userRoutes = async (
                 return reply.code(200).send({ success: true });
             } catch (err: any) {
                 request.log.error(err);
-                const status = err.message.includes('Unauthorized') ? 403 : 500;
-                return reply.code(status).send({ error: err.message });
+                if (err.message.includes('Unauthorized')) {
+                    return reply.code(403).send({ error: err.message });
+                }
+                return reply.code(500).send({ error: 'Internal server error' });
             }
         }
     );

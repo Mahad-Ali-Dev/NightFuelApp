@@ -114,7 +114,7 @@ export function registerStripeRoutes(
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         logger.error({ err: message, userId, tier }, '[stripe] checkout session creation failed');
-        return reply.status(500).send({ statusCode: 500, error: 'Internal Server Error', message });
+        return reply.status(500).send({ statusCode: 500, error: 'Internal Server Error', message: 'An unexpected error occurred' });
       }
     },
   );
@@ -155,7 +155,7 @@ export function registerStripeRoutes(
         return reply.status(200).send({ onboardingUrl: accountLink.url });
       } catch (err: any) {
         logger.error({ err: err.message, userId }, '[stripe] connect onboarding failed');
-        return reply.status(500).send({ error: err.message });
+        return reply.status(500).send({ error: 'An unexpected error occurred' });
       }
     }
   );

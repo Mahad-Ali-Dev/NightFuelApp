@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, Linking } from 'react-native';
-import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,11 +12,26 @@ import { shadows } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
 import { Skeleton, EmptyState } from '@/components/ui';
 import { LineChart } from 'react-native-gifted-charts';
-import { resolveDemo, tipsFor } from '@/constants/exerciseDemos';
+import { resolveDemo, resolveDemoFrames, tipsFor } from '@/constants/exerciseDemos';
+import { ExerciseDemo } from '@/components/exercise/ExerciseDemo';
 const { width } = Dimensions.get('window');
 // Bundled neutral placeholder shown when an exercise has no image (no network hit).
 const FALLBACK_IMAGE = require('../../assets/images/exercise-detail-fallback.png');
 const DIFF_COLORS: Record<string, string> = { Beginner: '#2ECC71', Intermediate: '#F59E0B', Expert: '#EF4444' };
+// Map raw ExerciseDB body-part keys to human, capitalized labels so no raw
+// "upper legs" / "lower arms" leaks into the UI. Falls back to a Title-Case of
+// the raw token for anything unmapped.
+const BODY_PART_LABELS: Record<string, string> = {
+    back: 'Back', chest: 'Chest', shoulders: 'Shoulders', neck: 'Neck',
+    'upper legs': 'Legs', 'lower legs': 'Calves', 'lower arms': 'Forearms', 'upper arms': 'Arms',
+    waist: 'Core / Abs', cardio: 'Cardio', 'pelvic floor': 'Pelvic Floor',
+};
+// Human label for a muscle/body-part token (case-insensitive), capitalized.
+const muscleLabel = (raw?: string | null): string => {
+    const t = (raw ?? '').trim();
+    if (!t) return '';
+    return BODY_PART_LABELS[t.toLowerCase()] ?? t.charAt(0).toUpperCase() + t.slice(1);
+};
 type DetailTab = 'howto' | 'muscles' | 'tips' | 'progress';
 const TABS: { key: DetailTab; label: string }[] = [{ key: 'howto', label: 'How To' },{ key: 'muscles', label: 'Muscles' },{ key: 'tips', label: 'Pro Tips' },{ key: 'progress', label: 'Progress' }];
 export default function ExerciseDetailScreen() {
@@ -42,7 +56,10 @@ export default function ExerciseDetailScreen() {
     }, [exercise?.instructions]);
     // A single chunk reads better as a flowing paragraph than a lone "1." bullet.
     const isSingleParagraph = instructions.length === 1;
-    // Demo media: prefer backend demoUrl, fall back to the curated client map.
+    // In-app looping demo frames (start↔end of the rep) from the curated client
+    // map; null when uncovered so <ExerciseDemo/> falls back to the still image.
+    const demoFrames = useMemo(() => resolveDemoFrames(exercise), [exercise]);
+    // Secondary "full tutorial" link: prefer backend demoUrl, else curated YouTube map.
     const demoUrl = useMemo(() => resolveDemo(exercise), [exercise]);
     // Body-part-specific coaching cues (distinct per muscle group); generic fallback.
     const { tips, isGeneral: tipsAreGeneral } = useMemo(() => tipsFor(exercise?.bodyPart), [exercise?.bodyPart]);
@@ -50,10 +67,27 @@ export default function ExerciseDetailScreen() {
     const secondaryMuscles: string[] = Array.isArray(exercise?.secondaryMuscles)
         ? exercise.secondaryMuscles.filter((m: unknown): m is string => typeof m === 'string' && m.trim().length > 0)
         : [];
-    // Display label: prefer bodyPart (e.g. "chest") over muscleGroup (e.g. "pectoralis major")
+    // Primary muscle chips: collapse bodyPart + muscleGroup case-insensitively so
+    // "Chest" vs "chest" (or region+region pairs) never render as duplicate chips.
+    const primaryMuscles = useMemo<string[]>(() => {
+        const out: string[] = [];
+        const seen = new Set<string>();
+        for (const raw of [exercise?.bodyPart, exercise?.muscleGroup]) {
+            const t = typeof raw === 'string' ? raw.trim() : '';
+            if (!t) continue;
+            const key = t.toLowerCase();
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push(t);
+        }
+        return out;
+    }, [exercise?.bodyPart, exercise?.muscleGroup]);
+    // Set of primary muscle keys so secondary chips can drop any repeat (case-insensitive).
+    const primaryKeys = useMemo(() => new Set(primaryMuscles.map((m) => m.toLowerCase())), [primaryMuscles]);
+    // Display label: prefer bodyPart, mapped to a human label (no raw "upper legs").
     const targetLabel = exercise?.bodyPart
-        ? exercise.bodyPart.charAt(0).toUpperCase() + exercise.bodyPart.slice(1)
-        : (exercise?.muscleGroup ?? 'N/A');
+        ? muscleLabel(exercise.bodyPart)
+        : (exercise?.muscleGroup ? muscleLabel(exercise.muscleGroup) : 'N/A');
     const chartData = useMemo(() => { if (!analyticsQuery.data || !Array.isArray(analyticsQuery.data)) return []; return analyticsQuery.data.map((e: any) => ({ value: e.maxWeight || 0, label: new Date(e.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) })).slice(-10); }, [analyticsQuery.data]);
     const diffColor = DIFF_COLORS[exercise?.difficulty ?? ''] ?? colors.accent.coral;
     if (exerciseQuery.isLoading) return (
@@ -111,10 +145,12 @@ export default function ExerciseDetailScreen() {
                 ) : null}
             </View>
             <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-                <View style={{ width: '100%', height: 320 }}>
-                    <Image source={exercise.imageUrl || exercise.image ? { uri: exercise.imageUrl || exercise.image } : FALLBACK_IMAGE} placeholder={FALLBACK_IMAGE} style={{ width: '100%', height: 320 }} contentFit="cover" cachePolicy="memory-disk" transition={400} />
-                    <LinearGradient colors={['transparent', 'rgba(0,0,0,0.7)', colors.background.primary]} style={StyleSheet.absoluteFillObject} />
-                </View>
+                <ExerciseDemo
+                    frames={demoFrames}
+                    imageUrl={exercise.imageUrl ?? null}
+                    fallback={FALLBACK_IMAGE}
+                    tutorialUrl={demoUrl}
+                />
                 <View style={{ padding: 20, marginTop: -40 }}>
                     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
                         <View style={[s.badge, { backgroundColor: withAlpha(diffColor, 0.15), borderColor: diffColor }]}><Text style={[typography.caption, { color: diffColor, fontWeight: 'bold', fontSize: 10 }]}>{(exercise.difficulty||'N/A').toUpperCase()}</Text></View>
@@ -135,8 +171,8 @@ export default function ExerciseDetailScreen() {
                         {TABS.map((tab) => (<TouchableOpacity key={tab.key} activeOpacity={0.85} accessibilityRole="tab" accessibilityState={{ selected: activeTab===tab.key }} accessibilityLabel={tab.label} onPress={() => setActiveTab(tab.key)} style={[s.tab, activeTab===tab.key && { borderBottomColor: colors.accent.coral }]}><Text style={[typography.caption, { color: activeTab===tab.key ? colors.text.primary : colors.text.tertiary, fontWeight:'bold', fontSize:11 }]}>{tab.label.toUpperCase()}</Text></TouchableOpacity>))}
                     </View>
                     <View style={{ marginTop: 20 }}>
-                        {activeTab==='howto' && <View style={{ gap:20 }}>{instructions.length===0?<Text style={[typography.body,{color:colors.text.secondary,lineHeight:24}]}>No instructions available.</Text>:isSingleParagraph?<Text style={[typography.body,{color:colors.text.secondary,lineHeight:24}]}>{instructions[0]}</Text>:instructions.map((step:string,idx:number)=>(<View key={idx} style={{ flexDirection:'row',gap:14,alignItems:'flex-start' }}><View style={[s.stepNum,{backgroundColor:withAlpha(colors.accent.coral,0.15),borderColor:withAlpha(colors.accent.coral,0.3)}]}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold'}]}>{idx+1}</Text></View><Text style={[typography.body,{color:colors.text.secondary,flex:1,lineHeight:24}]}>{step}</Text></View>))}</View>}
-                        {activeTab==='muscles' && <View style={[s.sectionCard,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Text style={[typography.caption,{color:colors.text.secondary,fontWeight:'bold',marginBottom:8}]}>PRIMARY MUSCLES</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{[exercise.bodyPart, exercise.muscleGroup].filter((v,i,a)=>v&&a.indexOf(v)===i).map((m:string,i:number)=>(<View key={i} style={[s.chip,{backgroundColor:withAlpha(colors.accent.coral,0.15),borderColor:colors.accent.coral}]}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold'}]}>{m.charAt(0).toUpperCase()+m.slice(1)}</Text></View>))}</View>{secondaryMuscles.length>0 && <><Text style={[typography.caption,{color:colors.text.secondary,fontWeight:'bold',marginTop:18,marginBottom:8}]}>SECONDARY MUSCLES</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{secondaryMuscles.map((m:string,i:number)=>(<View key={i} style={[s.chip,{backgroundColor:withAlpha(colors.accent.cyan,0.15),borderColor:colors.accent.cyan}]}><Text style={[typography.caption,{color:colors.accent.cyan,fontWeight:'bold'}]}>{m.charAt(0).toUpperCase()+m.slice(1)}</Text></View>))}</View></>}</View>}
+                        {activeTab==='howto' && <View style={{ gap:20 }}>{instructions.length===0?<View style={{gap:14}}><Text style={[typography.heading,{color:colors.text.primary,fontSize:16}]}>Instructions coming soon</Text><Text style={[typography.caption,{color:colors.text.tertiary,fontSize:12,marginTop:-6}]}>Step-by-step instructions aren't available yet. In the meantime, keep these coaching cues in mind:</Text>{tips.map((tip,i)=>(<View key={i} style={{flexDirection:'row',gap:10,alignItems:'flex-start'}}><View style={{width:6,height:6,borderRadius:3,marginTop:9,backgroundColor:colors.accent.coral}} /><Text style={[typography.body,{color:colors.text.secondary,flex:1,lineHeight:22}]}>{tip}</Text></View>))}</View>:isSingleParagraph?<Text style={[typography.body,{color:colors.text.secondary,lineHeight:24}]}>{instructions[0]}</Text>:instructions.map((step:string,idx:number)=>(<View key={idx} style={{ flexDirection:'row',gap:14,alignItems:'flex-start' }}><View style={[s.stepNum,{backgroundColor:withAlpha(colors.accent.coral,0.15),borderColor:withAlpha(colors.accent.coral,0.3)}]}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold'}]}>{idx+1}</Text></View><Text style={[typography.body,{color:colors.text.secondary,flex:1,lineHeight:24}]}>{step}</Text></View>))}</View>}
+                        {activeTab==='muscles' && (()=>{ const secondaryFiltered=secondaryMuscles.filter((m,i,a)=>!primaryKeys.has(m.trim().toLowerCase())&&a.findIndex((x)=>x.trim().toLowerCase()===m.trim().toLowerCase())===i); return <View style={[s.sectionCard,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Text style={[typography.caption,{color:colors.text.secondary,fontWeight:'bold',marginBottom:8}]}>PRIMARY MUSCLES</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{primaryMuscles.map((m:string,i:number)=>(<View key={i} style={[s.chip,{backgroundColor:withAlpha(colors.accent.coral,0.15),borderColor:colors.accent.coral}]}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold'}]}>{muscleLabel(m)}</Text></View>))}</View>{secondaryFiltered.length>0 && <><Text style={[typography.caption,{color:colors.text.secondary,fontWeight:'bold',marginTop:18,marginBottom:8}]}>SECONDARY MUSCLES</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{secondaryFiltered.map((m:string,i:number)=>(<View key={i} style={[s.chip,{backgroundColor:withAlpha(colors.accent.cyan,0.15),borderColor:colors.accent.cyan}]}><Text style={[typography.caption,{color:colors.accent.cyan,fontWeight:'bold'}]}>{muscleLabel(m)}</Text></View>))}</View></>}</View>; })()}
                         {activeTab==='tips' && <View style={[s.sectionCard,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><View style={{flexDirection:'row',alignItems:'center',marginBottom:16}}><View style={{width:36,height:36,borderRadius:18,alignItems:'center',justifyContent:'center',backgroundColor:withAlpha(colors.accent.amber,0.15)}}><Ionicons name="bulb" size={20} color={colors.accent.amber} /></View><Text style={[typography.heading,{color:colors.text.primary,marginLeft:12,fontSize:16}]}>{tipsAreGeneral?'Training Tips':"Coach's Tips"}</Text></View>{tips.map((tip,i)=>(<View key={i} style={{flexDirection:'row',gap:10,marginBottom:12}}><View style={{width:6,height:6,borderRadius:3,marginTop:8,backgroundColor:colors.accent.amber}} /><Text style={[typography.body,{color:colors.text.secondary,flex:1,lineHeight:22}]}>{tip}</Text></View>))}</View>}
                         {activeTab==='progress' && (analyticsQuery.isLoading?<View style={[s.sectionCard,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Skeleton width={180} height={18} radius={6} style={{marginBottom:spacing.xl}} /><Skeleton width="100%" height={180} radius={borderRadius.md} /></View>:analyticsQuery.isError?<EmptyState icon="cloud-offline-outline" title="Couldn't load progress" subtitle="We hit a snag fetching your weight progression. Check your connection and try again." actionLabel="Retry" onAction={()=>analyticsQuery.refetch()} />:chartData.length>0?<View style={[s.sectionCard,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold',marginBottom:20}]}>Weight Progression (KG)</Text><LineChart data={chartData} width={width-100} height={180} color={colors.accent.cyan} thickness={3} startFillColor={colors.accent.cyan} startOpacity={0.4} endOpacity={0.1} initialSpacing={20} noOfSections={4} yAxisColor={colors.border.default} xAxisColor={colors.border.default} yAxisTextStyle={{color:colors.text.secondary,fontSize:10}} xAxisLabelTextStyle={{color:colors.text.secondary,fontSize:10}} /></View>:<EmptyState icon="stats-chart-outline" title="No progress yet" subtitle="Log a set of this exercise and your weight progression will start charting here." actionLabel="Log This Exercise" onAction={()=>router.push({pathname:'/training/workout',params:{exercise:exercise.name}})} />)}
                     </View>

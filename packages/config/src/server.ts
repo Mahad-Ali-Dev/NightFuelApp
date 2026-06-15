@@ -106,6 +106,18 @@ export function registerFastifyErrorHandler(fastify: FastifyLike, logger: Logger
             'Unhandled request error',
         );
         const statusCode: number = error.statusCode ?? 500;
+        // Information-disclosure hardening: never echo raw error text (DB/Prisma
+        // internals, stack hints) in a 5xx body. The real error is already logged
+        // above. For 4xx we keep the specific message so validation/auth UX copy
+        // is preserved.
+        if (statusCode >= 500) {
+            reply.code(statusCode).send({
+                error: 'InternalServerError',
+                message: 'An unexpected error occurred',
+                statusCode,
+            });
+            return;
+        }
         reply.code(statusCode).send({
             error: error.name ?? 'InternalServerError',
             message: error.message ?? 'An unexpected error occurred',

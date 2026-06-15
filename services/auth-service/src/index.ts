@@ -14,7 +14,11 @@ import fastifyRateLimit from '@fastify/rate-limit';
 
 const envSchema = z.object({
     AUTH_PORT: z.string().default('3001'),
-    JWT_SECRET: z.string(),
+    // auth-service is the token *issuer*, so it sets the security floor for the
+    // whole platform. A weak/short secret would let every access token be
+    // forged, so we require >=32 chars and fail loudly at boot (via loadConfig)
+    // rather than booting silently on a weak secret.
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     REDIS_URL: z.string().url(),
     // Comma-separated list of allowed web origins. Falls back to localhost dev
     // origins. Never use '*' here — credentials:true forbids a wildcard origin.

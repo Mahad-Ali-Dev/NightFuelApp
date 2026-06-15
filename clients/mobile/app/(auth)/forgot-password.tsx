@@ -82,13 +82,13 @@ export default function ForgotPasswordScreen() {
             >
               <Ionicons name="checkmark-circle" size={48} color={colors.success} />
             </View>
-            <Text style={[styles.successKicker, { color: colors.success }]}>Link sent</Text>
+            <Text style={[styles.successKicker, { color: colors.success }]}>Request received</Text>
             <Text style={[styles.successTitle, { color: colors.text.primary }]}>
-              Check your email
+              Almost there
             </Text>
             <Text style={[styles.successText, { color: colors.text.secondary }]}>
-              We've sent password reset instructions to{' '}
-              <Text style={{ color: colors.text.primary }}>{email}</Text>
+              Password reset by email isn't available just yet. Please contact support and we'll
+              help you reset your password.
             </Text>
             <View
               style={[
@@ -99,9 +99,9 @@ export default function ForgotPasswordScreen() {
                 },
               ]}
             >
-              <Ionicons name="information-circle-outline" size={16} color={colors.text.tertiary} />
+              <Ionicons name="mail-outline" size={16} color={colors.text.tertiary} />
               <Text style={[styles.hintText, { color: colors.text.tertiary }]}>
-                Didn't get it? Check your spam folder.
+                Reach us at support@nightfuel.app
               </Text>
             </View>
             <Button

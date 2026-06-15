@@ -68,6 +68,84 @@ const DEMO_FALLBACK_LC: Record<string, string> = Object.fromEntries(
   Object.entries(DEMO_FALLBACK).map(([name, url]) => [name.toLowerCase(), url]),
 );
 
+// ---------------------------------------------------------------------------
+// In-app demo media (no browser hand-off, no new npm dependency)
+// ---------------------------------------------------------------------------
+//
+// free-exercise-db (MIT, no API key) ships TWO HTTPS frames per exercise —
+// `0.jpg` (start of the movement) and `1.jpg` (end). expo-image (already
+// installed) renders these inline; alternating the two frames on a timer in
+// <ExerciseDemo/> produces a real looping motion demo entirely in-app.
+//
+// NOTE: the raw repo serves static JPG frames, NOT animated GIFs, so we loop a
+// 2-frame sequence rather than relying on a single animated file. Each value
+// below is therefore the ORDERED list of frame URLs for one exercise; the
+// helpers expose both the frame list (`resolveDemoFrames`, preferred by the
+// player) and a single-URL accessor (`resolveDemoGif`, kept for the documented
+// name / any single-image caller).
+//
+// Keyed by the EXACT `LibraryExercise.name` used in DEMO_FALLBACK so the curated
+// YouTube map and the in-app frames line up one-to-one. Every slug below is a
+// verified directory in the free-exercise-db `exercises/` tree.
+const FEDB_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
+
+/** Build the ordered [start, end] HTTPS frame URLs for a free-exercise-db slug. */
+const fedb = (slug: string): readonly string[] => [`${FEDB_BASE}/${slug}/0.jpg`, `${FEDB_BASE}/${slug}/1.jpg`];
+
+/**
+ * In-app looping demo frames keyed by the exact `LibraryExercise.name`.
+ * Each entry is an ordered list of HTTPS frame URLs (start → end of the rep)
+ * that <ExerciseDemo/> cross-fades between to animate the movement.
+ */
+export const DEMO_FRAMES: Record<string, readonly string[]> = {
+  // ── Gym ─────────────────────────────────────────────────────────────────
+  'Barbell Bench Press': fedb('Barbell_Bench_Press_-_Medium_Grip'),
+  'Barbell Deadlift': fedb('Barbell_Deadlift'),
+  'Barbell Back Squat': fedb('Barbell_Full_Squat'),
+  'Overhead Press': fedb('Standing_Military_Press'),
+  'Pull-Up': fedb('Pullups'),
+  'Dumbbell Incline Press': fedb('Incline_Dumbbell_Press'),
+  'Cable Lat Pulldown': fedb('Wide-Grip_Lat_Pulldown'),
+  'Dumbbell Lateral Raise': fedb('Side_Lateral_Raise'),
+  'Barbell Row': fedb('Bent_Over_Barbell_Row'),
+  'Leg Press': fedb('Leg_Press'),
+  'Romanian Deadlift': fedb('Romanian_Deadlift'),
+  'Dumbbell Bicep Curl': fedb('Dumbbell_Bicep_Curl'),
+  'Tricep Pushdown': fedb('Triceps_Pushdown'),
+
+  // ── Home ────────────────────────────────────────────────────────────────
+  'Push-Up': fedb('Pushups'),
+  'Bodyweight Squat': fedb('Bodyweight_Squat'),
+  'Plank': fedb('Plank'),
+  'Lunges': fedb('Bodyweight_Walking_Lunge'),
+  'Pike Push-Up': fedb('Handstand_Push-Ups'),
+  'Mountain Climbers': fedb('Mountain_Climbers'),
+  'Tricep Dips': fedb('Bench_Dips'),
+  'Glute Bridge': fedb('Single_Leg_Glute_Bridge'),
+  'Superman': fedb('Superman'),
+
+  // ── Cardio ──────────────────────────────────────────────────────────────
+  'Box Jump': fedb('Front_Box_Jump'),
+  'Jump Rope': fedb('Rope_Jumping'),
+};
+
+/**
+ * Single-frame demo image keyed by the exact `LibraryExercise.name`. This is the
+ * first (start-of-movement) frame of {@link DEMO_FRAMES}; kept under the
+ * documented `DEMO_GIF` name for callers that want a single still rather than the
+ * animated loop. (Despite the historical name, the source is a static JPG frame.)
+ */
+export const DEMO_GIF: Record<string, string> = Object.fromEntries(
+  Object.entries(DEMO_FRAMES)
+    .map(([name, frames]) => [name, frames[0]] as const)
+    .filter((entry): entry is readonly [string, string] => typeof entry[1] === 'string'),
+);
+
+// Pre-lowercased index for case-insensitive, whitespace-trimmed frame lookups.
+const DEMO_FRAMES_LC: Record<string, readonly string[]> = Object.fromEntries(
+  Object.entries(DEMO_FRAMES).map(([name, frames]) => [name.toLowerCase(), frames]),
+);
+
 /**
  * Body-part-specific coaching cues. Keys are the lowercase ExerciseDB body-part
  * labels surfaced by the API (`exercise.bodyPart`). Each list has 3–5 cues so
@@ -162,6 +240,35 @@ export function resolveDemo(exercise: { name?: string | null; demoUrl?: string |
   const name = exercise.name;
   if (!name) return null;
   return DEMO_FALLBACK_LC[name.trim().toLowerCase()] ?? null;
+}
+
+/**
+ * Resolve the ordered in-app demo frame URLs for an exercise (start → end of the
+ * rep). Prefers a backend-provided `demoGifUrl` if the API ever supplies one
+ * (treated as a single frame), then the curated client map (case-insensitive,
+ * trimmed). Returns null when nothing matches so the caller can fall back to the
+ * static image / "coming soon" state. URLs are always HTTPS (ATS-safe).
+ */
+export function resolveDemoFrames(
+  exercise: { name?: string | null; demoGifUrl?: string | null } | null | undefined,
+): readonly string[] | null {
+  if (!exercise) return null;
+  if (exercise.demoGifUrl) return [exercise.demoGifUrl];
+  const name = exercise.name;
+  if (!name) return null;
+  return DEMO_FRAMES_LC[name.trim().toLowerCase()] ?? null;
+}
+
+/**
+ * Resolve a single in-app demo image URL for an exercise (the first/start frame).
+ * Mirrors {@link resolveDemo}: prefers backend `demoGifUrl`, then the client map.
+ * Returns null when nothing matches.
+ */
+export function resolveDemoGif(
+  exercise: { name?: string | null; demoGifUrl?: string | null } | null | undefined,
+): string | null {
+  const frames = resolveDemoFrames(exercise);
+  return frames && frames.length > 0 ? frames[0] ?? null : null;
 }
 
 /**

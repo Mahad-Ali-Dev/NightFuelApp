@@ -210,10 +210,10 @@ export class AuthService {
      * Request a password reset. Always resolves with the same generic message
      * (never reveals whether the email exists) to prevent user enumeration.
      *
-     * If the account exists, a cryptographically-random token is generated, its
-     * SHA-256 hash is stored with a short TTL, and the raw token is logged at
-     * info level. Email delivery is wired separately — the raw token never
-     * leaves this method otherwise.
+     * If the account exists, a cryptographically-random token is generated and
+     * its SHA-256 hash is stored with a short TTL. The raw token is never
+     * logged (it is a live credential); email delivery is wired separately, so
+     * the raw token does not leave this method yet.
      */
     async forgotPassword(body: ForgotPasswordBody): Promise<{ message: string }> {
         const user = await this.prisma.user.findUnique({
@@ -243,9 +243,11 @@ export class AuthService {
             },
         });
 
-        // TODO(email): replace this log with an email containing the reset link.
+        // TODO(email): send an email containing the reset link (using rawToken).
+        // The raw token is a live credential, so it is never written to logs —
+        // log only a non-sensitive event for observability.
         logger.info(
-            { userId: user.id, resetToken: rawToken, expiresAt: expiresAt.toISOString() },
+            { userId: user.id },
             'Password reset token generated',
         );
 
@@ -300,7 +302,9 @@ export class AuthService {
 
         // The raw refresh token is returned to the client; only its SHA-256
         // hash is persisted, so a DB compromise never yields a usable token.
-        const refreshTokenString = randomUUID();
+        // Use 256 bits of entropy (matching the password-reset token) rather
+        // than a UUIDv4, whose format is predictable and carries fewer bits.
+        const refreshTokenString = randomBytes(32).toString('hex');
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 30); // 30 days
 
