@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
 FROM node:22-alpine AS base
+RUN apk add --no-cache openssl
 RUN npm install -g turbo@2
 
 # ── Pruner stage: extract only decision-engine and its workspace deps ───────
@@ -20,23 +21,16 @@ RUN npm install
 
 # Copy pruned source files
 COPY --from=pruner /app/out/full/ .
+COPY --from=pruner /app/tsconfig.json ./tsconfig.json
 
 # Build TypeScript
 RUN turbo run build --filter=decision-engine
 
 # ── Runner stage ────────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-
-WORKDIR /app
-
-# Copy built output and runtime node_modules
-COPY --from=installer --chown=appuser:appgroup /app/services/decision-engine/dist ./dist
-COPY --from=installer --chown=appuser:appgroup /app/services/decision-engine/node_modules ./node_modules
-COPY --from=installer --chown=appuser:appgroup /app/node_modules ./root_node_modules
-
-USER appuser
-
+RUN apk add --no-cache openssl
+ENV NODE_ENV=production
+COPY --from=installer /app /app
+WORKDIR /app/services/decision-engine
 EXPOSE 3016
-
 CMD ["node", "dist/index.js"]

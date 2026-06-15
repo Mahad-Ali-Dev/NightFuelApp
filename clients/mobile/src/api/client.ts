@@ -93,6 +93,23 @@ function shouldStripV1Prefix(baseURL: string): boolean {
 
 const STRIP_V1_PREFIX = shouldStripV1Prefix(API_BASE_URL);
 
+/**
+ * Resolve a `/v1/...`-style logical path into the exact same absolute URL the
+ * {@link apiClient} interceptor would produce, honoring the gateway prefix
+ * policy (see {@link shouldStripV1Prefix}).
+ *
+ * Use this for requests made *outside* of axios — e.g. the XHR-based SSE
+ * streamer in `api/ai.ts` — so the base URL + `/v1` strip behaviour stays in
+ * one place and never drifts from the interceptor.
+ */
+export function resolveApiUrl(path: string): string {
+  let p = path;
+  if (STRIP_V1_PREFIX && p.startsWith('/v1/')) {
+    p = p.replace(/^\/v1\//, '/');
+  }
+  return `${API_BASE_URL}${p}`;
+}
+
 // ---------------------------------------------------------------------------
 // Secure-store token helpers
 // ---------------------------------------------------------------------------
@@ -200,7 +217,14 @@ apiClient.interceptors.response.use(
       _retry?: boolean;
     };
 
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    // Don't run token-refresh on the auth endpoints themselves: a 401 from
+    // login/register/refresh/forgot-password is a real credential error, not an
+    // expired session. Refreshing + replaying it would wrongly log the user out
+    // (or loop) on a simple wrong-password attempt.
+    const reqUrl = originalRequest.url || '';
+    const isAuthEndpoint = /\/auth\/(login|register|refresh|forgot-password)/.test(reqUrl);
+
+    if (error.response?.status !== 401 || originalRequest._retry || isAuthEndpoint) {
       return Promise.reject(error);
     }
 

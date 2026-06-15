@@ -8,8 +8,14 @@ export interface SubscriptionStatus {
 }
 
 export const getStatus = async (): Promise<SubscriptionStatus> => {
-  const { data } = await apiClient.get<SubscriptionStatus>('/v1/subscriptions/status');
-  return data;
+  // Backend exposes /me (not /status); map its shape onto SubscriptionStatus.
+  const { data } = await apiClient.get<any>('/v1/subscriptions/me');
+  return {
+    tier: data.tier ?? 'FREE',
+    active: data.status === 'ACTIVE',
+    expiresAt: data.currentPeriodEnd ?? undefined,
+    features: data.limits?.analyticsEnabled ? ['analytics'] : [],
+  };
 };
 
 export const upgrade = async (payload: { tier: string; paymentMethodId?: string }) => {

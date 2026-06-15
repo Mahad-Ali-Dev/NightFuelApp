@@ -11,7 +11,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getFastingLogs, startFasting, endFasting, FastingLog } from '@/api/meals';
 import { CircularProgress } from '@/components/ui/CircularProgress';
-import { Button, Card } from '@/components/ui';
+import { Button, Card, Skeleton, EmptyState } from '@/components/ui';
+import { shadows } from '@/theme/shadows';
+import { withAlpha } from '@/theme/utils';
 import { format, differenceInSeconds, parseISO, addHours } from 'date-fns';
 
 const { width } = Dimensions.get('window');
@@ -80,18 +82,35 @@ export default function FastingScreen() {
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Fasting Tracker</Text>
-                <TouchableOpacity style={styles.backBtn}>
-                    <Ionicons name="stats-chart-outline" size={24} color={colors.text.primary} />
-                </TouchableOpacity>
+                <Text style={[typography.h2, { color: colors.text.primary }]}>Fasting</Text>
+                <View style={{ width: 40 }} />
             </View>
 
+            {fastingQuery.isLoading ? (
+                <ScrollView contentContainerStyle={{ padding: 20, alignItems: 'center', paddingBottom: 100 }}>
+                    <Skeleton width={width * 0.75} height={width * 0.75} radius={borderRadius.full} style={{ marginTop: 40 }} />
+                    <View style={styles.infoRow}>
+                        <Skeleton width="48%" height={76} radius={borderRadius.xl} />
+                        <Skeleton width="48%" height={76} radius={borderRadius.xl} />
+                    </View>
+                    <Skeleton width="100%" height={60} radius={borderRadius.xl} style={{ marginTop: 40 }} />
+                    <Skeleton width="100%" height={110} radius={borderRadius.xl} style={{ marginTop: 40 }} />
+                </ScrollView>
+            ) : fastingQuery.isError ? (
+                <EmptyState
+                    icon="cloud-offline-outline"
+                    title="Couldn't load fasting"
+                    subtitle="Something went wrong loading your fasting status. Check your connection and try again."
+                    actionLabel="Try Again"
+                    onAction={() => fastingQuery.refetch()}
+                />
+            ) : (
             <ScrollView contentContainerStyle={{ padding: 20, alignItems: 'center', paddingBottom: 100 }}>
                 {/* Timer Circle */}
-                <View style={styles.timerContainer}>
+                <View style={[styles.timerContainer, activeFast && shadows.glow(colors.accent.cyan)]}>
                     <CircularProgress
                         progress={progress}
                         size={width * 0.75}
@@ -100,14 +119,14 @@ export default function FastingScreen() {
                         trackColor={colors.background.tertiary}
                     />
                     <View style={styles.timerCenter}>
-                        <Text style={[typography.caption, { color: colors.text.tertiary, fontWeight: 'bold' }]}>
+                        <Text style={[typography.overline, { color: colors.text.secondary }]}>
                             {activeFast ? 'ELAPSED TIME' : 'READY TO START'}
                         </Text>
-                        <Text style={[typography.display, { color: colors.text.primary, fontSize: 48, letterSpacing: -1, marginVertical: 8 }]}>
+                        <Text style={[typography.statLarge, { color: colors.text.primary, marginVertical: 8 }]}>
                             {activeFast ? formatTime(elapsed) : '00:00:00'}
                         </Text>
                         {activeFast && (
-                            <Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: 'bold' }]}>
+                            <Text style={[typography.overline, { color: colors.accent.cyan }]}>
                                 {Math.round(progress * 100)}% COMPLETE
                             </Text>
                         )}
@@ -116,36 +135,42 @@ export default function FastingScreen() {
 
                 {/* Info Cards */}
                 <View style={styles.infoRow}>
-                    <View style={[styles.infoCard, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl }]}>
-                        <Text style={[typography.caption, { color: colors.text.tertiary }]}>Target</Text>
-                        <Text style={[typography.heading, { color: colors.text.primary, fontSize: 20 }]}>
+                    <Card variant="glass" style={styles.infoCard}>
+                        <Text style={[typography.overline, { color: colors.text.secondary }]}>Target</Text>
+                        <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: 4 }]}>
                             {activeFast ? activeFast.targetHours : selectedHours}h
                         </Text>
-                    </View>
-                    <View style={[styles.infoCard, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl }]}>
-                        <Text style={[typography.caption, { color: colors.text.tertiary }]}>Ends At</Text>
-                        <Text style={[typography.heading, { color: colors.text.primary, fontSize: 20 }]}>
+                    </Card>
+                    <Card variant="glass" style={styles.infoCard}>
+                        <Text style={[typography.overline, { color: colors.text.secondary }]}>Ends At</Text>
+                        <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: 4 }]}>
                             {activeFast?.startedAt
                                 ? (() => { try { return format(addHours(parseISO(activeFast.startedAt), activeFast.targetHours), 'HH:mm'); } catch { return '--:--'; } })()
                                 : '--:--'}
                         </Text>
-                    </View>
+                    </Card>
                 </View>
 
                 {/* Protocol Selection */}
                 {!activeFast && (
                     <View style={{ width: '100%', marginTop: 32 }}>
-                        <Text style={[typography.caption, { color: colors.text.tertiary, fontWeight: 'bold', marginBottom: 12 }]}>SELECT PROTOCOL</Text>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 12 }]}>SELECT PROTOCOL</Text>
                         <View style={styles.protocolGrid}>
-                            {PROTOCOLS.map((p) => (
+                            {PROTOCOLS.map((p) => {
+                                const active = selectedHours === p.hours;
+                                return (
                                 <TouchableOpacity
                                     key={p.label}
-                                    style={[styles.protocolBtn, { backgroundColor: selectedHours === p.hours ? colors.accent.cyan : colors.background.secondary, borderColor: colors.border.default }]}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected: active }}
+                                    accessibilityLabel={`${p.label} fasting protocol`}
+                                    style={[styles.protocolBtn, { backgroundColor: active ? colors.accent.cyan : colors.background.secondary, borderColor: active ? colors.accent.cyan : colors.border.default }, active && shadows.glow(colors.accent.cyan)]}
                                     onPress={() => setSelectedHours(p.hours)}
                                 >
-                                    <Text style={[typography.subhead, { color: selectedHours === p.hours ? colors.background.primary : colors.text.primary, fontWeight: 'bold' }]}>{p.label}</Text>
+                                    <Text style={[typography.subhead, { color: active ? colors.background.primary : colors.text.primary, fontWeight: 'bold' }]}>{p.label}</Text>
                                 </TouchableOpacity>
-                            ))}
+                                );
+                            })}
                         </View>
                     </View>
                 )}
@@ -160,7 +185,7 @@ export default function FastingScreen() {
                 />
 
                 {/* Tips Card */}
-                <Card style={[styles.tipsCard, { backgroundColor: `${colors.accent.cyan}10`, borderColor: colors.accent.cyan, marginTop: 40 }]}>
+                <Card style={[styles.tipsCard, { backgroundColor: withAlpha(colors.accent.cyan, 0.08), borderColor: withAlpha(colors.accent.cyan, 0.4), marginTop: 40 }]}>
                     <View style={styles.tipsHeader}>
                         <Ionicons name="bulb-outline" size={20} color={colors.accent.cyan} />
                         <Text style={[typography.subhead, { color: colors.accent.cyan, fontWeight: 'bold', marginLeft: 12 }]}>Ria's Fasting Tip</Text>
@@ -170,6 +195,7 @@ export default function FastingScreen() {
                     </Text>
                 </Card>
             </ScrollView>
+            )}
         </View>
     );
 }
@@ -177,11 +203,11 @@ export default function FastingScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
-    backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+    backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1 },
     timerContainer: { marginTop: 40, alignItems: 'center', justifyContent: 'center' },
     timerCenter: { position: 'absolute', alignItems: 'center' },
     infoRow: { flexDirection: 'row', gap: 16, marginTop: 40, width: '100%' },
-    infoCard: { flex: 1, padding: 20, alignItems: 'center' },
+    infoCard: { flex: 1, alignItems: 'center' },
     protocolGrid: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
     protocolBtn: { flex: 1, height: 60, alignItems: 'center', justifyContent: 'center', borderRadius: 16, borderWidth: 1, minWidth: '45%' },
     tipsCard: { padding: 20 },

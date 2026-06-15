@@ -13,7 +13,7 @@ interface FABProps {
   style?: ViewStyle;
 }
 
-export function FAB({
+function FABComponent({
   icon = 'add',
   variant = 'coral',
   size = 56,
@@ -24,8 +24,11 @@ export function FAB({
 
   const gradientColors =
     variant === 'purple'
-      ? [colors.accent.purple, colors.accent.purpleDark] as const
-      : [colors.accent.coral, colors.accent.coralDark] as const;
+      ? colors.gradients.purple
+      : colors.gradients.coral;
+
+  const glowColor =
+    variant === 'purple' ? colors.accent.purple : colors.accent.coral;
 
   return (
     <Pressable
@@ -34,6 +37,7 @@ export function FAB({
         styles.container,
         { width: size, height: size, borderRadius: size / 2 },
         shadows.lg,
+        shadows.glow(glowColor),
         pressed && { transform: [{ scale: 0.92 }] },
         style,
       ]}
@@ -47,6 +51,12 @@ export function FAB({
     </Pressable>
   );
 }
+
+/**
+ * Memoized: `icon`/`variant`/`size` are primitives and `onPress` is stable.
+ * `style` is usually a StyleSheet ref; inline objects simply skip the win.
+ */
+export const FAB = React.memo(FABComponent);
 
 const styles = StyleSheet.create({
   container: {

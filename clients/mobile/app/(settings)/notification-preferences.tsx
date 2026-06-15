@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity,
     ActivityIndicator, Alert,
@@ -14,6 +14,9 @@ import {
     type NotificationPreferences,
 } from '@/api/notifications';
 import { withAlpha } from '@/theme/utils';
+import { colors as palette } from '@/theme/colors';
+import { spacing, borderRadius as br } from '@/theme/spacing';
+import { EmptyState, Skeleton } from '@/components/ui';
 
 // ── Preference Categories ─────────────────────────────────────────────────────
 
@@ -36,7 +39,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Workout Reminders',
         description: 'Get reminded before your scheduled workouts',
         icon: 'barbell-outline',
-        iconColor: '#00D4FF',
+        iconColor: palette.accent.cyan,
         category: 'Training & Health',
     },
     {
@@ -44,7 +47,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Meal & Nutrition',
         description: 'Reminders to log meals and chrono-nutrition tips',
         icon: 'restaurant-outline',
-        iconColor: '#FF6B35',
+        iconColor: palette.accent.coral,
         category: 'Training & Health',
     },
     {
@@ -52,7 +55,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Shift Alerts',
         description: 'Pre-shift prep and circadian rhythm notifications',
         icon: 'time-outline',
-        iconColor: '#A855F7',
+        iconColor: palette.accent.purple,
         category: 'Training & Health',
     },
     {
@@ -60,7 +63,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Sleep Reminders',
         description: 'Wind-down and sleep hygiene reminders',
         icon: 'bed-outline',
-        iconColor: '#6366F1',
+        iconColor: palette.accent.blue,
         category: 'Training & Health',
     },
     {
@@ -68,7 +71,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Plan Ready',
         description: 'Notified when your daily workout or meal plan is ready',
         icon: 'checkmark-circle-outline',
-        iconColor: '#2ECC71',
+        iconColor: palette.accent.emerald,
         category: 'Training & Health',
     },
     {
@@ -76,7 +79,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Adherence Alerts',
         description: 'Gentle nudges when you fall behind your nutrition plan',
         icon: 'alert-circle-outline',
-        iconColor: '#F59E0B',
+        iconColor: palette.accent.amber,
         category: 'Training & Health',
     },
 
@@ -86,7 +89,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Weekly Report',
         description: 'Your weekly performance summary from Coach Ria',
         icon: 'analytics-outline',
-        iconColor: '#2ECC71',
+        iconColor: palette.accent.emerald,
         category: 'Progress & Insights',
     },
     {
@@ -94,7 +97,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Streak Updates',
         description: 'Stay motivated with streak milestones and warnings',
         icon: 'flame-outline',
-        iconColor: '#EF4444',
+        iconColor: palette.accent.red,
         category: 'Progress & Insights',
     },
 
@@ -104,7 +107,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Coach Messages',
         description: 'Messages and check-ins from your AI Coach Ria',
         icon: 'chatbubble-ellipses-outline',
-        iconColor: '#A855F7',
+        iconColor: palette.accent.purple,
         category: 'Coaching',
     },
 ];
@@ -155,20 +158,61 @@ export default function NotificationPreferencesScreen() {
         if (prefs) saveMutation.mutate(prefs);
     };
 
-    // Group items by category
-    const categories = PREFERENCE_ITEMS.reduce<Record<string, PreferenceItem[]>>((acc, item) => {
-        if (!acc[item.category]) acc[item.category] = [];
-        acc[item.category]!.push(item);
-        return acc;
-    }, {});
+    // Group items by category. PREFERENCE_ITEMS is a module-level constant, so
+    // this grouping is computed once instead of on every render.
+    const categories = useMemo(
+        () => PREFERENCE_ITEMS.reduce<Record<string, PreferenceItem[]>>((acc, item) => {
+            if (!acc[item.category]) acc[item.category] = [];
+            acc[item.category]!.push(item);
+            return acc;
+        }, {}),
+        [],
+    );
+
+    // Error (and no cached prefs to fall back on): show a friendly retry state
+    // instead of a spinner that would otherwise hang forever.
+    if (prefsQuery.isError && !prefs) {
+        return (
+            <View style={[styles.container, { backgroundColor: colors.background.primary, paddingTop: insets.top }]}>
+                <Header router={router} colors={colors} typography={typography} hasChanges={false} onSave={handleSave} isSaving={false} />
+                <EmptyState
+                    icon="cloud-offline-outline"
+                    title="Couldn't load preferences"
+                    subtitle="We couldn't fetch your notification settings. Check your connection and try again."
+                    actionLabel="Try Again"
+                    onAction={() => prefsQuery.refetch()}
+                />
+            </View>
+        );
+    }
 
     if (prefsQuery.isLoading || !prefs) {
         return (
             <View style={[styles.container, { backgroundColor: colors.background.primary, paddingTop: insets.top }]}>
                 <Header router={router} colors={colors} typography={typography} hasChanges={false} onSave={handleSave} isSaving={false} />
-                <View style={styles.center}>
-                    <ActivityIndicator size="large" color={colors.accent.coral} />
-                </View>
+                <ScrollView showsVerticalScrollIndicator={false} scrollEnabled={false} contentContainerStyle={{ paddingBottom: 100 }}>
+                    {/* Info banner placeholder */}
+                    <Skeleton width="auto" height={56} radius={br.lg} style={{ marginHorizontal: spacing.xl, marginTop: spacing.lg }} />
+
+                    {/* Two category groups, each with a header + a few rows */}
+                    {[3, 2].map((rowCount, groupIdx) => (
+                        <View key={groupIdx} style={{ marginBottom: 8 }}>
+                            <Skeleton width="40%" height={11} radius={br.sm} style={{ marginHorizontal: spacing.xl, marginTop: spacing['2xl'], marginBottom: spacing.sm }} />
+                            <View style={[styles.section, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                                {Array.from({ length: rowCount }).map((_, idx) => (
+                                    <View key={idx} style={styles.prefRow}>
+                                        <Skeleton width={40} height={40} radius={20} />
+                                        <View style={{ flex: 1, marginHorizontal: 14 }}>
+                                            <Skeleton width="50%" height={16} radius={br.sm} />
+                                            <Skeleton width="80%" height={12} radius={br.sm} style={{ marginTop: 6 }} />
+                                        </View>
+                                        <Skeleton width={44} height={26} radius={br.full} />
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    ))}
+                </ScrollView>
             </View>
         );
     }
@@ -197,7 +241,7 @@ export default function NotificationPreferencesScreen() {
                 {Object.entries(categories).map(([category, items]) => (
                     <View key={category} style={{ marginBottom: 8 }}>
                         <Text style={[typography.caption, {
-                            color: colors.text.tertiary,
+                            color: colors.text.secondary,
                             fontWeight: 'bold',
                             letterSpacing: 1,
                             fontSize: 11,
@@ -220,11 +264,14 @@ export default function NotificationPreferencesScreen() {
                                             <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '600' }]}>
                                                 {item.label}
                                             </Text>
-                                            <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 2, lineHeight: 17 }]}>
+                                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2, lineHeight: 17 }]}>
                                                 {item.description}
                                             </Text>
                                         </View>
                                         <Switch
+                                            accessibilityRole="switch"
+                                            accessibilityLabel={item.label}
+                                            accessibilityState={{ checked: prefs[item.key] as boolean }}
                                             value={prefs[item.key] as boolean}
                                             onValueChange={() => toggle(item.key)}
                                             trackColor={{ false: colors.border.default, true: withAlpha(item.iconColor, 0.4) }}
@@ -240,7 +287,7 @@ export default function NotificationPreferencesScreen() {
 
                 {/* Quiet Hours Section */}
                 <Text style={[typography.caption, {
-                    color: colors.text.tertiary,
+                    color: colors.text.secondary,
                     fontWeight: 'bold',
                     letterSpacing: 1,
                     fontSize: 11,
@@ -254,22 +301,25 @@ export default function NotificationPreferencesScreen() {
                 <View style={[styles.section, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
                     {/* Toggle to show/hide the time pickers */}
                     <View style={styles.prefRow}>
-                        <View style={[styles.iconBox, { backgroundColor: withAlpha('#6366F1', 0.12) }]}>
-                            <Ionicons name="moon-outline" size={20} color="#6366F1" />
+                        <View style={[styles.iconBox, { backgroundColor: withAlpha(palette.accent.blue, 0.12) }]}>
+                            <Ionicons name="moon-outline" size={20} color={palette.accent.blue} />
                         </View>
                         <View style={{ flex: 1, marginHorizontal: 14 }}>
                             <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '600' }]}>
                                 Quiet Hours
                             </Text>
-                            <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 2, lineHeight: 17 }]}>
+                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2, lineHeight: 17 }]}>
                                 Suppress non-critical notifications during sleep hours
                             </Text>
                         </View>
                         <Switch
+                            accessibilityRole="switch"
+                            accessibilityLabel="Quiet Hours"
+                            accessibilityState={{ checked: quietHoursExpanded }}
                             value={quietHoursExpanded}
                             onValueChange={setQuietHoursExpanded}
-                            trackColor={{ false: colors.border.default, true: withAlpha('#6366F1', 0.4) }}
-                            thumbColor={quietHoursExpanded ? '#6366F1' : colors.text.tertiary}
+                            trackColor={{ false: colors.border.default, true: withAlpha(palette.accent.blue, 0.4) }}
+                            thumbColor={quietHoursExpanded ? palette.accent.blue : colors.text.tertiary}
                             ios_backgroundColor={colors.background.tertiary}
                         />
                     </View>
@@ -277,9 +327,9 @@ export default function NotificationPreferencesScreen() {
                     {/* Time range display — shown when quiet hours is toggled on */}
                     {quietHoursExpanded && (
                         <View style={[styles.quietHoursRow, { borderTopColor: colors.border.default }]}>
-                            <TimeDisplay label="FROM" time={prefs.quietHoursStart} colors={colors} typography={typography} iconColor="#6366F1" />
+                            <TimeDisplay label="FROM" time={prefs.quietHoursStart} colors={colors} typography={typography} iconColor={palette.accent.blue} />
                             <Ionicons name="arrow-forward" size={16} color={colors.text.tertiary} />
-                            <TimeDisplay label="TO" time={prefs.quietHoursEnd} colors={colors} typography={typography} iconColor="#6366F1" />
+                            <TimeDisplay label="TO" time={prefs.quietHoursEnd} colors={colors} typography={typography} iconColor={palette.accent.blue} />
                         </View>
                     )}
                 </View>
@@ -287,6 +337,9 @@ export default function NotificationPreferencesScreen() {
                 {/* Master Disable Banner */}
                 <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
                     <TouchableOpacity
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel="Disable All Non-Critical Notifications"
                         style={[styles.disableAllBtn, { borderColor: withAlpha(colors.accent.coral, 0.4), backgroundColor: withAlpha(colors.accent.coral, 0.06) }]}
                         onPress={() => {
                             Alert.alert(
@@ -319,11 +372,14 @@ export default function NotificationPreferencesScreen() {
 
                 {/* System-level notification link */}
                 <TouchableOpacity
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Manage system notification permissions"
                     style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 20 }}
                     onPress={() => Alert.alert('Open Settings', 'Go to Settings → Notifications → NightFuel to manage system-level permissions.')}
                 >
                     <Ionicons name="settings-outline" size={16} color={colors.text.tertiary} />
-                    <Text style={[typography.caption, { color: colors.text.tertiary, marginLeft: 8 }]}>
+                    <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 8 }]}>
                         Manage system notification permissions
                     </Text>
                     <Ionicons name="chevron-forward" size={14} color={colors.text.tertiary} style={{ marginLeft: 4 }} />
@@ -338,15 +394,19 @@ export default function NotificationPreferencesScreen() {
 function Header({ router, colors, typography, hasChanges, onSave, isSaving }: any) {
     return (
         <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
-            <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
+            <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={{ padding: 4 }}>
                 <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
             </TouchableOpacity>
             <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18, fontWeight: '800' }]}>
                 Notification Settings
             </Text>
             <TouchableOpacity
+                activeOpacity={0.85}
                 onPress={onSave}
                 disabled={!hasChanges || isSaving}
+                accessibilityRole="button"
+                accessibilityLabel="Save notification preferences"
+                accessibilityState={{ disabled: !hasChanges || isSaving, busy: isSaving }}
                 style={{ padding: 4 }}
             >
                 {isSaving ? (
@@ -368,7 +428,7 @@ function Header({ router, colors, typography, hasChanges, onSave, isSaving }: an
 function TimeDisplay({ label, time, colors, typography, iconColor }: any) {
     return (
         <View style={{ alignItems: 'center' }}>
-            <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 10, fontWeight: 'bold', marginBottom: 4 }]}>
+            <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10, fontWeight: 'bold', marginBottom: 4 }]}>
                 {label}
             </Text>
             <View style={[styles.timeBox, { backgroundColor: withAlpha(iconColor, 0.1), borderColor: withAlpha(iconColor, 0.3) }]}>
@@ -384,34 +444,33 @@ function TimeDisplay({ label, time, colors, typography, iconColor }: any) {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 14,
+        paddingHorizontal: spacing.xl,
+        paddingVertical: spacing.md,
         borderBottomWidth: 1,
     },
     infoBanner: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        marginHorizontal: 20,
-        marginTop: 16,
-        padding: 14,
-        borderRadius: 12,
+        marginHorizontal: spacing.xl,
+        marginTop: spacing.lg,
+        padding: spacing.lg,
+        borderRadius: 14,
         borderWidth: 1,
     },
     section: {
-        marginHorizontal: 20,
-        borderRadius: 16,
+        marginHorizontal: spacing.xl,
+        borderRadius: 20,
         borderWidth: 1,
         overflow: 'hidden',
     },
     prefRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
+        padding: spacing.lg,
     },
     iconBox: {
         width: 40,

@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
 FROM node:22-alpine AS base
+RUN apk add --no-cache openssl
 RUN npm install -g turbo@2
 
 # ── Pruner stage: extract only user-service and its workspace deps ────────────
@@ -20,6 +21,7 @@ RUN npm install
 
 # Copy pruned source files
 COPY --from=pruner /app/out/full/ .
+COPY --from=pruner /app/tsconfig.json ./tsconfig.json
 
 # Generate Prisma client targeting the user-service schema
 RUN npx --workspace=user-service prisma generate
@@ -29,19 +31,13 @@ RUN turbo run build --filter=user-service
 
 # ── Runner stage ──────────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-
-WORKDIR /app
-
-# Copy built output and runtime node_modules
-COPY --from=installer --chown=appuser:appgroup /app/services/user-service/dist ./dist
-COPY --from=installer --chown=appuser:appgroup /app/services/user-service/node_modules ./node_modules
-COPY --from=installer --chown=appuser:appgroup /app/node_modules ./root_node_modules
-COPY --from=installer --chown=appuser:appgroup /app/services/user-service/prisma ./prisma
-
-USER appuser
-
+RUN apk add --no-cache openssl
+ENV NODE_ENV=production
+COPY --from=installer /app /app
+WORKDIR /app/services/user-service
 EXPOSE 3009
-
-# Run Prisma migrations then start the service
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+# The hand-written migrations are incomplete (they omit columns the schema has,
+# e.g. user_profiles.region), so `migrate deploy` leaves the DB out of sync with
+# the Prisma schema and queries fail with P2022. Sync from the schema instead so a
+# fresh DB gets the full, correct set of columns/tables.
+CMD ["sh", "-c", "npx prisma db push --schema=prisma/schema.prisma --skip-generate --accept-data-loss && node dist/index.js"]

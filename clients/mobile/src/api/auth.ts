@@ -29,8 +29,11 @@ export interface AuthResponse {
   user: {
     id: string;
     email: string;
-    name: string;
+    /** Backend returns `displayName` (not `name`) */
+    displayName: string;
+    name?: string;
     role: string;
+    onboardingCompleted?: boolean;
   };
   accessToken: string;
   refreshToken: string;

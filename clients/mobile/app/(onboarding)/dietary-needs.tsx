@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { shadows } from '@/theme/shadows';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { DietaryPreference, DietMode } from '@/types/enums';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,25 +46,28 @@ export default function NutritionScreen() {
     const isValid = preference && mode;
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
                 <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
                     Your <Text style={{ color: colors.accent.cyan }}>Nutrition</Text>
                 </Text>
+                <Text style={[typography.body, { color: colors.text.secondary, marginBottom: spacing.lg }]}>
+                    Tell us how you eat so every plan respects your preferences and goals.
+                </Text>
 
-                <Text style={[typography.heading, { color: colors.text.primary, marginTop: spacing.md, marginBottom: spacing.md }]}>
+                <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing.md, marginBottom: spacing.md }]}>
                     Dietary Preference
                 </Text>
                 <View style={{ gap: spacing.sm }}>
                     {PREFERENCES.map((d) => {
                         const isSelected = preference === d.value;
                         return (
-                            <TouchableOpacity key={d.value} onPress={() => setPreference(preference === d.value ? null : (d.value as DietaryPreference))} activeOpacity={0.8}>
+                            <TouchableOpacity key={d.value} onPress={() => setPreference(preference === d.value ? null : (d.value as DietaryPreference))} activeOpacity={0.85} accessibilityRole="button" accessibilityState={{ selected: isSelected }} accessibilityLabel={d.label}>
                                 <Card
-                                    variant={isSelected ? 'elevated' : 'default'}
+                                    variant={isSelected ? 'elevated' : 'glass'}
                                     style={[
                                         styles.optionCard,
-                                        isSelected && { borderColor: colors.accent.cyan, borderWidth: 1 }
+                                        isSelected && { borderColor: colors.accent.cyan, borderWidth: 1.5, ...shadows.glow(colors.accent.cyan) }
                                     ]}
                                 >
                                     <Ionicons name={d.icon as any} size={20} color={isSelected ? colors.accent.cyan : colors.text.secondary} />
@@ -77,19 +81,19 @@ export default function NutritionScreen() {
                     })}
                 </View>
 
-                <Text style={[typography.heading, { color: colors.text.primary, marginTop: spacing.xl, marginBottom: spacing.md }]}>
+                <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing.xl, marginBottom: spacing.md }]}>
                     Diet Mode
                 </Text>
                 <View style={{ gap: spacing.sm }}>
                     {MODES.map((m) => {
                         const isSelected = mode === m.value;
                         return (
-                            <TouchableOpacity key={m.value} onPress={() => setMode(mode === m.value ? null : (m.value as DietMode))} activeOpacity={0.8}>
+                            <TouchableOpacity key={m.value} onPress={() => setMode(mode === m.value ? null : (m.value as DietMode))} activeOpacity={0.85} accessibilityRole="button" accessibilityState={{ selected: isSelected }} accessibilityLabel={m.label}>
                                 <Card
-                                    variant={isSelected ? 'elevated' : 'default'}
+                                    variant={isSelected ? 'elevated' : 'glass'}
                                     style={[
                                         styles.optionCard,
-                                        isSelected && { borderColor: colors.accent.cyan, borderWidth: 1 }
+                                        isSelected && { borderColor: colors.accent.cyan, borderWidth: 1.5, ...shadows.glow(colors.accent.cyan) }
                                     ]}
                                 >
                                     <View>
@@ -113,7 +117,7 @@ export default function NutritionScreen() {
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: spacing['2xl'] }]}>
                 <Button
                     title="Continue"
-                    iconRight={<Ionicons name="arrow-forward" size={20} color="#fff" />}
+                    iconRight={<Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
                     onPress={handleNext}
                     disabled={!isValid}
                     fullWidth
@@ -130,7 +134,7 @@ const styles = StyleSheet.create({
     optionCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
+        padding: 18,
     },
     footer: {
         paddingTop: 16,

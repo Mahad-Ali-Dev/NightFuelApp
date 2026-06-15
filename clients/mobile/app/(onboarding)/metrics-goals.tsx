@@ -5,6 +5,7 @@ import { useTheme } from '@/theme';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
+import { shadows } from '@/theme/shadows';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -25,6 +26,28 @@ export default function BiologicalDataScreen() {
     const [height, setHeight] = useState(data.heightCm?.toString() || '');
     const [sex, setSex] = useState(data.biologicalSex);
 
+    const isValidDob = (value: string): boolean => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+        const parsed = new Date(`${value}T00:00:00`);
+        // Reject impossible dates (e.g. 2020-13-40 -> NaN, 2021-02-29 -> rolls over).
+        if (Number.isNaN(parsed.getTime())) return false;
+        if (value !== parsed.toISOString().slice(0, 10)) return false;
+        return parsed.getTime() < Date.now();
+    };
+
+    const weightNum = parseFloat(weight);
+    const heightNum = parseFloat(height);
+
+    const dobError = dob.length > 0 && !isValidDob(dob)
+        ? 'Enter a valid past date as YYYY-MM-DD'
+        : undefined;
+    const weightError = weight.length > 0 && !(weightNum > 0)
+        ? 'Enter a weight greater than 0'
+        : undefined;
+    const heightError = height.length > 0 && !(heightNum > 0)
+        ? 'Enter a height greater than 0'
+        : undefined;
+
     const handleNext = () => {
         updateData({
             dateOfBirth: dob,
@@ -35,11 +58,12 @@ export default function BiologicalDataScreen() {
         router.push('/(onboarding)/shift-type');
     };
 
-    const isValid = dob && weight && height && sex;
+    const isValid =
+        isValidDob(dob) && weightNum > 0 && heightNum > 0 && !!sex;
 
     return (
-        <View style={styles.container}>
-            <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
+        <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing['2xl'] }}>
                 <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
                     Your <Text style={{ color: colors.accent.cyan }}>Biological Profile</Text>
                 </Text>
@@ -53,6 +77,7 @@ export default function BiologicalDataScreen() {
                     value={dob}
                     onChangeText={setDob}
                     keyboardType="numeric"
+                    error={dobError}
                 />
 
                 <View style={{ height: spacing.md }} />
@@ -65,6 +90,7 @@ export default function BiologicalDataScreen() {
                             value={weight}
                             onChangeText={setWeight}
                             keyboardType="numeric"
+                            error={weightError}
                         />
                     </View>
                     <View style={{ width: spacing.md }} />
@@ -75,12 +101,13 @@ export default function BiologicalDataScreen() {
                             value={height}
                             onChangeText={setHeight}
                             keyboardType="numeric"
+                            error={heightError}
                         />
                     </View>
                 </View>
 
                 <View style={{ height: spacing.xl }} />
-                <Text style={[typography.heading, { color: colors.text.primary, marginBottom: spacing.md }]}>
+                <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.md }]}>
                     Biological Sex
                 </Text>
 
@@ -88,12 +115,12 @@ export default function BiologicalDataScreen() {
                     {SEX_OPTIONS.map((s) => {
                         const isSelected = sex === s.value;
                         return (
-                            <TouchableOpacity key={s.value} onPress={() => setSex(sex === s.value ? null : (s.value as any))} activeOpacity={0.8}>
+                            <TouchableOpacity key={s.value} onPress={() => setSex(sex === s.value ? null : (s.value as any))} activeOpacity={0.85} accessibilityRole="button" accessibilityState={{ selected: isSelected }} accessibilityLabel={s.label}>
                                 <Card
-                                    variant={isSelected ? 'elevated' : 'default'}
+                                    variant={isSelected ? 'elevated' : 'glass'}
                                     style={[
                                         styles.optionCard,
-                                        isSelected && { borderColor: colors.accent.cyan, borderWidth: 1 }
+                                        isSelected && { borderColor: colors.accent.cyan, borderWidth: 1.5, ...shadows.glow(colors.accent.cyan) }
                                     ]}
                                 >
                                     <Ionicons
@@ -118,7 +145,7 @@ export default function BiologicalDataScreen() {
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: spacing['2xl'] }]}>
                 <Button
                     title="Continue"
-                    iconRight={<Ionicons name="arrow-forward" size={20} color="#fff" />}
+                    iconRight={<Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
                     onPress={handleNext}
                     disabled={!isValid}
                     fullWidth
@@ -138,7 +165,7 @@ const styles = StyleSheet.create({
     optionCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 16,
+        padding: 18,
     },
     footer: {
         paddingTop: 16,

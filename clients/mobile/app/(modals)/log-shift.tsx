@@ -8,6 +8,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { create as createShift } from '@/api/shifts';
 import { Button } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
+import { shadows } from '@/theme/shadows';
+import { typography as themeTypography } from '@/theme/typography';
 import { format } from 'date-fns';
 import { getErrorMessage } from '@/utils/validation';
 
@@ -72,11 +74,11 @@ export default function LogShiftModal() {
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border.default, backgroundColor: colors.background.secondary }]}>
-                <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Ionicons name="close" size={28} color={colors.text.primary} />
                 </TouchableOpacity>
                 <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Log Shift</Text>
-                <TouchableOpacity onPress={handleSave} disabled={mutation.isPending}>
+                <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Save shift" accessibilityState={{ disabled: mutation.isPending }} onPress={handleSave} disabled={mutation.isPending}>
                     {mutation.isPending ? (
                         <ActivityIndicator size="small" color={colors.accent.cyan} />
                     ) : (
@@ -142,12 +144,17 @@ export default function LogShiftModal() {
                             return (
                                 <TouchableOpacity
                                     key={type.value}
+                                    activeOpacity={0.85}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={type.label}
+                                    accessibilityState={{ selected }}
                                     style={[
                                         styles.typeBtn,
                                         {
                                             backgroundColor: selected ? withAlpha(colors.accent.cyan, 0.2) : colors.background.secondary,
                                             borderColor: selected ? colors.accent.cyan : colors.border.default,
-                                        }
+                                        },
+                                        selected && shadows.glow(colors.accent.cyan),
                                     ]}
                                     onPress={() => setShiftType(type.value)}
                                 >
@@ -167,7 +174,7 @@ export default function LogShiftModal() {
                             value={isDayOff}
                             onValueChange={setIsDayOff}
                             trackColor={{ false: colors.border.default, true: colors.accent.cyan }}
-                            thumbColor="#fff"
+                            thumbColor={colors.text.primary}
                         />
                     </View>
 
@@ -223,7 +230,7 @@ const styles = StyleSheet.create({
     textInput: {
         flex: 1,
         marginLeft: 8,
-        fontFamily: 'Inter',
+        fontFamily: themeTypography.body.fontFamily,
         fontSize: 16,
         paddingVertical: 10,
     },

@@ -1,7 +1,7 @@
 import React from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Dimensions,
+    Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -10,12 +10,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getToday, getWeeklyStats, TodayProgress } from '@/api/progress';
 import { CircularProgress } from '@/components/ui/CircularProgress';
+import { Card } from '@/components/ui/Card';
+import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
+import { withAlpha } from '@/theme/utils';
+import { typography as typo } from '@/theme/typography';
 
 const { width } = Dimensions.get('window');
 
 export default function DailyReportScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -50,32 +54,64 @@ export default function DailyReportScreen() {
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" activeOpacity={0.85} onPress={() => router.back()} style={[styles.headerBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 20 }]}>Performance Hub</Text>
-                <TouchableOpacity onPress={() => queryClient.invalidateQueries({ queryKey: ['today-progress'] })}>
-                    <Ionicons name="refresh" size={22} color={colors.text.secondary} />
+                <Text style={[typography.h3, { color: colors.text.primary }]}>Performance Hub</Text>
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Refresh" activeOpacity={0.85} onPress={() => queryClient.invalidateQueries({ queryKey: ['today-progress'] })} style={[styles.headerBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    <Ionicons name="refresh" size={20} color={colors.text.secondary} />
                 </TouchableOpacity>
             </View>
 
+            {todayQuery.isLoading ? (
+                <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
+                    <View style={{ padding: spacing.xl }}>
+                        <SkeletonCard height={148} radius={borderRadius['2xl']} />
+                    </View>
+                    <View style={styles.gridContainer}>
+                        {Array.from({ length: 4 }).map((_, i) => (
+                            <SkeletonCard key={i} height={126} radius={borderRadius.xl} style={{ width: (width - 52) / 2, marginBottom: 0 }} />
+                        ))}
+                    </View>
+                    <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing['2xl'] }}>
+                        <Skeleton width={140} height={22} style={{ marginBottom: spacing.md }} />
+                        <SkeletonCard height={150} radius={borderRadius.xl} />
+                    </View>
+                    <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing['2xl'] }}>
+                        <Skeleton width={140} height={22} style={{ marginBottom: spacing.md }} />
+                        {Array.from({ length: 3 }).map((_, i) => (
+                            <SkeletonCard key={i} height={54} radius={borderRadius.lg} style={{ marginBottom: spacing.sm + 2 }} />
+                        ))}
+                    </View>
+                </ScrollView>
+            ) : todayQuery.isError ? (
+                <EmptyState
+                    icon="cloud-offline-outline"
+                    title="Couldn't load your hub"
+                    subtitle="Something went wrong fetching today's performance. Check your connection and try again."
+                    actionLabel="Try Again"
+                    onAction={() => todayQuery.refetch()}
+                />
+            ) : (
             <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
                 {/* Score Card */}
                 <View style={{ padding: spacing.xl }}>
                     <LinearGradient
-                        colors={[`${scoreColor}20`, `${colors.background.secondary}`]}
-                        style={[styles.scoreCard, { borderRadius: borderRadius['2xl'], borderColor: scoreColor, borderWidth: 1 }]}
+                        colors={[withAlpha(scoreColor, 0.18), colors.background.secondary]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={[styles.scoreCard, { borderRadius: borderRadius['2xl'], borderColor: withAlpha(scoreColor, 0.4), borderWidth: 1 }, shadows.glow(scoreColor)]}
                     >
                         <View style={styles.scoreRow}>
                             <View style={styles.scoreRing}>
                                 <CircularProgress progress={score / 100} size={100} strokeWidth={8} color={scoreColor} trackColor={colors.border.default} />
                                 <View style={styles.ringInner}>
-                                    <Text style={[typography.display, { color: colors.text.primary, fontSize: 32 }]}>{score}</Text>
-                                    <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 10 }]}>PERF SCORE</Text>
+                                    <Text style={[styles.scoreNum, { color: colors.text.primary }]}>{score}</Text>
+                                    <Text style={[typography.overline, { color: colors.text.secondary, fontSize: 9 }]}>PERF SCORE</Text>
                                 </View>
                             </View>
                             <View style={styles.scoreInfo}>
-                                <Text style={[typography.heading, { color: colors.text.primary }]}>Great Job!</Text>
+                                <Text style={[typography.h3, { color: colors.text.primary }]}>Great Job!</Text>
                                 <Text style={[typography.body, { color: colors.text.secondary, marginTop: 4 }]}>
                                     Your performance score is {score}% today. Keep up the high intensity!
                                 </Text>
@@ -89,22 +125,25 @@ export default function DailyReportScreen() {
                     {NAV_ITEMS.map((item) => (
                         <TouchableOpacity
                             key={item.label}
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityLabel={item.label}
                             style={[styles.gridCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl }]}
                             onPress={() => router.push(item.route as any)}
                         >
-                            <View style={[styles.iconBox, { backgroundColor: `${item.color}15` }]}>
+                            <View style={[styles.iconBox, { backgroundColor: withAlpha(item.color, 0.14), borderColor: withAlpha(item.color, 0.28), borderWidth: 1 }]}>
                                 <Ionicons name={item.icon as any} size={24} color={item.color} />
                             </View>
-                            <Text style={[typography.subhead, { color: colors.text.primary, marginTop: 12, fontWeight: '700' }]}>{item.label}</Text>
-                            <Text style={[typography.caption, { color: item.color, fontWeight: '800', marginTop: 4 }]}>{item.value}</Text>
+                            <Text style={[typography.subhead, { color: colors.text.primary, marginTop: 14, fontWeight: '700' }]}>{item.label}</Text>
+                            <Text style={[typography.captionMedium, { color: item.color, marginTop: 4 }]}>{item.value}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>
 
                 {/* Weekly Recap */}
                 <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing['2xl'] }}>
-                    <Text style={[typography.heading, { color: colors.text.primary, marginBottom: spacing.md }]}>Weekly Recap</Text>
-                    <View style={[styles.recapCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl }]}>
+                    <Text style={[typography.h3, { color: colors.text.primary, marginBottom: spacing.md }]}>Weekly Recap</Text>
+                    <Card variant="glass" style={styles.recapCard}>
                         <View style={styles.recapRow}>
                             <RecapItem label="Avg Score" value={`${weekly?.avgScore || 0}%`} icon="analytics" color={colors.accent.purple} />
                             <RecapItem label="Streak" value={`${weekly?.streakDays || 0} Days`} icon="flash" color={colors.accent.coral} />
@@ -114,12 +153,12 @@ export default function DailyReportScreen() {
                             <RecapItem label="Water" value={`${(weekly?.avgHydration || 0) / 1000}L`} icon="water" color={colors.accent.cyan} />
                             <RecapItem label="Logged" value={`${weekly?.daysLogged || 0}/7`} icon="checkmark-circle" color={colors.success} />
                         </View>
-                    </View>
+                    </Card>
                 </View>
 
                 {/* Daily Checklist */}
                 <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing['2xl'] }}>
-                    <Text style={[typography.heading, { color: colors.text.primary, marginBottom: spacing.md }]}>Optimizations</Text>
+                    <Text style={[typography.h3, { color: colors.text.primary, marginBottom: spacing.md }]}>Optimizations</Text>
                     <View style={styles.checklist}>
                         <CheckItem label="Protein Target Met" checked={!!progress && (progress.proteinActual ?? 0) >= 140} color={colors.success} />
                         <CheckItem label="Hydration Goal" checked={!!progress && (progress.hydrationActual ?? 0) >= 2500} color={colors.accent.cyan} />
@@ -127,6 +166,7 @@ export default function DailyReportScreen() {
                     </View>
                 </View>
             </ScrollView>
+            )}
         </View>
     );
 }
@@ -135,12 +175,12 @@ function RecapItem({ label, value, icon, color }: any) {
     const { colors, typography } = useTheme();
     return (
         <View style={styles.recapItem}>
-            <View style={[styles.recapIcon, { backgroundColor: `${color}15` }]}>
+            <View style={[styles.recapIcon, { backgroundColor: withAlpha(color, 0.14) }]}>
                 <Ionicons name={icon} size={18} color={color} />
             </View>
             <View style={{ marginLeft: 12 }}>
-                <Text style={[typography.caption, { color: colors.text.tertiary }]}>{label}</Text>
-                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>{value}</Text>
+                <Text style={[typography.caption, { color: colors.text.secondary }]}>{label}</Text>
+                <Text style={[styles.recapValue, { color: colors.text.primary }]}>{value}</Text>
             </View>
         </View>
     );
@@ -159,6 +199,9 @@ function CheckItem({ label, checked, color }: any) {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
+    headerBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    scoreNum: { fontFamily: typo.statMedium.fontFamily, fontSize: 32, lineHeight: 38 },
+    recapValue: { fontFamily: typo.statTiny.fontFamily, fontSize: 16, marginTop: 1 },
     scoreCard: { padding: 24 },
     scoreRow: { flexDirection: 'row', alignItems: 'center' },
     scoreRing: { width: 100, height: 100, alignItems: 'center', justifyContent: 'center' },
@@ -167,7 +210,7 @@ const styles = StyleSheet.create({
     gridContainer: { flexDirection: 'row', paddingHorizontal: 20, flexWrap: 'wrap', gap: 12 },
     gridCard: { width: (width - 52) / 2, padding: 20, borderWidth: 1 },
     iconBox: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-    recapCard: { padding: 20, borderWidth: 1 },
+    recapCard: { padding: 20 },
     recapRow: { flexDirection: 'row', justifyContent: 'space-between' },
     recapItem: { flex: 1, flexDirection: 'row', alignItems: 'center' },
     recapIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },

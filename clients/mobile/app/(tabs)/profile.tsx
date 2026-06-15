@@ -9,7 +9,7 @@
 import React from 'react';
 import {
     View, Text, StyleSheet, ScrollView,
-    TouchableOpacity, Dimensions, ActivityIndicator,
+    TouchableOpacity, Dimensions,
 } from 'react-native';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,25 +23,13 @@ import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { colors as C } from '@/theme/colors';
 import { withAlpha } from '@/theme/utils';
+import { Skeleton } from '@/components/ui';
 import { TAB_BAR_H } from './_layout';
 
 const { width } = Dimensions.get('window');
 const H_PAD = 20;
 const CARD_GAP = 12;
 const COL_W = (width - H_PAD * 2 - CARD_GAP) / 2;
-
-// ─── Feature hub items ────────────────────────────────────────────────────────
-
-const HUB_FEATURES = [
-    { id: 'shifts', label: 'Shifts', icon: 'calendar', color: '#FFB300', route: '/(shifts)' },
-    { id: 'exercises', label: 'Exercises', icon: 'barbell', color: '#FF4444', route: '/(exercises)' },
-    { id: 'sleep', label: 'Sleep Tracker', icon: 'moon', color: '#7C4DFF', route: '/(modals)/log-sleep' },
-    { id: 'community', label: 'Community', icon: 'people', color: '#4FC3F7', route: '/(community)' },
-    { id: 'coaches', label: 'Coaches', icon: 'person-circle', color: '#FF6B35', route: '/coaches/browse' },
-    { id: 'circadian', label: 'Circadian', icon: 'radio-button-on', color: '#B47CFF', route: '/(tabs)/circadian' },
-    { id: 'plan', label: "Today's Plan", icon: 'flash', color: '#00D4AA', route: '/(tabs)/circadian' },
-    { id: 'settings', label: 'Settings', icon: 'settings-outline', color: '#8B949E', route: '/(settings)' },
-] as const;
 
 const ACHIEVEMENTS = [
     { title: 'Early Riser', desc: '30 Day Streak', icon: 'trophy', color: '#FFB300' },
@@ -52,7 +40,7 @@ const ACHIEVEMENTS = [
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
-    const { colors, typography, borderRadius } = useTheme();
+    const { colors, typography, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const { user, logout } = useAuth();
     const router = useRouter();
@@ -66,11 +54,7 @@ export default function ProfileScreen() {
     const isAdmin = user?.role === 'admin' || (user?.role as any) === 'ADMIN';
 
     if (isLoading) {
-        return (
-            <View style={[s.root, { backgroundColor: colors.background.primary, justifyContent: 'center', alignItems: 'center' }]}>
-                <ActivityIndicator size="large" color={colors.accent.purple} />
-            </View>
-        );
+        return <ProfileSkeleton />;
     }
 
     return (
@@ -83,21 +67,24 @@ export default function ProfileScreen() {
                 {/* ══ COVER + HEADER ══════════════════════════════════════════ */}
                 <View style={[s.cover, { paddingTop: insets.top }]}>
                     <LinearGradient
-                        colors={[C.background.quaternary, colors.background.primary]}
+                        colors={[withAlpha(C.accent.coral, 0.18), withAlpha(C.accent.pink, 0.06), colors.background.primary]}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                         style={StyleSheet.absoluteFillObject}
                     />
                     <View style={[s.navHeader, { marginTop: insets.top > 0 ? 0 : 8 }]}>
-                        <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>
+                        <Text style={[typography.h1, { color: colors.text.primary }]}>
                             Profile
                         </Text>
                         <View style={s.navRight}>
-                            <TouchableOpacity
+                            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Settings"
+                                activeOpacity={0.85}
                                 style={[s.iconBtn, { backgroundColor: withAlpha(colors.text.primary, 0.06) }]}
                                 onPress={() => router.push('/(settings)' as any)}
                             >
                                 <Ionicons name="settings-outline" size={20} color={colors.text.primary} />
                             </TouchableOpacity>
-                            <TouchableOpacity
+                            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Log out"
+                                activeOpacity={0.85}
                                 style={[s.iconBtn, { backgroundColor: withAlpha(C.error, 0.10) }]}
                                 onPress={logout}
                             >
@@ -108,10 +95,10 @@ export default function ProfileScreen() {
                 </View>
 
                 {/* ══ AVATAR ══════════════════════════════════════════════════ */}
-                <View style={s.avatarWrap}>
-                    <View style={[s.avatarRing, { backgroundColor: colors.background.primary, borderColor: colors.accent.cyan }]}>
+                <View style={[s.avatarWrap, shadows.glow(colors.accent.coral)]}>
+                    <View style={[s.avatarRing, { backgroundColor: colors.background.primary, borderColor: colors.accent.coral }]}>
                         {(profile as any)?.avatarUrl ? (
-                            <Image source={{ uri: (profile as any).avatarUrl }} style={s.avatar} />
+                            <Image source={{ uri: (profile as any).avatarUrl }} style={s.avatar} cachePolicy="memory-disk" transition={200} />
                         ) : (
                             <View style={[s.avatar, { backgroundColor: colors.background.tertiary, alignItems: 'center', justifyContent: 'center' }]}>
                                 <Ionicons name="person" size={56} color={colors.text.tertiary} />
@@ -123,14 +110,14 @@ export default function ProfileScreen() {
 
                 <View style={s.details}>
                     {/* Name + title */}
-                    <Text style={[typography.display, { color: colors.text.primary, fontSize: 26, textAlign: 'center' }]}>
+                    <Text style={[typography.h1, { color: colors.text.primary, textAlign: 'center' }]}>
                         {(profile as any)?.displayName ?? user?.name}
                     </Text>
                     <Text style={[typography.body, { color: colors.text.secondary, marginTop: 4, textAlign: 'center' }]}>
                         {(profile as any)?.occupation ?? 'Member'} · Level {Math.floor(((stats?.daysLogged ?? 0)) / 7) + 1}
                     </Text>
                     {!!(profile as any)?.aboutMe && (
-                        <Text style={[typography.body, { color: colors.text.tertiary, textAlign: 'center', marginTop: 10, paddingHorizontal: 20 }]}>
+                        <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: 10, paddingHorizontal: 20 }]}>
                             {(profile as any).aboutMe}
                         </Text>
                     )}
@@ -138,15 +125,27 @@ export default function ProfileScreen() {
                     {/* Action buttons */}
                     <View style={s.actionRow}>
                         <TouchableOpacity
-                            style={[s.btnPrimary, { backgroundColor: colors.accent.purple, borderRadius: borderRadius.xl }]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Edit Profile"
+                            style={[s.btnPrimaryWrap, { borderRadius: borderRadius.xl }, shadows.glow(colors.accent.coral)]}
                             onPress={() => router.push('/(tabs)/profile/edit' as any)}
+                            activeOpacity={0.9}
                         >
-                            <Ionicons name="create-outline" size={17} color="#fff" />
-                            <Text style={[s.btnTxt, { color: '#fff' }]}>Edit Profile</Text>
+                            <LinearGradient
+                                colors={colors.gradients.coral}
+                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                style={[s.btnPrimary, { borderRadius: borderRadius.xl }]}
+                            >
+                                <Ionicons name="create-outline" size={17} color={colors.text.primary} />
+                                <Text style={[s.btnTxt, { color: colors.text.primary }]}>Edit Profile</Text>
+                            </LinearGradient>
                         </TouchableOpacity>
                         <TouchableOpacity
+                            accessibilityRole="button"
+                            accessibilityLabel="Preferences"
                             style={[s.btnSecondary, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl }]}
                             onPress={() => router.push('/(tabs)/profile/preferences' as any)}
+                            activeOpacity={0.85}
                         >
                             <Ionicons name="options-outline" size={17} color={colors.text.primary} />
                             <Text style={[s.btnTxt, { color: colors.text.primary }]}>Preferences</Text>
@@ -155,8 +154,11 @@ export default function ProfileScreen() {
 
                     {isAdmin && (
                         <TouchableOpacity
+                            accessibilityRole="button"
+                            accessibilityLabel="Admin Dashboard"
                             style={[s.adminBtn, { backgroundColor: C.error, borderRadius: borderRadius.xl }]}
                             onPress={() => router.push('/(admin)' as any)}
+                            activeOpacity={0.85}
                         >
                             <Ionicons name="shield" size={17} color="#fff" />
                             <Text style={[s.btnTxt, { color: '#fff' }]}>Admin Dashboard</Text>
@@ -174,24 +176,27 @@ export default function ProfileScreen() {
                     <View style={[s.circCard, { backgroundColor: colors.background.secondary, borderColor: withAlpha(colors.text.primary, 0.07) }]}>
                         <View style={s.circHeader}>
                             <Ionicons name="sunny-outline" size={18} color={C.accent.amber} />
-                            <Text style={[s.circLabel, { color: colors.text.tertiary }]}>CIRCADIAN PHASE</Text>
+                            <Text style={[s.circLabel, { color: colors.text.secondary }]}>CIRCADIAN PHASE</Text>
                         </View>
-                        <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18, marginTop: 10 }]}>
+                        <Text style={[typography.h3, { color: colors.text.primary, marginTop: 10 }]}>
                             {(status as any)?.circadianPhase ?? '—'}
                         </Text>
-                        <Text style={[typography.body, { color: colors.text.tertiary, marginTop: 4 }]}>
+                        <Text style={[typography.body, { color: colors.text.secondary, marginTop: 4 }]}>
                             Your metabolic window is currently optimised for activity.
                         </Text>
                         <TouchableOpacity
+                            accessibilityRole="button"
+                            accessibilityLabel="View full schedule"
                             style={[s.circBtn, { backgroundColor: withAlpha(C.accent.amber, 0.12), borderColor: withAlpha(C.accent.amber, 0.25) }]}
                             onPress={() => router.push('/(tabs)/circadian' as any)}
+                            activeOpacity={0.85}
                         >
                             <Text style={[s.circBtnTxt, { color: C.accent.amber }]}>View Full Schedule →</Text>
                         </TouchableOpacity>
                     </View>
 
                     {/* Achievements */}
-                    <Text style={[s.sectionLbl, { color: colors.text.tertiary }]}>ACHIEVEMENTS</Text>
+                    <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>ACHIEVEMENTS</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                         {ACHIEVEMENTS.map((ach, i) => (
                             <View key={i} style={[s.achCard, { backgroundColor: colors.background.secondary, borderColor: withAlpha(colors.text.primary, 0.06) }]}>
@@ -199,7 +204,7 @@ export default function ProfileScreen() {
                                     <Ionicons name={ach.icon as any} size={24} color={ach.color} />
                                 </View>
                                 <Text style={[s.achTitle, { color: colors.text.primary }]}>{ach.title}</Text>
-                                <Text style={[s.achDesc, { color: colors.text.tertiary }]}>{ach.desc}</Text>
+                                <Text style={[s.achDesc, { color: colors.text.secondary }]}>{ach.desc}</Text>
                             </View>
                         ))}
                     </ScrollView>
@@ -209,8 +214,11 @@ export default function ProfileScreen() {
                     {/* Coach Hub button (coach users only) */}
                     {isCoach && (
                         <TouchableOpacity
+                            accessibilityRole="button"
+                            accessibilityLabel="Open Coach Hub"
                             style={[s.coachBtn, { backgroundColor: withAlpha(colors.accent.purple, 0.12), borderColor: withAlpha(colors.accent.purple, 0.3) }]}
                             onPress={() => router.push('/(coach)/dashboard' as any)}
+                            activeOpacity={0.85}
                         >
                             <Ionicons name="people" size={20} color={colors.accent.purple} />
                             <Text style={[s.coachBtnTxt, { color: colors.accent.purple }]}>Open Coach Hub</Text>
@@ -226,10 +234,71 @@ export default function ProfileScreen() {
 // ─── StatPill sub-component ───────────────────────────────────────────────────
 
 function StatPill({ label, value, color, colors }: { label: string; value: string; color: string; colors: any }) {
+    const { typography } = useTheme();
     return (
         <View style={[s.statPill, { backgroundColor: colors.background.secondary, borderColor: withAlpha(colors.text.primary, 0.06) }]}>
-            <Text style={[s.statValue, { color }]}>{value}</Text>
-            <Text style={[s.statLabel, { color: colors.text.tertiary }]}>{label}</Text>
+            <Text style={[typography.statSmall, s.statValue, { color }]}>{value}</Text>
+            <Text style={[s.statLabel, { color: colors.text.secondary }]}>{label}</Text>
+        </View>
+    );
+}
+
+// ─── Loading skeleton (mirrors the profile layout) ────────────────────────────
+
+function ProfileSkeleton() {
+    const { colors, spacing, borderRadius } = useTheme();
+    const insets = useSafeAreaInsets();
+    return (
+        <View style={[s.root, { backgroundColor: colors.background.primary }]}>
+            {/* Cover gradient wash */}
+            <View style={[s.cover, { paddingTop: insets.top }]}>
+                <LinearGradient
+                    colors={[withAlpha(C.accent.coral, 0.18), withAlpha(C.accent.pink, 0.06), colors.background.primary]}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFillObject}
+                />
+                <View style={[s.navHeader, { marginTop: insets.top > 0 ? 0 : 8 }]}>
+                    <Skeleton width={120} height={28} radius={borderRadius.md} />
+                    <View style={s.navRight}>
+                        <Skeleton width={38} height={38} radius={19} />
+                        <Skeleton width={38} height={38} radius={19} />
+                    </View>
+                </View>
+            </View>
+
+            {/* Avatar */}
+            <View style={[s.avatarWrap, { marginBottom: 16 }]}>
+                <Skeleton width={110} height={110} radius={55} />
+            </View>
+
+            <View style={s.details}>
+                <Skeleton width={180} height={28} radius={borderRadius.md} style={{ marginBottom: spacing.sm }} />
+                <Skeleton width={140} height={16} radius={borderRadius.sm} />
+
+                {/* Action buttons */}
+                <View style={s.actionRow}>
+                    <Skeleton width="48%" height={48} radius={borderRadius.xl} />
+                    <Skeleton width="48%" height={48} radius={borderRadius.xl} />
+                </View>
+
+                {/* Stat pills */}
+                <View style={s.statsRow}>
+                    <Skeleton width="31%" height={72} radius={borderRadius.xl} />
+                    <Skeleton width="31%" height={72} radius={borderRadius.xl} />
+                    <Skeleton width="31%" height={72} radius={borderRadius.xl} />
+                </View>
+
+                {/* Circadian card */}
+                <Skeleton width="100%" height={170} radius={borderRadius['2xl']} style={{ marginBottom: spacing['3xl'] }} />
+
+                {/* Achievements row */}
+                <Skeleton width={140} height={14} radius={borderRadius.sm} style={{ alignSelf: 'flex-start', marginBottom: spacing.lg }} />
+                <View style={{ flexDirection: 'row', gap: spacing.md, alignSelf: 'flex-start' }}>
+                    <Skeleton width={124} height={120} radius={borderRadius.xl} />
+                    <Skeleton width={124} height={120} radius={borderRadius.xl} />
+                    <Skeleton width={124} height={120} radius={borderRadius.xl} />
+                </View>
+            </View>
         </View>
     );
 }
@@ -254,38 +323,33 @@ const s = StyleSheet.create({
     // Details
     details: { paddingHorizontal: H_PAD, alignItems: 'center' },
     actionRow: { flexDirection: 'row', width: '100%', gap: CARD_GAP, marginTop: 24, marginBottom: 24 },
-    btnPrimary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 13 },
-    btnSecondary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 13, borderWidth: 1 },
+    btnPrimaryWrap: { flex: 1, overflow: 'hidden' },
+    btnPrimary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14 },
+    btnSecondary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderWidth: 1 },
     btnTxt: { fontSize: 14, fontWeight: '700' },
     adminBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', paddingVertical: 13, marginBottom: 24 },
 
     // Stats
-    statsRow: { flexDirection: 'row', width: '100%', gap: CARD_GAP, marginBottom: 20 },
-    statPill: { flex: 1, paddingVertical: 14, alignItems: 'center', borderRadius: 18, borderWidth: 1 },
-    statValue: { fontSize: 20, fontWeight: '900' },
-    statLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginTop: 3 },
+    statsRow: { flexDirection: 'row', width: '100%', gap: CARD_GAP, marginBottom: 24 },
+    statPill: { flex: 1, paddingVertical: 16, alignItems: 'center', borderRadius: 20, borderWidth: 1 },
+    statValue: {},
+    statLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginTop: 4 },
 
     // Circadian
-    circCard: { width: '100%', padding: 20, borderRadius: 20, borderWidth: 1, marginBottom: 28 },
+    circCard: { width: '100%', padding: 22, borderRadius: 24, borderWidth: 1, marginBottom: 28 },
     circHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     circLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.2 },
-    circBtn: { marginTop: 14, paddingVertical: 9, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, alignSelf: 'flex-start' },
+    circBtn: { marginTop: 16, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1, alignSelf: 'flex-start' },
     circBtnTxt: { fontSize: 13, fontWeight: '700' },
 
     // Section label
-    sectionLbl: { fontSize: 11, fontWeight: '700', letterSpacing: 1.4, alignSelf: 'flex-start', marginBottom: 14 },
+    sectionLbl: { alignSelf: 'flex-start', marginBottom: 14 },
 
     // Achievements
-    achCard: { width: 120, padding: 14, borderRadius: 18, borderWidth: 1, alignItems: 'center' },
-    achIcon: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+    achCard: { width: 124, padding: 16, borderRadius: 20, borderWidth: 1, alignItems: 'center' },
+    achIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
     achTitle: { fontSize: 12, fontWeight: '700', textAlign: 'center' },
     achDesc: { fontSize: 11, textAlign: 'center', marginTop: 2 },
-
-    // More features hub
-    hubGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: CARD_GAP, width: '100%', marginBottom: 20 },
-    hubCard: { width: COL_W, padding: 16, borderRadius: 18, borderWidth: 1, alignItems: 'flex-start' },
-    hubIcon: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-    hubLabel: { fontSize: 13, fontWeight: '700' },
 
     // Coach button
     coachBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%', padding: 16, borderRadius: 18, borderWidth: 1 },

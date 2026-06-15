@@ -12,9 +12,11 @@ import { useAuthStore } from '@/store/authStore';
 import { useRouter, Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Input, Button } from '@/components/ui';
+import { Input, Button, Card } from '@/components/ui';
 import { useTheme } from '@/theme';
-import { spacing } from '@/theme/spacing';
+import { spacing, borderRadius } from '@/theme/spacing';
+import { typography } from '@/theme/typography';
+import { withAlpha } from '@/theme/utils';
 import { isValidEmail, isStrongPassword, sanitizeInput } from '@/utils/validation';
 
 export default function RegisterScreen() {
@@ -59,7 +61,7 @@ export default function RegisterScreen() {
         password,
         region: 'US' // Defaulting to US, ideally we'd ask the user or detect it
       });
-      router.replace('/(onboarding)/shift-type');
+      router.replace('/(onboarding)/metrics-goals');
     } catch (e: any) {
       setError(e?.message ?? 'Registration failed. Please try again.');
     } finally {
@@ -70,7 +72,7 @@ export default function RegisterScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
       >
         <ScrollView
@@ -78,11 +80,25 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
         >
           {/* Back + Header */}
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+          <Pressable
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => router.back()}
+            style={({ pressed }) => [
+              styles.backBtn,
+              {
+                backgroundColor: colors.background.secondary,
+                borderColor: colors.border.default,
+              },
+              pressed && styles.pressed,
+            ]}
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
           </Pressable>
 
           <View style={styles.header}>
+            <Text style={[styles.kicker, { color: colors.accent.coral }]}>Get started</Text>
             <Text style={[styles.title, { color: colors.text.primary }]}>
               Create your{'\n'}
               <Text style={{ color: colors.accent.coral }}>account</Text>
@@ -94,6 +110,10 @@ export default function RegisterScreen() {
 
           {/* Form */}
           <View style={styles.form}>
+            <Text style={[styles.sectionLabel, { color: colors.text.secondary }]}>
+              Your details
+            </Text>
+
             <Input
               label="Full Name"
               placeholder="John Doe"
@@ -138,7 +158,15 @@ export default function RegisterScreen() {
             />
 
             {error ? (
-              <View style={[styles.errorBox, { backgroundColor: 'rgba(255,68,68,0.1)' }]}>
+              <View
+                style={[
+                  styles.errorBox,
+                  {
+                    backgroundColor: withAlpha(colors.error, 0.1),
+                    borderColor: withAlpha(colors.error, 0.25),
+                  },
+                ]}
+              >
                 <Ionicons name="alert-circle" size={16} color={colors.error} />
                 <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
               </View>
@@ -150,7 +178,7 @@ export default function RegisterScreen() {
               loading={loading}
               fullWidth
               size="lg"
-              icon={<Ionicons name="rocket-outline" size={20} color="#FFF" />}
+              icon={<Ionicons name="rocket-outline" size={20} color={colors.text.primary} />}
             />
           </View>
 
@@ -160,7 +188,10 @@ export default function RegisterScreen() {
               Already have an account?{' '}
             </Text>
             <Link href="/(auth)/login" asChild>
-              <Pressable>
+              <Pressable
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={({ pressed }) => pressed && styles.pressed}
+              >
                 <Text style={[styles.loginLink, { color: colors.accent.coral }]}>Sign In</Text>
               </Pressable>
             </Link>
@@ -179,7 +210,7 @@ function PasswordRequirements({ password }: { password: string }) {
     { label: 'One number (0-9)', met: /[0-9]/.test(password) },
   ];
   return (
-    <View style={styles.pwReqs}>
+    <Card variant="glass" padding="md" style={styles.pwReqs}>
       {rules.map(rule => (
         <View key={rule.label} style={styles.pwReqRow}>
           <Ionicons
@@ -197,7 +228,7 @@ function PasswordRequirements({ password }: { password: string }) {
           </Text>
         </View>
       ))}
-    </View>
+    </Card>
   );
 }
 
@@ -211,36 +242,49 @@ const styles = StyleSheet.create({
     paddingBottom: spacing['3xl'],
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   header: {
     marginBottom: spacing['3xl'],
   },
+  kicker: {
+    ...typography.overline,
+    marginBottom: spacing.sm,
+  },
   title: {
+    ...typography.display,
     fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: -0.5,
     lineHeight: 40,
   },
   subtitle: {
-    fontSize: 15,
+    ...typography.body,
     marginTop: spacing.sm,
   },
   form: {},
+  sectionLabel: {
+    ...typography.overline,
+    marginBottom: spacing.lg,
+  },
+  pressed: {
+    opacity: 0.6,
+  },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: 8,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
     marginBottom: spacing.lg,
   },
   errorText: {
-    fontSize: 13,
+    ...typography.bodySm,
     flex: 1,
   },
   loginRow: {
@@ -249,17 +293,16 @@ const styles = StyleSheet.create({
     marginTop: spacing['3xl'],
   },
   loginText: {
-    fontSize: 15,
+    ...typography.body,
   },
   loginLink: {
-    fontSize: 15,
-    fontWeight: '600',
+    ...typography.body,
+    fontWeight: '700',
   },
   pwReqs: {
-    marginTop: -spacing.sm,
+    marginTop: -spacing.xs,
     marginBottom: spacing.lg,
-    paddingHorizontal: spacing.xs,
-    gap: 4,
+    gap: spacing.xs,
   },
   pwReqRow: {
     flexDirection: 'row',
@@ -267,6 +310,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   pwReqText: {
-    fontSize: 12,
+    ...typography.caption,
   },
 });

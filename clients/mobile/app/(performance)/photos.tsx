@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Alert, Dimensions, Image, FlatList,
+    Alert, Dimensions, Image, FlatList,
     Modal
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -9,8 +9,11 @@ import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Card } from '@/components/ui/Card';
+import { Skeleton, EmptyState } from '@/components/ui';
+import { withAlpha } from '@/theme/utils';
 
 const { width } = Dimensions.get('window');
 const PHOTO_DIR = ((FileSystem as any).documentDirectory || (FileSystem as any).cacheDirectory || '') + 'progress_photos/';
@@ -23,7 +26,7 @@ interface PhotoEntry {
 }
 
 export default function ProgressPhotosScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
 
@@ -127,8 +130,25 @@ export default function ProgressPhotosScreen() {
 
     if (loading) {
         return (
-            <View style={[styles.centered, { backgroundColor: colors.background.primary }]}>
-                <ActivityIndicator color={colors.accent.purple} />
+            <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+                {/* Header */}
+                <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
+                    <View style={[styles.headerBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                        <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
+                    </View>
+                    <Text style={[typography.h3, { color: colors.text.primary }]}>Progress Photos</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <View style={styles.grid}>
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <Skeleton
+                            key={i}
+                            width={(width - 32 - 16) / 3}
+                            height={((width - 32 - 16) / 3) * (4 / 3)}
+                            radius={borderRadius.lg}
+                        />
+                    ))}
+                </View>
             </View>
         );
     }
@@ -137,37 +157,35 @@ export default function ProgressPhotosScreen() {
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" activeOpacity={0.85} onPress={() => router.back()} style={[styles.headerBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Progress Photos</Text>
-                <TouchableOpacity onPress={handleAddPhoto}>
-                    <Ionicons name="add" size={28} color={colors.accent.purple} />
+                <Text style={[typography.h3, { color: colors.text.primary }]}>Progress Photos</Text>
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Add" activeOpacity={0.85} onPress={handleAddPhoto} style={[styles.headerBtn, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.3) }]}>
+                    <Ionicons name="add" size={24} color={colors.accent.purple} />
                 </TouchableOpacity>
             </View>
 
             <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
                 {photos.length === 0 ? (
-                    <View style={styles.emptyContainer}>
-                        <Ionicons name="camera-outline" size={80} color={colors.text.tertiary} />
-                        <Text style={[typography.heading, { color: colors.text.primary, marginTop: 20 }]}>No Photos Yet</Text>
-                        <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: 10, paddingHorizontal: 40 }]}>
-                            Visual progress is one of the best motivators. Take your first photo today!
-                        </Text>
-                        <TouchableOpacity
-                            style={[styles.cameraBtn, { backgroundColor: colors.accent.purple, borderRadius: borderRadius.xl, marginTop: 30 }]}
-                            onPress={handleAddPhoto}
-                        >
-                            <Ionicons name="camera" size={20} color="#fff" />
-                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700', marginLeft: 8 }]}>Take Photo</Text>
-                        </TouchableOpacity>
-                    </View>
+                    <EmptyState
+                        icon="camera-outline"
+                        title="No Photos Yet"
+                        subtitle="Visual progress is one of the best motivators. Take your first photo today!"
+                        actionLabel="Take Photo"
+                        onAction={handleAddPhoto}
+                        style={styles.emptyContainer}
+                    />
                 ) : (
                     <>
                         {/* Compare Toggle */}
                         {photos.length >= 2 && (
                             <TouchableOpacity
-                                style={[styles.compareBar, { backgroundColor: comparing ? colors.accent.purple + '20' : colors.background.secondary, borderColor: comparing ? colors.accent.purple : colors.border.default, borderRadius: borderRadius.xl }]}
+                                activeOpacity={0.85}
+                                accessibilityRole="button"
+                                accessibilityLabel="Compare progress"
+                                accessibilityState={{ selected: comparing }}
+                                style={[styles.compareBar, { backgroundColor: comparing ? withAlpha(colors.accent.purple, 0.16) : colors.background.secondary, borderColor: comparing ? withAlpha(colors.accent.purple, 0.4) : colors.border.default, borderRadius: borderRadius.xl }]}
                                 onPress={() => setComparing(!comparing)}
                             >
                                 <Ionicons name="git-compare" size={20} color={comparing ? colors.accent.purple : colors.text.secondary} />
@@ -180,10 +198,11 @@ export default function ProgressPhotosScreen() {
                         {comparing && photos.length >= 2 && (
                             <View style={styles.compareRow}>
                                 <View style={styles.compareItem}>
-                                    <Text style={[typography.caption, { color: colors.text.tertiary, marginBottom: 8 }]}>BEFORE ({photos[compareIdxB]?.date})</Text>
+                                    <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 8 }]}>BEFORE ({photos[compareIdxB]?.date})</Text>
                                     <View style={[styles.compareImgContainer, { backgroundColor: colors.background.tertiary, borderRadius: borderRadius.xl }]}>
                                         <Image source={{ uri: photos[compareIdxB]?.uri }} style={styles.compareImg} />
-                                        <TouchableOpacity
+                                        <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Swap"
+                                            activeOpacity={0.85}
                                             style={styles.cycleBtn}
                                             onPress={() => setCompareIdxB((compareIdxB + 1) % photos.length)}
                                         >
@@ -192,10 +211,11 @@ export default function ProgressPhotosScreen() {
                                     </View>
                                 </View>
                                 <View style={styles.compareItem}>
-                                    <Text style={[typography.caption, { color: colors.text.tertiary, marginBottom: 8 }]}>AFTER ({photos[compareIdxA]?.date})</Text>
+                                    <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 8 }]}>AFTER ({photos[compareIdxA]?.date})</Text>
                                     <View style={[styles.compareImgContainer, { backgroundColor: colors.background.tertiary, borderRadius: borderRadius.xl }]}>
                                         <Image source={{ uri: photos[compareIdxA]?.uri }} style={styles.compareImg} />
-                                        <TouchableOpacity
+                                        <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Swap"
+                                            activeOpacity={0.85}
                                             style={styles.cycleBtn}
                                             onPress={() => setCompareIdxA((compareIdxA + 1) % photos.length)}
                                         >
@@ -211,6 +231,9 @@ export default function ProgressPhotosScreen() {
                             {photos.map((photo, index) => (
                                 <TouchableOpacity
                                     key={photo.id}
+                                    activeOpacity={0.85}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Progress photo from ${photo.date}`}
                                     style={[styles.gridItem, { borderRadius: borderRadius.lg, backgroundColor: colors.background.tertiary }]}
                                     onPress={() => setSelectedPhoto(photo)}
                                 >
@@ -228,7 +251,7 @@ export default function ProgressPhotosScreen() {
             {/* Lightbox / Detail Modal */}
             <Modal visible={!!selectedPhoto} transparent animationType="fade">
                 <View style={styles.modalBg}>
-                    <TouchableOpacity style={styles.closeModal} onPress={() => setSelectedPhoto(null)}>
+                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close" activeOpacity={0.7} style={styles.closeModal} onPress={() => setSelectedPhoto(null)}>
                         <Ionicons name="close" size={32} color="#fff" />
                     </TouchableOpacity>
 
@@ -236,12 +259,13 @@ export default function ProgressPhotosScreen() {
                         <View style={styles.modalContent}>
                             <Image source={{ uri: selectedPhoto.uri }} style={styles.fullImg} resizeMode="contain" />
                             <View style={styles.modalFooter}>
-                                <Text style={[typography.heading, { color: colors.text.primary }]}>{selectedPhoto.date}</Text>
-                                <TouchableOpacity
+                                <Text style={[typography.h3, { color: colors.text.primary }]}>{selectedPhoto.date}</Text>
+                                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Delete"
+                                    activeOpacity={0.7}
                                     style={styles.deleteBtn}
                                     onPress={() => handleDelete(selectedPhoto.id, selectedPhoto.uri)}
                                 >
-                                    <Ionicons name="trash-outline" size={24} color="#ff4444" />
+                                    <Ionicons name="trash-outline" size={24} color={colors.accent.red} />
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -254,10 +278,9 @@ export default function ProgressPhotosScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
-    emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
-    cameraBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 30, elevation: 4 },
+    headerBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    emptyContainer: { marginTop: 80 },
     compareBar: { margin: 20, padding: 18, flexDirection: 'row', alignItems: 'center', borderWidth: 1 },
     compareRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 12, marginBottom: 30 },
     compareItem: { flex: 1 },

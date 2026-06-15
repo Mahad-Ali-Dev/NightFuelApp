@@ -4,7 +4,10 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { shadows } from '@/theme/shadows';
+import { withAlpha } from '@/theme/utils';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // import * as Notifications from 'expo-notifications'; 
 // import healthKit from 'react-native-health';
@@ -27,8 +30,18 @@ export default function PermissionsScreen() {
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
+                <View style={styles.heroBadgeWrap}>
+                    <LinearGradient
+                        colors={colors.gradients.coral}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={[styles.heroBadge, shadows.glow(colors.accent.coral)]}
+                    >
+                        <Ionicons name="rocket" size={28} color={colors.text.primary} />
+                    </LinearGradient>
+                </View>
                 <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
                     Final <Text style={{ color: colors.accent.cyan }}>Steps</Text>
                 </Text>
@@ -36,9 +49,13 @@ export default function PermissionsScreen() {
                     Enable permissions to let NightFuel keep your circadian clock synchronized automatically.
                 </Text>
 
-                <Card style={styles.permissionCard}>
+                <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.md }]}>
+                    Recommended access
+                </Text>
+
+                <Card variant="glass" style={styles.permissionCard}>
                     <View style={styles.headerRow}>
-                        <View style={[styles.iconBox, { backgroundColor: `${colors.accent.coral}20` }]}>
+                        <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.coral, 0.14) }]}>
                             <Ionicons name="notifications" size={24} color={colors.accent.coral} />
                         </View>
                         <View style={styles.textStack}>
@@ -56,9 +73,9 @@ export default function PermissionsScreen() {
 
                 <View style={{ height: spacing.lg }} />
 
-                <Card style={styles.permissionCard}>
+                <Card variant="glass" style={styles.permissionCard}>
                     <View style={styles.headerRow}>
-                        <View style={[styles.iconBox, { backgroundColor: `${colors.accent.cyan}20` }]}>
+                        <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.cyan, 0.14) }]}>
                             <Ionicons name="heart" size={24} color={colors.accent.cyan} />
                         </View>
                         <View style={styles.textStack}>
@@ -78,7 +95,7 @@ export default function PermissionsScreen() {
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: spacing['2xl'] }]}>
                 <Button
                     title="Start NightFuel"
-                    iconRight={<Ionicons name="rocket" size={20} color="#fff" />}
+                    iconRight={<Ionicons name="rocket" size={20} color={colors.text.primary} />}
                     onPress={handleFinish}
                     fullWidth
                 />
@@ -97,6 +114,16 @@ export default function PermissionsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    heroBadgeWrap: {
+        marginBottom: 16,
+    },
+    heroBadge: {
+        width: 64,
+        height: 64,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     permissionCard: {
         padding: 20,

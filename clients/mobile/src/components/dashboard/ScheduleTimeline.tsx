@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { colors } from '@/theme';
 
 interface TimelineEvent {
     time: string;
@@ -21,7 +22,7 @@ export function ScheduleTimeline({ events, onViewFull }: ScheduleTimelineProps) 
         <View>
             <View style={styles.headerRow}>
                 <Text style={styles.heading}>24h Schedule</Text>
-                <TouchableOpacity onPress={onViewFull}>
+                <TouchableOpacity onPress={onViewFull} activeOpacity={0.85}>
                     <Text style={styles.viewFull}>View Full</Text>
                 </TouchableOpacity>
             </View>
@@ -41,7 +42,7 @@ export function ScheduleTimeline({ events, onViewFull }: ScheduleTimelineProps) 
                             </View>
                         )}
                         {event.status === 'past' && <Ionicons name="checkmark" size={18} color="#00D4AA" />}
-                        {event.icon && event.status === 'future' && <Ionicons name={event.icon} size={18} color={event.iconColor || '#8B949E'} />}
+                        {event.icon && event.status === 'future' && <Ionicons name={event.icon} size={18} color={event.iconColor || colors.text.secondary} />}
                     </View>
                 </View>
             ))}
@@ -54,16 +55,16 @@ const styles = StyleSheet.create({
     heading: { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
     viewFull: { color: '#FF6B35', fontWeight: '700', fontSize: 12 },
     item: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-    timeCircle: { width: 56, height: 56, borderRadius: 28, borderWidth: 1, borderColor: '#2D3748', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+    timeCircle: { width: 56, height: 56, borderRadius: 28, borderWidth: 1, borderColor: colors.border.light, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
     timeCircleActive: { borderWidth: 2, borderColor: '#FF6B35' },
     timeCircleDim: { opacity: 0.5 },
-    timeText: { color: '#8B949E', fontSize: 12 },
+    timeText: { color: colors.text.secondary, fontSize: 12 },
     timeTextActive: { color: '#FFFFFF', fontWeight: '600' },
-    card: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#161B22', borderRadius: 16, padding: 16 },
+    card: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.background.secondary, borderRadius: 16, padding: 16 },
     cardActive: { backgroundColor: '#1C2128', borderLeftWidth: 3, borderLeftColor: '#FF6B35' },
     cardDim: { opacity: 0.5 },
     title: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-    detail: { color: '#8B949E', fontSize: 12, marginTop: 2 },
+    detail: { color: colors.text.secondary, fontSize: 12, marginTop: 2 },
     nowBadge: { backgroundColor: '#FF6B3530', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
     nowText: { color: '#FF6B35', fontSize: 10, fontWeight: '800' },
 });

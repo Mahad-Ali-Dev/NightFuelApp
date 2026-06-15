@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
+import { shadows } from '@/theme';
 import { getMyBadges, getBadgeCatalog, getUserScore, type Badge } from '@/api/community';
 
 const { width } = Dimensions.get('window');
@@ -22,6 +23,8 @@ const TIER_META: Record<string, { color: string; gradient: [string, string]; lab
     gold:     { color: '#FFD700', gradient: ['#FFD700', '#FFA500'], label: 'Gold' },
     platinum: { color: '#E5E4E2', gradient: ['#E5E4E2', '#B0C4DE'], label: 'Platinum' },
 };
+
+const TIER_ORDER = ['platinum', 'gold', 'silver', 'bronze'];
 
 export default function AchievementsScreen() {
     const { colors, typography } = useTheme();
@@ -52,7 +55,6 @@ export default function AchievementsScreen() {
     const earned = (badgesQuery.data ?? []) as Badge[];
     const score = scoreQuery.data;
 
-    const tierOrder = ['platinum', 'gold', 'silver', 'bronze'];
     const grouped = useMemo(() => {
         const map: Record<string, Badge[]> = {};
         for (const b of catalog) {
@@ -77,10 +79,10 @@ export default function AchievementsScreen() {
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 20, fontWeight: '900' }]}>
+                <Text style={[typography.h2, { color: colors.text.primary }]}>
                     Achievements
                 </Text>
                 <View style={{ width: 40 }} />
@@ -95,47 +97,47 @@ export default function AchievementsScreen() {
 
                     {/* ── XP / Level Card ─────────────────────────────────── */}
                     <LinearGradient
-                        colors={['#1A1A2E', '#2D1B69', '#1A1A2E']}
-                        style={[styles.xpCard, { marginHorizontal: 20, marginTop: 16 }]}
+                        colors={[colors.background.tertiary, colors.accent.purpleDark, colors.background.tertiary]}
+                        style={[styles.xpCard, { marginHorizontal: 20, marginTop: 16, borderColor: withAlpha(colors.accent.purple, 0.35) }, shadows.glow(colors.accent.purple)]}
                         start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                     >
                         <View style={styles.xpCardInner}>
                             <View>
-                                <Text style={[typography.caption, { color: 'rgba(255,255,255,0.6)', fontSize: 11, letterSpacing: 1 }]}>
+                                <Text style={[typography.overline, { color: withAlpha(colors.text.primary, 0.7) }]}>
                                     CURRENT LEVEL
                                 </Text>
-                                <Text style={{ fontSize: 52, fontWeight: '900', color: '#fff', lineHeight: 58 }}>
+                                <Text style={[typography.statLarge, { color: colors.text.primary, marginTop: 2 }]}>
                                     {level}
                                 </Text>
-                                <Text style={[typography.body, { color: 'rgba(255,255,255,0.7)' }]}>
+                                <Text style={[typography.body, { color: withAlpha(colors.text.primary, 0.75) }]}>
                                     {xp.toLocaleString()} XP total
                                 </Text>
                             </View>
-                            <View style={styles.badgeCountCircle}>
-                                <Text style={{ fontSize: 28, fontWeight: '900', color: '#fff' }}>{earned.length}</Text>
-                                <Text style={[typography.caption, { color: 'rgba(255,255,255,0.6)', fontSize: 10 }]}>BADGES</Text>
+                            <View style={[styles.badgeCountCircle, { borderColor: withAlpha(colors.text.primary, 0.2), backgroundColor: withAlpha(colors.text.primary, 0.08) }]}>
+                                <Text style={[typography.statSmall, { color: colors.text.primary }]}>{earned.length}</Text>
+                                <Text style={[typography.caption, { color: withAlpha(colors.text.primary, 0.6), fontSize: 10 }]}>BADGES</Text>
                             </View>
                         </View>
 
                         {/* Progress bar */}
                         <View style={{ marginTop: 16 }}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                                <Text style={[typography.caption, { color: 'rgba(255,255,255,0.6)', fontSize: 10 }]}>
+                                <Text style={[typography.caption, { color: withAlpha(colors.text.primary, 0.6), fontSize: 10 }]}>
                                     LEVEL {level}
                                 </Text>
-                                <Text style={[typography.caption, { color: 'rgba(255,255,255,0.6)', fontSize: 10 }]}>
+                                <Text style={[typography.caption, { color: withAlpha(colors.text.primary, 0.6), fontSize: 10 }]}>
                                     LEVEL {level + 1} · {nextLevelXp.toLocaleString()} XP
                                 </Text>
                             </View>
-                            <View style={styles.progressTrack}>
+                            <View style={[styles.progressTrack, { backgroundColor: withAlpha(colors.text.primary, 0.12) }]}>
                                 <View
                                     style={[styles.progressFill, {
                                         width: `${Math.min(100, Math.round(levelProgress * 100))}%`,
-                                        backgroundColor: '#A855F7'
+                                        backgroundColor: colors.accent.purpleLight
                                     }]}
                                 />
                             </View>
-                            <Text style={[typography.caption, { color: 'rgba(255,255,255,0.5)', fontSize: 10, marginTop: 4, textAlign: 'right' }]}>
+                            <Text style={[typography.caption, { color: withAlpha(colors.text.primary, 0.5), fontSize: 10, marginTop: 4, textAlign: 'right' }]}>
                                 {Math.round(levelProgress * 100)}% to next level
                             </Text>
                         </View>
@@ -144,7 +146,7 @@ export default function AchievementsScreen() {
                     {/* ── Earned Badges (recent first) ────────────────────── */}
                     {earned.length > 0 && (
                         <View style={{ marginTop: 28 }}>
-                            <Text style={[typography.heading, { color: colors.text.primary, marginHorizontal: 20, marginBottom: 14, fontSize: 16, fontWeight: '800' }]}>
+                            <Text style={[typography.h3, { color: colors.text.primary, marginHorizontal: 20, marginBottom: 14 }]}>
                                 🏅 Your Badges ({earned.length})
                             </Text>
                             <ScrollView
@@ -160,14 +162,14 @@ export default function AchievementsScreen() {
                     )}
 
                     {/* ── Full Catalog by Tier ─────────────────────────────── */}
-                    <Text style={[typography.heading, { color: colors.text.primary, marginHorizontal: 20, marginTop: 32, marginBottom: 6, fontSize: 16, fontWeight: '800' }]}>
+                    <Text style={[typography.h3, { color: colors.text.primary, marginHorizontal: 20, marginTop: 32, marginBottom: 6 }]}>
                         📚 All Badges
                     </Text>
-                    <Text style={[typography.body, { color: colors.text.tertiary, marginHorizontal: 20, marginBottom: 16 }]}>
+                    <Text style={[typography.body, { color: colors.text.secondary, marginHorizontal: 20, marginBottom: 16 }]}>
                         {earned.length} of {catalog.length} unlocked
                     </Text>
 
-                    {tierOrder.filter(t => grouped[t]?.length).map((tier) => {
+                    {TIER_ORDER.filter(t => grouped[t]?.length).map((tier) => {
                         const meta = TIER_META[tier]!;
                         return (
                             <View key={tier} style={{ marginBottom: 24 }}>
@@ -203,7 +205,7 @@ export default function AchievementsScreen() {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function EarnedBadgeCard({ badge, colors, typography }: { badge: Badge; colors: any; typography: any }) {
+const EarnedBadgeCard = React.memo(function EarnedBadgeCard({ badge, colors, typography }: { badge: Badge; colors: any; typography: any }) {
     const meta = TIER_META[badge.tier] ?? TIER_META.bronze!;
     return (
         <View style={styles.earnedCard}>
@@ -223,9 +225,9 @@ function EarnedBadgeCard({ badge, colors, typography }: { badge: Badge; colors: 
             </LinearGradient>
         </View>
     );
-}
+});
 
-function CatalogBadgeCard({
+const CatalogBadgeCard = React.memo(function CatalogBadgeCard({
     badge, unlocked, tierColor, colors, typography
 }: { badge: Badge; unlocked: boolean; tierColor: string; colors: any; typography: any }) {
     return (
@@ -245,7 +247,7 @@ function CatalogBadgeCard({
                 {badge.name}
             </Text>
             <Text style={[typography.caption, {
-                color: colors.text.tertiary,
+                color: colors.text.secondary,
                 fontSize: 9,
                 textAlign: 'center',
                 marginTop: 3,
@@ -262,12 +264,12 @@ function CatalogBadgeCard({
             )}
             {unlocked && (
                 <View style={[styles.checkMark, { backgroundColor: tierColor }]}>
-                    <Ionicons name="checkmark" size={10} color="#000" />
+                    <Ionicons name="checkmark" size={10} color={colors.text.inverse} />
                 </View>
             )}
         </View>
     );
-}
+});
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
@@ -282,7 +284,8 @@ const styles = StyleSheet.create({
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
     xpCard: {
-        borderRadius: 20,
+        borderRadius: 24,
+        borderWidth: 1,
         padding: 20,
         overflow: 'hidden',
     },
@@ -296,14 +299,11 @@ const styles = StyleSheet.create({
         height: 80,
         borderRadius: 40,
         borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.2)',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: 'rgba(255,255,255,0.08)',
     },
     progressTrack: {
         height: 6,
-        backgroundColor: 'rgba(255,255,255,0.12)',
         borderRadius: 3,
         overflow: 'hidden',
     },

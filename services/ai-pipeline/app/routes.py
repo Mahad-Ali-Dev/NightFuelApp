@@ -1,5 +1,5 @@
 from typing import Dict, Any, List
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from .models import DayPlanRequest, DayPlanResponse, GoalPreferences
 from .validators import generate_skeleton
 from .chains.plan_generator import generate_plan_content, LLMProvider
@@ -16,13 +16,13 @@ def health_check():
     return {"status": "ok"}
 
 @router.post("/generate-plan", response_model=DayPlanResponse)
-async def generate_plan(request: DayPlanRequest, provider: str = "openai"):
+async def generate_plan(request: DayPlanRequest, http_request: Request, provider: str = "anthropic"):
     """
     Synchronous endpoint for plan generation.
     Takes a single day's circadian profile and returns a structured AI-generated plan.
     """
     logger.info(f"Generating plan for user {request.userId} on date {request.date}")
-    await check_rate_limit(request.userId)
+    await check_rate_limit(request.userId, category="generation", request=http_request)
 
     # Layer 2: Chrono-Nutrition Optimizer (Rules Engine)
     skeleton = generate_skeleton(request)
@@ -33,7 +33,7 @@ async def generate_plan(request: DayPlanRequest, provider: str = "openai"):
         active_provider = LLMProvider(provider.lower())
     except ValueError:
         logger.warning(f"Invalid provider requested '{provider}', falling back to OpenAI.")
-        active_provider = LLMProvider.OPENAI
+        active_provider = LLMProvider.ANTHROPIC
 
     pref_dict = request.preferences.model_dump() if request.preferences else {}
     logic_targets_dict = request.logicTargets.model_dump() if request.logicTargets else None
@@ -59,22 +59,23 @@ async def generate_plan(request: DayPlanRequest, provider: str = "openai"):
 
 @router.post("/weekly-audit")
 async def weekly_audit(
+    http_request: Request,
     userId: str,
     stats: Dict[str, Any],
     history: List[Dict[str, Any]],
     preferences: Dict[str, Any],
-    provider: str = "openai"
+    provider: str = "anthropic"
 ):
     """
     Generate a coaching summary/audit for the last 7 days.
     """
     logger.info(f"Generating weekly audit for user {userId}")
-    await check_rate_limit(userId)
+    await check_rate_limit(userId, category="generation", request=http_request)
     
     try:
         active_provider = LLMProvider(provider.lower())
     except ValueError:
-        active_provider = LLMProvider.OPENAI
+        active_provider = LLMProvider.ANTHROPIC
 
     return await generate_weekly_audit(
         userId=userId,
@@ -92,19 +93,20 @@ class SwapPayload(BaseModel):
 @router.post("/meal-swap")
 async def meal_swap(
     payload: SwapPayload,
-    provider: str = "openai"
+    http_request: Request,
+    provider: str = "anthropic"
 ):
     """
     Swap a single meal for an alternative that fits the same caloric/macro profile.
     """
     logger.info("Swapping meal", extra={"meal": payload.meal_to_swap.get("name", "Unknown")})
-    await check_rate_limit(payload.userId)
+    await check_rate_limit(payload.userId, category="generation", request=http_request)
     
     # Validate provider
     try:
         active_provider = LLMProvider(provider.lower())
     except ValueError:
-        active_provider = LLMProvider.OPENAI
+        active_provider = LLMProvider.ANTHROPIC
 
     pref_dict = payload.preferences.model_dump() if payload.preferences else {}
     
@@ -121,15 +123,16 @@ from .models import MealScoreRequest
 @router.post("/meal-score")
 async def meal_score(
     payload: MealScoreRequest,
-    provider: str = "openai"
+    http_request: Request,
+    provider: str = "anthropic"
 ):
     logger.info("Scoring custom meal", extra={"meal": payload.meal.get("name", "Unknown")})
-    await check_rate_limit(payload.userId)
+    await check_rate_limit(payload.userId, category="generation", request=http_request)
     
     try:
         active_provider = LLMProvider(provider.lower())
     except ValueError:
-        active_provider = LLMProvider.OPENAI
+        active_provider = LLMProvider.ANTHROPIC
         
     pref_dict = payload.preferences.model_dump() if payload.preferences else {}
     
@@ -149,15 +152,16 @@ import json as _json
 @router.post("/chat")
 async def chat_with_coach(
     payload: CoachChatRequest,
-    provider: str = "openai"
+    http_request: Request,
+    provider: str = "anthropic"
 ):
     logger.info("Handling chat request", extra={"userId": payload.userId})
-    await check_rate_limit(payload.userId)
+    await check_rate_limit(payload.userId, category="chat", request=http_request)
 
     try:
         active_provider = LLMProvider(provider.lower())
     except ValueError:
-        active_provider = LLMProvider.OPENAI
+        active_provider = LLMProvider.ANTHROPIC
 
     response_text = await generate_chat_response(
         user_id=payload.userId,
@@ -171,7 +175,7 @@ async def chat_with_coach(
 
 
 @router.post("/chat/stream")
-async def chat_with_coach_stream(payload: CoachChatRequest, provider: str = "openai"):
+async def chat_with_coach_stream(payload: CoachChatRequest, http_request: Request, provider: str = "anthropic"):
     """
     Server-Sent Events streaming variant of /chat.
 
@@ -190,12 +194,12 @@ async def chat_with_coach_stream(payload: CoachChatRequest, provider: str = "ope
     Closes M1, M5, M6 from PRODUCTION_READINESS.md.
     """
     logger.info("Handling streaming chat request", extra={"userId": payload.userId})
-    await check_rate_limit(payload.userId)
+    await check_rate_limit(payload.userId, category="chat", request=http_request)
 
     try:
         active_provider = LLMProvider(provider.lower())
     except ValueError:
-        active_provider = LLMProvider.OPENAI
+        active_provider = LLMProvider.ANTHROPIC
 
     async def event_generator():
         async for event in generate_chat_response_stream(

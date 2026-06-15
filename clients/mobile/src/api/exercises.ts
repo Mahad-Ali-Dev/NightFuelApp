@@ -193,5 +193,10 @@ export const getAnalytics = async (exerciseName: string) => {
   return data;
 };
 
-/** Alias for report screen */
-export const getWorkout = getById;
+/** Fetch a single logged workout (with its exercises) for the report screen.
+ *  Note: this hits the workout endpoint `/v1/exercises/:id`, NOT the exercise
+ *  *library* endpoint used by getById. A workout-log id is not a library id. */
+export const getWorkout = async (id: string) => {
+  const { data } = await apiClient.get(`/v1/exercises/${id}`);
+  return data;
+};

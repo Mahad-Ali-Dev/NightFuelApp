@@ -1,7 +1,7 @@
 
 import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { registerSchema, loginSchema, refreshTokenSchema } from './schemas';
+import { registerSchema, loginSchema, refreshTokenSchema, forgotPasswordSchema, resetPasswordSchema } from './schemas';
 import { AuthService } from './auth.service';
 
 export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = async (fastify, opts) => {
@@ -57,6 +57,45 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
             } catch (err: any) {
                 request.log.error(err);
                 reply.code(401).send({ error: err.message });
+            }
+        }
+    );
+
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/forgot-password',
+        {
+            schema: {
+                body: forgotPasswordSchema,
+            },
+        },
+        async (request, reply) => {
+            // Always return 200 with a generic message — never reveal whether the
+            // account exists (prevents user enumeration). Internal failures are
+            // logged but still surface the generic message.
+            try {
+                const result = await service.forgotPassword(request.body);
+                reply.send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                reply.send({ message: 'If an account exists, a reset link has been sent' });
+            }
+        }
+    );
+
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/reset-password',
+        {
+            schema: {
+                body: resetPasswordSchema,
+            },
+        },
+        async (request, reply) => {
+            try {
+                await service.resetPassword(request.body);
+                reply.send({ message: 'Password has been reset' });
+            } catch (err: any) {
+                request.log.error(err);
+                reply.code(400).send({ error: err.message });
             }
         }
     );

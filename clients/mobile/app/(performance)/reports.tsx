@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     ActivityIndicator, Alert, Dimensions, FlatList
@@ -9,18 +9,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPerformanceReports, generateWeeklyAudit, PerformanceReport } from '@/api/progress';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui';
+import { LinearGradient } from 'expo-linear-gradient';
+import { withAlpha } from '@/theme/utils';
+import { typography as typo } from '@/theme/typography';
 
 const { width } = Dimensions.get('window');
 
 export default function AIReportsScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
 
     const [selectedId, setSelectedId] = useState<string | null>(null);
 
-    const { data: reports = [], isLoading } = useQuery({
+    const { data: reports = [], isLoading, isError, refetch } = useQuery({
         queryKey: ['performance-reports'],
         queryFn: getPerformanceReports,
     });
@@ -37,14 +43,97 @@ export default function AIReportsScreen() {
     const activeReport = reports.find(r => r.id === selectedId) || reports[0];
 
     // If no report selected yet but we have data, set first one
-    if (!selectedId && reports.length > 0 && reports[0]) {
-        setSelectedId(reports[0].id);
-    }
+    useEffect(() => {
+        if (!selectedId && reports.length > 0 && reports[0]) {
+            setSelectedId(reports[0].id);
+        }
+    }, [reports, selectedId]);
+
+    const keyExtractor = useCallback((item: PerformanceReport) => item.id, []);
+
+    const renderHistoryTab = useCallback(({ item }: { item: PerformanceReport }) => (
+        <TouchableOpacity
+            activeOpacity={0.85}
+            accessibilityRole="tab"
+            accessibilityLabel={item.weekRange}
+            accessibilityState={{ selected: selectedId === item.id }}
+            onPress={() => setSelectedId(item.id)}
+            style={[
+                styles.historyTab,
+                {
+                    backgroundColor: selectedId === item.id ? withAlpha(colors.accent.purple, 0.16) : colors.background.secondary,
+                    borderColor: selectedId === item.id ? withAlpha(colors.accent.purple, 0.5) : colors.border.default,
+                    borderRadius: borderRadius.lg
+                },
+                selectedId === item.id && shadows.glow(colors.accent.purple),
+            ]}
+        >
+            <Text style={[typography.captionMedium, { color: selectedId === item.id ? colors.accent.purple : colors.text.secondary }]}>
+                {item.weekRange}
+            </Text>
+            <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>
+                {new Date(item.date).toLocaleDateString()}
+            </Text>
+        </TouchableOpacity>
+    ), [selectedId, colors, typography, borderRadius, shadows]);
 
     if (isLoading) {
         return (
-            <View style={[styles.centered, { backgroundColor: colors.background.primary }]}>
-                <ActivityIndicator color={colors.accent.purple} size="large" />
+            <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+                {/* Header */}
+                <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
+                    <View style={[styles.headerBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                        <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
+                    </View>
+                    <Text style={[typography.h3, { color: colors.text.primary }]}>AI Performance Reports</Text>
+                    <View style={[styles.headerBtn, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.3) }]}>
+                        <Ionicons name="sparkles" size={22} color={colors.accent.purple} />
+                    </View>
+                </View>
+
+                {/* History tab strip */}
+                <View style={{ height: 80, borderBottomWidth: 1, borderBottomColor: colors.border.default, justifyContent: 'center' }}>
+                    <View style={{ flexDirection: 'row', paddingHorizontal: 20, gap: 10 }}>
+                        {Array.from({ length: 3 }).map((_, i) => (
+                            <Skeleton key={i} width={100} height={48} radius={borderRadius.lg} />
+                        ))}
+                    </View>
+                </View>
+
+                {/* Report body */}
+                <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}>
+                    <SkeletonCard height={108} radius={borderRadius.xl} />
+                    <SkeletonCard height={88} radius={borderRadius.xl} />
+                    <Skeleton width={140} height={20} style={{ marginTop: spacing.sm, marginBottom: spacing.md }} />
+                    {Array.from({ length: 3 }).map((_, i) => (
+                        <Skeleton key={i} width="100%" height={16} style={{ marginBottom: spacing.md }} />
+                    ))}
+                    <SkeletonCard height={96} radius={borderRadius.xl} style={{ marginTop: spacing.xl }} />
+                </ScrollView>
+            </View>
+        );
+    }
+
+    if (isError) {
+        return (
+            <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+                {/* Header */}
+                <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
+                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" activeOpacity={0.85} onPress={() => router.back()} style={[styles.headerBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                        <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
+                    </TouchableOpacity>
+                    <Text style={[typography.h3, { color: colors.text.primary }]}>AI Performance Reports</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <View style={styles.centered}>
+                    <EmptyState
+                        icon="cloud-offline-outline"
+                        title="Couldn't load reports"
+                        subtitle="Something went wrong fetching your performance audits. Check your connection and try again."
+                        actionLabel="Try Again"
+                        onAction={() => refetch()}
+                    />
+                </View>
             </View>
         );
     }
@@ -53,33 +142,37 @@ export default function AIReportsScreen() {
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" activeOpacity={0.85} onPress={() => router.back()} style={[styles.headerBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>AI Performance Reports</Text>
-                <TouchableOpacity onPress={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
+                <Text style={[typography.h3, { color: colors.text.primary }]}>AI Performance Reports</Text>
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Generate with AI"
+                    activeOpacity={0.85}
+                    onPress={() => generateMutation.mutate()}
+                    disabled={generateMutation.isPending}
+                    style={[styles.headerBtn, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.3) }]}
+                >
                     {generateMutation.isPending ? (
                         <ActivityIndicator color={colors.accent.purple} size="small" />
                     ) : (
-                        <Ionicons name="sparkles" size={24} color={colors.accent.purple} />
+                        <Ionicons name="sparkles" size={22} color={colors.accent.purple} />
                     )}
                 </TouchableOpacity>
             </View>
 
             {reports.length === 0 ? (
                 <View style={styles.emptyState}>
-                    <Ionicons name="analytics" size={64} color={colors.text.tertiary} />
-                    <Text style={[typography.heading, { color: colors.text.primary, marginTop: 20 }]}>No Reports Yet</Text>
-                    <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: 10, paddingHorizontal: 40 }]}>
-                        Generate your first AI performance audit to get deep insights on your adherence and progress.
-                    </Text>
-                    <TouchableOpacity
-                        style={[styles.generateBtn, { backgroundColor: colors.accent.purple, borderRadius: borderRadius.xl, marginTop: 30 }]}
+                    <EmptyState
+                        icon="analytics-outline"
+                        title="No Reports Yet"
+                        subtitle="Generate your first AI performance audit to get deep insights on your adherence and progress."
+                    />
+                    <Button
+                        title="Generate First Audit"
                         onPress={() => generateMutation.mutate()}
                         disabled={generateMutation.isPending}
-                    >
-                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>Generate First Audit</Text>
-                    </TouchableOpacity>
+                        style={{ marginTop: spacing.sm, minWidth: 220 }}
+                    />
                 </View>
             ) : (
                 <View style={{ flex: 1 }}>
@@ -88,83 +181,89 @@ export default function AIReportsScreen() {
                         <FlatList
                             horizontal
                             data={reports}
-                            keyExtractor={item => item.id}
+                            keyExtractor={keyExtractor}
                             showsHorizontalScrollIndicator={false}
                             contentContainerStyle={{ paddingHorizontal: 20, alignItems: 'center' }}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    onPress={() => setSelectedId(item.id)}
-                                    style={[
-                                        styles.historyTab,
-                                        {
-                                            backgroundColor: selectedId === item.id ? colors.accent.purple + '20' : colors.background.secondary,
-                                            borderColor: selectedId === item.id ? colors.accent.purple : colors.border.default,
-                                            borderRadius: borderRadius.lg
-                                        }
-                                    ]}
-                                >
-                                    <Text style={[typography.caption, { color: selectedId === item.id ? colors.accent.purple : colors.text.secondary }]}>
-                                        {item.weekRange}
-                                    </Text>
-                                    <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 10 }]}>
-                                        {new Date(item.date).toLocaleDateString()}
-                                    </Text>
-                                </TouchableOpacity>
-                            )}
+                            renderItem={renderHistoryTab}
+                            initialNumToRender={8}
+                            maxToRenderPerBatch={8}
+                            windowSize={5}
                         />
                     </View>
 
                     {activeReport && (
-                        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
+                        <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}>
                             {/* Score Banner */}
-                            <View style={[styles.scoreCard, { backgroundColor: colors.background.secondary, borderRadius: borderRadius["2xl"], borderColor: colors.border.default }]}>
-                                <View>
-                                    <Text style={[typography.caption, { color: colors.text.tertiary, textTransform: 'uppercase', letterSpacing: 1 }]}>Weekly Performance</Text>
-                                    <Text style={[typography.heading, { color: colors.text.primary, fontSize: 24, marginTop: 4 }]}>{activeReport.weekRange}</Text>
-                                </View>
-                                <View style={[styles.scoreBadge, { backgroundColor: activeReport.score >= 80 ? '#10b98120' : activeReport.score >= 60 ? '#f59e0b20' : '#ef444420' }]}>
-                                    <Text style={[styles.scoreText, { color: activeReport.score >= 80 ? '#10b981' : activeReport.score >= 60 ? '#f59e0b' : '#ef4444' }]}>
-                                        {activeReport.score}
-                                    </Text>
-                                </View>
-                            </View>
+                            {(() => {
+                                const scoreColor = activeReport.score >= 80 ? colors.accent.emerald : activeReport.score >= 60 ? colors.accent.amber : colors.accent.red;
+                                return (
+                                    <Card variant="glass" noPadding style={[styles.scoreCard, shadows.glow(scoreColor)]}>
+                                        <LinearGradient
+                                            colors={[withAlpha(scoreColor, 0.18), 'transparent']}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 1 }}
+                                            style={styles.scoreCardInner}
+                                        >
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[typography.overline, { color: colors.text.secondary }]}>Weekly Performance</Text>
+                                                <Text style={[typography.h2, { color: colors.text.primary, marginTop: spacing.xs }]}>{activeReport.weekRange}</Text>
+                                            </View>
+                                            <View style={[styles.scoreBadge, { backgroundColor: withAlpha(scoreColor, 0.16), borderColor: withAlpha(scoreColor, 0.4) }]}>
+                                                <Text style={[styles.scoreText, { color: scoreColor }]}>
+                                                    {activeReport.score}
+                                                </Text>
+                                            </View>
+                                        </LinearGradient>
+                                    </Card>
+                                );
+                            })()}
 
                             {/* Summary */}
-                            <View style={[styles.section, { backgroundColor: colors.accent.purple + '08', borderColor: colors.accent.purple + '20', borderRadius: borderRadius.xl }]}>
+                            <View style={[styles.section, { backgroundColor: withAlpha(colors.accent.purple, 0.08), borderColor: withAlpha(colors.accent.purple, 0.2), borderRadius: borderRadius.xl }]}>
                                 <Text style={[typography.body, { color: colors.text.primary, lineHeight: 22, fontStyle: 'italic' }]}>
                                     "{activeReport.summary}"
                                 </Text>
                             </View>
 
-                            {/* Highlights */}
-                            <View style={styles.sectionTitleRow}>
-                                <Ionicons name="trending-up" size={18} color="#10b981" />
-                                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700', marginLeft: 8 }]}>Highlights</Text>
-                            </View>
-                            {activeReport.highlights.map((h, i) => (
-                                <View key={i} style={styles.bulletItem}>
-                                    <Ionicons name="checkmark-circle" size={16} color="#10b981" />
-                                    <Text style={[typography.body, { color: colors.text.secondary, marginLeft: 10, flex: 1 }]}>{h}</Text>
-                                </View>
-                            ))}
+                            {/* Highlights — hidden when the audit produced none (e.g. fallback report) */}
+                            {(activeReport.highlights?.length ?? 0) > 0 && (
+                                <>
+                                    <View style={styles.sectionTitleRow}>
+                                        <Ionicons name="trending-up" size={18} color={colors.accent.emerald} />
+                                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700', marginLeft: 8 }]}>Highlights</Text>
+                                    </View>
+                                    {activeReport.highlights.map((h, i) => (
+                                        <View key={i} style={styles.bulletItem}>
+                                            <Ionicons name="checkmark-circle" size={16} color={colors.accent.emerald} />
+                                            <Text style={[typography.body, { color: colors.text.secondary, marginLeft: 10, flex: 1 }]}>{h}</Text>
+                                        </View>
+                                    ))}
+                                </>
+                            )}
 
                             {/* Improvements */}
-                            <View style={[styles.sectionTitleRow, { marginTop: 24 }]}>
-                                <Ionicons name="alert-circle" size={18} color="#f59e0b" />
-                                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700', marginLeft: 8 }]}>Areas to Improve</Text>
-                            </View>
-                            {activeReport.improvements.map((imp, i) => (
-                                <View key={i} style={styles.bulletItem}>
-                                    <Ionicons name="flash" size={16} color="#f59e0b" />
-                                    <Text style={[typography.body, { color: colors.text.secondary, marginLeft: 10, flex: 1 }]}>{imp}</Text>
-                                </View>
-                            ))}
+                            {(activeReport.improvements?.length ?? 0) > 0 && (
+                                <>
+                                    <View style={[styles.sectionTitleRow, { marginTop: 24 }]}>
+                                        <Ionicons name="alert-circle" size={18} color={colors.accent.amber} />
+                                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700', marginLeft: 8 }]}>Areas to Improve</Text>
+                                    </View>
+                                    {activeReport.improvements.map((imp, i) => (
+                                        <View key={i} style={styles.bulletItem}>
+                                            <Ionicons name="flash" size={16} color={colors.accent.amber} />
+                                            <Text style={[typography.body, { color: colors.text.secondary, marginLeft: 10, flex: 1 }]}>{imp}</Text>
+                                        </View>
+                                    ))}
+                                </>
+                            )}
 
                             {/* Focus Area */}
-                            <View style={[styles.focusCard, { backgroundColor: colors.accent.cyan + '10', borderColor: colors.accent.cyan + '30', borderRadius: borderRadius.xl, marginTop: 30 }]}>
-                                <Text style={[typography.subhead, { color: colors.accent.cyan, fontWeight: '800', marginBottom: 8 }]}>Next Week's Focus</Text>
-                                <Text style={[typography.body, { color: colors.text.primary }]}>{activeReport.focusArea}</Text>
-                            </View>
+                            {activeReport.focusArea ? (
+                                <View style={[styles.focusCard, { backgroundColor: withAlpha(colors.accent.cyan, 0.1), borderColor: withAlpha(colors.accent.cyan, 0.3), borderRadius: borderRadius.xl, marginTop: 30 }]}>
+                                    <Text style={[typography.subhead, { color: colors.accent.cyan, fontWeight: '800', marginBottom: 8 }]}>Next Week's Focus</Text>
+                                    <Text style={[typography.body, { color: colors.text.primary }]}>{activeReport.focusArea}</Text>
+                                </View>
+                            ) : null}
                         </ScrollView>
                     )}
                 </View>
@@ -177,12 +276,13 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
-    emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-    generateBtn: { paddingVertical: 14, paddingHorizontal: 30, elevation: 2 },
+    headerBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     historyTab: { paddingHorizontal: 16, paddingVertical: 10, marginRight: 10, borderWidth: 1, alignItems: 'center', minWidth: 100 },
-    scoreCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, marginBottom: 20, borderWidth: 1 },
-    scoreBadge: { width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
-    scoreText: { fontSize: 22, fontWeight: '900' },
+    scoreCard: { marginBottom: 20 },
+    scoreCardInner: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24 },
+    scoreBadge: { width: 64, height: 64, borderRadius: 32, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+    scoreText: { fontFamily: typo.statSmall.fontFamily, fontSize: 26 },
     section: { padding: 20, marginBottom: 24, borderWidth: 1 },
     sectionTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
     bulletItem: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },

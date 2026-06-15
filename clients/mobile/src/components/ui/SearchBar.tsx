@@ -11,7 +11,7 @@ interface SearchBarProps {
   onFilterPress?: () => void;
 }
 
-export function SearchBar({
+function SearchBarComponent({
   value,
   onChangeText,
   placeholder = 'Search...',
@@ -24,7 +24,7 @@ export function SearchBar({
       style={[
         styles.container,
         {
-          backgroundColor: colors.background.tertiary,
+          backgroundColor: colors.background.secondary,
           borderColor: colors.border.default,
         },
       ]}
@@ -45,6 +45,12 @@ export function SearchBar({
     </View>
   );
 }
+
+/**
+ * Memoized: `value`/`placeholder` are strings and the callbacks are stable.
+ * Guards against re-renders triggered by unrelated parent state changes.
+ */
+export const SearchBar = React.memo(SearchBarComponent);
 
 const styles = StyleSheet.create({
   container: {

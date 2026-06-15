@@ -12,10 +12,58 @@ import { Image } from 'expo-image';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import Constants from 'expo-constants';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SafeBlurView } from '@/components/SafeBlurView';
+import { withAlpha } from '@/theme/utils';
 import { TAB_BAR_H } from './_layout';
 
+type SettingItemType = {
+    label: string;
+    icon: string;
+    route?: string;
+    value?: string | boolean;
+    isSwitch?: boolean;
+};
+
+// Static settings layout — hoisted to module scope so it isn't rebuilt on every
+// render. (The Dark Mode switch state is derived from the theme store at render.)
+const SETTINGS_SECTIONS: { title: string; items: SettingItemType[] }[] = [
+    {
+        title: 'Account',
+        items: [
+            { label: 'My Profile & Preferences', icon: 'person-circle-outline', route: '/(tabs)/profile' },
+            { label: 'Manage Subscription', icon: 'star-outline', route: '/(settings)/subscription', value: 'Pro Tier' },
+        ]
+    },
+    {
+        title: 'Insights & Tools',
+        items: [
+            { label: 'Analytics Dashboard', icon: 'stats-chart-outline', route: '/(tabs)/analytics' },
+            { label: 'Achievements & Badges', icon: 'trophy-outline', route: '/(community)/achievements' },
+            { label: 'AI Workout Planner', icon: 'sparkles-outline', route: '/(exercises)/ai-planner' },
+            { label: 'Calculators (1RM & Macros)', icon: 'calculator-outline', route: '/(exercises)/calculator' },
+        ]
+    },
+    {
+        title: 'App Settings',
+        items: [
+            { label: 'Notification Settings', icon: 'notifications-outline', route: '/(settings)/notification-preferences' },
+            { label: 'Notification History', icon: 'list-outline', route: '/(settings)/notifications' },
+            { label: 'Connected Devices', icon: 'watch-outline', route: '/(settings)/devices' },
+            { label: 'Dark Mode', icon: 'moon-outline', isSwitch: true, value: true },
+        ]
+    },
+    {
+        title: 'Support',
+        items: [
+            { label: 'Help Center', icon: 'help-circle-outline' },
+            { label: 'Terms of Service', icon: 'document-text-outline' },
+        ]
+    }
+];
+
 export default function MoreScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
 
@@ -29,107 +77,96 @@ export default function MoreScreen() {
 
     const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
-    type SettingItemType = {
-        label: string;
-        icon: string;
-        route?: string;
-        value?: string | boolean;
-        isSwitch?: boolean;
-    };
-
-    const SETTINGS_SECTIONS: { title: string; items: SettingItemType[] }[] = [
-        {
-            title: 'Account',
-            items: [
-                { label: 'My Profile & Preferences', icon: 'person-circle-outline', route: '/(tabs)/profile' },
-                { label: 'Manage Subscription', icon: 'star-outline', route: '/(settings)/subscription', value: 'Pro Tier' },
-            ]
-        },
-        {
-            title: 'Insights & Tools',
-            items: [
-                { label: 'Analytics Dashboard', icon: 'stats-chart-outline', route: '/(tabs)/analytics' },
-                { label: 'Achievements & Badges', icon: 'trophy-outline', route: '/(community)/achievements' },
-                { label: 'AI Workout Planner', icon: 'sparkles-outline', route: '/(exercises)/ai-planner' },
-                { label: 'Calculators (1RM & Macros)', icon: 'calculator-outline', route: '/(exercises)/calculator' },
-            ]
-        },
-        {
-            title: 'App Settings',
-            items: [
-                { label: 'Notification Settings', icon: 'notifications-outline', route: '/(settings)/notification-preferences' },
-                { label: 'Notification History', icon: 'list-outline', route: '/(settings)/notifications' },
-                { label: 'Connected Devices', icon: 'watch-outline', route: '/(settings)/devices' },
-                { label: 'Dark Mode', icon: 'moon-outline', isSwitch: true, value: true },
-            ]
-        },
-        {
-            title: 'Support',
-            items: [
-                { label: 'Help Center', icon: 'help-circle-outline' },
-                { label: 'Terms of Service', icon: 'document-text-outline' },
-            ]
-        }
-    ];
-
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             {/* Header */}
-            <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 32, fontWeight: '900' }]}>More</Text>
+            <View style={styles.header}>
+                <Text style={[typography.display, { color: colors.text.primary }]}>More</Text>
             </View>
 
-            <ScrollView contentContainerStyle={{ paddingBottom: TAB_BAR_H + 40 }}>
-                {/* Profile Summary */}
-                <View style={[styles.profileCard, { borderBottomColor: colors.border.default }]}>
-                    <Image
-                        source={(profile?.data as any)?.avatarUrl || 'https://i.pravatar.cc/150'}
-                        style={[styles.avatar, { borderColor: colors.border.default }]}
-                    />
-                    <View style={{ marginLeft: 16 }}>
-                        <Text style={[typography.heading, { color: colors.text.primary, fontSize: 22 }]}>
-                            {(profile?.data as any)?.name || user?.name || 'User'}
-                        </Text>
-                        <Text style={[typography.body, { color: colors.text.secondary }]}>
-                            {(profile?.data as any)?.email || user?.email || ''}
-                        </Text>
-                        <View style={[styles.badge, { backgroundColor: `${colors.accent.purple}20` }]}>
-                            <Text style={[typography.caption, { color: colors.accent.purple, fontWeight: '700' }]}>NightFuel User</Text>
+            <ScrollView
+                contentContainerStyle={{ paddingBottom: TAB_BAR_H + 40, paddingTop: spacing.sm }}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Profile Summary — glass hero with coral→pink brand ring */}
+                <View style={[styles.profileWrap, { marginHorizontal: spacing.md }]}>
+                    <SafeBlurView tint="dark" intensity={40} style={styles.profileCard}>
+                        <LinearGradient
+                            colors={[withAlpha(colors.accent.coral, 0.10), withAlpha(colors.accent.pink, 0.04)]}
+                            style={StyleSheet.absoluteFillObject}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                        />
+                        <LinearGradient
+                            colors={colors.gradients.coral}
+                            style={[styles.avatarRing, shadows.glow(colors.accent.pink)]}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                        >
+                            <Image
+                                source={(profile?.data as any)?.avatarUrl || 'https://i.pravatar.cc/150'}
+                                style={[styles.avatar, { borderColor: colors.background.secondary }]}
+                                cachePolicy="memory-disk"
+                                transition={200}
+                            />
+                        </LinearGradient>
+                        <View style={{ marginLeft: spacing.lg, flex: 1 }}>
+                            <Text style={[typography.h2, { color: colors.text.primary }]} numberOfLines={1}>
+                                {(profile?.data as any)?.name || user?.name || 'User'}
+                            </Text>
+                            <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: 2 }]} numberOfLines={1}>
+                                {(profile?.data as any)?.email || user?.email || ''}
+                            </Text>
+                            <View style={[styles.badge, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.30) }]}>
+                                <Ionicons name="moon" size={11} color={colors.accent.purple} />
+                                <Text style={[typography.captionMedium, { color: colors.accent.purple, marginLeft: 5 }]}>NightFuel User</Text>
+                            </View>
                         </View>
-                    </View>
+                    </SafeBlurView>
                 </View>
 
                 {/* Settings Sections */}
                 {SETTINGS_SECTIONS.map((section, idx) => (
                     <View key={idx} style={{ marginTop: spacing.xl }}>
-                        <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: spacing.xl, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }]}>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginLeft: spacing.xl, marginBottom: spacing.sm }]}>
                             {section.title}
                         </Text>
-                        <View style={[styles.sectionGroup, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl, marginHorizontal: spacing.md }]}>
+                        <View style={[styles.sectionGroup, { borderColor: colors.border.default, borderRadius: borderRadius.xl, marginHorizontal: spacing.md }]}>
+                            <SafeBlurView tint="dark" intensity={40} style={StyleSheet.absoluteFillObject} />
+                            <LinearGradient
+                                colors={colors.gradients.card}
+                                style={StyleSheet.absoluteFillObject}
+                            />
                             {section.items.map((item, itemIdx) => (
                                 <TouchableOpacity
                                     key={itemIdx}
-                                    style={[styles.settingItem, itemIdx !== section.items.length - 1 && { borderBottomColor: colors.border.default, borderBottomWidth: 1 }]}
+                                    accessibilityRole={item.isSwitch ? undefined : 'button'}
+                                    accessibilityLabel={item.isSwitch ? undefined : item.label}
+                                    style={[styles.settingItem, itemIdx !== section.items.length - 1 && { borderBottomColor: colors.border.default, borderBottomWidth: StyleSheet.hairlineWidth }]}
                                     onPress={() => item.route && router.push(item.route as any)}
                                     disabled={!item.route && !item.isSwitch}
+                                    activeOpacity={0.7}
                                 >
                                     <View style={styles.itemLeft}>
-                                        <Ionicons name={item.icon as any} size={22} color={colors.text.primary} />
-                                        <Text style={[typography.body, { color: colors.text.primary, marginLeft: 12, fontWeight: '500' }]}>{item.label}</Text>
+                                        <View style={[styles.itemIcon, { backgroundColor: withAlpha(colors.accent.coral, 0.10) }]}>
+                                            <Ionicons name={item.icon as any} size={19} color={colors.accent.coral} />
+                                        </View>
+                                        <Text style={[typography.bodyMedium, { color: colors.text.primary, marginLeft: spacing.md }]}>{item.label}</Text>
                                     </View>
 
                                     {item.isSwitch ? (
                                         <Switch
+                                            accessibilityLabel={item.label}
                                             value={item.label === 'Dark Mode' ? theme === 'dark' : item.value as boolean}
                                             onValueChange={(val) => {
                                                 if (item.label === 'Dark Mode') setTheme(val ? 'dark' : 'light');
                                             }}
-                                            trackColor={{ true: colors.accent.purple }}
+                                            trackColor={{ true: colors.accent.purple, false: colors.border.light }}
+                                            thumbColor={colors.text.primary}
+                                            ios_backgroundColor={colors.border.default}
                                         />
                                     ) : (
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            {item.value && <Text style={[typography.subhead, { color: colors.text.tertiary, marginRight: 8 }]}>{item.value}</Text>}
-                                            <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />
+                                            {item.value && <Text style={[typography.captionMedium, { color: colors.text.secondary, marginRight: spacing.sm }]}>{item.value}</Text>}
+                                            <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} />
                                         </View>
                                     )}
                                 </TouchableOpacity>
@@ -140,16 +177,19 @@ export default function MoreScreen() {
 
                 {/* Logout Button */}
                 <TouchableOpacity
-                    style={[styles.logoutBtn, { borderColor: colors.accent.coral, borderRadius: borderRadius.lg, marginHorizontal: spacing.md }]}
+                    accessibilityRole="button"
+                    style={[styles.logoutBtn, { borderColor: withAlpha(colors.accent.coral, 0.40), backgroundColor: withAlpha(colors.accent.coral, 0.08), borderRadius: borderRadius.lg, marginHorizontal: spacing.md }]}
                     onPress={async () => {
                         await useAuthStore.getState().logout();
                         router.replace('/(auth)/login');
                     }}
+                    activeOpacity={0.8}
                 >
-                    <Text style={[typography.subhead, { color: colors.accent.coral, fontWeight: '700' }]}>Log Out</Text>
+                    <Ionicons name="log-out-outline" size={18} color={colors.accent.coral} />
+                    <Text style={[typography.subhead, { color: colors.accent.coral, fontWeight: '700', marginLeft: spacing.sm }]}>Log Out</Text>
                 </TouchableOpacity>
 
-                <Text style={[typography.caption, { color: colors.text.tertiary, textAlign: 'center', marginTop: 32 }]}>
+                <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing['3xl'] }]}>
                     NightFuel v{appVersion}
                 </Text>
             </ScrollView>
@@ -159,12 +199,15 @@ export default function MoreScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
-    profileCard: { flexDirection: 'row', alignItems: 'center', padding: 24, borderBottomWidth: 1 },
-    avatar: { width: 80, height: 80, borderRadius: 40, borderWidth: 2 },
-    badge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginTop: 8 },
+    header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
+    profileWrap: { borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+    profileCard: { flexDirection: 'row', alignItems: 'center', padding: 20 },
+    avatarRing: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },
+    avatar: { width: 68, height: 68, borderRadius: 34, borderWidth: 3 },
+    badge: { flexDirection: 'row', alignSelf: 'flex-start', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1, marginTop: 10 },
     sectionGroup: { borderWidth: 1, overflow: 'hidden' },
-    settingItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
-    itemLeft: { flexDirection: 'row', alignItems: 'center' },
-    logoutBtn: { marginTop: 40, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+    settingItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 14 },
+    itemLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    itemIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    logoutBtn: { flexDirection: 'row', marginTop: 40, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
 });

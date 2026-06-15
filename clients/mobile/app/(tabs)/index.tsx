@@ -6,10 +6,12 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, RefreshControl,
-    TouchableOpacity, Dimensions, ActivityIndicator, Image, ImageBackground
+    TouchableOpacity, Dimensions, ImageBackground
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeBlurView } from '@/components/SafeBlurView';
-import { useTheme } from '@/theme';
+import { useTheme, colors as palette, typography, spacing, borderRadius } from '@/theme';
+import { Skeleton, EmptyState } from '@/components/ui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
@@ -32,10 +34,10 @@ const MINI_W = (width - H_PAD * 2 - CARD_GAP) / 2;
 // ─── Static data ─────────────────────────────────────────────────────────────
 
 const QUICK_ACTIONS = [
-    { id: 'meal', label: 'Log Meal', icon: 'restaurant', color: '#00D4AA', image: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=400&q=80', route: '/(tabs)/nutrition' },
-    { id: 'workout', label: 'Log Workout', icon: 'flame', color: '#FF4444', image: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=400&q=80', route: '/(tabs)/training' },
-    { id: 'sleep', label: 'Log Sleep', icon: 'moon', color: '#7C4DFF', image: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=400&q=80', route: '/(modals)/log-sleep' },
-    { id: 'stats', label: 'Progress', icon: 'stats-chart', color: '#4FC3F7', image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&q=80', route: '/(performance)' },
+    { id: 'meal', label: 'Log Meal', icon: 'restaurant', color: palette.accent.cyan, image: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=400&q=80', route: '/(tabs)/nutrition' },
+    { id: 'workout', label: 'Log Workout', icon: 'flame', color: palette.accent.coral, image: 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=400&q=80', route: '/(tabs)/training' },
+    { id: 'sleep', label: 'Log Sleep', icon: 'moon', color: palette.accent.purple, image: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=400&q=80', route: '/(modals)/log-sleep' },
+    { id: 'stats', label: 'Progress', icon: 'stats-chart', color: palette.accent.blue, image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&q=80', route: '/(performance)' },
 ] as const;
 
 // Exercise categories shown as image cards
@@ -45,7 +47,7 @@ const EXERCISE_CATEGORY_META = [
         label: 'Gym Workout',
         fallbackCount: '500+',
         image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=400&q=80',
-        accent: '#FF6B35',
+        accent: palette.accent.coral,
         filter: 'gym',
     },
     {
@@ -53,7 +55,7 @@ const EXERCISE_CATEGORY_META = [
         label: 'Home Workout',
         fallbackCount: '200+',
         image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&q=80',
-        accent: '#00D4AA',
+        accent: palette.accent.cyan,
         filter: 'home',
     },
     {
@@ -61,7 +63,7 @@ const EXERCISE_CATEGORY_META = [
         label: 'Cardio',
         fallbackCount: '80+',
         image: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=400&q=80',
-        accent: '#4FC3F7',
+        accent: palette.accent.blue,
         filter: 'cardio',
     },
     {
@@ -69,19 +71,19 @@ const EXERCISE_CATEGORY_META = [
         label: 'Kegel / Pelvic',
         fallbackCount: '5',
         image: 'https://images.unsplash.com/photo-1506629082955-511b1aa562c8?w=400&q=80',
-        accent: '#7C4DFF',
+        accent: palette.accent.purple,
         filter: 'kegel',
     },
 ] as const;
 
 // More Features shown as image cards on Home
 const MORE_FEATURES = [
-    { id: 'shifts', label: 'Shifts', image: 'https://images.unsplash.com/photo-1506784365847-bbad939e9335?w=400&q=80', accent: '#FFB300', route: '/(shifts)' },
-    { id: 'sleep', label: 'Sleep Tracker', image: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=400&q=80', accent: '#7C4DFF', route: '/(modals)/log-sleep' },
-    { id: 'community', label: 'Community', image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=400&q=80', accent: '#4FC3F7', route: '/(community)' },
-    { id: 'coaches', label: 'Coaches', image: 'https://images.unsplash.com/photo-1526506114866-2679df30dc0c?w=400&q=80', accent: '#FF6B35', route: '/coaches/browse' },
-    { id: 'circadian', label: 'Circadian', image: 'https://images.unsplash.com/photo-1621508643809-b69a941ea13e?w=400&q=80', accent: '#B47CFF', route: '/(tabs)/circadian' },
-    { id: 'settings', label: 'Settings', image: 'https://images.unsplash.com/photo-1555448248-2571daf6344b?w=400&q=80', accent: '#8B949E', route: '/(settings)' },
+    { id: 'shifts', label: 'Shifts', image: 'https://images.unsplash.com/photo-1506784365847-bbad939e9335?w=400&q=80', accent: palette.accent.amber, route: '/(shifts)' },
+    { id: 'sleep', label: 'Sleep Tracker', image: 'https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=400&q=80', accent: palette.accent.purple, route: '/(modals)/log-sleep' },
+    { id: 'community', label: 'Community', image: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=400&q=80', accent: palette.accent.blue, route: '/(community)' },
+    { id: 'coaches', label: 'Coaches', image: 'https://images.unsplash.com/photo-1526506114866-2679df30dc0c?w=400&q=80', accent: palette.accent.coral, route: '/coaches/browse' },
+    { id: 'circadian', label: 'Circadian', image: 'https://images.unsplash.com/photo-1621508643809-b69a941ea13e?w=400&q=80', accent: palette.accent.purpleLight, route: '/(tabs)/circadian' },
+    { id: 'settings', label: 'Settings', image: 'https://images.unsplash.com/photo-1555448248-2571daf6344b?w=400&q=80', accent: palette.text.secondary, route: '/(settings)' },
 ] as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -123,34 +125,34 @@ function getNextMeal(meals: PlanMeal[]): PlanMeal | null {
 }
 
 function getInsight(hour: number) {
-    if (hour >= 22 || hour < 5) return { icon: 'moon' as const, text: 'Melatonin rising. Wind down screens.', color: '#7C4DFF' };
-    if (hour >= 5 && hour < 9) return { icon: 'sunny' as const, text: 'Cortisol peak. Delay caffeine 90 min.', color: '#FFB300' };
-    if (hour >= 14 && hour < 17) return { icon: 'water' as const, text: 'Cortisol dip. Ideal time for protein.', color: '#00D4AA' };
-    if (hour >= 17 && hour < 22) return { icon: 'flash' as const, text: 'Alertness window closing. Fuel up now.', color: '#FF6B35' };
-    return { icon: 'pulse' as const, text: 'Optimal alertness window. Stay fuelled.', color: '#4FC3F7' };
+    if (hour >= 22 || hour < 5) return { icon: 'moon' as const, text: 'Melatonin rising. Wind down screens.', color: palette.accent.purple };
+    if (hour >= 5 && hour < 9) return { icon: 'sunny' as const, text: 'Cortisol peak. Delay caffeine 90 min.', color: palette.accent.amber };
+    if (hour >= 14 && hour < 17) return { icon: 'water' as const, text: 'Cortisol dip. Ideal time for protein.', color: palette.accent.cyan };
+    if (hour >= 17 && hour < 22) return { icon: 'flash' as const, text: 'Alertness window closing. Fuel up now.', color: palette.accent.coral };
+    return { icon: 'pulse' as const, text: 'Optimal alertness window. Stay fuelled.', color: palette.accent.blue };
 }
 
 // ─── MacroPill ────────────────────────────────────────────────────────────────
 
-function MacroPill({ label, value, color }: { label: string; value: string; color: string }) {
+const MacroPill = React.memo(function MacroPill({ label, value, color }: { label: string; value: string; color: string }) {
     const { colors } = useTheme();
     return (
         <View style={[mp.pill, { backgroundColor: withAlpha(color, 0.10) }]}>
-            <Text style={[mp.val, { color }]}>{value}</Text>
-            <Text style={[mp.lbl, { color: colors.text.tertiary }]}>{label}</Text>
+            <Text style={[typography.statTiny, mp.val, { color }]}>{value}</Text>
+            <Text style={[typography.caption, mp.lbl, { color: colors.text.secondary }]}>{label}</Text>
         </View>
     );
-}
+});
 const mp = StyleSheet.create({
     pill: { alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, marginRight: 8 },
-    val: { fontSize: 15, fontWeight: '800' },
-    lbl: { fontSize: 11, fontWeight: '500', marginTop: 2 },
+    val: {},
+    lbl: { marginTop: 2 },
 });
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
-    const { colors } = useTheme();
+    const { colors, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const qc = useQueryClient();
@@ -159,8 +161,8 @@ export default function DashboardScreen() {
 
     // ── Queries ──
     const { data: shift, isLoading: shiftLoading } = useQuery({ queryKey: ['current-shift'], queryFn: getCurrentShift, retry: 1 });
-    const { data: progress } = useQuery({ queryKey: ['today-progress'], queryFn: getTodayProgress, retry: 1 });
-    const { data: plan } = useQuery({ queryKey: ['today-plan'], queryFn: getTodayPlan, retry: 1 });
+    const { data: progress, isLoading: progressLoading } = useQuery({ queryKey: ['today-progress'], queryFn: getTodayProgress, retry: 1 });
+    const { data: plan, isLoading: planLoading } = useQuery({ queryKey: ['today-plan'], queryFn: getTodayPlan, retry: 1 });
 
     // Fetch exercise counts per category
     const exerciseCountQueries = EXERCISE_CATEGORY_META.map(cat => cat.filter);
@@ -230,8 +232,43 @@ export default function DashboardScreen() {
 
     if (shiftLoading) {
         return (
-            <View style={[s.loadingWrap, { backgroundColor: colors.background.primary }]}>
-                <ActivityIndicator size="large" color={colors.accent.coral} />
+            <View style={[s.root, { backgroundColor: colors.background.primary }]}>
+                <ScrollView
+                    contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16 }]}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Header skeleton */}
+                    <View style={s.header}>
+                        <View style={s.headerLeft}>
+                            <Skeleton width={44} height={44} radius={borderRadius.full} />
+                            <View>
+                                <Skeleton width={96} height={13} radius={borderRadius.sm} />
+                                <Skeleton width={140} height={22} radius={borderRadius.sm} style={{ marginTop: spacing.sm }} />
+                            </View>
+                        </View>
+                        <Skeleton width={38} height={38} radius={borderRadius.full} />
+                    </View>
+                    <Skeleton width={180} height={13} radius={borderRadius.sm} style={{ marginTop: spacing.md, marginBottom: spacing.xl }} />
+
+                    {/* Hero skeleton */}
+                    <Skeleton width="100%" height={104} radius={borderRadius['2xl']} style={{ marginBottom: spacing.md }} />
+                    {/* Insight chip skeleton */}
+                    <Skeleton width={240} height={36} radius={borderRadius.xl} style={{ marginBottom: spacing.xl }} />
+                    {/* Up-next skeleton */}
+                    <Skeleton width="100%" height={196} radius={borderRadius['2xl']} style={{ marginBottom: spacing.lg }} />
+                    {/* Mini-card row skeleton */}
+                    <View style={s.miniRow}>
+                        <Skeleton width={MINI_W} height={150} radius={borderRadius.xl} />
+                        <Skeleton width={MINI_W} height={150} radius={borderRadius.xl} />
+                    </View>
+                    {/* Quick-actions grid skeleton */}
+                    <Skeleton width={120} height={12} radius={borderRadius.sm} style={{ marginBottom: spacing.lg }} />
+                    <View style={s.quickGrid}>
+                        {[0, 1, 2, 3].map(i => (
+                            <Skeleton key={i} width={MINI_W} height={110} radius={borderRadius.xl} />
+                        ))}
+                    </View>
+                </ScrollView>
             </View>
         );
     }
@@ -261,8 +298,10 @@ export default function DashboardScreen() {
                         <TouchableOpacity
                             onPress={() => router.push('/(tabs)/profile' as any)}
                             activeOpacity={0.75}
+                            accessibilityRole="button"
+                            accessibilityLabel="Profile"
                         >
-                            <View style={[s.avatar, {
+                            <View style={[s.avatar, shadows.glow(colors.accent.coral), {
                                 backgroundColor: withAlpha(colors.accent.coral, 0.14),
                                 borderColor: withAlpha(colors.accent.coral, 0.35),
                             }]}>
@@ -270,8 +309,8 @@ export default function DashboardScreen() {
                             </View>
                         </TouchableOpacity>
                         <View>
-                            <Text style={[s.greetTxt, { color: colors.text.secondary }]}>{greeting} 👋</Text>
-                            <Text style={[s.nameTxt, { color: colors.text.primary }]}>{displayName}</Text>
+                            <Text style={[typography.captionMedium, s.greetTxt, { color: colors.text.secondary }]}>{greeting} 👋</Text>
+                            <Text style={[typography.h1, s.nameTxt, { color: colors.text.primary }]} numberOfLines={1}>{displayName}</Text>
                         </View>
                     </View>
                     <View style={s.headerRight}>
@@ -284,7 +323,8 @@ export default function DashboardScreen() {
                                 <Text style={[s.shiftTxt, { color: colors.accent.cyan }]}>{shift.type}</Text>
                             </View>
                         )}
-                        <TouchableOpacity
+                        <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Notifications"
+                            activeOpacity={0.75}
                             style={[s.iconBtn, { backgroundColor: withAlpha(colors.text.primary, 0.06) }]}
                             onPress={() => router.push('/(settings)/notifications' as any)}
                         >
@@ -292,13 +332,18 @@ export default function DashboardScreen() {
                         </TouchableOpacity>
                     </View>
                 </View>
-                <Text style={[s.dateTxt, { color: colors.text.tertiary }]}>{formattedDate}</Text>
+                <Text style={[typography.bodySm, s.dateTxt, { color: colors.text.secondary }]}>{formattedDate}</Text>
 
                 {/* ══ SHIFT COUNTDOWN HERO ════════════════════════════════════ */}
                 <TouchableOpacity
                     onPress={() => router.push('/(shifts)' as any)}
                     activeOpacity={0.88}
-                    style={{ borderRadius: 24, overflow: 'hidden', marginBottom: 12, borderWidth: 1, borderColor: withAlpha(colors.accent.coral, 0.15) }}
+                    accessibilityRole="button"
+                    accessibilityLabel={countdown ? `Your shift ends in ${countdown}` : 'No active shift, rest mode'}
+                    style={[
+                        { borderRadius: 24, overflow: 'hidden', marginBottom: 12, borderWidth: 1, borderColor: withAlpha(heroColor, 0.25) },
+                        shadows.glow(heroColor),
+                    ]}
                 >
                     <SafeBlurView
                         tint="dark"
@@ -306,23 +351,27 @@ export default function DashboardScreen() {
                         style={[s.heroCard, { borderWidth: 0 }]}
                     >
                         <LinearGradient
-                            colors={[withAlpha(heroColor, 0.15), withAlpha(heroColor, 0.02)]}
+                            colors={countdown ? colors.gradients.coral : [withAlpha(heroColor, 0.18), withAlpha(heroColor, 0.02)]}
                             style={StyleSheet.absoluteFillObject}
                             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                         />
                         <View style={{ flex: 1 }}>
-                            <Text style={[s.heroLbl, { color: colors.text.secondary }]}>
+                            <Text style={[typography.overline, s.heroLbl, { color: countdown ? withAlpha('#FFFFFF', 0.92) : colors.text.secondary }]}>
                                 {countdown ? 'Your shift ends in' : 'No active shift'}
                             </Text>
-                            <Text style={[s.heroVal, { color: heroColor }]}>
+                            <Text
+                                style={[countdown ? typography.statLarge : typography.h1, s.heroVal, { color: countdown ? colors.text.primary : heroColor }]}
+                                numberOfLines={1}
+                                adjustsFontSizeToFit
+                            >
                                 {countdown ?? 'Rest Mode'}
                             </Text>
                         </View>
-                        <View style={[s.heroIcon, { backgroundColor: withAlpha(heroColor, 0.12) }]}>
+                        <View style={[s.heroIcon, { backgroundColor: countdown ? withAlpha('#FFFFFF', 0.18) : withAlpha(heroColor, 0.12) }]}>
                             <Ionicons
                                 name={countdown ? 'time-outline' : 'moon-outline'}
                                 size={34}
-                                color={heroColor}
+                                color={countdown ? colors.text.primary : heroColor}
                             />
                         </View>
                     </SafeBlurView>
@@ -334,11 +383,21 @@ export default function DashboardScreen() {
                     borderColor: withAlpha(insight.color, 0.22),
                 }]}>
                     <Ionicons name={insight.icon} size={13} color={insight.color} />
-                    <Text style={[s.chipTxt, { color: insight.color }]}>{insight.text}</Text>
+                    <Text style={[typography.captionMedium, s.chipTxt, { color: insight.color }]}>{insight.text}</Text>
                 </View>
 
                 {/* ══ UP NEXT MEAL ════════════════════════════════════════════ */}
-                {nextMeal && (
+                {planLoading ? (
+                    <View style={s.upNextSkeleton}>
+                        <View style={s.upNextTop}>
+                            <Skeleton width={120} height={26} radius={borderRadius.md} />
+                            <Skeleton width={34} height={34} radius={borderRadius.full} />
+                        </View>
+                        <Skeleton width="70%" height={26} radius={borderRadius.sm} style={{ marginTop: spacing.md }} />
+                        <Skeleton width="90%" height={16} radius={borderRadius.sm} style={{ marginTop: spacing.sm }} />
+                        <Skeleton width="100%" height={46} radius={borderRadius.lg} style={{ marginTop: spacing.xl }} />
+                    </View>
+                ) : nextMeal ? (
                     <View style={{ borderRadius: 24, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}>
                         <SafeBlurView
                             tint="dark"
@@ -352,16 +411,16 @@ export default function DashboardScreen() {
                             />
                             <View style={s.upNextTop}>
                                 <View style={[s.upNextBadge, { backgroundColor: withAlpha(colors.accent.coral, 0.12) }]}>
-                                    <Text style={[s.upNextLbl, { color: colors.accent.coral }]}>UP NEXT</Text>
+                                    <Text style={[typography.overline, s.upNextLbl, { color: colors.accent.coral }]}>UP NEXT</Text>
                                     <Text style={[s.upNextTime, { color: colors.accent.coral }]}> · {nextMeal.time}</Text>
                                 </View>
                                 <View style={[s.mealIconWrap, { backgroundColor: withAlpha(colors.accent.amber, 0.12) }]}>
                                     <Ionicons name="restaurant" size={16} color={colors.accent.amber} />
                                 </View>
                             </View>
-                            <Text style={[s.mealName, { color: colors.text.primary }]}>{nextMeal.label}</Text>
+                            <Text style={[typography.h2, s.mealName, { color: colors.text.primary }]}>{nextMeal.label}</Text>
                             {!!nextMeal.description && (
-                                <Text style={[s.mealDesc, { color: colors.text.secondary }]} numberOfLines={2}>
+                                <Text style={[typography.body, s.mealDesc, { color: colors.text.secondary }]} numberOfLines={2}>
                                     {nextMeal.description}
                                 </Text>
                             )}
@@ -373,13 +432,31 @@ export default function DashboardScreen() {
                                 </View>
                             )}
                             <TouchableOpacity
-                                style={[s.logBtn, { backgroundColor: colors.accent.coral }]}
+                                style={[s.logBtn, { overflow: 'hidden' }, shadows.glow(colors.accent.pink)]}
                                 onPress={() => router.push('/(tabs)/nutrition' as any)}
+                                activeOpacity={0.85}
+                                accessibilityRole="button"
+                                accessibilityLabel="Log Meal"
                             >
+                                <LinearGradient
+                                    colors={colors.gradients.coral}
+                                    style={StyleSheet.absoluteFillObject}
+                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                />
                                 <Ionicons name="checkmark" size={17} color="#fff" />
                                 <Text style={s.logBtnTxt}>Log Meal</Text>
                             </TouchableOpacity>
                         </SafeBlurView>
+                    </View>
+                ) : (
+                    <View style={s.emptyCard}>
+                        <EmptyState
+                            icon="restaurant-outline"
+                            title="No meals planned yet"
+                            subtitle="Build today's fuelling plan around your shift to see your next meal here."
+                            actionLabel="Plan my meals"
+                            onAction={() => router.push('/(tabs)/nutrition' as any)}
+                        />
                     </View>
                 )}
 
@@ -390,6 +467,8 @@ export default function DashboardScreen() {
                         style={{ width: MINI_W, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}
                         onPress={() => router.push('/(shifts)/sleep-optimizer' as any)}
                         activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Sleep Window, 8 hour target, melatonin guide"
                     >
                         <SafeBlurView
                             tint="dark"
@@ -398,12 +477,15 @@ export default function DashboardScreen() {
                                 borderColor: withAlpha(colors.text.primary, 0.1),
                             }]}
                         >
-                            <View style={[s.miniIcon, { backgroundColor: withAlpha('#7C4DFF', 0.14) }]}>
-                                <Ionicons name="moon" size={20} color="#7C4DFF" />
+                            <View style={[s.miniIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.14) }]}>
+                                <Ionicons name="moon" size={20} color={colors.accent.purple} />
                             </View>
-                            <Text style={[s.miniLbl, { color: colors.text.tertiary }]}>Sleep Window</Text>
-                            <Text style={[s.miniVal, { color: colors.text.primary }]}>8h target</Text>
-                            <Text style={[s.miniSub, { color: '#7C4DFF' }]}>Melatonin guide →</Text>
+                            <Text style={[typography.overline, s.miniLbl, { color: colors.text.secondary }]}>Sleep Window</Text>
+                            <Text style={[s.miniVal, { color: colors.text.primary }]}>
+                                <Text style={typography.statSmall}>8h</Text>
+                                <Text style={[typography.captionMedium, { color: colors.text.secondary }]}> target</Text>
+                            </Text>
+                            <Text style={[typography.captionMedium, s.miniSub, { color: colors.accent.purple }]}>Melatonin guide →</Text>
                         </SafeBlurView>
                     </TouchableOpacity>
 
@@ -414,46 +496,55 @@ export default function DashboardScreen() {
                             intensity={40}
                             style={[s.miniCard, { borderWidth: 0, width: '100%' }]}
                         >
-                            <View style={[s.miniIcon, { backgroundColor: withAlpha('#4FC3F7', 0.14) }]}>
-                                <Ionicons name="water" size={20} color="#4FC3F7" />
+                            <View style={[s.miniIcon, { backgroundColor: withAlpha(colors.accent.blue, 0.14) }]}>
+                                <Ionicons name="water" size={20} color={colors.accent.blue} />
                             </View>
-                            <Text style={[s.miniLbl, { color: colors.text.tertiary }]}>Hydration</Text>
+                            <Text style={[typography.overline, s.miniLbl, { color: colors.text.secondary }]}>Hydration</Text>
                             <Text style={[s.miniVal, { color: colors.text.primary }]}>
-                                {progress ? ((progress.hydrationActual || progress.hydrationMl || 0) / 1000).toFixed(1) : '0'}
-                                <Text style={[s.miniSub, { color: colors.text.tertiary }]}>
+                                <Text style={typography.statMedium}>
+                                    {progress ? ((progress.hydrationActual || progress.hydrationMl || 0) / 1000).toFixed(1) : '0'}
+                                </Text>
+                                <Text style={[typography.captionMedium, { color: colors.text.secondary }]}>
                                     {' / 2.5L'}
                                 </Text>
                             </Text>
-                            <View style={[s.hydBarBg, { backgroundColor: withAlpha('#4FC3F7', 0.15) }]}>
-                                <View style={[s.hydBarFill, { width: (hydPct + '%') as any, backgroundColor: '#4FC3F7' }]} />
+                            <View style={[s.hydBarBg, { backgroundColor: withAlpha(colors.accent.blue, 0.15) }]}>
+                                <View style={[s.hydBarFill, { width: (hydPct + '%') as any, backgroundColor: colors.accent.blue }]} />
                             </View>
                             <TouchableOpacity
                                 style={[s.addWaterBtn, {
-                                    backgroundColor: withAlpha('#4FC3F7', 0.12),
-                                    borderColor: withAlpha('#4FC3F7', 0.22),
+                                    backgroundColor: withAlpha(colors.accent.blue, 0.12),
+                                    borderColor: withAlpha(colors.accent.blue, 0.22),
                                 }]}
                                 onPress={() => addWater()}
+                                activeOpacity={0.85}
+                                accessibilityRole="button"
+                                accessibilityLabel="Add 250 millilitres of water"
                             >
-                                <Text style={[s.addWaterTxt, { color: '#4FC3F7' }]}>+ Add 250ml</Text>
+                                <Text style={[typography.captionMedium, s.addWaterTxt, { color: colors.accent.blue }]}>+ Add 250ml</Text>
                             </TouchableOpacity>
                         </SafeBlurView>
                     </View>
                 </View>
 
                 {/* ══ QUICK ACTIONS ════════════════════════════════════════════ */}
-                <Text style={[s.sectionLbl, { color: colors.text.tertiary }]}>QUICK ACTIONS</Text>
+                <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>QUICK ACTIONS</Text>
                 <View style={s.quickGrid}>
                     {QUICK_ACTIONS.map(a => (
                         <TouchableOpacity
                             key={a.id}
                             onPress={() => router.push(a.route as any)}
                             activeOpacity={0.75}
+                            accessibilityRole="button"
+                            accessibilityLabel={a.label}
                             style={{ width: MINI_W, height: 110, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}
                         >
                             <Image
                                 source={{ uri: a.image }}
                                 style={StyleSheet.absoluteFillObject}
-                                resizeMode="cover"
+                                contentFit="cover"
+                                cachePolicy="memory-disk"
+                                transition={200}
                             />
                             {/* Dark gradient for text readability */}
                             <LinearGradient
@@ -475,7 +566,7 @@ export default function DashboardScreen() {
                 </View>
 
                 {/* ══ EXERCISE CATEGORIES ═════════════════════════════════════ */}
-                <Text style={[s.sectionLbl, { color: colors.text.tertiary }]}>EXPLORE</Text>
+                <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>EXPLORE</Text>
                 <View style={s.catGrid}>
                     {exerciseCategories.map(cat => (
                         <TouchableOpacity
@@ -483,11 +574,15 @@ export default function DashboardScreen() {
                             style={s.catCard}
                             onPress={() => router.push(`/(exercises)?category=${cat.id}` as any)}
                             activeOpacity={0.82}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${cat.label}, ${cat.count} exercises`}
                         >
                             <Image
                                 source={{ uri: cat.image }}
                                 style={StyleSheet.absoluteFillObject}
-                                resizeMode="cover"
+                                contentFit="cover"
+                                cachePolicy="memory-disk"
+                                transition={200}
                             />
                             {/* Dark gradient overlay for readability */}
                             <LinearGradient
@@ -507,7 +602,7 @@ export default function DashboardScreen() {
                 </View>
 
                 {/* ══ MORE FEATURES (HOME) ═════════════════════════════════════ */}
-                <Text style={[s.sectionLbl, { color: colors.text.tertiary }]}>MORE FEATURES</Text>
+                <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>MORE FEATURES</Text>
                 <View style={[s.catGrid, { marginBottom: 28 }]}>
                     {MORE_FEATURES.map(feat => (
                         <TouchableOpacity
@@ -515,11 +610,15 @@ export default function DashboardScreen() {
                             style={s.catCard}
                             onPress={() => router.push(feat.route as any)}
                             activeOpacity={0.82}
+                            accessibilityRole="button"
+                            accessibilityLabel={feat.label}
                         >
                             <Image
                                 source={{ uri: feat.image }}
                                 style={StyleSheet.absoluteFillObject}
-                                resizeMode="cover"
+                                contentFit="cover"
+                                cachePolicy="memory-disk"
+                                transition={200}
                             />
                             {/* Dark gradient overlay for readability */}
                             <LinearGradient
@@ -535,20 +634,52 @@ export default function DashboardScreen() {
                 </View>
 
                 {/* ══ WORKOUT ACTIVITY HEATMAP ═════════════════════════════════ */}
-                <Text style={[s.sectionLbl, { color: colors.text.tertiary }]}>WORKOUT ACTIVITY</Text>
+                <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>WORKOUT ACTIVITY</Text>
                 <ActivityHeatmap />
                 <View style={{ height: 20 }} />
 
                 {/* ══ 24-HOUR SCHEDULE TIMELINE ════════════════════════════════ */}
-                {sortedMeals.length > 0 && (
-                    <>
-                        <View style={s.sectionRow}>
-                            <Text style={[s.sectionLbl, { color: colors.text.tertiary }]}>24H SCHEDULE</Text>
-                            <TouchableOpacity onPress={() => router.push('/(tabs)/circadian' as any)}>
-                                <Text style={[s.viewAll, { color: colors.accent.coral }]}>View Full →</Text>
-                            </TouchableOpacity>
-                        </View>
+                <View style={s.sectionRow}>
+                    <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>24H SCHEDULE</Text>
+                    {sortedMeals.length > 0 && (
+                        <TouchableOpacity
+                            onPress={() => router.push('/(tabs)/circadian' as any)}
+                            activeOpacity={0.85}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            accessibilityRole="button"
+                            accessibilityLabel="View full 24 hour schedule"
+                        >
+                            <Text style={[typography.captionMedium, s.viewAll, { color: colors.accent.coral }]}>View Full →</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
 
+                {planLoading ? (
+                    <View style={[s.timeline, { borderColor: withAlpha(colors.text.primary, 0.1) }]}>
+                        {[0, 1, 2, 3].map(i => (
+                            <View key={i} style={s.tlRow}>
+                                <Skeleton width={40} height={12} radius={borderRadius.sm} />
+                                <View style={s.tlConnector}>
+                                    <Skeleton width={10} height={10} radius={borderRadius.full} />
+                                </View>
+                                <View style={s.tlContent}>
+                                    <Skeleton width="60%" height={14} radius={borderRadius.sm} />
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                ) : sortedMeals.length === 0 ? (
+                    <View style={s.emptyCard}>
+                        <EmptyState
+                            icon="calendar-outline"
+                            title="Your day is a blank canvas"
+                            subtitle="Set up a meal protocol to map your fuel, hydration and rest across all 24 hours."
+                            actionLabel="View circadian plan"
+                            onAction={() => router.push('/(tabs)/circadian' as any)}
+                        />
+                    </View>
+                ) : (
+                    <>
                         <SafeBlurView
                             tint="dark"
                             intensity={40}
@@ -597,7 +728,7 @@ export default function DashboardScreen() {
                                                 )}
                                             </View>
                                             {!!meal.description && !isPast && (
-                                                <Text style={[s.tlDesc, { color: colors.text.tertiary }]} numberOfLines={1}>
+                                                <Text style={[s.tlDesc, { color: colors.text.secondary }]} numberOfLines={1}>
                                                     {meal.description}
                                                 </Text>
                                             )}
@@ -610,7 +741,7 @@ export default function DashboardScreen() {
                 )}
 
                 {/* ══ WEEKLY RECAP ════════════════════════════════════════════ */}
-                <Text style={[s.sectionLbl, { color: colors.text.tertiary, marginTop: 4 }]}>WEEKLY RECAP</Text>
+                <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary, marginTop: 4 }]}>WEEKLY RECAP</Text>
                 <WeeklyRecap />
 
                 <View style={{ height: 120 }} />
@@ -623,7 +754,6 @@ export default function DashboardScreen() {
 
 const s = StyleSheet.create({
     root: { flex: 1 },
-    loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     scroll: { paddingHorizontal: H_PAD },
 
     // Header
@@ -632,33 +762,34 @@ const s = StyleSheet.create({
     headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     avatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
     avatarTxt: { fontSize: 15, fontWeight: '800' },
-    greetTxt: { fontSize: 13, fontWeight: '500' },
-    nameTxt: { fontSize: 20, fontWeight: '800', marginTop: 1 },
+    greetTxt: {},
+    nameTxt: { marginTop: 1 },
     shiftBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
     shiftDot: { width: 6, height: 6, borderRadius: 3 },
     shiftTxt: { fontSize: 12, fontWeight: '700' },
     iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-    dateTxt: { fontSize: 13, fontWeight: '500', marginBottom: 20, marginTop: 2 },
+    dateTxt: { marginBottom: 20, marginTop: 2 },
 
     // Hero
     heroCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 24, borderRadius: 24, borderWidth: 1, overflow: 'hidden', marginBottom: 12 },
-    heroLbl: { fontSize: 14, fontWeight: '500', marginBottom: 4 },
-    heroVal: { fontSize: 40, fontWeight: '900', letterSpacing: -1 },
+    heroLbl: { marginBottom: 6 },
+    heroVal: {},
     heroIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
 
     // Insight chip
     chipWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1, marginBottom: 20, alignSelf: 'flex-start' },
-    chipTxt: { fontSize: 13, fontWeight: '600' },
+    chipTxt: { flexShrink: 1 },
 
     // UP NEXT card
     upNextCard: { padding: 22, borderRadius: 24, borderWidth: 1, overflow: 'hidden', marginBottom: 16 },
+    upNextSkeleton: { padding: 22, borderRadius: 24, borderWidth: 1, borderColor: palette.border.default, backgroundColor: withAlpha(palette.background.secondary, 0.5), marginBottom: 16 },
     upNextTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
     upNextBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
-    upNextLbl: { fontSize: 11, fontWeight: '900', letterSpacing: 0.8 },
+    upNextLbl: {},
     upNextTime: { fontSize: 11, fontWeight: '700' },
     mealIconWrap: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-    mealName: { fontSize: 22, fontWeight: '900', marginBottom: 6 },
-    mealDesc: { fontSize: 14, lineHeight: 20, marginBottom: 14 },
+    mealName: { marginBottom: 6 },
+    mealDesc: { marginBottom: 14 },
     macroRow: { flexDirection: 'row', marginBottom: 18 },
     logBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 14 },
     logBtnTxt: { color: '#fff', fontSize: 15, fontWeight: '800' },
@@ -667,13 +798,16 @@ const s = StyleSheet.create({
     miniRow: { flexDirection: 'row', gap: CARD_GAP, marginBottom: 28 },
     miniCard: { width: MINI_W, padding: 16, borderRadius: 20, borderWidth: 1 },
     miniIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-    miniLbl: { fontSize: 11, fontWeight: '600', letterSpacing: 0.5, marginBottom: 4 },
-    miniVal: { fontSize: 20, fontWeight: '800', marginBottom: 4 },
-    miniSub: { fontSize: 11, fontWeight: '600' },
+    miniLbl: { marginBottom: 4 },
+    miniVal: { marginBottom: 4 },
+    miniSub: {},
     hydBarBg: { height: 4, borderRadius: 4, marginVertical: 10, overflow: 'hidden' },
     hydBarFill: { height: '100%', borderRadius: 4 },
     addWaterBtn: { paddingVertical: 7, borderRadius: 10, borderWidth: 1, alignItems: 'center', marginTop: 4 },
-    addWaterTxt: { fontSize: 12, fontWeight: '700' },
+    addWaterTxt: {},
+
+    // Empty / zero-data card (matches glass card rhythm)
+    emptyCard: { borderRadius: 24, borderWidth: 1, borderColor: palette.border.default, backgroundColor: withAlpha(palette.background.secondary, 0.5), marginBottom: 28, overflow: 'hidden' },
 
     // Exercise category cards (2×2 image grid)
     catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: CARD_GAP, marginBottom: 28 },
@@ -684,7 +818,7 @@ const s = StyleSheet.create({
     catLabelTxt: { color: '#fff', fontSize: 13, fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
 
     // Quick actions
-    sectionLbl: { fontSize: 12, fontWeight: '700', letterSpacing: 1.4, marginBottom: 14 },
+    sectionLbl: { marginBottom: 14 },
     quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: CARD_GAP, marginBottom: 28 },
     quickCard: { width: MINI_W, padding: 18, borderRadius: 20, borderWidth: 1, alignItems: 'flex-start' },
     quickIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
@@ -692,7 +826,7 @@ const s = StyleSheet.create({
 
     // Section row with link
     sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-    viewAll: { fontSize: 13, fontWeight: '700' },
+    viewAll: {},
 
     // Timeline
     timeline: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 28 },

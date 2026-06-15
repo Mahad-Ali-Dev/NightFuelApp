@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    Dimensions, ActivityIndicator, Image, ImageBackground
+    Dimensions, ImageBackground
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
@@ -15,6 +15,7 @@ import { getToday as getTodayProgress } from '@/api/progress';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Card } from '@/components/ui/Card';
+import { Skeleton } from '@/components/ui';
 import { format } from 'date-fns';
 import { withAlpha } from '@/theme/utils';
 import { colors as themeColors } from '@/theme/colors';
@@ -23,7 +24,7 @@ import { TAB_BAR_H } from './_layout';
 const { width } = Dimensions.get('window');
 
 export default function NutritionHubScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
 
@@ -74,6 +75,12 @@ export default function NutritionHubScreen() {
         return { target, consumed };
     }, [progress, logs]);
 
+    // Stable navigation handlers so the memoized ToolCards don't re-render on
+    // unrelated parent updates.
+    const openLibrary = useCallback(() => router.push('/(meals)/encyclopedia' as any), [router]);
+    const openRecipes = useCallback(() => router.push('/(meals)/recipes' as any), [router]);
+    const openGrocery = useCallback(() => router.push('/(meals)/grocery' as any), [router]);
+
     return (
         <ImageBackground
             blurRadius={4}
@@ -92,25 +99,29 @@ export default function NutritionHubScreen() {
             >
                 {/* Header */}
                 <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
-                    <View>
-                        <Text style={[typography.display, { color: colors.text.primary, fontSize: 32, fontWeight: '900' }]}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={[typography.overline, { color: colors.text.secondary }]}>
+                            {format(new Date(), 'EEEE, MMM d').toUpperCase()}
+                        </Text>
+                        <Text style={[typography.display, { color: colors.text.primary, fontSize: 34, marginTop: 4 }]}>
                             Nutrition
                         </Text>
-                        <Text style={[typography.body, { color: colors.text.tertiary }]}>
+                        <Text style={[typography.body, { color: colors.text.secondary, marginTop: 2 }]}>
                             Fueling your {(progress as any)?.shiftType || 'Rotation'} phase.
                         </Text>
                     </View>
-                    <TouchableOpacity
-                        style={[styles.historyBtn, { backgroundColor: colors.background.secondary }]}
+                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="View log"
+                        activeOpacity={0.85}
+                        style={[styles.historyBtn, { backgroundColor: colors.background.secondary, borderWidth: 1, borderColor: colors.border.default }, shadows.sm]}
                         onPress={() => router.push('/(meals)/log-meal' as any)}
                     >
-                        <Ionicons name="receipt-outline" size={24} color={colors.text.primary} />
+                        <Ionicons name="receipt-outline" size={22} color={colors.text.primary} />
                     </TouchableOpacity>
                 </View>
 
                 {/* Macro Dashboard */}
-                <View style={styles.macroDashboard}>
-                    <View style={styles.mainCircle}>
+                <Card variant="glass" style={styles.macroDashboard}>
+                    <View style={[styles.mainCircle, shadows.glow(colors.accent.emerald)]}>
                         <CircularProgress
                             progress={stats.target.calories > 0 ? stats.consumed.calories / stats.target.calories : 0}
                             size={180}
@@ -119,10 +130,10 @@ export default function NutritionHubScreen() {
                             trackColor={colors.background.tertiary}
                         />
                         <View style={styles.circleText}>
-                            <Text style={[typography.display, { color: colors.text.primary, fontSize: 36 }]}>
+                            <Text style={[typography.statLarge, { color: colors.text.primary, fontSize: 44, lineHeight: 50 }]}>
                                 {Math.max(0, stats.target.calories - stats.consumed.calories)}
                             </Text>
-                            <Text style={[typography.caption, { color: colors.text.tertiary, fontWeight: 'bold' }]}>KCAL LEFT</Text>
+                            <Text style={[typography.overline, { color: colors.text.secondary }]}>KCAL LEFT</Text>
                         </View>
                     </View>
 
@@ -131,27 +142,30 @@ export default function NutritionHubScreen() {
                         <MacroItem label="Carbs" current={stats.consumed.carbs} target={stats.target.carbs} color={colors.accent.cyan} unit="g" />
                         <MacroItem label="Fat" current={stats.consumed.fat} target={stats.target.fat} color={colors.accent.amber} unit="g" />
                     </View>
-                </View>
+                </Card>
 
                 {/* Quick Tools */}
+                <Text style={[typography.overline, { color: colors.text.secondary, marginHorizontal: 20, marginTop: 28, marginBottom: 12 }]}>
+                    Quick Tools
+                </Text>
                 <View style={styles.toolRow}>
                     <ToolCard
                         icon="search"
                         title="Library"
                         color={colors.accent.cyan}
-                        onPress={() => router.push('/(meals)/encyclopedia' as any)}
+                        onPress={openLibrary}
                     />
                     <ToolCard
                         icon="restaurant"
                         title="Recipes"
                         color={colors.accent.purple}
-                        onPress={() => router.push('/(meals)/recipes' as any)}
+                        onPress={openRecipes}
                     />
                     <ToolCard
                         icon="cart"
                         title="Grocery"
                         color={colors.accent.emerald}
-                        onPress={() => router.push('/(meals)/grocery' as any)}
+                        onPress={openGrocery}
                     />
                 </View>
 
@@ -159,15 +173,22 @@ export default function NutritionHubScreen() {
                 <View style={[styles.section, { marginTop: 32 }]}>
                     <View style={styles.sectionHeader}>
                         <Text style={[typography.heading, { color: colors.text.primary }]}>Daily Plan</Text>
-                        <TouchableOpacity onPress={() => router.push('/(meals)/planner' as any)}>
+                        <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => router.push('/(meals)/planner' as any)}>
                             <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: 'bold' }]}>EDIT PLAN</Text>
                         </TouchableOpacity>
                     </View>
 
                     {planQuery.isLoading ? (
-                        <ActivityIndicator color={colors.accent.emerald} style={{ marginTop: 20 }} />
-                    ) : !plan ? (
+                        <View style={styles.planList}>
+                            {[0, 1, 2].map((i) => (
+                                <Skeleton key={i} width="100%" height={72} radius={borderRadius.xl} />
+                            ))}
+                        </View>
+                    ) : !plan || !((plan.meals || []).some((m: any) => m && (m.label || m.name))) ? (
                         <TouchableOpacity
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityLabel="No plan generated for today. Generate plan."
                             style={{ borderRadius: borderRadius.xl, overflow: 'hidden', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border.default }}
                             onPress={() => router.push('/(meals)/planner' as any)}
                         >
@@ -176,16 +197,24 @@ export default function NutritionHubScreen() {
                                 intensity={40}
                                 style={[styles.emptyPlan, { backgroundColor: 'transparent' }]}
                             >
-                                <Ionicons name="sparkles" size={24} color={colors.accent.purple} />
-                                <Text style={[typography.body, { color: colors.text.secondary, marginTop: 8 }]}>No plan generated for today</Text>
-                                <Text style={[typography.caption, { color: colors.text.tertiary, textAlign: 'center', marginTop: 4 }]}>Tap to let Ria build your protocol-compliant meals.</Text>
+                                <View style={[styles.emptyPlanIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.12), borderColor: withAlpha(colors.accent.purple, 0.24) }, shadows.glow(colors.accent.purple)]}>
+                                    <Ionicons name="sparkles" size={26} color={colors.accent.purple} />
+                                </View>
+                                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 14 }]}>No plan generated for today</Text>
+                                <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginTop: 6, maxWidth: 240, lineHeight: 18 }]}>Tap to let Ria build your protocol-compliant meals.</Text>
+                                <View style={[styles.emptyPlanCta, { backgroundColor: withAlpha(colors.accent.purple, 0.14) }]}>
+                                    <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', letterSpacing: 0.5 }]}>GENERATE PLAN</Text>
+                                </View>
                             </BlurView>
                         </TouchableOpacity>
                     ) : (
                         <View style={styles.planList}>
-                            {(plan.meals || []).map((m: any, i: number) => (
+                            {(plan.meals || []).filter((m: any) => m && (m.label || m.name)).map((m: any, i: number) => (
                                 <TouchableOpacity
                                     key={i}
+                                    activeOpacity={0.85}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Log ${m.label || m.name}${m.time ? `, ${m.time}` : ''}`}
                                     style={{ borderRadius: borderRadius.xl, overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}
                                     onPress={() => router.push({ pathname: '/(meals)/log-meal', params: { preset: m.label } })}
                                 >
@@ -198,8 +227,8 @@ export default function NutritionHubScreen() {
                                             <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold' }]}>{m.time}</Text>
                                         </View>
                                         <View style={{ flex: 1, marginLeft: 16 }}>
-                                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{m.label}</Text>
-                                            <Text style={[typography.caption, { color: colors.text.tertiary }]} numberOfLines={1}>{m.description}</Text>
+                                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{m.label || m.name}</Text>
+                                            <Text style={[typography.caption, { color: colors.text.secondary }]} numberOfLines={1}>{m.description}</Text>
                                         </View>
                                         <Ionicons name="add-circle" size={24} color={colors.accent.emerald} />
                                     </BlurView>
@@ -211,12 +240,13 @@ export default function NutritionHubScreen() {
 
                 {/* Fasting Card */}
                 <View style={styles.section}>
-                    <View style={{ borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: colors.accent.cyan }}>
+                    <View style={[{ borderRadius: borderRadius['2xl'], overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.accent.cyan, 0.4) }, shadows.glow(colors.accent.cyan)]}>
                         <BlurView
                             tint="dark"
                             intensity={40}
                             style={styles.fastCard}
                         >
+                            <LinearGradient colors={[withAlpha(colors.accent.cyan, 0.12), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
                             <View style={styles.fastHeader}>
                                 <View style={styles.fastTitle}>
                                     <Ionicons name="timer" size={24} color={colors.accent.cyan} />
@@ -229,13 +259,15 @@ export default function NutritionHubScreen() {
 
                             <View style={styles.fastBody}>
                                 <View>
-                                    <Text style={[typography.caption, { color: colors.text.tertiary }]}>Protocol</Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary }]}>Protocol</Text>
                                     <Text style={[typography.subhead, { color: colors.text.primary }]}>16:8 Windows</Text>
                                 </View>
                                 <TouchableOpacity
-                                    style={[styles.fastAction, { backgroundColor: colors.accent.cyan }]}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={fasting?.status === 'ACTIVE' ? 'View timer' : 'Start fast'}
+                                    style={[styles.fastAction, { backgroundColor: colors.accent.cyan }, shadows.glow(colors.accent.cyan)]}
                                     onPress={() => router.push('/(meals)/fasting' as any)}
-                                    activeOpacity={0.8}
+                                    activeOpacity={0.85}
                                 >
                                     <Text style={[typography.caption, { color: themeColors.background.primary, fontWeight: 'bold' }]}>
                                         {fasting?.status === 'ACTIVE' ? 'VIEW TIMER' : 'START FAST'}
@@ -251,7 +283,7 @@ export default function NutritionHubScreen() {
     );
 }
 
-function MacroItem({ label, current, target, color, unit }: any) {
+const MacroItem = React.memo(function MacroItem({ label, current, target, color, unit }: any) {
     const { colors, typography, borderRadius } = useTheme();
     const progress = target > 0 ? Math.min(1, current / target) : 0;
 
@@ -266,15 +298,17 @@ function MacroItem({ label, current, target, color, unit }: any) {
             </View>
         </View>
     );
-}
+});
 
-function ToolCard({ icon, title, color, onPress }: any) {
+const ToolCard = React.memo(function ToolCard({ icon, title, color, onPress }: any) {
     const { colors, typography, borderRadius } = useTheme();
     return (
         <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={title}
             style={[{ flex: 1, borderRadius: borderRadius.xl, overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }]}
             onPress={onPress}
-            activeOpacity={0.8}
+            activeOpacity={0.85}
         >
             <BlurView
                 tint="dark"
@@ -288,13 +322,13 @@ function ToolCard({ icon, title, color, onPress }: any) {
             </BlurView>
         </TouchableOpacity>
     );
-}
+});
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 20 },
     historyBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-    macroDashboard: { padding: 20, alignItems: 'center' },
+    macroDashboard: { marginHorizontal: 20, padding: 24, alignItems: 'center' },
     mainCircle: { width: 180, height: 180, alignItems: 'center', justifyContent: 'center', marginBottom: 30 },
     circleText: { position: 'absolute', alignItems: 'center' },
     macroGrid: { width: '100%', gap: 16 },
@@ -302,12 +336,14 @@ const styles = StyleSheet.create({
     macroLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
     barBg: { height: 6, width: '100%' },
     barFill: { height: '100%' },
-    toolRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 12, marginTop: 10 },
+    toolRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 12 },
     toolCard: { flex: 1, padding: 16, alignItems: 'center', justifyContent: 'center' },
     toolIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
     section: { paddingHorizontal: 20, marginBottom: 24 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-    emptyPlan: { padding: 40, alignItems: 'center', justifyContent: 'center' },
+    emptyPlan: { paddingVertical: 36, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center' },
+    emptyPlanIcon: { width: 60, height: 60, borderRadius: 30, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    emptyPlanCta: { marginTop: 16, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
     planList: { gap: 12 },
     mealCard: { flexDirection: 'row', alignItems: 'center', padding: 16 },
     mealTime: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
@@ -317,5 +353,5 @@ const styles = StyleSheet.create({
     fastBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
     fastBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     fastAction: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-    fab: { position: 'absolute', width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#FF6B35', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 },
+    fab: { position: 'absolute', width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: themeColors.accent.coral, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 },
 });

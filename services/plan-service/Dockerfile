@@ -1,4 +1,5 @@
 FROM node:22-alpine AS base
+RUN apk add --no-cache openssl
 RUN npm install -g turbo@^2
 
 FROM base AS pruner
@@ -10,20 +11,21 @@ FROM base AS installer
 WORKDIR /app
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/out/package-lock.json ./package-lock.json
-RUN npm ci
+RUN npm install
 
 FROM installer AS builder
 WORKDIR /app
 COPY --from=pruner /app/out/full/ .
-RUN npm run build --workspace=plan-service
+COPY --from=pruner /app/tsconfig.json ./tsconfig.json
+RUN turbo run build --filter=plan-service
 
 FROM node:22-alpine AS runner
-WORKDIR /app
+RUN apk add --no-cache openssl
 ENV NODE_ENV=production
-COPY --from=builder /app/services/plan-service/dist ./dist
-COPY --from=builder /app/services/plan-service/prisma ./prisma
-COPY --from=builder /app/services/plan-service/src/generated ./src/generated
-COPY --from=builder /app/services/plan-service/node_modules ./node_modules
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app /app
+WORKDIR /app/services/plan-service
 EXPOSE 3005
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=prisma/schema.prisma && node dist/index.js"]
+# The committed migrations are incomplete (they omit columns the schema has, e.g.
+# day_plans.protocol_id), so `migrate deploy` leaves the DB out of sync → P2022 at
+# query time. Sync from the schema instead, matching user-/exercise-service.
+CMD ["sh", "-c", "npx prisma db push --schema=prisma/schema.prisma --skip-generate --accept-data-loss && node dist/index.js"]

@@ -86,21 +86,25 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
         const raw = (await authApi.getMe()) as any;
         user = {
           id: raw.userId ?? raw.id,
-          email: raw.email ?? '',
-          name: raw.displayName ?? raw.name ?? 'User',
+          // role + email come from the auth response; the /me profile omits them
+          email: response.user.email ?? raw.email ?? '',
+          name: raw.displayName ?? response.user.displayName ?? raw.name ?? 'User',
           avatarUrl: raw.avatarUrl ?? null,
-          role: (raw.role ?? 'user').toLowerCase() as User['role'],
-          onboardingComplete: raw.onboardingComplete ?? raw.preferences?.onboardingCompleted ?? false,
+          role: (response.user.role ?? raw.role ?? 'user').toLowerCase() as User['role'],
+          onboardingComplete: raw.onboardingCompleted ?? raw.onboardingComplete ?? raw.preferences?.onboardingCompleted ?? false,
           shiftType: raw.shiftType ?? null,
         };
       } catch {
         // getMe failed (unlikely right after login); fall back to minimal data
         user = {
-          ...response.user,
+          id: response.user.id,
+          email: response.user.email ?? '',
+          name: response.user.displayName ?? response.user.name ?? 'User',
           avatarUrl: null,
-          onboardingComplete: false,
+          role: (response.user.role ?? 'user').toLowerCase() as User['role'],
+          onboardingComplete: response.user.onboardingCompleted ?? false,
           shiftType: null,
-        } as User;
+        };
       }
       set({
         user,
@@ -119,12 +123,15 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
     try {
       const response = await authApi.register(data);
       // auth.ts register() already persists tokens via setTokens
-      const user = {
-        ...response.user,
+      const user: User = {
+        id: response.user.id,
+        email: response.user.email ?? '',
+        name: response.user.displayName ?? response.user.name ?? 'User',
         avatarUrl: null,
-        onboardingComplete: false,
+        role: (response.user.role ?? 'user').toLowerCase() as User['role'],
+        onboardingComplete: response.user.onboardingCompleted ?? false,
         shiftType: null,
-      } as User;
+      };
       set({
         user,
         isAuthenticated: true,
@@ -178,7 +185,7 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
           name: raw.displayName ?? raw.name ?? 'User',
           avatarUrl: raw.avatarUrl ?? null,
           role: (raw.role ?? 'user').toLowerCase() as User['role'],
-          onboardingComplete: raw.onboardingComplete ?? raw.preferences?.onboardingCompleted ?? false,
+          onboardingComplete: raw.onboardingCompleted ?? raw.onboardingComplete ?? raw.preferences?.onboardingCompleted ?? false,
           shiftType: raw.shiftType ?? null,
         };
         set({

@@ -74,7 +74,7 @@ export function SafeBlurView({
         );
     }
 
-    const bg = FALLBACK_COLORS[tint as string] ?? FALLBACK_COLORS['default']!;
+    const bg = FALLBACK_COLORS[tint as keyof typeof FALLBACK_COLORS] ?? FALLBACK_COLORS['default']!;
 
     return (
         <View style={[{ backgroundColor: bg }, style]} {...(rest as any)}>

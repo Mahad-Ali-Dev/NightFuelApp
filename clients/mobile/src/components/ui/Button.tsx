@@ -11,6 +11,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme';
 import { borderRadius as br, spacing } from '@/theme/spacing';
+import { shadows } from '@/theme/shadows';
 
 interface ButtonProps extends PressableProps {
   title: string;
@@ -43,7 +44,11 @@ export function Button({
     <>
       {loading ? (
         <ActivityIndicator
-          color={variant === 'outline' || variant === 'ghost' ? colors.accent.coral : '#FFF'}
+          color={
+            variant === 'outline' || variant === 'ghost'
+              ? colors.accent.coral
+              : colors.text.primary
+          }
           size="small"
           style={{ marginRight: spacing.sm }}
         />
@@ -56,8 +61,8 @@ export function Button({
           sizeStyles.text,
           variant === 'outline' && { color: colors.accent.coral },
           variant === 'ghost' && { color: colors.text.secondary },
-          variant === 'danger' && { color: '#FFF' },
-          (variant === 'primary' || variant === 'secondary') && { color: '#FFF' },
+          variant === 'danger' && { color: colors.text.primary },
+          (variant === 'primary' || variant === 'secondary') && { color: colors.text.primary },
           isDisabled && { opacity: 0.5 },
         ]}
       >
@@ -71,12 +76,17 @@ export function Button({
     return (
       <Pressable
         disabled={isDisabled}
-        style={[fullWidth && styles.fullWidth, style as ViewStyle]}
+        style={({ pressed }) => [
+          fullWidth && styles.fullWidth,
+          !isDisabled && shadows.glow(colors.accent.coral),
+          pressed && { transform: [{ scale: 0.98 }] },
+          style as ViewStyle,
+        ]}
         {...props}
       >
         {({ pressed }) => (
           <LinearGradient
-            colors={[colors.accent.coral, colors.accent.coralDark]}
+            colors={colors.gradients.coral}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[
@@ -113,7 +123,7 @@ export function Button({
           borderColor: variant === 'outline' ? colors.accent.coral : undefined,
         },
         fullWidth && styles.fullWidth,
-        pressed && { opacity: 0.8 },
+        pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] },
         isDisabled && { opacity: 0.5 },
         style as ViewStyle,
       ]}
@@ -148,7 +158,7 @@ const styles = StyleSheet.create({
   },
   text: {
     fontWeight: '600',
-    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
   fullWidth: {
     width: '100%',

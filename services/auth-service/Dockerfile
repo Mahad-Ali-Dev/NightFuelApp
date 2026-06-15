@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
 FROM node:22-alpine AS base
+RUN apk add --no-cache openssl
 RUN npm install -g turbo@2
 
 # ── Pruner stage: extract only auth-service and its workspace deps ──────────
@@ -20,6 +21,7 @@ RUN npm install
 
 # Copy pruned source files
 COPY --from=pruner /app/out/full/ .
+COPY --from=pruner /app/tsconfig.json ./tsconfig.json
 
 # Generate Prisma client
 RUN npx --workspace=auth-service prisma generate
@@ -29,19 +31,9 @@ RUN turbo run build --filter=auth-service
 
 # ── Runner stage ─────────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-
-WORKDIR /app
-
-# Copy built output and runtime node_modules
-COPY --from=installer --chown=appuser:appgroup /app/services/auth-service/dist ./dist
-COPY --from=installer --chown=appuser:appgroup /app/services/auth-service/node_modules ./node_modules
-COPY --from=installer --chown=appuser:appgroup /app/node_modules ./root_node_modules
-COPY --from=installer --chown=appuser:appgroup /app/services/auth-service/prisma ./prisma
-
-USER appuser
-
+RUN apk add --no-cache openssl
+ENV NODE_ENV=production
+COPY --from=installer /app /app
+WORKDIR /app/services/auth-service
 EXPOSE 3001
-
-# Run migrations then start the service
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy --schema=prisma/schema.prisma && node dist/index.js"]

@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
+import { shadows } from '@/theme/shadows';
+import { withAlpha } from '@/theme/utils';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Skeleton, EmptyState } from '@/components/ui';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { searchFoods, logMeal } from '@/api/meals';
 
@@ -27,7 +30,7 @@ export default function BuildPlateScreen() {
     const [plate, setPlate] = useState<any[]>([]);
     const [mealType, setMealType] = useState<MealType>('BREAKFAST');
 
-    const { data: foodItems = [], isLoading: foodsLoading } = useQuery({
+    const { data: foodItems = [], isLoading: foodsLoading, isError: foodsError, refetch: refetchFoods } = useQuery({
         queryKey: ['foods-quick-add'],
         queryFn: () => searchFoods({ q: 'chicken rice broccoli', limit: 10 }),
         staleTime: 5 * 60 * 1000,
@@ -75,11 +78,11 @@ export default function BuildPlateScreen() {
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Ionicons name="close" size={28} color={colors.text.primary} />
                 </TouchableOpacity>
                 <Text style={[typography.heading, { color: colors.text.primary }]}>Build Your Plate</Text>
-                <TouchableOpacity onPress={() => router.push('/(modals)/barcode-scanner' as any)}>
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Scan barcode" onPress={() => router.push('/(modals)/barcode-scanner' as any)}>
                     <Ionicons name="scan-circle-outline" size={28} color={colors.accent.cyan} />
                 </TouchableOpacity>
             </View>
@@ -93,10 +96,14 @@ export default function BuildPlateScreen() {
                 {MEAL_TYPES.map(mt => (
                     <TouchableOpacity
                         key={mt.key}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel={mt.label}
+                        accessibilityState={{ selected: mealType === mt.key }}
                         style={[styles.mealTypeChip, {
                             backgroundColor: mealType === mt.key ? colors.accent.cyan : colors.background.secondary,
                             borderColor:     mealType === mt.key ? colors.accent.cyan : colors.border.default,
-                        }]}
+                        }, mealType === mt.key && shadows.glow(colors.accent.cyan)]}
                         onPress={() => setMealType(mt.key)}
                     >
                         <Text style={[typography.caption, {
@@ -110,21 +117,40 @@ export default function BuildPlateScreen() {
             </ScrollView>
 
             <View style={[styles.plateArea, { backgroundColor: colors.background.primary, borderBottomColor: colors.border.default }]}>
-                <View style={[styles.circlePlate, { borderColor: colors.border.default }]}>
+                <View style={[
+                    styles.circlePlate,
+                    {
+                        borderColor: plate.length > 0 ? colors.accent.cyan : colors.border.default,
+                        backgroundColor: plate.length > 0 ? withAlpha(colors.accent.cyan, 0.06) : 'transparent',
+                    },
+                    plate.length > 0 && shadows.glow(colors.accent.cyan),
+                ]}>
                     {plate.length === 0 ? (
-                        <Text style={[typography.caption, { color: colors.text.tertiary, textAlign: 'center' }]}>Drag items or tap to add to plate</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center' }]}>Drag items or tap to add to plate</Text>
                     ) : (
                         <View style={{ position: 'absolute' }}>
-                            <Ionicons name="restaurant-outline" size={48} color={colors.text.secondary} />
+                            <Ionicons name="restaurant-outline" size={48} color={colors.accent.cyan} />
                         </View>
                     )}
                 </View>
 
                 <View style={styles.macroSummaryRow}>
-                    <Text style={[typography.heading, { color: colors.text.primary }]}>{Math.round(totals.kcal)} <Text style={{ fontSize: 12, color: colors.text.tertiary }}>KCAL</Text></Text>
-                    <Text style={[typography.heading, { color: colors.text.primary }]}>{Math.round(totals.pro)}g <Text style={{ fontSize: 12, color: colors.text.tertiary }}>PRO</Text></Text>
-                    <Text style={[typography.heading, { color: colors.text.primary }]}>{Math.round(totals.carb)}g <Text style={{ fontSize: 12, color: colors.text.tertiary }}>CARB</Text></Text>
-                    <Text style={[typography.heading, { color: colors.text.primary }]}>{Math.round(totals.fat)}g <Text style={{ fontSize: 12, color: colors.text.tertiary }}>FAT</Text></Text>
+                    <View style={styles.macroSummaryItem}>
+                        <Text style={[typography.statSmall, { color: colors.text.primary }]}>{Math.round(totals.kcal)}</Text>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 2 }]}>KCAL</Text>
+                    </View>
+                    <View style={styles.macroSummaryItem}>
+                        <Text style={[typography.statSmall, { color: colors.text.primary }]}>{Math.round(totals.pro)}<Text style={[typography.statTiny, { color: colors.text.secondary }]}>g</Text></Text>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 2 }]}>PRO</Text>
+                    </View>
+                    <View style={styles.macroSummaryItem}>
+                        <Text style={[typography.statSmall, { color: colors.text.primary }]}>{Math.round(totals.carb)}<Text style={[typography.statTiny, { color: colors.text.secondary }]}>g</Text></Text>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 2 }]}>CARB</Text>
+                    </View>
+                    <View style={styles.macroSummaryItem}>
+                        <Text style={[typography.statSmall, { color: colors.text.primary }]}>{Math.round(totals.fat)}<Text style={[typography.statTiny, { color: colors.text.secondary }]}>g</Text></Text>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 2 }]}>FAT</Text>
+                    </View>
                 </View>
             </View>
 
@@ -135,16 +161,41 @@ export default function BuildPlateScreen() {
                 </View>
 
                 {foodsLoading ? (
-                    <ActivityIndicator color={colors.accent.cyan} style={{ marginVertical: 20 }} />
+                    Array.from({ length: 4 }).map((_, i) => (
+                        <Card key={`food-skeleton-${i}`} variant="glass" style={styles.foodRow}>
+                            <Skeleton width={40} height={40} radius={8} />
+                            <View style={[styles.foodInfo, { marginLeft: spacing.md }]}>
+                                <Skeleton width="55%" height={15} />
+                                <Skeleton width="80%" height={12} style={{ marginTop: 6 }} />
+                            </View>
+                            <Skeleton width={24} height={24} radius={12} />
+                        </Card>
+                    ))
+                ) : foodsError ? (
+                    <EmptyState
+                        icon="cloud-offline-outline"
+                        title="Couldn't load foods"
+                        subtitle="Check your connection and try again."
+                        actionLabel="Retry"
+                        onAction={() => refetchFoods()}
+                    />
+                ) : foodItems.length === 0 ? (
+                    <EmptyState
+                        icon="fast-food-outline"
+                        title="No quick-add foods"
+                        subtitle="Scan a barcode to add a food to your plate."
+                        actionLabel="Scan barcode"
+                        onAction={() => router.push('/(modals)/barcode-scanner' as any)}
+                    />
                 ) : foodItems.map((item) => (
-                    <TouchableOpacity key={item.id} onPress={() => addToPlate(item)} activeOpacity={0.8}>
-                        <Card style={styles.foodRow}>
-                            <View style={[styles.iconBox, { backgroundColor: colors.background.tertiary }]}>
-                                <Ionicons name="fast-food" size={20} color={colors.text.secondary} />
+                    <TouchableOpacity key={item.id} accessibilityRole="button" accessibilityLabel={`Add ${item.name} to plate`} onPress={() => addToPlate(item)} activeOpacity={0.8}>
+                        <Card variant="glass" style={styles.foodRow}>
+                            <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.cyan, 0.12) }]}>
+                                <Ionicons name="fast-food" size={20} color={colors.accent.cyan} />
                             </View>
                             <View style={styles.foodInfo}>
                                 <Text style={[typography.subhead, { color: colors.text.primary }]}>{item.name}</Text>
-                                <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 4 }]}>
+                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>
                                     {item.calories} kcal • {item.protein}P / {item.carbs}C / {item.fat}F
                                 </Text>
                             </View>
@@ -159,7 +210,7 @@ export default function BuildPlateScreen() {
                         {plate.map((item, index) => (
                             <View key={index} style={styles.plateItemRow}>
                                 <Text style={[typography.body, { color: colors.text.primary }]}>{item.name}</Text>
-                                <TouchableOpacity onPress={() => removeFromPlate(index)}>
+                                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Delete" onPress={() => removeFromPlate(index)}>
                                     <Ionicons name="trash-outline" size={20} color={colors.accent.coral} />
                                 </TouchableOpacity>
                             </View>
@@ -226,6 +277,9 @@ const styles = StyleSheet.create({
         width: '100%',
         paddingHorizontal: 20,
         marginTop: 24,
+    },
+    macroSummaryItem: {
+        alignItems: 'center',
     },
     sectionHeader: {
         flexDirection: 'row',

@@ -44,7 +44,7 @@ export type Message = ChatMessage;
 
 /** Start a new conversation */
 export async function startConversation(targetId: string) {
-  const { data } = await apiClient.post<{ data: { id: string } }>('/v1/coaches/conversations', { targetId });
+  const { data } = await apiClient.post<{ data: { id: string } }>('/v1/coaches/conversations', { targetUserId: targetId });
   return data.data;
 }
 

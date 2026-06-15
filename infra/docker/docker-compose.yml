@@ -9,8 +9,8 @@ services:
     volumes:
       - ./postgres/init-scripts:/docker-entrypoint-initdb.d
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # No host port exposure — only the internal Docker network reaches Postgres.
+    # (Avoids clashing with any existing DB on the host and is safer.)
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -19,8 +19,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # No host port exposure — internal Docker network only.
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -31,8 +30,10 @@ services:
     image: nginx:alpine
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    # Host port 8080 -> gateway. Avoids the host's existing nginx on 80/443.
+    # Front this with the host nginx (subdomain -> localhost:8080) for HTTPS.
     ports:
-      - "80:80"
+      - "8080:80"
     depends_on:
       - auth-service
       - user-service
@@ -133,9 +134,16 @@ services:
     environment:
       PLAN_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_plans?schema=public
       PLAN_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_plans?schema=public
+      # @nightfuel/config's loadConfig validates process.env.DATABASE_URL; Prisma reads PLAN_DATABASE_URL.
+      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_plans?schema=public
       REDIS_URL: redis://redis:6379
       PLAN_PORT: 3005
       AI_PIPELINE_URL: http://ai-pipeline:3004
+      USER_SERVICE_URL: http://user-service:3009
+      STATE_SERVICE_URL: http://state-service:3015
+      DECISION_ENGINE_URL: http://decision-engine:3016
+      MEAL_SERVICE_URL: http://meal-service:3006
+      EXERCISE_SERVICE_URL: http://exercise-service:3011
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
       LOG_LEVEL: info
     depends_on:
@@ -156,8 +164,11 @@ services:
     environment:
       MEAL_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_meals?schema=public
       MEAL_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_meals?schema=public
+      # @nightfuel/config's loadConfig validates process.env.DATABASE_URL; Prisma reads MEAL_DATABASE_URL.
+      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_meals?schema=public
       REDIS_URL: redis://redis:6379
       MEAL_PORT: 3006
+      PLAN_SERVICE_URL: http://plan-service:3005
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
       LOG_LEVEL: info
     depends_on:
@@ -200,6 +211,8 @@ services:
       DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_progress?schema=public
       REDIS_URL: redis://redis:6379
       PROGRESS_PORT: 3007
+      USER_SERVICE_URL: http://user-service:3009
+      AI_PIPELINE_URL: http://ai-pipeline:3004
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
       LOG_LEVEL: info
     depends_on:
@@ -246,6 +259,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_exercise?schema=public
       REDIS_URL: redis://redis:6379
       EXERCISE_PORT: 3011
+      AI_PIPELINE_URL: http://ai-pipeline:3004
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
       LOG_LEVEL: info
     depends_on:
@@ -312,6 +326,7 @@ services:
       REDIS_URL: redis://redis:6379
       COMMUNITY_PORT: 3013
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      USER_SERVICE_URL: http://user-service:3009
       LOG_LEVEL: info
     depends_on:
       postgres:
@@ -332,6 +347,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_chat?schema=public
       REDIS_URL: redis://redis:6379
       CHAT_PORT: 3014
+      AI_PIPELINE_URL: http://ai-pipeline:3004
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
       LOG_LEVEL: info
     depends_on:
@@ -371,6 +387,9 @@ services:
     environment:
       REDIS_URL: redis://redis:6379
       DECISION_PORT: 3016
+      # decision-engine is Redis-only but the shared @nightfuel/config schema
+      # requires DATABASE_URL to be present; it is validated, not used.
+      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_state?schema=public
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
       LOG_LEVEL: info
     depends_on:

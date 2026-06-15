@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { shadows } from '@/theme/shadows';
+import { withAlpha } from '@/theme/utils';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { ActivityLevel } from '@/types/enums';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,7 +50,7 @@ export default function EnvironmentScreen() {
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
                 <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
                     Work <Text style={{ color: colors.accent.cyan }}>Environment</Text>
@@ -61,16 +63,16 @@ export default function EnvironmentScreen() {
                     {LIFESTYLES.map((l) => {
                         const isSelected = lifestyle === l.value;
                         return (
-                            <TouchableOpacity key={l.value} onPress={() => setLifestyle(lifestyle === l.value ? null : (l.value as ActivityLevel))} activeOpacity={0.8}>
+                            <TouchableOpacity key={l.value} onPress={() => setLifestyle(lifestyle === l.value ? null : (l.value as ActivityLevel))} activeOpacity={0.85} accessibilityRole="button" accessibilityState={{ selected: isSelected }} accessibilityLabel={l.label}>
                                 <Card
-                                    variant={isSelected ? 'elevated' : 'default'}
+                                    variant={isSelected ? 'elevated' : 'glass'}
                                     style={[
                                         styles.envCard,
-                                        isSelected && { borderColor: colors.accent.cyan, borderWidth: 1 }
+                                        isSelected && { borderColor: colors.accent.cyan, borderWidth: 1.5, ...shadows.glow(colors.accent.cyan) }
                                     ]}
                                 >
                                     <View style={styles.contentRow}>
-                                        <View style={[styles.iconBox, { backgroundColor: isSelected ? `${colors.accent.cyan}20` : colors.background.tertiary }]}>
+                                        <View style={[styles.iconBox, { backgroundColor: isSelected ? withAlpha(colors.accent.cyan, 0.16) : colors.background.tertiary }]}>
                                             <Ionicons
                                                 name={l.icon as any}
                                                 size={24}
@@ -84,7 +86,7 @@ export default function EnvironmentScreen() {
                                             ]}>
                                                 {l.label}
                                             </Text>
-                                            <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 4 }]}>
+                                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>
                                                 {l.desc}
                                             </Text>
                                         </View>
@@ -100,7 +102,7 @@ export default function EnvironmentScreen() {
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: spacing['2xl'] }]}>
                 <Button
                     title="Continue"
-                    iconRight={<Ionicons name="arrow-forward" size={20} color="#fff" />}
+                    iconRight={<Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
                     onPress={handleNext}
                     disabled={!lifestyle}
                     fullWidth

@@ -1,4 +1,4 @@
-import { PrismaClient } from './generated/prisma';
+import { PrismaClient, Prisma } from './generated/prisma';
 import {
     MealLoggedPayload,
     ExerciseLoggedPayload,
@@ -12,6 +12,46 @@ import { createLogger } from '@nightfuel/config';
 
 const logger = createLogger('state-service:materializer');
 
+const ADHERENCE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const ADHERENCE_MAX_SAMPLES = 100; // safety cap so the JSON column can't grow unbounded
+
+interface AdherenceSample {
+    at: string; // ISO8601
+    adherent: boolean;
+}
+
+/** Parse the stored JSON column defensively (it may be null, a string, or already an array). */
+function parseSamples(raw: unknown): AdherenceSample[] {
+    let value = raw;
+    if (typeof value === 'string') {
+        try { value = JSON.parse(value); } catch { return []; }
+    }
+    if (!Array.isArray(value)) return [];
+    return value.filter(
+        (s): s is AdherenceSample =>
+            !!s && typeof s.at === 'string' && typeof s.adherent === 'boolean'
+    );
+}
+
+/** Append the new sample, drop anything older than 7 days, and return the windowed mean. */
+function rollWindow(
+    existing: AdherenceSample[],
+    sample: AdherenceSample,
+    now: number
+): { samples: AdherenceSample[]; mean: number } {
+    const cutoff = now - ADHERENCE_WINDOW_MS;
+    const samples = [...existing, sample]
+        .filter((s) => {
+            const t = Date.parse(s.at);
+            return !Number.isNaN(t) && t >= cutoff;
+        })
+        .slice(-ADHERENCE_MAX_SAMPLES);
+    const mean = samples.length
+        ? samples.reduce((acc, s) => acc + (s.adherent ? 1 : 0), 0) / samples.length
+        : 0;
+    return { samples, mean };
+}
+
 export class StateMaterializer {
     constructor(private prisma: PrismaClient) { }
 
@@ -19,25 +59,38 @@ export class StateMaterializer {
         const { userId, payload } = event;
         logger.info({ userId, mealLogId: payload.mealLogId }, 'Processing meal log event');
 
-        // Simple materialization: update adherence based on rolling window if we store history
-        // For now, we'll just update the last known adherence or a running avg if we had more context
-        // Actually, the requirement says "It updates: user_state table"
+        // Read-modify-write of the rolling adherence window. Per-user events are
+        // processed sequentially by the stream consumer group, so this is race-safe.
+        const existing = await this.prisma.userState.findUnique({
+            where: { userId },
+            select: { adherenceSamples: true },
+        });
+
+        const now = Date.now();
+        const sample: AdherenceSample = {
+            at: payload.loggedAt ?? new Date(now).toISOString(),
+            adherent: payload.isAdherent,
+        };
+        const { samples, mean } = rollWindow(
+            parseSamples(existing?.adherenceSamples),
+            sample,
+            now
+        );
 
         await this.prisma.userState.upsert({
             where: { userId },
             create: {
                 userId,
-                last7DaysAdherence: payload.isAdherent ? 1.0 : 0.0,
-                lastEventId: event.eventId
+                last7DaysAdherence: mean,
+                adherenceSamples: samples as unknown as Prisma.InputJsonValue,
+                lastEventId: event.eventId,
             },
             update: {
-                // Simple moving average for adherence: (current * 6 + new) / 7
-                last7DaysAdherence: {
-                    set: 0.8 // Placeholder: should be calculated from real history if possible
-                },
+                last7DaysAdherence: mean,
+                adherenceSamples: samples as unknown as Prisma.InputJsonValue,
                 lastEventId: event.eventId,
-                lastProcessedAt: new Date()
-            }
+                lastProcessedAt: new Date(now),
+            },
         });
     }
 

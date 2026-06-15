@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { colors } from '@/theme';
 
 interface PlanSection {
     title: string;
@@ -39,12 +40,12 @@ export function PlanBuilder({ sections = DEFAULT_SECTIONS, onSave, onAddSection 
                 </View>
             ))}
 
-            <TouchableOpacity style={styles.addSectionBtn} onPress={onAddSection}>
+            <TouchableOpacity style={styles.addSectionBtn} onPress={onAddSection} activeOpacity={0.85}>
                 <Ionicons name="add" size={20} color="#7C4DFF" />
                 <Text style={styles.addSectionText}>Add Section</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.saveBtn} onPress={onSave}>
+            <TouchableOpacity style={styles.saveBtn} onPress={onSave} activeOpacity={0.85}>
                 <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
                 <Text style={styles.saveBtnText}>Save Plan</Text>
             </TouchableOpacity>
@@ -54,11 +55,11 @@ export function PlanBuilder({ sections = DEFAULT_SECTIONS, onSave, onAddSection 
 
 const styles = StyleSheet.create({
     container: { padding: 4 },
-    sectionCard: { backgroundColor: '#161B22', borderRadius: 16, padding: 16, marginBottom: 12, borderLeftWidth: 4 },
+    sectionCard: { backgroundColor: colors.background.secondary, borderRadius: 16, padding: 16, marginBottom: 12, borderLeftWidth: 4 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
     sectionTitle: { fontSize: 14, fontWeight: '800', letterSpacing: 1 },
     itemRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 4, gap: 10 },
-    bullet: { color: '#8B949E', fontSize: 14, lineHeight: 20, marginTop: 1 },
+    bullet: { color: colors.text.secondary, fontSize: 14, lineHeight: 20, marginTop: 1 },
     itemText: { color: '#C9D1D9', fontSize: 14, lineHeight: 20, flex: 1 },
     addSectionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderWidth: 1, borderColor: '#7C4DFF30', borderStyle: 'dashed', borderRadius: 16, marginBottom: 12, gap: 8 },
     addSectionText: { color: '#7C4DFF', fontWeight: '700' },

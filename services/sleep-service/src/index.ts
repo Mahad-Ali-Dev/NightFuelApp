@@ -92,6 +92,33 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/sleep', {
     }
 });
 
+// GET /v1/sleep/quality — derived sleep-quality summary (empty-safe).
+// Static path → Fastify's router matches it before the /:id param route.
+fastify.get('/v1/sleep/quality', {
+    onRequest: [(fastify as any).authenticate],
+}, async (request, reply) => {
+    try {
+        const userId = (request.user as any).userId ?? (request.user as any).id;
+        return reply.send(await sleepSvc.getQuality(userId));
+    } catch (err: any) {
+        logger.error(err);
+        return reply.code(500).send({ error: err.message });
+    }
+});
+
+// GET /v1/sleep/analytics — derived analytics + 7-day chart data (empty-safe).
+fastify.get('/v1/sleep/analytics', {
+    onRequest: [(fastify as any).authenticate],
+}, async (request, reply) => {
+    try {
+        const userId = (request.user as any).userId ?? (request.user as any).id;
+        return reply.send(await sleepSvc.getAnalytics(userId));
+    } catch (err: any) {
+        logger.error(err);
+        return reply.code(500).send({ error: err.message });
+    }
+});
+
 // GET /v1/sleep/:id
 fastify.withTypeProvider<ZodTypeProvider>().get('/v1/sleep/:id', {
     onRequest: [(fastify as any).authenticate],

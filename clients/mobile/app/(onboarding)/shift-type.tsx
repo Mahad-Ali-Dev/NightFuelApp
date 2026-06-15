@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { shadows } from '@/theme/shadows';
+import { withAlpha } from '@/theme/utils';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { FitnessGoal } from '@/types/enums';
 import { Ionicons } from '@expo/vector-icons';
@@ -31,7 +33,7 @@ export default function GoalsScreen() {
     };
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
                 <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
                     What is your <Text style={{ color: colors.accent.coral }}>primary goal</Text>?
@@ -46,18 +48,21 @@ export default function GoalsScreen() {
                         return (
                             <TouchableOpacity
                                 key={option.value}
-                                activeOpacity={0.8}
+                                activeOpacity={0.85}
                                 onPress={() => setGoal(goal === option.value ? null : (option.value as FitnessGoal))}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: isSelected }}
+                                accessibilityLabel={option.label}
                             >
                                 <Card
-                                    variant={isSelected ? 'elevated' : 'default'}
+                                    variant={isSelected ? 'elevated' : 'glass'}
                                     style={[
                                         styles.card,
-                                        isSelected && { borderColor: colors.accent.coral, borderWidth: 1 }
+                                        isSelected && { borderColor: colors.accent.coral, borderWidth: 1.5, ...shadows.glow(colors.accent.coral) }
                                     ]}
                                 >
                                     <View style={styles.cardHeader}>
-                                        <View style={[styles.iconContainer, { backgroundColor: `${colors.accent.coral}20` }]}>
+                                        <View style={[styles.iconContainer, { backgroundColor: withAlpha(colors.accent.coral, 0.14) }]}>
                                             <Ionicons name={option.icon as any} size={24} color={colors.accent.coral} />
                                         </View>
                                         {isSelected && (
@@ -82,7 +87,7 @@ export default function GoalsScreen() {
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: spacing['2xl'] }]}>
                 <Button
                     title="Continue"
-                    iconRight={<Ionicons name="arrow-forward" size={20} color="#fff" />}
+                    iconRight={<Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
                     onPress={handleNext}
                     disabled={!goal}
                     fullWidth

@@ -7,7 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/Button';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors as themeColors } from '@/theme/colors';
+import { withAlpha } from '@/theme/utils';
+import { shadows } from '@/theme/shadows';
 import { upgrade } from '@/api/subscriptions';
 
 type Plan = 'annual' | 'monthly';
@@ -54,7 +55,7 @@ export default function PremiumScreen() {
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Ionicons name="close" size={28} color={colors.text.primary} />
                 </TouchableOpacity>
             </View>
@@ -73,14 +74,14 @@ export default function PremiumScreen() {
 
                 {/* Feature list */}
                 <LinearGradient
-                    colors={[colors.background.secondary, `${colors.accent.cyan}15`]}
+                    colors={[colors.background.secondary, withAlpha(colors.accent.cyan, 0.1)]}
                     style={[styles.featureBox, { borderColor: colors.border.default }]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                 >
                     {FEATURES.map((feat, i) => (
                         <View key={i} style={styles.featureRow}>
-                            <View style={[styles.iconBox, { backgroundColor: `${colors.accent.cyan}20` }]}>
+                            <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.cyan, 0.14) }]}>
                                 <Ionicons name={feat.icon as any} size={20} color={colors.accent.cyan} />
                             </View>
                             <View style={styles.featureText}>
@@ -97,6 +98,9 @@ export default function PremiumScreen() {
                     <TouchableOpacity
                         onPress={() => setSelectedPlan('annual')}
                         activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Annual plan, $89.99 per year, save 20%"
+                        accessibilityState={{ selected: annualSelected }}
                         style={[
                             styles.priceCard,
                             {
@@ -104,19 +108,20 @@ export default function PremiumScreen() {
                                 borderWidth:     annualSelected ? 2 : 1,
                                 backgroundColor: colors.background.secondary,
                             },
+                            annualSelected && shadows.glow(colors.accent.cyan),
                         ]}
                     >
                         <View style={[styles.saveBadge, { backgroundColor: colors.accent.cyan }]}>
-                            <Text style={[typography.caption, { color: themeColors.background.primary, fontWeight: 'bold', fontSize: 10 }]}>
+                            <Text style={[typography.caption, { color: colors.text.inverse, fontWeight: 'bold', fontSize: 10 }]}>
                                 SAVE 20%
                             </Text>
                         </View>
                         <Text style={[typography.heading, { color: colors.text.primary }]}>Annually</Text>
-                        <Text style={[typography.display, { color: colors.accent.cyan, fontSize: 24, marginTop: 4 }]}>$89.99</Text>
+                        <Text style={[typography.statSmall, { color: colors.accent.cyan, marginTop: 4 }]}>$89.99</Text>
                         <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>$7.50 / month</Text>
                         {annualSelected && (
                             <View style={[styles.checkIcon, { backgroundColor: colors.accent.cyan }]}>
-                                <Ionicons name="checkmark" size={12} color="#000" />
+                                <Ionicons name="checkmark" size={12} color={colors.text.inverse} />
                             </View>
                         )}
                     </TouchableOpacity>
@@ -125,6 +130,9 @@ export default function PremiumScreen() {
                     <TouchableOpacity
                         onPress={() => setSelectedPlan('monthly')}
                         activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel="Monthly plan, $9.99 billed monthly"
+                        accessibilityState={{ selected: monthlySelected }}
                         style={[
                             styles.priceCard,
                             {
@@ -132,14 +140,15 @@ export default function PremiumScreen() {
                                 borderWidth:     monthlySelected ? 2 : 1,
                                 backgroundColor: colors.background.secondary,
                             },
+                            monthlySelected && shadows.glow(colors.accent.purple),
                         ]}
                     >
                         <Text style={[typography.heading, { color: colors.text.primary }]}>Monthly</Text>
-                        <Text style={[typography.display, { color: colors.text.primary, fontSize: 24, marginTop: 4 }]}>$9.99</Text>
-                        <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 2 }]}>Billed monthly</Text>
+                        <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: 4 }]}>$9.99</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>Billed monthly</Text>
                         {monthlySelected && (
                             <View style={[styles.checkIcon, { backgroundColor: colors.accent.purple }]}>
-                                <Ionicons name="checkmark" size={12} color="#000" />
+                                <Ionicons name="checkmark" size={12} color={colors.text.inverse} />
                             </View>
                         )}
                     </TouchableOpacity>
@@ -154,7 +163,7 @@ export default function PremiumScreen() {
                     fullWidth
                     disabled={upgradeMutation.isPending}
                 />
-                <Text style={[typography.caption, { color: colors.text.tertiary, textAlign: 'center', marginTop: 16 }]}>
+                <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginTop: 16 }]}>
                     Cancel anytime. Subscription auto-renews.
                 </Text>
             </View>

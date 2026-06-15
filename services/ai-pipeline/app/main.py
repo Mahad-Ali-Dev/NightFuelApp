@@ -10,6 +10,7 @@ from .config import get_settings
 from .routes import router
 from .logger import logger
 from .cache import init_semantic_cache
+from .rate_limiter import RateLimitExceeded
 from contextlib import asynccontextmanager
 
 settings = get_settings()
@@ -25,6 +26,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="NightFuel AI Pipeline", lifespan=lifespan)
 
 from fastapi.exceptions import RequestValidationError
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    # Exact contract: HTTP 429 with body {error, retryAfterSeconds}.
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "Rate limit exceeded. Please slow down and try again later.",
+            "retryAfterSeconds": exc.retry_after_seconds,
+        },
+        headers={"Retry-After": str(exc.retry_after_seconds)},
+    )
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

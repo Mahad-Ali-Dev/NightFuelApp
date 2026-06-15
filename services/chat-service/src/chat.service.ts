@@ -155,7 +155,7 @@ export class ChatService {
         // Call the AI pipeline
         let replyText: string;
         try {
-            const res = await fetch(`${AI_PIPELINE_URL}/chat`, {
+            const res = await fetch(`${AI_PIPELINE_URL}/v1/ai/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

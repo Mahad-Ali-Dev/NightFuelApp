@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, RefreshControl, Dimensions,
+    RefreshControl, Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -10,6 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { getRecent, getHeatmap } from '@/api/exercises';
 import { format } from 'date-fns';
+import { withAlpha } from '@/theme/utils';
+import { Skeleton, EmptyState } from '@/components/ui';
 
 const { width } = Dimensions.get('window');
 
@@ -55,7 +57,7 @@ export default function WorkoutHistoryScreen() {
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
                 <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Workout History</Text>
@@ -70,11 +72,11 @@ export default function WorkoutHistoryScreen() {
                 <View style={styles.statsGrid}>
                     {stats.map((s) => (
                         <View key={s.label} style={[styles.statCard, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl, borderColor: colors.border.default }]}>
-                            <View style={[styles.statIcon, { backgroundColor: `${s.color}15` }]}>
+                            <View style={[styles.statIcon, { backgroundColor: withAlpha(s.color, 0.14) }]}>
                                 <Ionicons name={s.icon as any} size={18} color={s.color} />
                             </View>
-                            <Text style={[typography.display, { color: colors.text.primary, fontSize: 18, marginTop: 8 }]}>{s.value}</Text>
-                            <Text style={[typography.caption, { color: colors.text.tertiary, textTransform: 'uppercase', fontSize: 9 }]}>{s.label}</Text>
+                            <Text style={[typography.statSmall, { color: colors.text.primary, fontSize: 22, marginTop: 10 }]}>{s.value}</Text>
+                            <Text style={[typography.overline, { color: colors.text.secondary, fontSize: 9, marginTop: 2 }]}>{s.label}</Text>
                         </View>
                     ))}
                 </View>
@@ -99,12 +101,12 @@ export default function WorkoutHistoryScreen() {
                             ))}
                         </View>
                         <View style={styles.heatmapLegend}>
-                            <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 9 }]}>Less</Text>
+                            <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 9 }]}>Less</Text>
                             <View style={[styles.heatmapCell, { backgroundColor: colors.background.tertiary, width: 10, height: 10 }]} />
                             <View style={[styles.heatmapCell, { backgroundColor: `${colors.accent.cyan}30`, width: 10, height: 10 }]} />
                             <View style={[styles.heatmapCell, { backgroundColor: `${colors.accent.cyan}80`, width: 10, height: 10 }]} />
                             <View style={[styles.heatmapCell, { backgroundColor: colors.accent.cyan, width: 10, height: 10 }]} />
-                            <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 9 }]}>More</Text>
+                            <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 9 }]}>More</Text>
                         </View>
                     </View>
                 </View>
@@ -114,25 +116,56 @@ export default function WorkoutHistoryScreen() {
                     <Text style={[typography.heading, { color: colors.text.primary, marginBottom: spacing.md }]}>Workout Logs</Text>
 
                     {historyQuery.isLoading ? (
-                        <ActivityIndicator color={colors.accent.coral} style={{ marginTop: 40 }} />
-                    ) : history.length === 0 ? (
-                        <View style={[styles.emptyBox, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl }]}>
-                            <Ionicons name="calendar-outline" size={48} color={colors.text.tertiary} />
-                            <Text style={[typography.body, { color: colors.text.secondary, marginTop: 10 }]}>No workouts logged yet</Text>
+                        <View>
+                            {[0, 1, 2, 3].map((i) => (
+                                <View key={i} style={[styles.workoutRow, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl, borderColor: colors.border.default, borderWidth: 1 }]}>
+                                    <Skeleton width={50} height={55} radius={borderRadius.lg} />
+                                    <View style={{ flex: 1, marginLeft: 16 }}>
+                                        <Skeleton width="60%" height={16} radius={borderRadius.sm} />
+                                        <Skeleton width="40%" height={12} radius={borderRadius.sm} style={{ marginTop: spacing.sm }} />
+                                    </View>
+                                </View>
+                            ))}
                         </View>
+                    ) : historyQuery.isError ? (
+                        <EmptyState
+                            icon="cloud-offline-outline"
+                            title="Couldn't load history"
+                            subtitle="Something went wrong fetching your workouts. Check your connection and try again."
+                            actionLabel="Try Again"
+                            onAction={() => historyQuery.refetch()}
+                        />
+                    ) : history.length === 0 ? (
+                        <EmptyState
+                            icon="calendar-outline"
+                            title="No workouts logged yet"
+                            subtitle="Finish a session and it'll show up here with your stats and streaks."
+                            actionLabel="Start a Workout"
+                            onAction={() => router.push('/(tabs)/training' as any)}
+                        />
                     ) : (
-                        history.map((w, idx) => (
+                        history.map((w, idx) => {
+                            // Guard against a workout log missing both timestamps:
+                            // new Date(undefined) is Invalid Date and date-fns `format`
+                            // throws a RangeError on it, which would crash the list.
+                            const ts = w.completedAt || w.startedAt;
+                            const when = ts ? new Date(ts) : null;
+                            const validWhen = when && !isNaN(when.getTime()) ? when : null;
+                            return (
                             <TouchableOpacity
                                 key={w.id || idx}
-                                style={[styles.workoutRow, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl, borderBottomColor: colors.border.default }]}
+                                accessibilityRole="button"
+                                accessibilityLabel={`${w.title || w.type || 'Strength Training'} workout details`}
+                                style={[styles.workoutRow, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl, borderColor: colors.border.default, borderWidth: 1 }]}
                                 onPress={() => router.push({ pathname: '/(exercises)/report', params: { workoutId: w.id } })}
+                                activeOpacity={0.85}
                             >
                                 <View style={[styles.dateBox, { backgroundColor: colors.background.tertiary, borderRadius: borderRadius.lg }]}>
-                                    <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: 'bold' }]}>
-                                        {format(new Date(w.completedAt || w.startedAt), 'MMM')}
+                                    <Text style={[typography.overline, { color: colors.accent.coral, fontSize: 10 }]}>
+                                        {validWhen ? format(validWhen, 'MMM') : '--'}
                                     </Text>
-                                    <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18, marginTop: -2 }]}>
-                                        {format(new Date(w.completedAt || w.startedAt), 'dd')}
+                                    <Text style={[typography.statTiny, { color: colors.text.primary, fontSize: 18, marginTop: -1 }]}>
+                                        {validWhen ? format(validWhen, 'dd') : '--'}
                                     </Text>
                                 </View>
 
@@ -142,12 +175,12 @@ export default function WorkoutHistoryScreen() {
                                     </Text>
                                     <View style={styles.metaRow}>
                                         <Ionicons name="time-outline" size={12} color={colors.text.tertiary} />
-                                        <Text style={[typography.caption, { color: colors.text.tertiary, marginLeft: 4 }]}>
+                                        <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 4 }]}>
                                             {w.duration}m
                                         </Text>
                                         <View style={[styles.dot, { backgroundColor: colors.border.default }]} />
                                         <Ionicons name="barbell-outline" size={12} color={colors.text.tertiary} />
-                                        <Text style={[typography.caption, { color: colors.text.tertiary, marginLeft: 4 }]}>
+                                        <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 4 }]}>
                                             {w.exercises?.length || 0} Ex.
                                         </Text>
                                         <View style={[styles.badge, { backgroundColor: `${colors.accent.cyan}15`, marginLeft: 8 }]}>
@@ -158,7 +191,8 @@ export default function WorkoutHistoryScreen() {
 
                                 <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} />
                             </TouchableOpacity>
-                        ))
+                            );
+                        })
                     )}
                 </View>
             </ScrollView>
@@ -178,11 +212,10 @@ const styles = StyleSheet.create({
     heatmapGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'center' },
     heatmapCell: { width: 14, height: 14 },
     heatmapLegend: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 16 },
-    workoutRow: { flexDirection: 'row', alignItems: 'center', padding: 12, marginBottom: 12, borderWidth: 0, borderBottomWidth: 0 },
+    workoutRow: { flexDirection: 'row', alignItems: 'center', padding: 12, marginBottom: 12 },
     dateBox: { width: 50, height: 55, alignItems: 'center', justifyContent: 'center' },
     metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
     dot: { width: 3, height: 3, borderRadius: 1.5, marginHorizontal: 8 },
     badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
     badgeText: { fontSize: 8, fontWeight: 'bold', textTransform: 'uppercase' },
-    emptyBox: { padding: 40, alignItems: 'center', justifyContent: 'center' },
 });

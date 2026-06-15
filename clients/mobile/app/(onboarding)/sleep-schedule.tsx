@@ -4,10 +4,12 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Card } from '@/components/ui/Card';
+import { shadows } from '@/theme/shadows';
+import { withAlpha } from '@/theme/utils';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { Ionicons } from '@expo/vector-icons';
 import { ShiftType, ActivityLevel, ExperienceLevel, LifestyleType, HealthCondition } from '@/types/enums';
+import { isValidTime } from '@/utils/validation';
 
 const ACTIVITY_LEVELS = [
     { value: ActivityLevel.SEDENTARY, label: 'Sedentary' },
@@ -68,6 +70,13 @@ export default function LifestyleScreen() {
         }
     };
 
+    const startHourError = startHour.length > 0 && !isValidTime(startHour)
+        ? 'Enter a valid time as HH:MM'
+        : undefined;
+    const endHourError = endHour.length > 0 && !isValidTime(endHour)
+        ? 'Enter a valid time as HH:MM'
+        : undefined;
+
     const handleNext = () => {
         updateData({
             shiftType,
@@ -81,36 +90,52 @@ export default function LifestyleScreen() {
         router.push('/(onboarding)/dietary-needs');
     };
 
-    const isValid = shiftType && lifestyle && experience && activity && startHour && endHour;
+    const isValid =
+        !!shiftType &&
+        !!lifestyle &&
+        !!experience &&
+        !!activity &&
+        isValidTime(startHour) &&
+        isValidTime(endHour);
 
     const SelectionGroup = ({ label, options, selected, onSelect, horizontal = false }: any) => (
-        <View style={{ marginBottom: spacing.lg }}>
-            <Text style={[typography.subhead, { color: colors.text.secondary, marginBottom: spacing.sm }]}>{label}</Text>
+        <View style={{ marginBottom: spacing.xl }}>
+            <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.md }]}>{label}</Text>
             <View style={[styles.optionsRow, horizontal && { flexWrap: 'wrap' }]}>
-                {options.map((opt: any) => (
-                    <TouchableOpacity
-                        key={opt.value}
-                        onPress={() => onSelect(selected === opt.value ? null : opt.value)}
-                        style={[
-                            styles.chip,
-                            { backgroundColor: colors.background.secondary, borderRadius: borderRadius.full },
-                            selected === opt.value && { backgroundColor: colors.accent.coral }
-                        ]}
-                    >
-                        <Text style={[typography.caption, { color: selected === opt.value ? '#fff' : colors.text.primary }]}>
-                            {opt.label}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
+                {options.map((opt: any) => {
+                    const active = selected === opt.value;
+                    return (
+                        <TouchableOpacity
+                            key={opt.value}
+                            activeOpacity={0.85}
+                            onPress={() => onSelect(active ? null : opt.value)}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: active }}
+                            accessibilityLabel={opt.label}
+                            style={[
+                                styles.chip,
+                                { backgroundColor: colors.background.secondary, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.border.default },
+                                active && { backgroundColor: colors.accent.coral, borderColor: colors.accent.coral, ...shadows.glow(colors.accent.coral) }
+                            ]}
+                        >
+                            <Text style={[typography.captionMedium, { color: active ? colors.text.primary : colors.text.secondary }]}>
+                                {opt.label}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
             </View>
         </View>
     );
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
                 <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
                     Your <Text style={{ color: colors.accent.coral }}>Lifestyle</Text>
+                </Text>
+                <Text style={[typography.body, { color: colors.text.secondary, marginBottom: spacing['2xl'] }]}>
+                    These signals let us align your meal timing and recovery with how you actually live and work.
                 </Text>
 
                 <SelectionGroup label="Shift Work Pattern" options={SHIFT_TYPES} selected={shiftType} onSelect={setShiftType} horizontal />
@@ -118,45 +143,52 @@ export default function LifestyleScreen() {
                 <SelectionGroup label="Training Experience" options={EXPERIENCE_LEVELS} selected={experience} onSelect={setExperience} horizontal />
                 <SelectionGroup label="Activity Level" options={ACTIVITY_LEVELS} selected={activity} onSelect={setActivity} horizontal />
 
-                <Text style={[typography.subhead, { color: colors.text.secondary, marginBottom: spacing.sm }]}>Sleep Window</Text>
+                <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.md }]}>Sleep Window</Text>
                 <View style={styles.row}>
                     <View style={{ flex: 1 }}>
-                        <Input label="Bedtime" placeholder="08:00" value={startHour} onChangeText={setStartHour} />
+                        <Input label="Bedtime" placeholder="08:00" value={startHour} onChangeText={setStartHour} error={startHourError} />
                     </View>
                     <View style={{ width: spacing.md }} />
                     <View style={{ flex: 1 }}>
-                        <Input label="Wake Up" placeholder="16:00" value={endHour} onChangeText={setEndHour} />
+                        <Input label="Wake Up" placeholder="16:00" value={endHour} onChangeText={setEndHour} error={endHourError} />
                     </View>
                 </View>
 
                 <View style={{ height: spacing.lg }} />
 
-                <Text style={[typography.subhead, { color: colors.text.secondary, marginBottom: spacing.sm }]}>Health Conditions (Optional)</Text>
+                <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.md }]}>Health Conditions (Optional)</Text>
                 <View style={[styles.optionsRow, { flexWrap: 'wrap' }]}>
-                    {HEALTH_CONDITIONS.map((opt) => (
-                        <TouchableOpacity
-                            key={opt.value}
-                            onPress={() => toggleCondition(opt.value)}
-                            style={[
-                                styles.chip,
-                                { backgroundColor: colors.background.secondary, borderRadius: borderRadius.full },
-                                conditions.includes(opt.value) && { backgroundColor: colors.accent.cyan + '40', borderColor: colors.accent.cyan, borderWidth: 1 }
-                            ]}
-                        >
-                            <Text style={[typography.caption, { color: conditions.includes(opt.value) ? colors.accent.cyan : colors.text.primary }]}>
-                                {opt.label}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
+                    {HEALTH_CONDITIONS.map((opt) => {
+                        const active = conditions.includes(opt.value);
+                        return (
+                            <TouchableOpacity
+                                key={opt.value}
+                                activeOpacity={0.85}
+                                onPress={() => toggleCondition(opt.value)}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: active }}
+                                accessibilityLabel={opt.label}
+                                style={[
+                                    styles.chip,
+                                    { backgroundColor: colors.background.secondary, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.border.default },
+                                    active && { backgroundColor: withAlpha(colors.accent.cyan, 0.16), borderColor: colors.accent.cyan }
+                                ]}
+                            >
+                                <Text style={[typography.captionMedium, { color: active ? colors.accent.cyan : colors.text.secondary }]}>
+                                    {opt.label}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
 
                 <View style={{ height: 100 }} />
             </ScrollView>
 
-            <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: Platform.OS === 'ios' ? spacing['3xl'] : spacing['2xl'] }]}>
+            <View style={[styles.footer, { backgroundColor: withAlpha(colors.background.primary, 0.92), borderTopColor: colors.border.default, paddingHorizontal: spacing.xl, paddingBottom: Platform.OS === 'ios' ? spacing['3xl'] : spacing['2xl'] }]}>
                 <Button
                     title="Continue"
-                    iconRight={<Ionicons name="arrow-forward" size={20} color="#fff" />}
+                    iconRight={<Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
                     onPress={handleNext}
                     disabled={!isValid}
                     fullWidth
@@ -178,8 +210,8 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     chip: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -188,7 +220,7 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: 'rgba(0,0,0,0.8)',
+        borderTopWidth: StyleSheet.hairlineWidth,
         paddingTop: 16,
     }
 });

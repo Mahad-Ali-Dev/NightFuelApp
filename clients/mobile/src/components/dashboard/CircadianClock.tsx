@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { colors } from '@/theme';
 
 interface CircadianClockProps {
     currentPhase?: string;
@@ -9,7 +10,7 @@ interface CircadianClockProps {
     size?: number;
 }
 
-export function CircadianClock({ currentPhase = 'Active', melatoninOnset, alertnessScore = 72, size = 160 }: CircadianClockProps) {
+function CircadianClockComponent({ currentPhase = 'Active', melatoninOnset, alertnessScore = 72, size = 160 }: CircadianClockProps) {
     const radius = (size - 16) / 2;
     const circumference = 2 * Math.PI * radius;
     const progress = alertnessScore / 100;
@@ -19,7 +20,7 @@ export function CircadianClock({ currentPhase = 'Active', melatoninOnset, alertn
             <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
                 <Circle
                     cx={size / 2} cy={size / 2} r={radius}
-                    stroke="#2D3748" strokeWidth={8} fill="none"
+                    stroke={colors.border.light} strokeWidth={8} fill="none"
                 />
                 <Circle
                     cx={size / 2} cy={size / 2} r={radius}
@@ -37,9 +38,14 @@ export function CircadianClock({ currentPhase = 'Active', melatoninOnset, alertn
     );
 }
 
+/**
+ * Memoized: all props are primitives and there's no state — a pure SVG gauge.
+ */
+export const CircadianClock = React.memo(CircadianClockComponent);
+
 const styles = StyleSheet.create({
     container: { alignItems: 'center', justifyContent: 'center' },
     center: { position: 'absolute', alignItems: 'center' },
     score: { color: '#FFFFFF', fontSize: 32, fontWeight: '800' },
-    phase: { color: '#8B949E', fontSize: 12, marginTop: 2 },
+    phase: { color: colors.text.secondary, fontSize: 12, marginTop: 2 },
 });

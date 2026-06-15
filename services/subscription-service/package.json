@@ -1,11 +1,11 @@
 {
-  "name": "@nightfuel/subscription-service",
+  "name": "subscription-service",
   "version": "0.1.0",
   "description": "NightFuel subscription management microservice – tier, status and feature limit tracking.",
   "private": true,
   "main": "dist/index.js",
   "scripts": {
-    "build": "prisma generate && tsc --project tsconfig.json",
+    "build": "prisma generate && tsc --project tsconfig.json && node -e \"require('fs').cpSync('src/generated','dist/generated',{recursive:true})\"",
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "lint": "eslint src --ext .ts",

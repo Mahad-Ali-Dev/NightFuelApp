@@ -11,10 +11,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getActiveSession, logSessionExercise, endSession, startSession } from '@/api/exercises';
+import { getActiveSession, logSessionExercise, endSession, startSession, getRoutines } from '@/api/exercises';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import ConfettiCannon from 'react-native-confetti-cannon';
+import { LinearGradient } from 'expo-linear-gradient';
+import { withAlpha } from '@/theme/utils';
+import { typography as typo } from '@/theme/typography';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -53,11 +56,11 @@ function formatTime(totalSeconds: number): string {
 }
 
 export default function ActiveWorkoutScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
-    const { sessionId: paramSessionId, exercise: paramExercise } = useLocalSearchParams<{ sessionId: string, exercise?: string }>();
+    const { sessionId: paramSessionId, exercise: paramExercise, routineId: paramRoutineId } = useLocalSearchParams<{ sessionId: string, exercise?: string, routineId?: string }>();
 
     // ── Workout Data ────────────────────────────────────────────────────────
     const [exerciseStates, setExerciseStates] = useState<ExerciseState[]>([]);
@@ -85,6 +88,15 @@ export default function ActiveWorkoutScreen() {
         queryKey: ['active-session', sessionId],
         queryFn: getActiveSession,
         enabled: !!sessionId,
+    });
+
+    // When launched from a routine (START button), fetch routines so we can seed
+    // the session with that routine's exercises — the backend creates an empty
+    // session, so without this the workout would open with no exercises.
+    const { data: routines, isLoading: routinesLoading } = useQuery({
+        queryKey: ['routines'],
+        queryFn: getRoutines,
+        enabled: !!paramRoutineId,
     });
 
     // ── Initialize ──────────────────────────────────────────────────────────
@@ -129,7 +141,7 @@ export default function ActiveWorkoutScreen() {
                 let resumedSessionId = restoredState.sessionId || session?.id || '';
                 if (!resumedSessionId) {
                     try {
-                        const newSess = await startSession();
+                        const newSess = await startSession(paramRoutineId);
                         resumedSessionId = newSess.id;
                     } catch (e) {
                         console.warn('Failed to start session', e);
@@ -141,7 +153,9 @@ export default function ActiveWorkoutScreen() {
                 return;
             }
 
-            // Fallback: Initial state from session
+            // Fallback: Initial state from session, or seed from the routine when
+            // the user started one (the backend creates an empty session, so we
+            // hydrate exercises from the routine definition here).
             let initialExercises: ExerciseState[] = [];
             if (session && session.logs && Array.isArray(session.logs) && session.logs.length > 0) {
                 initialExercises = session.logs.map((ex: any) => ({
@@ -154,6 +168,20 @@ export default function ActiveWorkoutScreen() {
                     })),
                     restSeconds: DEFAULT_REST_SECONDS,
                 }));
+            } else if (paramRoutineId && Array.isArray(routines)) {
+                const routine = routines.find((r) => r.id === paramRoutineId);
+                if (routine && Array.isArray(routine.exercises)) {
+                    initialExercises = routine.exercises.map((ex) => ({
+                        name: ex.name,
+                        muscleGroup: 'Other',
+                        sets: Array.from({ length: ex.sets || 3 }, () => ({
+                            kg: 0,
+                            reps: ex.reps || 10,
+                            completed: false,
+                        })),
+                        restSeconds: DEFAULT_REST_SECONDS,
+                    }));
+                }
             }
 
             if (paramExercise && typeof paramExercise === 'string') {
@@ -193,10 +221,12 @@ export default function ActiveWorkoutScreen() {
             setStartupCountdown(3);
         };
 
-        if (session || !isSessionLoading) {
+        const sessionReady = session || !isSessionLoading;
+        const routineReady = !paramRoutineId || !routinesLoading;
+        if (sessionReady && routineReady) {
             init();
         }
-    }, [session, isSessionLoading, paramExercise, sessionId]);
+    }, [session, isSessionLoading, paramExercise, sessionId, paramRoutineId, routines, routinesLoading]);
 
     // ── Timers ──────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -328,6 +358,12 @@ export default function ActiveWorkoutScreen() {
         // Capture the final elapsed time before any async work
         const finalElapsed = elapsedSeconds;
 
+        // Real session metrics for the summary screen (replaces hardcoded values).
+        const totalVolume = Math.round(exerciseStates.reduce((acc, ex) =>
+            acc + ex.sets.filter(s => s.completed).reduce((a, s) => a + (s.kg || 0) * (s.reps || 0), 0), 0));
+        const totalKcal = Math.round((finalElapsed / 60) * 6); // ≈6 kcal/min for resistance training
+        const summaryParams = { elapsed: String(finalElapsed), volume: String(totalVolume), kcal: String(totalKcal) };
+
         setShowConfetti(true);
 
         // Clear persisted state FIRST (before any async calls)
@@ -336,7 +372,7 @@ export default function ActiveWorkoutScreen() {
         try {
             if (!sessionId) {
                 setTimeout(() => {
-                    router.replace({ pathname: '/training/complete', params: { elapsed: String(finalElapsed) } });
+                    router.replace({ pathname: '/training/complete', params: summaryParams });
                 }, 1000);
                 return;
             }
@@ -373,7 +409,7 @@ export default function ActiveWorkoutScreen() {
 
             // Let the confetti run for 2.5 seconds before navigating
             setTimeout(() => {
-                router.replace({ pathname: '/training/complete', params: { elapsed: String(finalElapsed) } });
+                router.replace({ pathname: '/training/complete', params: summaryParams });
             }, 2500);
 
         } catch (e) {
@@ -389,18 +425,26 @@ export default function ActiveWorkoutScreen() {
     const renderHeader = () => (
         <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
             <View>
-                <Text style={[typography.caption, { color: colors.text.secondary, textTransform: 'uppercase', letterSpacing: 1 }]}>
+                <Text style={[typography.overline, { color: colors.text.secondary }]}>
                     Active Workout
                 </Text>
-                <Text style={[typography.display, { color: colors.accent.cyan, fontSize: 32, marginTop: -4 }]}>
+                <Text style={[styles.timer, { color: colors.accent.cyan }]}>
                     {formatTime(elapsedSeconds)}
                 </Text>
             </View>
             <TouchableOpacity
-                style={[styles.finishBtn, { backgroundColor: colors.accent.coral }]}
+                style={[styles.finishBtn, shadows.glow(colors.accent.coral)]}
                 onPress={handleEnd}
+                activeOpacity={0.9}
             >
-                <Text style={[typography.subhead, { color: '#FFF', fontWeight: 'bold' }]}>FINISH</Text>
+                <LinearGradient
+                    colors={colors.gradients.coral}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.finishBtnInner}
+                >
+                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>FINISH</Text>
+                </LinearGradient>
             </TouchableOpacity>
         </View>
     );
@@ -417,7 +461,7 @@ export default function ActiveWorkoutScreen() {
 
     return (
         <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={[styles.container, { backgroundColor: colors.background.primary }]}
         >
             <View style={{ paddingTop: insets.top, flex: 1 }}>
@@ -452,9 +496,9 @@ export default function ActiveWorkoutScreen() {
                                 {isExpanded && (
                                     <View style={styles.exContent}>
                                         <View style={styles.rowLabel}>
-                                            <Text style={[styles.label, { color: colors.text.tertiary, width: 40 }]}>SET</Text>
-                                            <Text style={[styles.label, { color: colors.text.tertiary, flex: 1, textAlign: 'center' }]}>KG</Text>
-                                            <Text style={[styles.label, { color: colors.text.tertiary, flex: 1, textAlign: 'center' }]}>REPS</Text>
+                                            <Text style={[styles.label, { color: colors.text.secondary, width: 40 }]}>SET</Text>
+                                            <Text style={[styles.label, { color: colors.text.secondary, flex: 1, textAlign: 'center' }]}>KG</Text>
+                                            <Text style={[styles.label, { color: colors.text.secondary, flex: 1, textAlign: 'center' }]}>REPS</Text>
                                             <View style={{ width: 40 }} />
                                         </View>
 
@@ -483,7 +527,7 @@ export default function ActiveWorkoutScreen() {
                                                     editable={!set.completed}
                                                 />
 
-                                                <TouchableOpacity
+                                                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Complete set"
                                                     style={[styles.checkBtn, { backgroundColor: set.completed ? colors.accent.emerald : colors.background.tertiary }]}
                                                     onPress={() => toggleSetComplete(eIdx, sIdx)}
                                                 >
@@ -493,6 +537,7 @@ export default function ActiveWorkoutScreen() {
                                         ))}
 
                                         <TouchableOpacity
+                                            activeOpacity={0.7}
                                             style={[styles.addSetBtn, { borderColor: colors.border.default }]}
                                             onPress={() => addSet(eIdx)}
                                         >
@@ -505,7 +550,20 @@ export default function ActiveWorkoutScreen() {
                         );
                     })}
 
+                    {exerciseStates.length === 0 && (
+                        <View style={{ alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 }}>
+                            <Ionicons name="barbell-outline" size={48} color={colors.text.tertiary} />
+                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 16, textAlign: 'center' }]}>
+                                No exercises yet
+                            </Text>
+                            <Text style={[typography.body, { color: colors.text.secondary, marginTop: 6, textAlign: 'center' }]}>
+                                Add your first exercise to this session using the button below.
+                            </Text>
+                        </View>
+                    )}
+
                     <TouchableOpacity
+                        activeOpacity={0.7}
                         style={{
                             flexDirection: 'row',
                             alignItems: 'center',
@@ -531,10 +589,10 @@ export default function ActiveWorkoutScreen() {
             {isStarting && (
                 <View style={[StyleSheet.absoluteFillObject, { zIndex: 1000 }]}>
                     <BlurView intensity={80} tint="dark" style={[StyleSheet.absoluteFillObject, { justifyContent: 'center', alignItems: 'center' }]}>
-                        <Text style={[typography.display, { fontSize: 120, color: colors.accent.coral, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 4 }, textShadowRadius: 10 }]}>
+                        <Text style={[styles.countdownNum, { color: colors.accent.coral, textShadowColor: withAlpha(colors.accent.coral, 0.5), textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 24 }]}>
                             {startupCountdown}
                         </Text>
-                        <Text style={[typography.heading, { color: '#FFF', marginTop: 20, letterSpacing: 2 }]}>
+                        <Text style={[typography.h3, { color: colors.text.primary, marginTop: 20, letterSpacing: 2 }]}>
                             GET READY!
                         </Text>
                     </BlurView>
@@ -545,9 +603,9 @@ export default function ActiveWorkoutScreen() {
             <Modal transparent visible={showRestTimer && !isStarting} animationType="fade">
                 <View style={styles.modalOverlay}>
                     <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={[styles.modalContent, { backgroundColor: colors.background.secondary, borderRadius: borderRadius['2xl'] }]}>
-                        <Text style={[typography.caption, { color: colors.text.secondary, textTransform: 'uppercase', letterSpacing: 2 }]}>Rest Timer</Text>
-                        <Text style={[typography.display, { color: colors.accent.coral, fontSize: 80, marginVertical: 20 }]}>
+                    <View style={[styles.modalContent, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius['2xl'] }, shadows.glow(colors.accent.coral)]}>
+                        <Text style={[typography.overline, { color: colors.text.secondary }]}>Rest Timer</Text>
+                        <Text style={[styles.restNum, { color: colors.accent.coral }]}>
                             {restSeconds}
                         </Text>
                         <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>
@@ -556,16 +614,18 @@ export default function ActiveWorkoutScreen() {
 
                         <View style={styles.modalActions}>
                             <TouchableOpacity
-                                style={[styles.modalBtn, { backgroundColor: colors.background.tertiary }]}
+                                activeOpacity={0.85}
+                                style={[styles.modalBtn, { backgroundColor: colors.background.tertiary, borderWidth: 1, borderColor: colors.border.default }]}
                                 onPress={() => setRestSeconds(prev => prev + 15)}
                             >
                                 <Text style={[typography.body, { color: colors.text.primary, fontWeight: 'bold' }]}>+15s</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
+                                activeOpacity={0.85}
                                 style={[styles.modalBtn, { backgroundColor: colors.accent.coral }]}
                                 onPress={() => setShowRestTimer(false)}
                             >
-                                <Text style={[typography.body, { color: '#FFF', fontWeight: 'bold' }]}>SKIP</Text>
+                                <Text style={[typography.body, { color: colors.text.primary, fontWeight: 'bold' }]}>SKIP</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -590,7 +650,9 @@ export default function ActiveWorkoutScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
-    finishBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12 },
+    timer: { fontFamily: typo.statMedium.fontFamily, fontSize: 32, lineHeight: 38, marginTop: 2 },
+    finishBtn: { borderRadius: 14 },
+    finishBtnInner: { borderRadius: 14, overflow: 'hidden', paddingHorizontal: 22, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
     exCard: { borderWidth: 1, overflow: 'hidden' },
     exHeader: { padding: 16 },
     exTitleRow: { flexDirection: 'row', alignItems: 'center' },
@@ -604,7 +666,9 @@ const styles = StyleSheet.create({
     checkBtn: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     addSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderStyle: 'dashed' as any, borderWidth: 1, borderRadius: 10, marginTop: 4 },
     modalOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-    modalContent: { width: '100%', padding: 30, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 10 },
+    modalContent: { width: '100%', padding: 30, alignItems: 'center', borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 10 },
+    restNum: { fontFamily: typo.statLarge.fontFamily, fontSize: 80, lineHeight: 88, marginVertical: 20 },
+    countdownNum: { fontFamily: typo.statLarge.fontFamily, fontSize: 120, lineHeight: 130 },
     modalActions: { flexDirection: 'row', gap: 16, marginTop: 20 },
     modalBtn: { flex: 1, height: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }
 });

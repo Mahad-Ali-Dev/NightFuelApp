@@ -28,7 +28,7 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
     fastify.get('/v1/coaches/conversations', {
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
-        const userId = (request as any).user?.id ?? (request as any).user?.sub;
+        const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
         const conversations = await chatService.getConversations(userId);
         return reply.send({ data: conversations });
     });
@@ -38,7 +38,7 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
         schema: { body: z.object({ targetUserId: z.string() }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
-        const userId = (request as any).user?.id ?? (request as any).user?.sub;
+        const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
         const { targetUserId } = request.body as any;
         const conv = await (opts.chatService as any).getOrCreateConversation(userId, targetUserId);
         return reply.send({ data: conv });
@@ -49,7 +49,7 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const { conversationId } = request.params as any;
-        const userId = (request as any).user?.id ?? (request as any).user?.sub;
+        const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
         const messages = await chatService.getMessagesForUser(conversationId, userId);
         return reply.send({ data: messages });
     });
@@ -59,7 +59,7 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const { conversationId } = request.params as any;
-        const userId = (request as any).user?.id ?? (request as any).user?.sub;
+        const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
         const { text } = request.body as any;
         const msg = await chatService.saveMessage(conversationId, userId, text);
         return reply.status(201).send({ data: msg });
@@ -81,7 +81,7 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
         schema: { querystring: z.object({ limit: z.coerce.number().default(50) }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
-        const userId = (request as any).user?.id ?? (request as any).user?.sub;
+        const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
         const { limit } = request.query as any;
         const messages = await chatService.getRiaMessages(userId, limit);
         return reply.send({ data: messages });
@@ -97,7 +97,7 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
         },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
-        const userId = (request as any).user?.id ?? (request as any).user?.sub;
+        const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
         const { message, context = {} } = request.body as any;
         const result = await chatService.sendRiaMessage(userId, message, context);
         return reply.send(result);

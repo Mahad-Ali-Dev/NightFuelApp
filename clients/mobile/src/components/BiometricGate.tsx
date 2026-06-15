@@ -121,13 +121,14 @@ export function BiometricGate({ prompt, children, onSkip }: BiometricGateProps) 
 
       <TouchableOpacity
         onPress={retry}
+        activeOpacity={0.85}
         style={[styles.btn, { backgroundColor: colors.accent.coral, borderRadius: borderRadius.lg, marginTop: spacing.xl }]}
       >
         <Text style={[typography.subhead, { color: '#fff', fontWeight: '700' }]}>Try again</Text>
       </TouchableOpacity>
 
       {onSkip && (
-        <TouchableOpacity onPress={onSkip} style={{ marginTop: spacing.md }}>
+        <TouchableOpacity onPress={onSkip} style={{ marginTop: spacing.md }} activeOpacity={0.85}>
           <Text style={[typography.caption, { color: colors.text.tertiary, fontWeight: '600' }]}>Cancel</Text>
         </TouchableOpacity>
       )}

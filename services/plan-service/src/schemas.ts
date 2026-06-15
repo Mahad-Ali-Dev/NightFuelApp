@@ -1,7 +1,14 @@
 import { z } from 'zod';
 
+// Calendar date in YYYY-MM-DD form. Enforced at the API boundary so a malformed or
+// empty date returns 400 instead of reaching `new Date(date)` → Invalid Date → a
+// Prisma validation error surfacing as 500. Matches the internal route's convention.
+const dateString = z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be in YYYY-MM-DD format');
+
 export const getPlanParamsSchema = z.object({
-    date: z.string()
+    date: dateString,
 });
 
 export const getPlanResponseSchema = z.object({
@@ -20,7 +27,7 @@ export const getPlanResponseSchema = z.object({
 // POST /store — accept a pre-generated plan from the frontend (no AI call)
 export const storePlanBodySchema = z.object({
     userId: z.string().uuid().optional(),
-    date: z.string(),
+    date: dateString,
     shiftId: z.string().uuid().optional(),
     shiftType: z.string().optional(),
     structuredPlan: z.record(z.any()),
@@ -30,7 +37,7 @@ export const storePlanBodySchema = z.object({
 
 export const generatePlanBodySchema = z.object({
     userId: z.string().uuid().optional(), // Ignored — authoritative userId comes from JWT
-    date: z.string(),
+    date: dateString,
     shiftId: z.string().uuid().optional(),
     shiftType: z.string().optional(),
     circadianProfile: z.record(z.any()).optional(), // Full circadian profile from the engine

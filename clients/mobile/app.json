@@ -68,13 +68,6 @@
           "icon": "./assets/images/notification-icon.png",
           "color": "#FF6B35"
         }
-      ],
-      [
-        "@sentry/react-native/expo",
-        {
-          "organization": "tase-llc",
-          "project": "react-native"
-        }
       ]
     ],
     "experiments": {

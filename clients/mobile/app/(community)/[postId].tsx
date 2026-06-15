@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-    ActivityIndicator, KeyboardAvoidingView, Platform, Alert
+    KeyboardAvoidingView, Platform, Alert
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getFeed, addComment, getComments, getPostById, Post, Comment } from '@/api/community';
+import { addComment, getComments, getPostById, Post, Comment } from '@/api/community';
 import { colors as themeColors } from '@/theme/colors';
 import { withAlpha } from '@/theme/utils';
 import { Image } from 'expo-image';
-import { Card, Button } from '@/components/ui';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Card, Button, Skeleton, EmptyState } from '@/components/ui';
+import { shadows } from '@/theme';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function PostDetailScreen() {
@@ -25,14 +27,13 @@ export default function PostDetailScreen() {
     const [commentText, setCommentText] = useState('');
 
     // ── Queries ─────────────────────────────────────────────────────────────
-    // Note: Reusing getFeed or implementing getPostById if available. 
-    // For now, finding in cached feed or fetching.
-    const { data: feedData } = useQuery({
-        queryKey: ['community-feed'],
-        queryFn: () => getFeed(50),
+    // Fetch the post directly by id so deep links and older posts (not in the
+    // cached feed window) still resolve instead of spinning forever.
+    const { data: post, isLoading: isLoadingPost, isError: isPostError, refetch: refetchPost } = useQuery({
+        queryKey: ['post', postId],
+        queryFn: () => getPostById(postId),
+        enabled: !!postId,
     });
-
-    const post = feedData?.find(p => p.id === postId);
 
     // Fetch real comments
     const { data: comments = [], refetch: refetchComments } = useQuery({
@@ -53,25 +54,73 @@ export default function PostDetailScreen() {
         }
     });
 
-    if (!post) {
+    if (isLoadingPost) {
         return (
-            <View style={[styles.container, { backgroundColor: colors.background.primary, justifyContent: 'center' }]}>
-                <ActivityIndicator size="large" color={colors.accent.cyan} />
+            <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+                <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
+                    <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backBtn}>
+                        <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                    </TouchableOpacity>
+                    <Text style={[typography.h2, { color: colors.text.primary }]}>Post</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <View style={styles.postContent}>
+                    <View style={styles.authorRow}>
+                        <Skeleton width={32} height={32} radius={16} />
+                        <View style={{ marginLeft: 12 }}>
+                            <Skeleton width={120} height={14} radius={4} />
+                            <Skeleton width={80} height={11} radius={4} style={{ marginTop: 6 }} />
+                        </View>
+                    </View>
+                    <View style={{ marginVertical: 20 }}>
+                        <Skeleton width="100%" height={16} radius={4} />
+                        <Skeleton width="92%" height={16} radius={4} style={{ marginTop: 10 }} />
+                        <Skeleton width="60%" height={16} radius={4} style={{ marginTop: 10 }} />
+                    </View>
+                    <View style={[styles.divider, { backgroundColor: colors.border.default }]} />
+                    <Skeleton width={160} height={12} radius={4} />
+                </View>
+            </View>
+        );
+    }
+
+    if (isPostError || !post) {
+        return (
+            <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+                <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
+                    <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backBtn}>
+                        <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                    </TouchableOpacity>
+                    <Text style={[typography.h2, { color: colors.text.primary }]}>Post</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <EmptyState
+                    icon={isPostError ? 'cloud-offline-outline' : 'alert-circle-outline'}
+                    title={isPostError ? "Couldn't load this post" : 'Post not found'}
+                    subtitle={
+                        isPostError
+                            ? 'Something went wrong fetching this post. Check your connection and try again.'
+                            : 'This post may have been removed or is no longer available.'
+                    }
+                    actionLabel={isPostError ? 'Try Again' : 'Go Back'}
+                    onAction={isPostError ? () => refetchPost() : () => router.back()}
+                    style={{ flex: 1 }}
+                />
             </View>
         );
     }
 
     return (
         <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={[styles.container, { backgroundColor: colors.background.primary }]}
         >
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Post</Text>
+                <Text style={[typography.h2, { color: colors.text.primary }]}>Post</Text>
                 <View style={{ width: 40 }} />
             </View>
 
@@ -81,14 +130,14 @@ export default function PostDetailScreen() {
                     <View style={styles.authorRow}>
                         <View style={[styles.avatarMini, { backgroundColor: colors.background.tertiary }]}>
                             {post.author?.avatarUrl ? (
-                                <Image source={{ uri: post.author.avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 16 }} />
+                                <Image source={{ uri: post.author.avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 16 }} cachePolicy="memory-disk" transition={200} />
                             ) : (
                                 <Ionicons name="person" size={16} color={colors.text.tertiary} />
                             )}
                         </View>
                         <View style={{ marginLeft: 12 }}>
                             <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{post.author?.name || 'User'}</Text>
-                            <Text style={[typography.caption, { color: colors.text.tertiary }]}>
+                            <Text style={[typography.caption, { color: colors.text.secondary }]}>
                                 {formatDistanceToNow(new Date(post.createdAt))} ago
                             </Text>
                         </View>
@@ -99,32 +148,34 @@ export default function PostDetailScreen() {
                     </Text>
 
                     {post.imageUrl && (
-                        <Image source={{ uri: post.imageUrl }} style={[styles.postImg, { borderRadius: borderRadius.xl }]} contentFit="cover" />
+                        <Image source={{ uri: post.imageUrl }} style={[styles.postImg, { borderRadius: borderRadius.xl }]} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                     )}
 
                     <View style={[styles.divider, { backgroundColor: colors.border.default }]} />
 
                     <View style={styles.interactionStats}>
-                        <Text style={[typography.caption, { color: colors.text.tertiary }]}>
-                            <Text style={{ color: colors.text.primary, fontWeight: 'bold' }}>{post.likes}</Text> Likes  •  <Text style={{ color: colors.text.primary, fontWeight: 'bold' }}>{post.commentsCount}</Text> Comments
+                        <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                            <Text style={[typography.statTiny, { color: colors.text.primary }]}>{post.likes}</Text> Likes  •  <Text style={[typography.statTiny, { color: colors.text.primary }]}>{post.commentsCount}</Text> Comments
                         </Text>
                     </View>
                 </View>
 
                 {/* Comments List */}
-                <View style={[styles.commentsSection, { borderTopColor: withAlpha(themeColors.text.primary, 0.02) }]}>
-                    <Text style={[typography.caption, { color: colors.text.tertiary, fontWeight: 'bold', marginBottom: 20 }]}>COMMENTS</Text>
+                <View style={[styles.commentsSection, { backgroundColor: colors.background.secondary, borderTopColor: colors.border.default }]}>
+                    <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 20 }]}>COMMENTS</Text>
                     {comments.length === 0 ? (
-                        <View style={styles.emptyComments}>
-                            <Ionicons name="chatbubble-ellipses-outline" size={32} color={colors.border.default} />
-                            <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 12 }]}>Be the first to reply</Text>
-                        </View>
+                        <EmptyState
+                            icon="chatbubble-ellipses-outline"
+                            title="No comments yet"
+                            subtitle="Be the first to reply and start the conversation."
+                            style={styles.emptyComments}
+                        />
                     ) : (
                         comments.map((c: Comment) => (
                             <View key={c.id} style={[styles.commentItem, { borderBottomColor: colors.border.default }]}>
                                 <View style={[styles.avatarMini, { backgroundColor: colors.background.tertiary }]}>
                                     {c.author?.avatarUrl ? (
-                                        <Image source={{ uri: c.author.avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 16 }} />
+                                        <Image source={{ uri: c.author.avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 16 }} cachePolicy="memory-disk" transition={200} />
                                     ) : (
                                         <Ionicons name="person" size={14} color={colors.text.tertiary} />
                                     )}
@@ -132,7 +183,7 @@ export default function PostDetailScreen() {
                                 <View style={{ flex: 1, marginLeft: 12 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                         <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold' }]}>{c.author?.name || 'User'}</Text>
-                                        <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 11 }]}>{formatDistanceToNow(new Date(c.createdAt))} ago</Text>
+                                        <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 11 }]}>{formatDistanceToNow(new Date(c.createdAt))} ago</Text>
                                     </View>
                                     <Text style={[typography.body, { color: colors.text.secondary, marginTop: 4 }]}>{c.text}</Text>
                                 </View>
@@ -152,12 +203,20 @@ export default function PostDetailScreen() {
                     onChangeText={setCommentText}
                     multiline
                 />
-                <TouchableOpacity
-                    style={[styles.sendBtn, { backgroundColor: colors.accent.cyan, opacity: commentText.trim() ? 1 : 0.5 }]}
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Send message"
+                    style={[styles.sendBtn, { opacity: commentText.trim() ? 1 : 0.5 }, commentText.trim() ? shadows.glow(colors.accent.coral) : null]}
                     onPress={() => commentMutation.mutate(commentText)}
                     disabled={commentMutation.isPending || !commentText.trim()}
+                    activeOpacity={0.9}
                 >
-                    <Ionicons name="send" size={18} color="#0D1117" />
+                    <LinearGradient
+                        colors={colors.gradients.coral}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.sendBtnGradient}
+                    >
+                        <Ionicons name="send" size={18} color={colors.text.primary} />
+                    </LinearGradient>
                 </TouchableOpacity>
             </View>
         </KeyboardAvoidingView>
@@ -176,8 +235,9 @@ const styles = StyleSheet.create({
     interactionStats: {},
     commentsSection: { padding: 20, borderTopWidth: 8 },
     commentItem: { flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1 },
-    emptyComments: { alignItems: 'center', paddingVertical: 40 },
+    emptyComments: { paddingVertical: 0 },
     inputBar: { flexDirection: 'row', alignItems: 'center', padding: 12, borderTopWidth: 1, backgroundColor: themeColors.background.primary },
     commentInput: { flex: 1, minHeight: 44, maxHeight: 100, paddingHorizontal: 20, paddingVertical: 10, fontSize: 15 },
-    sendBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginLeft: 12 },
+    sendBtn: { width: 44, height: 44, borderRadius: 22, marginLeft: 12, overflow: 'hidden' },
+    sendBtnGradient: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });

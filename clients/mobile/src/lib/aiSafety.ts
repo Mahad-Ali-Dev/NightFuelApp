@@ -22,7 +22,7 @@ export const AI_MAX_INPUT_CHARS = 2000;
 /** Injection-pattern signals — we strip / flag, never silently allow. */
 const INJECTION_PATTERNS: Array<{ name: string; re: RegExp }> = [
   { name: 'ignore_previous',     re: /ignore\s+(all\s+)?previous\s+(instructions?|prompts?|context|rules?)/i },
-  { name: 'system_prompt_dump',  re: /(reveal|show|print|repeat|output)\s+(the\s+)?(system|original|initial)\s+(prompt|instructions?|rules?)/i },
+  { name: 'system_prompt_dump',  re: /(reveal|show|print|repeat|output)\s+(the\s+|your\s+)?((system|original|initial)\s+)?(prompt|instructions?|rules?)/i },
   { name: 'role_override',       re: /\byou\s+are\s+now\s+(?:a|an)?\s*\w+/i },
   { name: 'role_assume',         re: /\b(act|pretend|behave)\s+as\s+(?:a|an|if)\b/i },
   { name: 'forget_persona',      re: /forget\s+(everything|your\s+(role|persona|instructions|rules))/i },

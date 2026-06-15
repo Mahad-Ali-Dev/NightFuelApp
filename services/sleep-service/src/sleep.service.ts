@@ -199,4 +199,62 @@ export class SleepService {
         logger.info({ userId }, 'Sleep preferences updated');
         return updated;
     }
+
+    // ── Derived analytics (empty-safe; never throws on no data) ──────────────────
+    async getQuality(userId: string) {
+        const sessions = await this.prisma.sleepSession.findMany({
+            where: { userId }, orderBy: { startTime: 'desc' }, take: 30,
+        });
+        if (sessions.length === 0) {
+            return { score: null, avgQuality: null, avgDurationMins: null, sessionsLogged: 0, lastNight: null };
+        }
+        const q = sessions.filter(s => s.quality != null).map(s => s.quality as number);
+        const d = sessions.filter(s => s.durationMins != null).map(s => s.durationMins as number);
+        const avgQuality = q.length ? q.reduce((a, b) => a + b, 0) / q.length : null;
+        const avgDurationMins = d.length ? Math.round(d.reduce((a, b) => a + b, 0) / d.length) : null;
+        const qScore = avgQuality != null ? (avgQuality / 10) * 100 : null;
+        const dScore = avgDurationMins != null ? Math.min(100, (avgDurationMins / 480) * 100) : null;
+        const score = (qScore != null && dScore != null) ? Math.round(0.6 * qScore + 0.4 * dScore)
+            : (qScore != null ? Math.round(qScore) : (dScore != null ? Math.round(dScore) : null));
+        const last = sessions[0];
+        return {
+            score,
+            avgQuality: avgQuality != null ? Math.round(avgQuality * 10) / 10 : null,
+            avgDurationMins,
+            sessionsLogged: sessions.length,
+            lastNight: {
+                durationMins: last.durationMins,
+                quality: last.quality,
+                startTime: last.startTime,
+                circadianAlignmentScore: last.circadianAlignmentScore,
+            },
+        };
+    }
+
+    async getAnalytics(userId: string) {
+        const sessions = await this.prisma.sleepSession.findMany({
+            where: { userId }, orderBy: { startTime: 'desc' }, take: 30,
+        });
+        const quality = await this.getQuality(userId);
+        const recent = sessions.slice(0, 7).reverse();
+        const chartData = recent.map(s => ({
+            date: s.startTime.toISOString().slice(0, 10),
+            durationMins: s.durationMins ?? 0,
+            quality: s.quality ?? 0,
+            alignmentScore: s.circadianAlignmentScore ?? 0,
+        }));
+        const aligns = sessions.filter(s => s.circadianAlignmentScore != null).map(s => s.circadianAlignmentScore as number);
+        const circadianAlignment = aligns.length ? Math.round(aligns.reduce((a, b) => a + b, 0) / aligns.length) : null;
+        return {
+            qualityScore: quality.score,
+            avgDuration: quality.avgDurationMins,
+            avgQuality: quality.avgQuality,
+            sessionsLogged: sessions.length,
+            circadianAlignment,
+            chartData,
+            summary: sessions.length === 0
+                ? 'Log your sleep to unlock personalized analytics.'
+                : `Across ${sessions.length} night(s), average sleep was ${quality.avgDurationMins ?? 0} min at a ${quality.score ?? 0}/100 quality score.`,
+        };
+    }
 }

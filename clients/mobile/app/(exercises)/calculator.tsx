@@ -12,6 +12,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { logOneRepMax } from '@/api/exercises';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { shadows } from '@/theme/shadows';
+import { withAlpha } from '@/theme/utils';
 
 const { width } = Dimensions.get('window');
 
@@ -67,7 +70,11 @@ export default function CalculatorScreen() {
             estimated1RMKg: estimated1RM,
         }),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['1rm'] });
+            // The 1RM list is read under two distinct query keys: ['exercise-1rm']
+            // (analytics screen) and ['workout-1rm'] (useWorkout hook). Invalidate
+            // both so the saved record refreshes everywhere it's shown.
+            queryClient.invalidateQueries({ queryKey: ['exercise-1rm'] });
+            queryClient.invalidateQueries({ queryKey: ['workout-1rm'] });
             Alert.alert('Saved', 'Your 1RM record has been saved successfully.');
             router.back();
         },
@@ -78,7 +85,7 @@ export default function CalculatorScreen() {
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
                 <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>1RM Calculator</Text>
@@ -86,7 +93,7 @@ export default function CalculatorScreen() {
             </View>
 
             <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={{ flex: 1 }}
             >
                 <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}>
@@ -94,7 +101,7 @@ export default function CalculatorScreen() {
                     <View style={[styles.card, { backgroundColor: colors.background.secondary, borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}>
                         <View style={styles.inputRow}>
                             <View style={styles.inputStack}>
-                                <Text style={[typography.caption, { color: colors.text.tertiary, marginBottom: 8 }]}>WEIGHT (KG)</Text>
+                                <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 8 }]}>WEIGHT (KG)</Text>
                                 <TextInput
                                     style={[styles.input, { color: colors.text.primary, backgroundColor: colors.background.tertiary, borderRadius: borderRadius.xl }]}
                                     keyboardType="numeric"
@@ -105,7 +112,7 @@ export default function CalculatorScreen() {
                                 />
                             </View>
                             <View style={styles.inputStack}>
-                                <Text style={[typography.caption, { color: colors.text.tertiary, marginBottom: 8 }]}>REPS</Text>
+                                <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 8 }]}>REPS</Text>
                                 <TextInput
                                     style={[styles.input, { color: colors.text.primary, backgroundColor: colors.background.tertiary, borderRadius: borderRadius.xl }]}
                                     keyboardType="numeric"
@@ -117,7 +124,7 @@ export default function CalculatorScreen() {
                             </View>
                         </View>
 
-                        <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 16, marginBottom: 8 }]}>EXERCISE</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 16, marginBottom: 8 }]}>EXERCISE</Text>
                         <TextInput
                             style={[styles.input, { color: colors.text.primary, backgroundColor: colors.background.tertiary, borderRadius: borderRadius.xl }]}
                             value={exerciseName}
@@ -129,13 +136,20 @@ export default function CalculatorScreen() {
 
                     {/* Result Circle */}
                     <View style={styles.resultContainer}>
-                        <View style={[styles.resultCircle, { borderColor: colors.accent.coral }]}>
-                            <Text style={[typography.caption, { color: colors.text.tertiary, letterSpacing: 2 }]}>ESTIMATED 1RM</Text>
-                            <Text style={[typography.display, { color: colors.accent.coral, fontSize: 56, marginVertical: 4 }]}>
-                                {estimated1RM}
-                            </Text>
-                            <Text style={[typography.subhead, { color: colors.text.secondary, fontWeight: 'bold' }]}>KILOGRAMS</Text>
-                        </View>
+                        <LinearGradient
+                            colors={colors.gradients.coral}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={[styles.resultRing, shadows.glow(colors.accent.coral)]}
+                        >
+                            <View style={[styles.resultCircle, { backgroundColor: colors.background.secondary }]}>
+                                <Text style={[typography.overline, { color: colors.text.secondary }]}>ESTIMATED 1RM</Text>
+                                <Text style={[typography.statLarge, { color: colors.text.primary, marginVertical: 4 }]}>
+                                    {estimated1RM}
+                                </Text>
+                                <Text style={[typography.subhead, { color: colors.text.secondary, fontWeight: 'bold' }]}>KILOGRAMS</Text>
+                            </View>
+                        </LinearGradient>
                     </View>
 
                     {/* Formula Selector */}
@@ -144,12 +158,16 @@ export default function CalculatorScreen() {
                             <TouchableOpacity
                                 key={f}
                                 onPress={() => setActiveFormula(f)}
-                                style={[styles.formulaBtn, activeFormula === f && { backgroundColor: colors.accent.coral, borderRadius: borderRadius.lg }]}
+                                activeOpacity={0.85}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: activeFormula === f }}
+                                accessibilityLabel={`${f} formula`}
+                                style={[styles.formulaBtn, activeFormula === f && { backgroundColor: withAlpha(colors.accent.coral, 0.18), borderRadius: borderRadius.lg, borderWidth: 1, borderColor: withAlpha(colors.accent.coral, 0.4) }]}
                             >
-                                <Text style={[styles.formulaText, { color: activeFormula === f ? '#FFF' : colors.text.tertiary }]}>
+                                <Text style={[styles.formulaText, { color: activeFormula === f ? colors.accent.coral : colors.text.tertiary }]}>
                                     {f.toUpperCase()}
                                 </Text>
-                                <Text style={[styles.formulaVal, { color: activeFormula === f ? '#FFF' : colors.text.secondary }]}>
+                                <Text style={[styles.formulaVal, { color: activeFormula === f ? colors.accent.coral : colors.text.secondary }]}>
                                     {results[f]}kg
                                 </Text>
                             </TouchableOpacity>
@@ -157,14 +175,25 @@ export default function CalculatorScreen() {
                     </View>
 
                     <TouchableOpacity
-                        style={[styles.saveBtn, { backgroundColor: colors.accent.coral, borderRadius: borderRadius.xl }]}
+                        style={[shadows.glow(colors.accent.coral), { borderRadius: borderRadius.xl, marginTop: 24, opacity: saveMutation.isPending ? 0.7 : 1 }]}
                         onPress={() => saveMutation.mutate()}
                         disabled={saveMutation.isPending}
+                        accessibilityRole="button"
+                        accessibilityLabel="Save to records"
+                        accessibilityState={{ disabled: saveMutation.isPending }}
+                        activeOpacity={0.85}
                     >
-                        <Ionicons name="trophy" size={20} color="#FFF" />
-                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginLeft: 8 }]}>
-                            {saveMutation.isPending ? 'SAVING...' : 'SAVE TO RECORDS'}
-                        </Text>
+                        <LinearGradient
+                            colors={colors.gradients.coral}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={[styles.saveBtn, { borderRadius: borderRadius.xl }]}
+                        >
+                            <Ionicons name="trophy" size={20} color="#FFF" />
+                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginLeft: 8 }]}>
+                                {saveMutation.isPending ? 'SAVING...' : 'SAVE TO RECORDS'}
+                            </Text>
+                        </LinearGradient>
                     </TouchableOpacity>
 
                     {/* Zone Table */}
@@ -176,13 +205,13 @@ export default function CalculatorScreen() {
                             <View key={zone.pct} style={[styles.zoneRow, idx < ZONES.length - 1 && { borderBottomColor: colors.border.default, borderBottomWidth: 1 }]}>
                                 <View style={styles.zoneLeft}>
                                     <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{zone.pct}%</Text>
-                                    <Text style={[typography.caption, { color: colors.text.tertiary }]}>{zone.label}</Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary }]}>{zone.label}</Text>
                                 </View>
                                 <View style={styles.zoneRight}>
-                                    <Text style={[typography.heading, { color: colors.accent.cyan, fontSize: 18 }]}>
+                                    <Text style={[typography.statTiny, { color: colors.accent.cyan, fontSize: 18 }]}>
                                         {Math.round(estimated1RM * zone.pct / 100)}kg
                                     </Text>
-                                    <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 10 }]}>~{zone.reps} reps</Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>~{zone.reps} reps</Text>
                                 </View>
                             </View>
                         ))}
@@ -202,12 +231,13 @@ const styles = StyleSheet.create({
     inputStack: { flex: 1 },
     input: { height: 56, paddingHorizontal: 16, fontSize: 20, fontWeight: 'bold', textAlign: 'center' },
     resultContainer: { alignItems: 'center', marginVertical: 30 },
-    resultCircle: { width: 220, height: 220, borderRadius: 110, borderWidth: 8, alignItems: 'center', justifyContent: 'center' },
+    resultRing: { width: 224, height: 224, borderRadius: 112, alignItems: 'center', justifyContent: 'center' },
+    resultCircle: { width: 208, height: 208, borderRadius: 104, alignItems: 'center', justifyContent: 'center' },
     formulaRow: { flexDirection: 'row', padding: 6, gap: 4, marginTop: 10 },
     formulaBtn: { flex: 1, alignItems: 'center', paddingVertical: 10 },
     formulaText: { fontSize: 10, fontWeight: 'bold', marginBottom: 2 },
     formulaVal: { fontSize: 14, fontWeight: '800' },
-    saveBtn: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 24 },
+    saveBtn: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
     zoneTable: { borderWidth: 1, overflow: 'hidden' },
     zoneRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
     zoneLeft: { flex: 1 },

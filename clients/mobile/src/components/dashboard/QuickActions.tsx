@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { colors } from '@/theme';
 
 interface QuickAction {
     icon: keyof typeof Ionicons.glyphMap;
@@ -39,5 +40,5 @@ const styles = StyleSheet.create({
     grid: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 20 },
     item: { alignItems: 'center', flex: 1 },
     iconBg: { width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-    label: { color: '#8B949E', fontSize: 12, fontWeight: '600' },
+    label: { color: colors.text.secondary, fontSize: 12, fontWeight: '600' },
 });

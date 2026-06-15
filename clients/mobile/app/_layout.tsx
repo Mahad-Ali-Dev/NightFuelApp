@@ -20,6 +20,7 @@ import BadgeToast from '@/components/BadgeToast';
 import { getErrorMessage } from '@/utils/validation';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useCircadianReminders } from '@/hooks/useCircadianReminders';
 import { wrap as sentryWrap, setUser as sentrySetUser, captureException } from '@/lib/sentry';
 import * as Linking from 'expo-linking';
 import { resolveDeepLink } from '@/lib/deepLinks';
@@ -47,16 +48,21 @@ function RootLayout() {
   const systemScheme = useColorScheme();
   const { isDarkTheme } = useThemeStore();
   const scheme = (isDarkTheme(systemScheme) ? 'dark' : 'light') as ColorScheme;
-  const themeColors = getThemeColors(scheme);
+  const themeColors = React.useMemo(() => getThemeColors(scheme), [scheme]);
 
-  const themeValue = {
+  // Memoized so the ThemeContext value is referentially stable across the root's
+  // frequent re-renders (auth / notification / connectivity churn during startup).
+  // Without this, a fresh object every render forces EVERY `useTheme()` consumer in
+  // the app to re-render on each root render — which on input screens can disrupt
+  // focus and read as flicker.
+  const themeValue = React.useMemo(() => ({
     scheme,
     colors: themeColors,
     typography,
     spacing,
     borderRadius,
     shadows,
-  };
+  }), [scheme, themeColors]);
 
   const { loadSession, user } = useAuthStore();
   const router = useRouter();
@@ -79,6 +85,7 @@ function RootLayout() {
 
   useOfflineSync();    // Drains offline queue when connectivity is restored
   useNotifications(); // Registers push token with backend
+  useCircadianReminders(); // Schedules shift-timed circadian local reminders (eat / caffeine / wind-down / log sleep)
 
   useEffect(() => {
     loadSession();

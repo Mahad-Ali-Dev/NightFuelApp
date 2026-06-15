@@ -343,7 +343,7 @@ export async function searchExercisesLive(query: string): Promise<Exercise[]> {
                 { headers: { Accept: 'application/json' }, signal: timeout },
             );
             if (res.ok) {
-                const data: { results: WgerExerciseInfo[] } = await res.json();
+                const data = await res.json() as { results: WgerExerciseInfo[] };
                 const mapped = data.results
                     .map(mapWgerToExercise)
                     .filter((e): e is Exercise => e !== null);
@@ -362,7 +362,7 @@ export async function searchExercisesLive(query: string): Promise<Exercise[]> {
             { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(6000) },
         );
         if (res.ok) {
-            const data: WgerSearchResult = await res.json();
+            const data = await res.json() as WgerSearchResult;
             if (data.suggestions.length > 0) {
                 return data.suggestions.map(s => ({
                     id: `wger-${s.data.base_id}`,
@@ -396,7 +396,7 @@ export async function fetchExerciseById(id: string): Promise<Exercise | undefine
             { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(6000) },
         );
         if (res.ok) {
-            const info: WgerExerciseInfo = await res.json();
+            const info = await res.json() as WgerExerciseInfo;
             return mapWgerToExercise(info) ?? undefined;
         }
     } catch {

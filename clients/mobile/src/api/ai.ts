@@ -1,5 +1,5 @@
 import { AxiosError } from 'axios';
-import { apiClient, API_BASE_URL, getAccessToken } from './client';
+import { apiClient, getAccessToken, resolveApiUrl } from './client';
 import { sanitizeAiInput, AI_TIMEOUTS, AI_FALLBACK_CHAT_REPLY } from '@/lib/aiSafety';
 import { captureException } from '@/lib/sentry';
 
@@ -153,17 +153,13 @@ export async function swapMeal(payload: MealSwapPayload): Promise<MealSwapRespon
 }
 
 /**
- * Streaming variant of `chat()` — see streamChat below.
- */
-
-/**
  * Streaming variant of `chat()`.
  *
  * Usage:
  *   const stop = streamChat(payload, {
  *     onToken: (delta) => append(delta),
  *     onDone:  (meta) => recordCost(meta),
- *     onError: (msg) => showError(msg),
+ *     onError: (msg, partial) => fallBackOrShow(msg, partial),
  *   });
  *   // user navigates away → stop()
  *
@@ -171,27 +167,38 @@ export async function swapMeal(payload: MealSwapPayload): Promise<MealSwapRespon
  * remains as a fallback for callers that don't want to deal with deltas.
  *
  * Implementation notes:
- *   - Uses fetch + ReadableStream rather than `react-native-sse` so
- *     we don't add another native dependency. RN 0.81+ has streaming
- *     fetch responses on iOS / Android.
- *   - Auth header attached manually (no axios interceptor here).
- *   - Sanitization applied client-side before transmission, same as
- *     the non-streaming chat().
- *   - On any error before the stream starts (network, 4xx), invokes
- *     onError with the canned fallback reply.
- *   - On error mid-stream, calls onError with whatever was received
- *     so the UI can show "(reply truncated)".
+ *   - Uses **XMLHttpRequest**, not fetch + ReadableStream. RN's fetch does
+ *     not expose a usable streaming `response.body.getReader()` on either
+ *     platform (Android buffers the whole body; iOS rejects `getReader`),
+ *     so token-by-token rendering via fetch silently degrades to "whole
+ *     reply at once". XHR's `onprogress` fires as bytes arrive and lets us
+ *     read the cumulative `responseText`, which is reliable in RN.
+ *   - We track a `lastIndex` into `responseText`, slice only the newly
+ *     arrived suffix each progress tick, and split it on the SSE record
+ *     separator "\n\n". A trailing partial record (no terminating blank
+ *     line yet) is held back until the next tick.
+ *   - Auth header attached manually (reuses {@link getAccessToken}); the
+ *     URL is built with {@link resolveApiUrl} so the API base + `/v1`
+ *     gateway-strip policy matches the axios interceptor exactly.
+ *   - Sanitization applied client-side before transmission, same as the
+ *     non-streaming chat().
+ *   - On any error before/while streaming (network, non-200, parse,
+ *     `error` event), invokes onError with the canned fallback reply *and*
+ *     whatever partial text had arrived, so the caller can transparently
+ *     fall back to the non-streaming path without regressing behaviour.
  */
+export interface StreamDoneMeta {
+  tokens?: number;
+  tokens_input?: number;
+  tokens_output?: number;
+  cost_usd?: number;
+  model?: string;
+  latency_ms?: number;
+}
+
 export interface StreamChatHandlers {
   onToken: (delta: string) => void;
-  onDone: (meta: {
-    tokens?: number;
-    tokens_input?: number;
-    tokens_output?: number;
-    cost_usd?: number;
-    model?: string;
-    latency_ms?: number;
-  }) => void;
+  onDone: (meta: StreamDoneMeta) => void;
   onError: (errorMessage: string, partialText: string) => void;
 }
 
@@ -205,112 +212,161 @@ export function streamChat(
     return () => undefined;
   }
 
-  const controller = new AbortController();
-  let partial = '';
+  const url = resolveApiUrl('/v1/ai/chat/stream');
 
-  const url = `${API_BASE_URL}/v1/ai/chat/stream`;
+  // Stream bookkeeping.
+  let partial = '';        // accumulated assistant text (for fallback/truncation)
+  let lastIndex = 0;       // how far into xhr.responseText we've already parsed
+  let finished = false;    // guard so we emit a terminal callback exactly once
+  let aborted = false;     // user called the returned stop()
+  let sawDone = false;     // received an explicit `done` / `[DONE]` sentinel
+
+  const xhr = new XMLHttpRequest();
+
+  /** Emit onError exactly once (network/parse/non-200) unless already done. */
+  const fail = (source: string, extra?: Record<string, unknown>) => {
+    if (finished || aborted) return;
+    finished = true;
+    captureException(new Error(`streamChat_${source}`), { source: `streamChat.${source}`, ...extra });
+    handlers.onError(AI_FALLBACK_CHAT_REPLY, partial);
+  };
+
+  /**
+   * Parse a single complete SSE record (one or more lines, already split off
+   * at "\n\n"). A record may contain several `data:` lines; we handle each.
+   */
+  const handleRecord = (record: string) => {
+    for (const line of record.split('\n')) {
+      const trimmedLine = line.replace(/\r$/, '');
+      if (!trimmedLine.startsWith('data:')) continue;
+      const data = trimmedLine.slice(5).trim();
+      if (!data) continue;
+
+      // Stream sentinel — server signals completion.
+      if (data === '[DONE]') {
+        sawDone = true;
+        if (!finished && !aborted) {
+          finished = true;
+          handlers.onDone({});
+        }
+        return;
+      }
+
+      try {
+        const event = JSON.parse(data) as
+          | { type: 'token'; delta: string }
+          | ({ type: 'done' } & StreamDoneMeta)
+          | { type: 'error'; message?: string; fallback?: string };
+
+        if (event.type === 'token') {
+          partial += event.delta;
+          handlers.onToken(event.delta);
+        } else if (event.type === 'done') {
+          sawDone = true;
+          if (!finished && !aborted) {
+            finished = true;
+            handlers.onDone({
+              tokens: event.tokens,
+              tokens_input: event.tokens_input,
+              tokens_output: event.tokens_output,
+              cost_usd: event.cost_usd,
+              model: event.model,
+              latency_ms: event.latency_ms,
+            });
+          }
+        } else if (event.type === 'error') {
+          // Server-side error event — treat as a stream failure so the
+          // caller falls back to the non-streaming path.
+          fail('event', { message: event.message });
+        }
+      } catch {
+        // Malformed JSON line — skip silently (common mid-stream when a
+        // record is split across progress ticks; the remainder is retried
+        // on the next tick because we only advance lastIndex past complete
+        // "\n\n"-terminated records).
+      }
+    }
+  };
+
+  /**
+   * Drain every complete "\n\n"-terminated record from the suffix of
+   * responseText we haven't parsed yet, leaving a trailing partial record
+   * (if any) buffered for the next progress tick.
+   *
+   * @param flush when true (final read), also parse a trailing record that
+   *              has no terminating blank line.
+   */
+  const drain = (flush: boolean) => {
+    const text: string = xhr.responseText || '';
+    let chunk = text.slice(lastIndex);
+
+    let sepIdx: number;
+    while ((sepIdx = chunk.indexOf('\n\n')) !== -1) {
+      const record = chunk.slice(0, sepIdx);
+      chunk = chunk.slice(sepIdx + 2);
+      lastIndex = text.length - chunk.length;
+      if (record.length > 0) handleRecord(record);
+    }
+
+    if (flush && chunk.length > 0) {
+      handleRecord(chunk);
+      lastIndex = text.length;
+    }
+  };
+
+  xhr.open('POST', url, true);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.setRequestHeader('Accept', 'text/event-stream');
+  // Empty string == default "text" response; required so responseText is
+  // populated incrementally during onprogress in RN.
+  try { xhr.responseType = ''; } catch { /* some RN versions reject reassignment after open */ }
+
+  xhr.onprogress = () => {
+    if (aborted) return;
+    if (xhr.status && xhr.status !== 200) return; // handled in onreadystatechange/onload
+    drain(false);
+  };
+
+  xhr.onload = () => {
+    if (aborted || finished) return;
+    if (xhr.status !== 200) {
+      fail('http', { status: xhr.status });
+      return;
+    }
+    drain(true);
+    // Server closed the stream without an explicit done/[DONE]. Treat a
+    // 200 with received tokens as a successful completion; an empty 200 as
+    // a failure so the caller can fall back.
+    if (!finished) {
+      if (sawDone || partial.length > 0) {
+        finished = true;
+        handlers.onDone({});
+      } else {
+        fail('empty');
+      }
+    }
+  };
+
+  xhr.onerror = () => fail('network');
+  xhr.ontimeout = () => fail('timeout');
+
+  xhr.timeout = AI_TIMEOUTS.chat;
 
   (async () => {
     try {
       const token = await getAccessToken();
-
-      const res = await fetch(url, {
-        method: 'POST',
-        signal: controller.signal,
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'text/event-stream',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ ...payload, message: safe.text }),
-      });
-
-      if (!res.ok) {
-        captureException(new Error(`stream_http_${res.status}`), {
-          source: 'streamChat.http',
-          status: res.status,
-        });
-        handlers.onError(AI_FALLBACK_CHAT_REPLY, partial);
-        return;
-      }
-
-      const body = (res as any).body as ReadableStream<Uint8Array> | undefined;
-      if (!body || typeof body.getReader !== 'function') {
-        // Fallback: pull whole body, then split into events. Loses the
-        // "see tokens as they arrive" benefit but doesn't break.
-        const text = await res.text();
-        for (const line of text.split('\n\n')) {
-          processSseLine(line, handlers, (acc) => { partial += acc; });
-        }
-        return;
-      }
-
-      const reader = body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let buffer = '';
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        // SSE events end with a blank line (\n\n). Pull complete events
-        // out of the buffer; whatever remains waits for the next chunk.
-        let blankIdx;
-        while ((blankIdx = buffer.indexOf('\n\n')) !== -1) {
-          const event = buffer.slice(0, blankIdx);
-          buffer = buffer.slice(blankIdx + 2);
-          processSseLine(event, handlers, (acc) => { partial += acc; });
-        }
-      }
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.send(JSON.stringify({ ...payload, message: safe.text }));
     } catch (err) {
-      if ((err as any)?.name === 'AbortError') return;
-      captureException(err, { source: 'streamChat.fetch' });
-      handlers.onError(AI_FALLBACK_CHAT_REPLY, partial);
+      fail('send', { err: (err as Error)?.message });
     }
   })();
 
   return () => {
-    try { controller.abort(); } catch { /* noop */ }
+    aborted = true;
+    finished = true;
+    try { xhr.abort(); } catch { /* noop */ }
   };
-}
-
-function processSseLine(
-  raw: string,
-  handlers: StreamChatHandlers,
-  appendPartial: (delta: string) => void,
-): void {
-  for (const line of raw.split('\n')) {
-    if (!line.startsWith('data:')) continue;
-    const data = line.slice(5).trim();
-    if (!data || data === '[DONE]') continue;
-
-    try {
-      const event = JSON.parse(data) as
-        | { type: 'token'; delta: string }
-        | { type: 'done'; tokens?: number; tokens_input?: number; tokens_output?: number; cost_usd?: number; model?: string; latency_ms?: number }
-        | { type: 'error'; message: string; fallback?: string };
-
-      if (event.type === 'token') {
-        handlers.onToken(event.delta);
-        appendPartial(event.delta);
-      } else if (event.type === 'done') {
-        handlers.onDone({
-          tokens: event.tokens,
-          tokens_input: event.tokens_input,
-          tokens_output: event.tokens_output,
-          cost_usd: event.cost_usd,
-          model: event.model,
-          latency_ms: event.latency_ms,
-        });
-      } else if (event.type === 'error') {
-        handlers.onError(event.fallback ?? event.message, '');
-      }
-    } catch {
-      // Malformed event line — skip silently (common during stream
-      // truncation; logging would be noisy).
-    }
-  }
 }
 
 /**

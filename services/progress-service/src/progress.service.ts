@@ -655,7 +655,7 @@ export class ProgressService {
         const record = await (this.prisma as any).bodyMetrics.create({
             data: {
                 userId,
-                measuredAt: new Date(),
+                recordedAt: new Date(),
                 bmi,
                 ...data,
             },
@@ -663,7 +663,7 @@ export class ProgressService {
 
         const metricsPayload: BodyMetricsLoggedPayload = {
             metricsId: record.id,
-            measuredAt: record.measuredAt.toISOString(),
+            measuredAt: record.recordedAt.toISOString(),
             weightKg: data.weightKg ?? null,
             bodyFatPct: data.bodyFatPct ?? null,
             bmi: null,
@@ -687,8 +687,8 @@ export class ProgressService {
         const since = new Date();
         since.setUTCDate(since.getUTCDate() - Math.min(days, 365));
         return (this.prisma as any).bodyMetrics.findMany({
-            where: { userId, measuredAt: { gte: since } },
-            orderBy: { measuredAt: 'desc' },
+            where: { userId, recordedAt: { gte: since } },
+            orderBy: { recordedAt: 'desc' },
         });
     }
 

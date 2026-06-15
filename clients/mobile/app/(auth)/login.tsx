@@ -14,7 +14,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Input, Button } from '@/components/ui';
 import { useTheme } from '@/theme';
-import { spacing } from '@/theme/spacing';
+import { spacing, borderRadius } from '@/theme/spacing';
+import { typography } from '@/theme/typography';
+import { shadows } from '@/theme/shadows';
+import { withAlpha } from '@/theme/utils';
 import { isValidEmail, sanitizeInput } from '@/utils/validation';
 
 export default function LoginScreen() {
@@ -55,7 +58,7 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
       >
         <ScrollView
@@ -64,16 +67,33 @@ export default function LoginScreen() {
         >
           {/* Header */}
           <View style={styles.header}>
+            <View
+              style={[
+                styles.logoBadge,
+                {
+                  backgroundColor: withAlpha(colors.accent.coral, 0.12),
+                  borderColor: withAlpha(colors.accent.coral, 0.35),
+                },
+                shadows.glow(colors.accent.coral),
+              ]}
+            >
+              <Ionicons name="moon" size={28} color={colors.accent.coral} />
+            </View>
+            <Text style={[styles.kicker, { color: colors.accent.coral }]}>Welcome back</Text>
             <Text style={[styles.logo, { color: colors.text.primary }]}>
               Night<Text style={{ color: colors.accent.coral }}>Fuel</Text>
             </Text>
             <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
-              Welcome back, night warrior
+              Fuel your shift. Pick up right where you left off.
             </Text>
           </View>
 
           {/* Form */}
           <View style={styles.form}>
+            <Text style={[styles.sectionLabel, { color: colors.text.secondary }]}>
+              Sign in to your account
+            </Text>
+
             <Input
               label="Email"
               placeholder="you@example.com"
@@ -97,7 +117,10 @@ export default function LoginScreen() {
             />
 
             <Link href="/(auth)/forgot-password" asChild>
-              <Pressable style={styles.forgotLink}>
+              <Pressable
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={({ pressed }) => [styles.forgotLink, pressed && styles.pressed]}
+              >
                 <Text style={[styles.forgotText, { color: colors.accent.coral }]}>
                   Forgot password?
                 </Text>
@@ -105,7 +128,15 @@ export default function LoginScreen() {
             </Link>
 
             {error ? (
-              <View style={[styles.errorBox, { backgroundColor: 'rgba(255,68,68,0.1)' }]}>
+              <View
+                style={[
+                  styles.errorBox,
+                  {
+                    backgroundColor: withAlpha(colors.error, 0.1),
+                    borderColor: withAlpha(colors.error, 0.25),
+                  },
+                ]}
+              >
                 <Ionicons name="alert-circle" size={16} color={colors.error} />
                 <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
               </View>
@@ -117,26 +148,9 @@ export default function LoginScreen() {
               loading={loading}
               fullWidth
               size="lg"
-              icon={<Ionicons name="log-in-outline" size={20} color={colors.background.primary} />}
+              icon={<Ionicons name="log-in-outline" size={20} color={colors.text.primary} />}
             />
           </View>
-
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
-            <Text style={[styles.dividerText, { color: colors.text.tertiary }]}>or</Text>
-            <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
-          </View>
-
-          {/* Social login */}
-          <Button
-            title="Continue with Google"
-            variant="outline"
-            fullWidth
-            size="lg"
-            icon={<Ionicons name="logo-google" size={20} color={colors.accent.coral} />}
-            onPress={() => { }}
-          />
 
           {/* Register link */}
           <View style={styles.registerRow}>
@@ -144,7 +158,10 @@ export default function LoginScreen() {
               Don't have an account?{' '}
             </Text>
             <Link href="/(auth)/register" asChild>
-              <Pressable>
+              <Pressable
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={({ pressed }) => pressed && styles.pressed}
+              >
                 <Text style={[styles.registerLink, { color: colors.accent.coral }]}>
                   Sign Up
                 </Text>
@@ -169,17 +186,37 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: spacing['4xl'],
   },
+  logoBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: borderRadius['2xl'],
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xl,
+  },
+  kicker: {
+    ...typography.overline,
+    marginBottom: spacing.xs,
+  },
   logo: {
-    fontSize: 38,
-    fontWeight: '800',
+    ...typography.display,
     letterSpacing: -1,
   },
   subtitle: {
-    fontSize: 16,
+    ...typography.subtitle,
+    fontFamily: typography.body.fontFamily,
     marginTop: spacing.sm,
   },
   form: {
     marginBottom: spacing['2xl'],
+  },
+  sectionLabel: {
+    ...typography.overline,
+    marginBottom: spacing.lg,
+  },
+  pressed: {
+    opacity: 0.6,
   },
   forgotLink: {
     alignSelf: 'flex-end',
@@ -187,33 +224,21 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   forgotText: {
-    fontSize: 14,
-    fontWeight: '500',
+    ...typography.bodySm,
+    fontWeight: '600',
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: 8,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
     marginBottom: spacing.lg,
   },
   errorText: {
-    fontSize: 13,
+    ...typography.bodySm,
     flex: 1,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: spacing['2xl'],
-    gap: spacing.md,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    fontSize: 13,
   },
   registerRow: {
     flexDirection: 'row',
@@ -221,10 +246,10 @@ const styles = StyleSheet.create({
     marginTop: spacing['3xl'],
   },
   registerText: {
-    fontSize: 15,
+    ...typography.body,
   },
   registerLink: {
-    fontSize: 15,
-    fontWeight: '600',
+    ...typography.body,
+    fontWeight: '700',
   },
 });

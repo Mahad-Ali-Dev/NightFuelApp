@@ -51,8 +51,14 @@ export const updatePreferences = async (updates: Partial<UserPreferences>): Prom
 };
 
 export const getStatus = async (): Promise<UserStatus> => {
-    const { data } = await apiClient.get('/v1/users/me/status');
-    return data;
+    // Backend uses adherenceRate / circadianPeakTime / updatedAt
+    const { data } = await apiClient.get<any>('/v1/users/me/status');
+    return {
+        fatigueScore: data.fatigueScore ?? 0,
+        adherenceScore: data.adherenceScore ?? data.adherenceRate ?? 0,
+        circadianPhase: data.circadianPhase ?? 'WAKE',
+        lastUpdated: data.lastUpdated ?? data.updatedAt ?? '',
+    };
 };
 
 export const getPublicProfile = async (userId: string): Promise<Partial<UserProfile>> => {

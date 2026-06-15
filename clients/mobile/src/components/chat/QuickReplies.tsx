@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScrollView, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { colors } from '@/theme';
 
 interface QuickRepliesProps {
     replies: string[];
@@ -20,6 +21,6 @@ export function QuickReplies({ replies, onSelect }: QuickRepliesProps) {
 
 const styles = StyleSheet.create({
     container: { paddingHorizontal: 16, paddingVertical: 8, gap: 8 },
-    chip: { backgroundColor: '#161B22', borderWidth: 1, borderColor: '#7C4DFF50', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10 },
+    chip: { backgroundColor: colors.background.secondary, borderWidth: 1, borderColor: '#7C4DFF50', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10 },
     chipText: { color: '#7C4DFF', fontSize: 13, fontWeight: '600' },
 });

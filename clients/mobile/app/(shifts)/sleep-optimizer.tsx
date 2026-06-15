@@ -1,26 +1,27 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { useTheme } from '@/theme';
+import { useTheme, spacing as spacingTokens, borderRadius } from '@/theme';
+import { withAlpha } from '@/theme/utils';
 import { Card } from '@/components/ui/Card';
+import { Skeleton, EmptyState } from '@/components/ui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAnalytics, log } from '@/api/sleep';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function SleepOptimizerScreen() {
-    const { colors, typography, spacing } = useTheme();
+    const { colors, typography, spacing, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
 
-    const { data: analytics, isLoading } = useQuery({
+    const { data: analytics, isLoading, isError, refetch } = useQuery({
         queryKey: ['sleep-analytics'],
         queryFn: getAnalytics,
     });
-
-    const [logging, setLogging] = useState(false);
 
     const logMutation = useMutation({
         mutationFn: () => {
@@ -31,73 +32,132 @@ export default function SleepOptimizerScreen() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['sleep-analytics'] });
             Alert.alert('Sleep Logged', 'Your sleep block has been recorded successfully.');
-            setLogging(false);
         },
         onError: (err: any) => {
             Alert.alert('Error', err?.response?.data?.message ?? 'Failed to log sleep. Please try again.');
-            setLogging(false);
         },
     });
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 20 }]}>Sleep Optimizer</Text>
-                <View style={{ width: 32 }} />
+                <Text style={[typography.h3, { color: colors.text.primary }]}>Sleep Optimizer</Text>
+                <View style={{ width: 40 }} />
             </View>
 
             {isLoading ? (
-                <View style={styles.center}>
-                    <ActivityIndicator size="large" color={colors.accent.purple} />
-                </View>
+                <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+                    {/* Hero score card */}
+                    <View style={{ alignItems: 'center', marginBottom: spacing['3xl'] }}>
+                        <Skeleton width={140} height={140} radius={borderRadius.full} style={{ marginVertical: spacing.xl }} />
+                        <Skeleton width="90%" height={14} radius={borderRadius.sm} style={{ marginBottom: spacing.sm }} />
+                        <Skeleton width="70%" height={14} radius={borderRadius.sm} />
+                    </View>
+                    {/* Section header */}
+                    <Skeleton width={180} height={16} radius={borderRadius.sm} style={{ marginBottom: spacing.lg }} />
+                    {/* Window cards */}
+                    <Skeleton width="100%" height={96} radius={borderRadius.xl} style={{ marginBottom: spacing.lg }} />
+                    <Skeleton width="100%" height={96} radius={borderRadius.xl} style={{ marginBottom: spacing.lg }} />
+                    {/* Log button */}
+                    <Skeleton width="100%" height={56} radius={borderRadius.full} />
+                </ScrollView>
+            ) : isError ? (
+                <EmptyState
+                    icon="cloud-offline-outline"
+                    title="Couldn't load sleep analytics"
+                    subtitle="Something went wrong fetching your recovery data. Check your connection and try again."
+                    actionLabel="Try Again"
+                    onAction={() => refetch()}
+                />
             ) : (
-                <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}>
+                <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
 
                     {/* Hero Score */}
-                    <View style={styles.heroSection}>
-                        <CircularProgress progress={(analytics?.qualityScore ?? 85) / 100} size={140} strokeWidth={12} color={colors.accent.purple} trackColor={colors.background.secondary} />
-                        <View style={styles.heroTextOverlay}>
-                            <Text style={[typography.display, { color: colors.text.primary, fontSize: 36 }]}>{analytics?.qualityScore ?? 85}</Text>
-                            <Text style={[typography.caption, { color: colors.text.secondary }]}>Quality</Text>
+                    <Card
+                        variant="glass"
+                        style={[
+                            styles.heroCard,
+                            { borderColor: withAlpha(colors.accent.purple, 0.3) },
+                            shadows.glow(colors.accent.purple),
+                        ]}
+                    >
+                        <LinearGradient
+                            colors={[withAlpha(colors.accent.purple, 0.14), 'transparent']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 0, y: 1 }}
+                            style={StyleSheet.absoluteFillObject}
+                            pointerEvents="none"
+                        />
+                        <Text style={[typography.overline, { color: colors.accent.purple, marginBottom: spacing.xl }]}>Sleep Quality Score</Text>
+                        <View style={styles.heroSection}>
+                            <View style={shadows.glow(colors.accent.purple)}>
+                                <CircularProgress progress={(analytics?.qualityScore ?? 0) / 100} size={140} strokeWidth={12} color={colors.accent.purple} trackColor={colors.background.tertiary} />
+                            </View>
+                            <View style={styles.heroTextOverlay}>
+                                <Text style={[typography.statLarge, { color: colors.text.primary }]}>{analytics?.qualityScore ?? '--'}</Text>
+                                <Text style={[typography.overline, { color: colors.accent.purple, marginTop: spacing.xs }]}>QUALITY</Text>
+                            </View>
                         </View>
-                    </View>
 
-                    <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginBottom: 32, marginHorizontal: 20 }]}>
-                        {analytics?.summary ?? 'Your recovery indicates you effectively managed your circadian transition.'}
-                    </Text>
-
-                    {/* Recommendations */}
-                    <Text style={[typography.heading, { color: colors.text.primary, fontSize: 20, marginBottom: 16 }]}>Recommended Windows</Text>
-
-                    <Card style={[styles.windowCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
-                        <View style={styles.windowHeader}>
-                            <Ionicons name="moon" size={20} color={colors.accent.purple} />
-                            <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: 8 }]}>Anchor Sleep</Text>
-                            <View style={{ flex: 1 }} />
-                            <Text style={[typography.subhead, { color: colors.accent.cyan, fontWeight: '700' }]}>{analytics?.anchorSleepWindow ?? '08:30 - 15:30'}</Text>
-                        </View>
-                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 8 }]}>Total darkness required. Avoid light exposure upon shift exit.</Text>
+                        <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing.xl, marginHorizontal: spacing.sm }]}>
+                            {analytics?.summary ?? 'Log a sleep block to see your recovery analytics.'}
+                        </Text>
                     </Card>
 
-                    <Card style={[styles.windowCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    {/* Recommendations */}
+                    <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.lg }]}>Recommended Windows</Text>
+
+                    <Card variant="glass" style={[styles.windowCard, { borderColor: withAlpha(colors.accent.purple, 0.25) }]}>
                         <View style={styles.windowHeader}>
-                            <Ionicons name="battery-charging" size={20} color={colors.accent.amber} />
-                            <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: 8 }]}>Pre-Shift Nap</Text>
+                            <View style={[styles.windowIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.28), borderWidth: 1 }]}>
+                                <Ionicons name="moon" size={18} color={colors.accent.purple} />
+                            </View>
+                            <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: spacing.md }]}>Anchor Sleep</Text>
                             <View style={{ flex: 1 }} />
-                            <Text style={[typography.subhead, { color: colors.accent.amber, fontWeight: '700' }]}>{analytics?.preShiftNapWindow ?? '16:30 - 18:00'}</Text>
+                            <Text style={[typography.statTiny, { color: colors.accent.cyan }]}>{analytics?.anchorSleepWindow ?? '—'}</Text>
                         </View>
-                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 8 }]}>90-minute cycle to top off cognitive alertness before shift.</Text>
+                        <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>Total darkness required. Avoid light exposure upon shift exit.</Text>
+                    </Card>
+
+                    <Card variant="glass" style={[styles.windowCard, { borderColor: withAlpha(colors.accent.amber, 0.25) }]}>
+                        <View style={styles.windowHeader}>
+                            <View style={[styles.windowIcon, { backgroundColor: withAlpha(colors.accent.amber, 0.14), borderColor: withAlpha(colors.accent.amber, 0.28), borderWidth: 1 }]}>
+                                <Ionicons name="battery-charging" size={18} color={colors.accent.amber} />
+                            </View>
+                            <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: spacing.md }]}>Pre-Shift Nap</Text>
+                            <View style={{ flex: 1 }} />
+                            <Text style={[typography.statTiny, { color: colors.accent.amber }]}>{analytics?.preShiftNapWindow ?? '—'}</Text>
+                        </View>
+                        <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>90-minute cycle to top off cognitive alertness before shift.</Text>
                     </Card>
 
                     <TouchableOpacity
-                        style={[styles.logBtn, { backgroundColor: colors.accent.purple, marginTop: 16 }]}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel="Log rest block"
+                        accessibilityState={{ disabled: logMutation.isPending, busy: logMutation.isPending }}
+                        style={[styles.logBtn, shadows.glow(colors.accent.purple)]}
                         onPress={() => logMutation.mutate()}
                         disabled={logMutation.isPending}
                     >
-                        {logMutation.isPending ? <ActivityIndicator color="#FFF" /> : <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Log Rest Block</Text>}
+                        <LinearGradient
+                            colors={colors.gradients.purple}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.logBtnGradient}
+                        >
+                            {logMutation.isPending ? (
+                                <ActivityIndicator color={colors.text.primary} />
+                            ) : (
+                                <>
+                                    <Ionicons name="bed" size={20} color={colors.text.primary} style={{ marginRight: spacing.sm }} />
+                                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>Log Rest Block</Text>
+                                </>
+                            )}
+                        </LinearGradient>
                     </TouchableOpacity>
 
                 </ScrollView>
@@ -108,11 +168,42 @@ export default function SleepOptimizerScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
-    center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    heroSection: { alignItems: 'center', justifyContent: 'center', marginVertical: 40 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacingTokens.xl, paddingBottom: spacingTokens.lg, borderBottomWidth: 1 },
+    backBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: borderRadius.full,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    heroCard: {
+        alignItems: 'center',
+        padding: spacingTokens['2xl'],
+        marginBottom: spacingTokens['3xl'],
+        overflow: 'hidden',
+    },
+    heroSection: { alignItems: 'center', justifyContent: 'center' },
     heroTextOverlay: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-    windowCard: { padding: 16, marginBottom: 16, borderWidth: 1, borderRadius: 16 },
+    windowCard: { padding: spacingTokens.lg, marginBottom: spacingTokens.lg },
     windowHeader: { flexDirection: 'row', alignItems: 'center' },
-    logBtn: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#A78BFA', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 }
+    windowIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: borderRadius.md,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    logBtn: {
+        height: 56,
+        borderRadius: borderRadius.full,
+        marginTop: spacingTokens.lg,
+        overflow: 'hidden',
+    },
+    logBtnGradient: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 });

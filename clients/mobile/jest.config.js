@@ -7,7 +7,6 @@
  */
 module.exports = {
   preset: 'jest-expo',
-  setupFilesAfterEach: [],
   testPathIgnorePatterns: [
     '<rootDir>/node_modules/',
     '<rootDir>/.expo/',

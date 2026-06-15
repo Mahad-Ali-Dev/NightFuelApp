@@ -1,5 +1,6 @@
 import { PrismaClient } from './generated/prisma';
 import { createLogger } from '@nightfuel/config';
+import { AuthorResolver } from './author-resolver';
 
 const logger = createLogger('community.service');
 
@@ -32,12 +33,15 @@ const BADGE_KEYS = {
 } as const;
 
 export class CommunityService {
-    constructor(private prisma: PrismaClient) { }
+    constructor(
+        private prisma: PrismaClient,
+        private authorResolver?: AuthorResolver
+    ) { }
 
     // ── Feed & Posts ──────────────────────────────────────────────────────────
 
     async getFeed(limit: number = 20, cursor?: string) {
-        return this.prisma.post.findMany({
+        const posts = await this.prisma.post.findMany({
             take: limit,
             ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
             orderBy: { createdAt: 'desc' },
@@ -45,13 +49,16 @@ export class CommunityService {
                 _count: { select: { comments: true } },
             }
         });
+        return this._withAuthors(posts);
     }
 
     async getPostById(postId: string) {
-        return this.prisma.post.findUnique({
+        const post = await this.prisma.post.findUnique({
             where: { id: postId },
             include: { _count: { select: { comments: true } } }
         });
+        if (!post) return post;
+        return this._withAuthor(post);
     }
 
     async createPost(authorId: string, content: string, imageUrl?: string) {
@@ -89,7 +96,7 @@ export class CommunityService {
     }
 
     async getUserPosts(authorId: string, limit: number = 20) {
-        return this.prisma.post.findMany({
+        const posts = await this.prisma.post.findMany({
             where: { authorId },
             take: limit,
             orderBy: { createdAt: 'desc' },
@@ -97,6 +104,7 @@ export class CommunityService {
                 _count: { select: { comments: true } },
             }
         });
+        return this._withAuthors(posts);
     }
 
     async likePost(postId: string, likerId?: string) {
@@ -135,11 +143,12 @@ export class CommunityService {
     }
 
     async getComments(postId: string, limit: number = 50) {
-        return this.prisma.comment.findMany({
+        const comments = await this.prisma.comment.findMany({
             where: { postId },
             take: limit,
             orderBy: { createdAt: 'asc' }
         });
+        return this._withAuthors(comments);
     }
 
     // ── Challenges ────────────────────────────────────────────────────────────
@@ -257,6 +266,29 @@ export class CommunityService {
     }
 
     // ── Internal Helpers ─────────────────────────────────────────────────────
+
+    // Attach author info to a list of posts/comments. Additive + backward
+    // compatible: if no resolver is configured or resolution fails, the rows
+    // are returned unchanged.
+    private async _withAuthors<T extends { authorId?: string | null }>(items: T[]) {
+        if (!this.authorResolver) return items;
+        try {
+            return await this.authorResolver.attachAuthors(items);
+        } catch (err) {
+            logger.warn({ err }, 'Author enrichment failed; returning rows without author');
+            return items;
+        }
+    }
+
+    private async _withAuthor<T extends { authorId?: string | null }>(item: T) {
+        if (!this.authorResolver) return item;
+        try {
+            return await this.authorResolver.attachAuthor(item);
+        } catch (err) {
+            logger.warn({ err }, 'Author enrichment failed; returning row without author');
+            return item;
+        }
+    }
 
     private async _addXP(userId: string, amount: number) {
         const score = await this.prisma.userScore.upsert({

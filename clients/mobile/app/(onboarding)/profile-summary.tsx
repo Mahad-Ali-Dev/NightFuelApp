@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Animated, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Animated, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { shadows } from '@/theme/shadows';
+import { withAlpha } from '@/theme/utils';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -63,6 +66,12 @@ export default function ProfileSummaryScreen() {
             if (mappedLifestyle === 'NIGHT_SHIFT_WORKER') mappedLifestyle = 'NIGHT_SHIFT';
             if (mappedLifestyle === 'STAY_AT_HOME' || mappedLifestyle === 'FREELANCER') mappedLifestyle = 'OTHER';
 
+            // Map ActivityLevel — the client enum uses EXTREMELY_ACTIVE but the
+            // user-service preferences schema expects EXTRA_ACTIVE. Without this the
+            // whole "Finish & Sync" call 400s (ZodError) for anyone who picked "Extreme".
+            let mappedActivity: string | undefined = data.activityLevel ?? undefined;
+            if (mappedActivity === 'EXTREMELY_ACTIVE') mappedActivity = 'EXTRA_ACTIVE';
+
             // Filter health conditions (remove empty strings, schema requires min(1))
             const healthConditions = (data.healthConditions || []).filter(
                 (c: string) => typeof c === 'string' && c.trim().length > 0,
@@ -73,7 +82,7 @@ export default function ProfileSummaryScreen() {
                 primaryGoal,
                 lifestyleType: mappedLifestyle,
                 experienceLevel: data.experienceLevel,
-                activityLevel: data.activityLevel,
+                activityLevel: mappedActivity,
                 sleepWindowStart: data.sleepWindowStart,
                 sleepWindowEnd: data.sleepWindowEnd,
                 dietaryPreference: data.dietaryPreference === 'GLUTEN_FREE' as any ? 'NONE' : (data.dietaryPreference ?? undefined),
@@ -112,28 +121,75 @@ export default function ProfileSummaryScreen() {
 
     const SummaryItem = ({ label, value, icon }: { label: string, value: string | number | undefined, icon: string }) => (
         <View style={styles.summaryItem}>
-            <View style={[styles.miniIcon, { backgroundColor: `${colors.accent.cyan}15` }]}>
+            <View style={[styles.miniIcon, { backgroundColor: withAlpha(colors.accent.cyan, 0.12) }]}>
                 <Ionicons name={icon as any} size={14} color={colors.accent.cyan} />
             </View>
             <View>
-                <Text style={[typography.caption, { color: colors.text.tertiary }]}>{label}</Text>
+                <Text style={[typography.caption, { color: colors.text.secondary }]}>{label}</Text>
                 <Text style={[typography.body, { color: colors.text.primary, fontWeight: '600' }]}>{value || 'Not set'}</Text>
             </View>
         </View>
     );
 
+    /** Loading placeholder that mirrors the summary card while we sync to the backend. */
+    const SyncingSkeleton = () => (
+        <Card variant="glass" style={styles.summaryCard}>
+            <View style={styles.summaryGrid}>
+                {[0, 1].map((col) => (
+                    <View key={col} style={styles.summaryColumn}>
+                        <Skeleton width="60%" height={20} radius={6} />
+                        {[0, 1, 2].map((row) => (
+                            <View key={row} style={styles.summaryItem}>
+                                <Skeleton width={28} height={28} radius={14} />
+                                <View style={{ flex: 1, gap: spacing.xs }}>
+                                    <Skeleton width="50%" height={10} radius={4} />
+                                    <Skeleton width="80%" height={14} radius={4} />
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                ))}
+            </View>
+
+            <View style={[styles.divider, { backgroundColor: colors.border.default }]} />
+
+            <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                    <Skeleton width={88} height={28} radius={6} />
+                    <Skeleton width={40} height={10} radius={4} style={{ marginTop: spacing.sm }} />
+                </View>
+                <View style={[styles.verticalDivider, { backgroundColor: colors.border.default }]} />
+                <View style={styles.statItem}>
+                    <Skeleton width={88} height={28} radius={6} />
+                    <Skeleton width={40} height={10} radius={4} style={{ marginTop: spacing.sm }} />
+                </View>
+            </View>
+        </Card>
+    );
+
     return (
-        <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={[styles.container, { backgroundColor: colors.background.primary, paddingTop: insets.top }]}>
             <ScrollView contentContainerStyle={styles.scrollContent}>
-                <Text style={[typography.subhead, { color: colors.text.secondary, textAlign: 'center', marginBottom: spacing.md }]}>
+                <View style={styles.heroBadgeWrap}>
+                    <LinearGradient
+                        colors={colors.gradients.cyan}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={[styles.heroBadge, shadows.glow(colors.accent.cyan)]}
+                    >
+                        <Ionicons name="sparkles" size={28} color={colors.text.inverse} />
+                    </LinearGradient>
+                </View>
+                <Text style={[typography.overline, { color: colors.accent.cyan, textAlign: 'center', marginBottom: spacing.sm }]}>
                     ANALYSIS COMPLETE
                 </Text>
                 <Text style={[typography.display, { color: colors.text.primary, textAlign: 'center', marginBottom: spacing['2xl'] }]}>
                     Your Onboarding <Text style={{ color: colors.accent.cyan }}>Summary</Text>
                 </Text>
 
+                {isLoading ? <SyncingSkeleton /> : (
                 <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-                    <Card variant="elevated" style={styles.summaryCard}>
+                    <Card variant="glass" style={styles.summaryCard}>
                         <View style={styles.summaryGrid}>
                             <View style={styles.summaryColumn}>
                                 <Text style={[typography.heading, { color: colors.accent.cyan, marginBottom: spacing.md }]}>Biological</Text>
@@ -149,34 +205,36 @@ export default function ProfileSummaryScreen() {
                             </View>
                         </View>
 
-                        <View style={styles.divider} />
+                        <View style={[styles.divider, { backgroundColor: colors.border.default }]} />
 
                         <View style={styles.statsRow}>
                             <View style={styles.statItem}>
-                                <Text style={[typography.heading, { color: colors.text.primary }]}>{data.dietaryPreference || 'Any'}</Text>
-                                <Text style={[typography.caption, { color: colors.text.tertiary }]}>DIET</Text>
+                                <Text numberOfLines={1} style={[typography.statSmall, { color: colors.text.primary }]}>{data.dietaryPreference || 'Any'}</Text>
+                                <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing.xs }]}>DIET</Text>
                             </View>
-                            <View style={styles.verticalDivider} />
+                            <View style={[styles.verticalDivider, { backgroundColor: colors.border.default }]} />
                             <View style={styles.statItem}>
-                                <Text style={[typography.heading, { color: colors.text.primary }]}>{data.dietMode || 'Balanced'}</Text>
-                                <Text style={[typography.caption, { color: colors.text.tertiary }]}>MODE</Text>
+                                <Text numberOfLines={1} style={[typography.statSmall, { color: colors.text.primary }]}>{data.dietMode || 'Balanced'}</Text>
+                                <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing.xs }]}>MODE</Text>
                             </View>
                         </View>
                     </Card>
 
-                    <View style={styles.infoBox}>
+                    <View style={[styles.infoBox, { backgroundColor: withAlpha(colors.accent.coral, 0.08), borderColor: withAlpha(colors.accent.coral, 0.22) }, shadows.glow(colors.accent.coral)]}>
                         <Ionicons name="sparkles" size={20} color={colors.accent.coral} />
                         <Text style={[typography.body, { color: colors.text.secondary, flex: 1, marginLeft: spacing.sm }]}>
                             Based on your {data.shiftType?.toLowerCase().replace('_', ' ')} schedule, we've optimized your metabolic window for maximum performance.
                         </Text>
                     </View>
                 </Animated.View>
+                )}
             </ScrollView>
 
-            <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: Math.max(insets.bottom, spacing['2xl']) }]}>
+            <View style={[styles.footer, { backgroundColor: withAlpha(colors.background.primary, 0.92), borderTopColor: colors.border.default, paddingHorizontal: spacing.xl, paddingBottom: Math.max(insets.bottom, spacing['2xl']) }]}>
                 <Button
                     title={isLoading ? 'Saving Profile...' : 'Finish & Sync'}
-                    iconRight={!isLoading ? <Ionicons name="checkmark-circle" size={20} color="#fff" /> : <ActivityIndicator color="#fff" />}
+                    iconRight={!isLoading ? <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} /> : undefined}
+                    loading={isLoading}
                     onPress={handleFinish}
                     disabled={isLoading}
                     fullWidth
@@ -193,9 +251,19 @@ const styles = StyleSheet.create({
     scrollContent: {
         padding: 24,
     },
+    heroBadgeWrap: {
+        alignItems: 'center',
+        marginBottom: 16,
+    },
+    heroBadge: {
+        width: 64,
+        height: 64,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     summaryCard: {
         padding: 24,
-        backgroundColor: 'transparent',
         borderRadius: 24,
     },
     summaryGrid: {
@@ -219,8 +287,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     divider: {
-        height: 1,
-        backgroundColor: 'transparent',
+        height: StyleSheet.hairlineWidth,
         marginVertical: 24,
     },
     statsRow: {
@@ -232,22 +299,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     verticalDivider: {
-        width: 1,
+        width: StyleSheet.hairlineWidth,
         height: 30,
-        backgroundColor: 'transparent',
     },
     infoBox: {
         flexDirection: 'row',
-        backgroundColor: 'rgba(255, 107, 53, 0.05)',
         padding: 16,
         borderRadius: 16,
         marginTop: 24,
         borderWidth: 1,
-        borderColor: 'rgba(255, 107, 53, 0.1)',
         alignItems: 'center',
     },
     footer: {
         paddingTop: 16,
-        backgroundColor: 'rgba(0,0,0,0.8)',
+        borderTopWidth: StyleSheet.hairlineWidth,
     }
 });

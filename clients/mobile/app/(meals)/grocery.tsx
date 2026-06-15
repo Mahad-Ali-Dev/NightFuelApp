@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Dimensions, Modal, TextInput, KeyboardAvoidingView, Platform
+    ActivityIndicator, Dimensions, Modal, TextInput, KeyboardAvoidingView, Platform, Share
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { getGroceryList, GroceryItem } from '@/api/meals';
+import { LinearGradient } from 'expo-linear-gradient';
+import { shadows } from '@/theme/shadows';
+import { Skeleton, EmptyState } from '@/components/ui';
 
 const { width } = Dimensions.get('window');
 const STORAGE_KEY = '@nightfuel_weekly_grocery';
@@ -150,11 +153,11 @@ export default function GroceryListScreen() {
     };
 
     // ── Group custom items by category ──────────────────────────────────────
-    const groupedCustom = customItems.reduce<Record<string, CustomGroceryItem[]>>((acc, item) => {
+    const groupedCustom = useMemo(() => customItems.reduce<Record<string, CustomGroceryItem[]>>((acc, item) => {
         if (!acc[item.category]) acc[item.category] = [];
-        acc[item.category].push(item);
+        acc[item.category]!.push(item);
         return acc;
-    }, {});
+    }, {}), [customItems]);
 
     // ── Backend data ────────────────────────────────────────────────────────
     const rawData = groceryQuery.data as any;
@@ -163,16 +166,54 @@ export default function GroceryListScreen() {
     const hasAnyItems = customItems.length > 0 || planItems.length > 0;
     const checkedCount = customItems.filter(i => i.checked).length;
 
+    // A 400 from the grocery endpoint means "no active nutrition plan" — that's
+    // an expected empty state, not a connection failure. Any other status is a
+    // genuine error and keeps the connection-error messaging below.
+    const isNoPlanError = (groceryQuery.error as any)?.response?.status === 400;
+
+    const handleShare = async () => {
+        const lines: string[] = ['🛒 Grocery List — NightFuel', ''];
+
+        // Custom items grouped by category (matches the on-screen grouping)
+        Object.keys(groupedCustom).forEach((category) => {
+            lines.push(category.toUpperCase());
+            groupedCustom[category]!.forEach((item) => {
+                lines.push(`• ${item.name} (Qty: ${item.quantity})`);
+            });
+            lines.push('');
+        });
+
+        // Backend weekly plan items
+        if (planItems.length > 0) {
+            lines.push('WEEKLY PLAN ITEMS');
+            planItems.forEach((item: any) => {
+                const amount = item.amount ? ` (${item.amount} ${item.unit || ''})`.trimEnd() : '';
+                lines.push(`• ${item.name}${amount}`);
+            });
+            lines.push('');
+        }
+
+        try {
+            await Share.share({ message: lines.join('\n').trim() });
+        } catch {
+            // User dismissed the share sheet or it's unavailable — nothing to do.
+        }
+    };
+
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={[styles.iconBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Grocery List</Text>
-                <TouchableOpacity style={styles.backBtn} onPress={() => {
-                    if (checkedCount > 0) clearChecked();
+                <Text style={[typography.h2, { color: colors.text.primary }]}>Grocery List</Text>
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Delete" style={styles.backBtn} onPress={() => {
+                    if (checkedCount > 0) {
+                        clearChecked();
+                    } else {
+                        handleShare();
+                    }
                 }}>
                     {checkedCount > 0 ? (
                         <Ionicons name="trash-outline" size={22} color={colors.accent.coral || '#FF6B6B'} />
@@ -184,19 +225,39 @@ export default function GroceryListScreen() {
 
             <View style={{ flex: 1 }}>
                 {groceryQuery.isLoading ? (
-                    <ActivityIndicator size="large" color={colors.accent.emerald} style={{ marginTop: 40 }} />
+                    <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+                        <Skeleton width="100%" height={50} radius={borderRadius.lg} style={{ marginBottom: 20 }} />
+                        {[0, 1].map((section) => (
+                            <View key={section} style={styles.categorySection}>
+                                <Skeleton width={140} height={12} radius={borderRadius.sm} style={{ marginBottom: 12 }} />
+                                <Skeleton width="100%" height={170} radius={borderRadius.xl} />
+                            </View>
+                        ))}
+                    </ScrollView>
+                ) : groceryQuery.isError && isNoPlanError && !hasAnyItems ? (
+                    <EmptyState
+                        icon="cart-outline"
+                        title="No grocery list yet"
+                        subtitle="Generate a nutrition plan first and your weekly grocery items will show up here."
+                        actionLabel="Add Item"
+                        onAction={() => setShowAddModal(true)}
+                    />
+                ) : groceryQuery.isError && !hasAnyItems ? (
+                    <EmptyState
+                        icon="cloud-offline-outline"
+                        title="Couldn't load your list"
+                        subtitle="Something went wrong fetching your grocery items. Check your connection and try again."
+                        actionLabel="Try Again"
+                        onAction={() => groceryQuery.refetch()}
+                    />
                 ) : !hasAnyItems ? (
-                    <View style={styles.emptyState}>
-                        <View style={[styles.emptyIcon, { backgroundColor: `${colors.accent.emerald}10` }]}>
-                            <Ionicons name="cart-outline" size={48} color={colors.accent.emerald} />
-                        </View>
-                        <Text style={[typography.heading, { color: colors.text.primary, textAlign: 'center', marginTop: 20 }]}>
-                            List is empty
-                        </Text>
-                        <Text style={[typography.body, { color: colors.text.tertiary, textAlign: 'center', marginTop: 8, paddingHorizontal: 40 }]}>
-                            Tap the + button to add your weekly grocery items.
-                        </Text>
-                    </View>
+                    <EmptyState
+                        icon="cart-outline"
+                        title="List is empty"
+                        subtitle="Add your weekly grocery items and check them off as you shop."
+                        actionLabel="Add Item"
+                        onAction={() => setShowAddModal(true)}
+                    />
                 ) : (
                     <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
                         {/* Summary bar */}
@@ -217,16 +278,20 @@ export default function GroceryListScreen() {
                         {/* Custom items grouped by category */}
                         {Object.keys(groupedCustom).map((category) => (
                             <View key={category} style={styles.categorySection}>
-                                <Text style={[typography.caption, { color: colors.accent.emerald, fontWeight: 'bold', marginBottom: 12, letterSpacing: 1 }]}>
+                                <Text style={[typography.overline, { color: colors.accent.emerald, marginBottom: 12 }]}>
                                     {category.toUpperCase()}
                                 </Text>
                                 <View style={[styles.itemStack, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl, borderColor: colors.border.default }]}>
-                                    {groupedCustom[category].map((item, i) => {
+                                    {groupedCustom[category]!.map((item, i) => {
                                         const isChecked = item.checked;
                                         return (
                                             <TouchableOpacity
                                                 key={item.id}
-                                                style={[styles.itemRow, i !== groupedCustom[category].length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border.default }]}
+                                                activeOpacity={0.85}
+                                                accessibilityRole="checkbox"
+                                                accessibilityState={{ checked: isChecked }}
+                                                accessibilityLabel={item.name}
+                                                style={[styles.itemRow, i !== groupedCustom[category]!.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border.default }]}
                                                 onPress={() => toggleCustomItem(item.id)}
                                                 onLongPress={() => removeItem(item.id)}
                                             >
@@ -242,11 +307,11 @@ export default function GroceryListScreen() {
                                                     }]}>
                                                         {item.name}
                                                     </Text>
-                                                    <Text style={[typography.caption, { color: colors.text.tertiary }]}>
+                                                    <Text style={[typography.caption, { color: colors.text.secondary }]}>
                                                         Qty: {item.quantity}
                                                     </Text>
                                                 </View>
-                                                <TouchableOpacity onPress={() => removeItem(item.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear" onPress={() => removeItem(item.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                                                     <Ionicons name="close-circle-outline" size={20} color={colors.text.tertiary} />
                                                 </TouchableOpacity>
                                             </TouchableOpacity>
@@ -259,7 +324,7 @@ export default function GroceryListScreen() {
                         {/* Backend plan items */}
                         {planItems.length > 0 && (
                             <View style={styles.categorySection}>
-                                <Text style={[typography.caption, { color: colors.text.tertiary, fontWeight: 'bold', marginBottom: 12, letterSpacing: 1 }]}>
+                                <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 12 }]}>
                                     WEEKLY PLAN ITEMS
                                 </Text>
                                 <View style={[styles.itemStack, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl, borderColor: colors.border.default }]}>
@@ -269,6 +334,10 @@ export default function GroceryListScreen() {
                                         return (
                                             <TouchableOpacity
                                                 key={i}
+                                                activeOpacity={0.85}
+                                                accessibilityRole="checkbox"
+                                                accessibilityState={{ checked: !!isChecked }}
+                                                accessibilityLabel={item.name}
                                                 style={[styles.itemRow, i !== planItems.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border.default }]}
                                                 onPress={() => togglePlanItem('Weekly Plan Items', item.name)}
                                             >
@@ -285,7 +354,7 @@ export default function GroceryListScreen() {
                                                         {item.name}
                                                     </Text>
                                                     {item.amount && (
-                                                        <Text style={[typography.caption, { color: colors.text.tertiary }]}>{item.amount} {item.unit || ''}</Text>
+                                                        <Text style={[typography.caption, { color: colors.text.secondary }]}>{item.amount} {item.unit || ''}</Text>
                                                     )}
                                                 </View>
                                             </TouchableOpacity>
@@ -299,18 +368,20 @@ export default function GroceryListScreen() {
             </View>
 
             {/* Floating Action Button */}
-            <TouchableOpacity
-                style={[styles.fab, { backgroundColor: colors.accent.emerald }]}
+            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Add"
+                style={[styles.fab, shadows.glow(colors.accent.coral)]}
                 onPress={() => setShowAddModal(true)}
                 activeOpacity={0.85}
             >
-                <Ionicons name="add" size={32} color="#FFF" />
+                <LinearGradient colors={colors.gradients.coral} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.fabGradient}>
+                    <Ionicons name="add" size={32} color="#FFF" />
+                </LinearGradient>
             </TouchableOpacity>
 
             {/* ── Add Item Modal ──────────────────────────────────────────────── */}
             <Modal visible={showAddModal} transparent animationType="slide">
                 <KeyboardAvoidingView
-                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                    behavior="padding"
                     style={styles.modalOverlay}
                 >
                     <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAddModal(false)}>
@@ -318,16 +389,16 @@ export default function GroceryListScreen() {
                             <View style={[styles.modalContent, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
                                 {/* Modal Header */}
                                 <View style={styles.modalHeader}>
-                                    <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>
+                                    <Text style={[typography.h3, { color: colors.text.primary }]}>
                                         Add Grocery Item
                                     </Text>
-                                    <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                                        <Ionicons name="close" size={24} color={colors.text.tertiary} />
+                                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close" onPress={() => setShowAddModal(false)} style={[styles.modalClose, { backgroundColor: colors.background.tertiary, borderColor: colors.border.default }]}>
+                                        <Ionicons name="close" size={20} color={colors.text.secondary} />
                                     </TouchableOpacity>
                                 </View>
 
                                 {/* Item Name */}
-                                <Text style={[typography.caption, { color: colors.text.tertiary, fontWeight: 'bold', marginBottom: 8, marginTop: 20 }]}>
+                                <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 8, marginTop: 20 }]}>
                                     ITEM NAME *
                                 </Text>
                                 <TextInput
@@ -340,7 +411,7 @@ export default function GroceryListScreen() {
                                 />
 
                                 {/* Quantity */}
-                                <Text style={[typography.caption, { color: colors.text.tertiary, fontWeight: 'bold', marginBottom: 8, marginTop: 16 }]}>
+                                <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 8, marginTop: 16 }]}>
                                     QUANTITY
                                 </Text>
                                 <TextInput
@@ -352,13 +423,17 @@ export default function GroceryListScreen() {
                                 />
 
                                 {/* Category */}
-                                <Text style={[typography.caption, { color: colors.text.tertiary, fontWeight: 'bold', marginBottom: 8, marginTop: 16 }]}>
+                                <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 8, marginTop: 16 }]}>
                                     CATEGORY
                                 </Text>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 24 }}>
                                     {CATEGORIES.map((cat) => (
                                         <TouchableOpacity
                                             key={cat}
+                                            activeOpacity={0.85}
+                                            accessibilityRole="button"
+                                            accessibilityState={{ selected: itemCategory === cat }}
+                                            accessibilityLabel={cat}
                                             style={[
                                                 styles.categoryChip,
                                                 {
@@ -380,14 +455,18 @@ export default function GroceryListScreen() {
 
                                 {/* Add Button */}
                                 <TouchableOpacity
-                                    style={[styles.addButton, { backgroundColor: colors.accent.emerald }]}
+                                    style={[styles.addButtonWrap, shadows.glow(colors.accent.coral)]}
                                     onPress={handleAddItem}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Add to list"
                                     activeOpacity={0.85}
                                 >
-                                    <Ionicons name="add-circle" size={22} color="#FFF" />
-                                    <Text style={[typography.subhead, { color: '#FFF', fontWeight: '900', marginLeft: 8, fontSize: 16 }]}>
-                                        ADD TO LIST
-                                    </Text>
+                                    <LinearGradient colors={colors.gradients.coral} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.addButton}>
+                                        <Ionicons name="add-circle" size={22} color="#FFF" />
+                                        <Text style={[typography.subhead, { color: '#FFF', fontWeight: '900', marginLeft: 8, fontSize: 16 }]}>
+                                            ADD TO LIST
+                                        </Text>
+                                    </LinearGradient>
                                 </TouchableOpacity>
                             </View>
                         </TouchableOpacity>
@@ -402,17 +481,19 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
     backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+    iconBtn: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    modalClose: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     summaryBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 20 },
     categorySection: { marginBottom: 24 },
     itemStack: { borderWidth: 1, overflow: 'hidden' },
     itemRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-    emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40, marginTop: 40 },
-    emptyIcon: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center' },
-    fab: { position: 'absolute', bottom: 30, right: 20, width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', elevation: 8, shadowColor: '#00D4AA', shadowOpacity: 0.3, shadowRadius: 10 },
+    fab: { position: 'absolute', bottom: 30, right: 20, width: 64, height: 64, borderRadius: 32, overflow: 'hidden' },
+    fabGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
     modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, borderWidth: 1, borderBottomWidth: 0 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     input: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, height: 48, fontSize: 15 },
     categoryChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8 },
-    addButton: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 28 },
+    addButtonWrap: { height: 56, borderRadius: 28, overflow: 'hidden' },
+    addButton: { flex: 1, height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 28 },
 });

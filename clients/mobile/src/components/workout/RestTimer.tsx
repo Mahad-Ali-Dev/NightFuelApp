@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
+import { colors } from '@/theme';
 
 interface RestTimerProps {
     durationSeconds: number;
@@ -42,7 +43,7 @@ export function RestTimer({ durationSeconds, isRunning, onFinish, size = 140 }: 
     return (
         <View style={[styles.container, { width: size, height: size }]}>
             <Svg width={size} height={size}>
-                <Circle cx={size / 2} cy={size / 2} r={radius} stroke="#2D3748" strokeWidth={10} fill="none" />
+                <Circle cx={size / 2} cy={size / 2} r={radius} stroke={colors.border.light} strokeWidth={10} fill="none" />
                 <Circle
                     cx={size / 2} cy={size / 2} r={radius}
                     stroke="#FF6B35" strokeWidth={10} fill="none"

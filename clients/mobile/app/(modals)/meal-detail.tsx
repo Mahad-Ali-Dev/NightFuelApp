@@ -5,8 +5,10 @@ import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
-import { colors as themeColors } from '@/theme/colors';
+import { shadows } from '@/theme/shadows';
 
 export default function MealDetailScreen() {
     const { colors, typography, spacing } = useTheme();
@@ -17,27 +19,34 @@ export default function MealDetailScreen() {
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             {/* Mock Image Header */}
             <View style={styles.imageHeader}>
-                <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background.tertiary }]} />
-                <TouchableOpacity
-                    style={[styles.backBtn, { top: Math.max(insets.top, 20) }]}
+                <LinearGradient
+                    colors={[colors.background.tertiary, colors.background.primary]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 0, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                />
+                <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back"
+                    style={[styles.backBtn, { top: Math.max(insets.top, 20), backgroundColor: withAlpha(colors.background.primary, 0.55), borderColor: colors.border.default }]}
                     onPress={() => router.back()}
                 >
                     <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.saveBtn, { top: Math.max(insets.top, 20) }]}
+                <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Save"
+                    style={[styles.saveBtn, { top: Math.max(insets.top, 20), backgroundColor: withAlpha(colors.background.primary, 0.55), borderColor: colors.border.default }]}
                 >
                     <Ionicons name="bookmark-outline" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Ionicons name="restaurant-outline" size={80} color={colors.text.secondary} style={{ opacity: 0.5 }} />
+                <View style={shadows.glow(colors.accent.coral)}>
+                    <Ionicons name="restaurant-outline" size={80} color={colors.accent.coral} style={{ opacity: 0.85 }} />
+                </View>
             </View>
 
             <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}>
                 <View style={styles.badgeRow}>
-                    <View style={[styles.badge, { backgroundColor: `${colors.accent.cyan}20` }]}>
+                    <View style={[styles.badge, { backgroundColor: withAlpha(colors.accent.cyan, 0.14), borderColor: withAlpha(colors.accent.cyan, 0.28) }]}>
                         <Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: '700' }]}>HIGH PROTEIN</Text>
                     </View>
-                    <View style={[styles.badge, { backgroundColor: `${colors.accent.coral}20` }]}>
+                    <View style={[styles.badge, { backgroundColor: withAlpha(colors.accent.coral, 0.14), borderColor: withAlpha(colors.accent.coral, 0.28) }]}>
                         <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: '700' }]}>LOW GI</Text>
                     </View>
                 </View>
@@ -49,27 +58,27 @@ export default function MealDetailScreen() {
                     Perfect pre-shift dinner providing sustained energy release without the insulin spike.
                 </Text>
 
-                <View style={[styles.macroRow, { backgroundColor: colors.background.secondary }]}>
+                <Card variant="glass" style={styles.macroRow}>
                     <View style={styles.macroBox}>
-                        <Text style={[typography.heading, { color: colors.text.primary }]}>650</Text>
-                        <Text style={[typography.caption, { color: colors.text.tertiary }]}>KCAL</Text>
+                        <Text style={[typography.statSmall, { color: colors.text.primary }]}>650</Text>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 2 }]}>KCAL</Text>
                     </View>
                     <View style={[styles.macroDivider, { backgroundColor: colors.border.default }]} />
                     <View style={styles.macroBox}>
-                        <Text style={[typography.heading, { color: colors.text.primary }]}>45g</Text>
-                        <Text style={[typography.caption, { color: colors.text.tertiary }]}>PRO</Text>
+                        <Text style={[typography.statSmall, { color: colors.text.primary }]}>45<Text style={[typography.statTiny, { color: colors.text.secondary }]}>g</Text></Text>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 2 }]}>PRO</Text>
                     </View>
                     <View style={[styles.macroDivider, { backgroundColor: colors.border.default }]} />
                     <View style={styles.macroBox}>
-                        <Text style={[typography.heading, { color: colors.text.primary }]}>55g</Text>
-                        <Text style={[typography.caption, { color: colors.text.tertiary }]}>CARB</Text>
+                        <Text style={[typography.statSmall, { color: colors.text.primary }]}>55<Text style={[typography.statTiny, { color: colors.text.secondary }]}>g</Text></Text>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 2 }]}>CARB</Text>
                     </View>
                     <View style={[styles.macroDivider, { backgroundColor: colors.border.default }]} />
                     <View style={styles.macroBox}>
-                        <Text style={[typography.heading, { color: colors.text.primary }]}>25g</Text>
-                        <Text style={[typography.caption, { color: colors.text.tertiary }]}>FAT</Text>
+                        <Text style={[typography.statSmall, { color: colors.text.primary }]}>25<Text style={[typography.statTiny, { color: colors.text.secondary }]}>g</Text></Text>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 2 }]}>FAT</Text>
                     </View>
-                </View>
+                </Card>
 
                 <Text style={[typography.heading, { color: colors.text.primary, marginTop: spacing.xl, marginBottom: spacing.md }]}>
                     Ingredients
@@ -104,7 +113,7 @@ export default function MealDetailScreen() {
             <View style={[styles.fabContainer, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: withAlpha(colors.background.primary, 0.95), borderTopColor: colors.border.default }]}>
                 <Button
                     title="Log Meal"
-                    icon={<Ionicons name="add" size={20} color={themeColors.text.primary} />}
+                    icon={<Ionicons name="add" size={20} color={colors.text.primary} />}
                     fullWidth
                     onPress={() => router.back()}
                 />
@@ -129,7 +138,7 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderWidth: StyleSheet.hairlineWidth,
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 10,
@@ -140,7 +149,7 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 20,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        borderWidth: StyleSheet.hairlineWidth,
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 10,
@@ -150,16 +159,15 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     badge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 999,
+        borderWidth: StyleSheet.hairlineWidth,
     },
     macroRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 16,
-        borderRadius: 16,
         marginTop: 24,
     },
     macroBox: {

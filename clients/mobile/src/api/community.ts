@@ -71,7 +71,7 @@ export const joinChallenge = async (challengeId: string): Promise<boolean> => {
 
 /** Log incremental progress toward a challenge (e.g. steps walked, workouts done) */
 export const updateChallengeProgress = async (challengeId: string, value: number): Promise<boolean> => {
-  const { data } = await apiClient.post(`/v1/community/challenges/${challengeId}/progress`, { value });
+  const { data } = await apiClient.post(`/v1/community/challenges/${challengeId}/progress`, { progress: value });
   return data.success ?? true;
 };
 

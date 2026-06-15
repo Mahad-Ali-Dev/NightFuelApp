@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-    FlatList, ActivityIndicator, Dimensions, RefreshControl,
+    FlatList, Dimensions, RefreshControl, Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -12,6 +12,8 @@ import { useQuery } from '@tanstack/react-query';
 import { searchLibrary } from '@/api/exercises';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
+import { shadows } from '@/theme/shadows';
+import { Skeleton, EmptyState } from '@/components/ui';
 import { TAB_BAR_H } from '../(tabs)/_layout';
 
 const { width } = Dimensions.get('window');
@@ -79,6 +81,53 @@ export default function ExerciseLibraryScreen() {
         if (activeCategory || searchQuery || activeMuscle) libraryQuery.refetch();
     }, [activeCategory, searchQuery, activeMuscle]);
 
+    const keyExtractor = useCallback((item: any) => item.id || item.name, []);
+
+    const renderItem = useCallback(({ item }: any) => {
+        const fallbackImg = CATEGORY_FALLBACK[item.category ?? activeCategory ?? '']
+            ?? CATEGORY_FALLBACK.gym;
+        const imgSrc = item.imageUrl || fallbackImg;
+        return (
+            <TouchableOpacity
+                style={[styles.exCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={item.name}
+                onPress={() => router.push(`/(exercises)/${item.id}` as any)}
+            >
+                <View style={styles.exImageWrapper}>
+                    <Image
+                        source={{ uri: imgSrc }}
+                        style={styles.exImage}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        transition={300}
+                    />
+                    <LinearGradient
+                        colors={['transparent', 'rgba(0,0,0,0.55)']}
+                        style={StyleSheet.absoluteFillObject}
+                    />
+
+                </View>
+                <View style={styles.exInfo}>
+                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', fontSize: 13 }]} numberOfLines={2}>
+                        {item.name}
+                    </Text>
+                    <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 11, marginTop: 2 }]} numberOfLines={1}>
+                        {item.bodyPart || item.muscleGroup || ''}
+                    </Text>
+                    {item.equipment && item.equipment !== 'body weight' && (
+                        <View style={[styles.equipPill, { borderColor: withAlpha(colors.accent.cyan, 0.5) }]}>
+                            <Text style={{ color: colors.accent.cyan, fontSize: 9, fontWeight: '600' }}>
+                                {item.equipment.toUpperCase()}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+            </TouchableOpacity>
+        );
+    }, [colors, typography, router, activeCategory]);
+
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             {/* Header */}
@@ -86,6 +135,10 @@ export default function ExerciseLibraryScreen() {
                 {(activeCategory || searchQuery || activeMuscle) ? (
                     <TouchableOpacity
                         style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel="Clear filters"
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         onPress={clearAllFilters}
                     >
                         <Ionicons name="arrow-back" size={20} color={colors.accent.coral} />
@@ -100,15 +153,15 @@ export default function ExerciseLibraryScreen() {
                 ) : null}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <View>
-                        <Text style={[typography.display, { color: colors.text.primary, fontSize: 28, fontWeight: '900' }]}>
+                        <Text style={[typography.h1, { color: colors.text.primary }]}>
                             Exercise Library
                         </Text>
-                        <Text style={[typography.body, { color: colors.text.tertiary }]}>
+                        <Text style={[typography.body, { color: colors.text.secondary, marginTop: 2 }]}>
                             {showBrowse ? 'Browse by category' : `${exercises.length} exercises found`}
                         </Text>
                     </View>
-                    <TouchableOpacity
-                        style={[styles.iconBtn, { backgroundColor: colors.background.secondary }]}
+                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="History"
+                        style={[styles.iconBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderWidth: 1 }]}
                         onPress={() => router.push('/(exercises)/history' as any)}
                     >
                         <Ionicons name="time-outline" size={22} color={colors.text.primary} />
@@ -129,13 +182,13 @@ export default function ExerciseLibraryScreen() {
                         returnKeyType="search"
                     />
                     {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearchQuery('')}>
+                        <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearchQuery('')}>
                             <Ionicons name="close-circle" size={18} color={colors.text.tertiary} />
                         </TouchableOpacity>
                     )}
                 </View>
-                <TouchableOpacity
-                    style={[styles.iconBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderWidth: 1 }]}
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Muscles"
+                    style={[styles.iconBtn, shadows.glow(colors.accent.cyan), { backgroundColor: colors.background.secondary, borderColor: withAlpha(colors.accent.cyan, 0.35), borderWidth: 1 }]}
                     onPress={() => router.push('/(exercises)/muscles')}
                 >
                     <Ionicons name="body-outline" size={22} color={colors.accent.cyan} />
@@ -149,18 +202,24 @@ export default function ExerciseLibraryScreen() {
                     showsVerticalScrollIndicator={false}
                 >
                     {/* Category Cards */}
+                    <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.lg }]}>
+                        Categories
+                    </Text>
                     <View style={styles.categoryGrid}>
                         {CATEGORY_IMAGES.map((cat) => (
                             <TouchableOpacity
                                 key={cat.key}
                                 style={styles.categoryCard}
                                 activeOpacity={0.85}
+                                accessibilityRole="button"
+                                accessibilityLabel={`${cat.label} exercises`}
                                 onPress={() => setActiveCategory(cat.key)}
                             >
                                 <Image
                                     source={{ uri: cat.image }}
                                     style={StyleSheet.absoluteFillObject}
                                     contentFit="cover"
+                                    cachePolicy="memory-disk"
                                 />
                                 <LinearGradient
                                     colors={['transparent', 'rgba(0,0,0,0.88)']}
@@ -179,13 +238,16 @@ export default function ExerciseLibraryScreen() {
                     </View>
 
                     {/* Browse by Muscle */}
-                    <Text style={[typography.heading, { color: colors.text.primary, marginTop: 32, marginBottom: 14 }]}>
+                    <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing['3xl'], marginBottom: spacing.lg }]}>
                         Browse by Muscle
                     </Text>
                     <View style={styles.muscleGrid}>
                         {MUSCLE_GROUPS.map((muscle) => (
                             <TouchableOpacity
                                 key={muscle}
+                                activeOpacity={0.85}
+                                accessibilityRole="button"
+                                accessibilityLabel={`${muscle} exercises`}
                                 style={[styles.muscleChip, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
                                 onPress={() => setActiveMuscle(muscle)}
                             >
@@ -197,72 +259,51 @@ export default function ExerciseLibraryScreen() {
                     </View>
                 </ScrollView>
             ) : libraryQuery.isLoading ? (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                    <ActivityIndicator size="large" color={colors.accent.coral} />
-                    <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 12 }]}>Searching exercises...</Text>
-                </View>
+                <ScrollView
+                    contentContainerStyle={{ padding: 16, paddingBottom: TAB_BAR_H + 40 }}
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={styles.skeletonGrid}>
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <View key={i} style={[styles.exCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                                <Skeleton width="100%" height={130} radius={0} />
+                                <View style={styles.exInfo}>
+                                    <Skeleton width="85%" height={13} radius={4} />
+                                    <Skeleton width="55%" height={11} radius={4} style={{ marginTop: spacing.sm }} />
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                </ScrollView>
             ) : exercises.length === 0 ? (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
-                    <Ionicons name="fitness-outline" size={64} color={colors.text.tertiary} />
-                    <Text style={[typography.heading, { color: colors.text.secondary, marginTop: 16, textAlign: 'center' }]}>
-                        No exercises found
-                    </Text>
-                    <TouchableOpacity style={{ marginTop: 16 }} onPress={clearAllFilters}>
-                        <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: 'bold' }]}>CLEAR FILTERS</Text>
-                    </TouchableOpacity>
-                </View>
+                <EmptyState
+                    icon="fitness-outline"
+                    title="No exercises found"
+                    subtitle={
+                        searchQuery
+                            ? `Nothing matched "${searchQuery}". Try a different search or clear your filters.`
+                            : 'No exercises here yet. Try another category, muscle group, or clear your filters.'
+                    }
+                    actionLabel="Clear Filters"
+                    onAction={clearAllFilters}
+                    style={{ flex: 1 }}
+                />
             ) : (
                 <FlatList
                     data={exercises}
-                    keyExtractor={(item: any) => item.id || item.name}
+                    keyExtractor={keyExtractor}
                     numColumns={2}
                     contentContainerStyle={{ padding: 16, paddingBottom: TAB_BAR_H + 40 }}
                     columnWrapperStyle={{ gap: 12 }}
                     ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+                    removeClippedSubviews={Platform.OS === 'android'}
+                    initialNumToRender={8}
+                    maxToRenderPerBatch={8}
+                    windowSize={7}
                     refreshControl={
                         <RefreshControl refreshing={libraryQuery.isFetching} onRefresh={onRefresh} tintColor={colors.accent.coral} />
                     }
-                    renderItem={({ item }: any) => {
-                        const fallbackImg = CATEGORY_FALLBACK[item.category ?? activeCategory ?? '']
-                            ?? CATEGORY_FALLBACK.gym;
-                        const imgSrc = item.imageUrl || fallbackImg;
-                        return (
-                            <TouchableOpacity
-                                style={[styles.exCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
-                                activeOpacity={0.85}
-                                onPress={() => router.push(`/(exercises)/${item.id}` as any)}
-                            >
-                                <View style={styles.exImageWrapper}>
-                                    <Image
-                                        source={{ uri: imgSrc }}
-                                        style={styles.exImage}
-                                        contentFit="cover"
-                                        transition={300}
-                                    />
-                                    <LinearGradient
-                                        colors={['transparent', 'rgba(0,0,0,0.55)']}
-                                        style={StyleSheet.absoluteFillObject}
-                                    />
-
-                                </View>
-                                <View style={styles.exInfo}>
-                                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', fontSize: 13 }]} numberOfLines={2}>
-                                        {item.name}
-                                    </Text>
-                                    <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 11, marginTop: 2 }]} numberOfLines={1}>
-                                        {item.bodyPart || item.muscleGroup || ''}
-                                    </Text>
-                                    {item.equipment && item.equipment !== 'body weight' && (
-                                        <View style={[styles.equipPill, { borderColor: withAlpha(colors.accent.cyan, 0.5) }]}>
-                                            <Text style={{ color: colors.accent.cyan, fontSize: 9, fontWeight: '600' }}>
-                                                {item.equipment.toUpperCase()}
-                                            </Text>
-                                        </View>
-                                    )}
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    }}
+                    renderItem={renderItem}
                 />
             )}
         </View>
@@ -288,6 +329,7 @@ const styles = StyleSheet.create({
     categoryContent: { padding: 14 },
     muscleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     muscleChip: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 20, borderWidth: 1 },
+    skeletonGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
     exCard: { width: CARD_W, borderRadius: 16, overflow: 'hidden', borderWidth: 1 },
     exImageWrapper: { position: 'relative', width: '100%', height: 130 },
     exImage: { width: '100%', height: 130 },

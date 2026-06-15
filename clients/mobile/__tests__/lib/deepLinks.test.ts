@@ -7,7 +7,7 @@ jest.mock('expo-linking', () => ({
       const u = new URL('http://' + noScheme.replace(/^\/\//, ''));
       const queryParams: Record<string, string> = {};
       u.searchParams.forEach((v, k) => { queryParams[k] = v; });
-      return { path: u.pathname.replace(/^\/+/, ''), queryParams };
+      return { hostname: u.hostname, path: u.pathname.replace(/^\/+/, ''), queryParams };
     } catch {
       return { path: '', queryParams: {} };
     }

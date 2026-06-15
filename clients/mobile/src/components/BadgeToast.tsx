@@ -160,7 +160,7 @@ export default function BadgeToast() {
                             />
 
                             {/* Close button */}
-                            <TouchableOpacity style={s.closeBtn} onPress={handleClose}>
+                            <TouchableOpacity style={s.closeBtn} onPress={handleClose} activeOpacity={0.85}>
                                 <Ionicons name="close" size={18} color={colors.text.tertiary} />
                             </TouchableOpacity>
 
@@ -211,6 +211,7 @@ export default function BadgeToast() {
                                 <TouchableOpacity
                                     style={[s.viewAllBtn, { borderColor: withAlpha(colors.text.primary, 0.2) }]}
                                     onPress={handleViewAll}
+                                    activeOpacity={0.85}
                                 >
                                     <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: '700' }]}>
                                         View Achievements
@@ -220,6 +221,7 @@ export default function BadgeToast() {
                                 <TouchableOpacity
                                     style={[s.doneBtn, { backgroundColor: tier.glow }]}
                                     onPress={handleClose}
+                                    activeOpacity={0.85}
                                 >
                                     <Text style={[typography.caption, { color: '#FFF', fontWeight: '800' }]}>
                                         Awesome! 🎉

@@ -9,19 +9,14 @@ export function useSleep() {
 
     const qualityQuery = useQuery({
         queryKey: ['sleep', 'quality'],
-        queryFn: async () => {
-            const { data } = await getQuality();
-            return data;
-        },
+        // getQuality()/getAnalytics() already return the parsed body — no second unwrap
+        queryFn: getQuality,
         staleTime: 10 * 60 * 1000,
     });
 
     const analyticsQuery = useQuery({
         queryKey: ['sleep', 'analytics'],
-        queryFn: async () => {
-            const { data } = await getAnalytics();
-            return data;
-        },
+        queryFn: getAnalytics,
         staleTime: 10 * 60 * 1000,
     });
 

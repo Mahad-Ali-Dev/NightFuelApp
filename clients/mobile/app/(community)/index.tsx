@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Dimensions, RefreshControl } from 'react-native';
+import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Dimensions, RefreshControl, Share } from 'react-native';
 
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getFeed, likePost, getChallenges, Post } from '@/api/community';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { Card, Button } from '@/components/ui';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Card, Button, Skeleton, EmptyState } from '@/components/ui';
+import { shadows } from '@/theme';
+import { withAlpha } from '@/theme/utils';
 import { formatDistanceToNow } from 'date-fns';
 
 const { width } = Dimensions.get('window');
@@ -22,7 +25,7 @@ export default function CommunityFeedScreen() {
     const [refreshing, setRefreshing] = useState(false);
 
     // ── Queries ─────────────────────────────────────────────────────────────
-    const { data: feed, isLoading: isFeedLoading, refetch } = useQuery({
+    const { data: feed, isLoading: isFeedLoading, isError: isFeedError, refetch } = useQuery({
         queryKey: ['community-feed'],
         queryFn: () => getFeed(20),
     });
@@ -50,13 +53,21 @@ export default function CommunityFeedScreen() {
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 22 }]}>Community</Text>
+                <Text style={[typography.h1, { color: colors.text.primary }]}>Community</Text>
                 <View style={styles.headerActions}>
-                    <TouchableOpacity onPress={() => router.push('/(community)/achievements' as any)} style={{ marginRight: 20 }}>
-                        <Ionicons name="trophy-outline" size={24} color={colors.accent.amber} />
+                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Achievements"
+                        activeOpacity={0.85}
+                        onPress={() => router.push('/(community)/achievements' as any)}
+                        style={[styles.headerIconBtn, { backgroundColor: withAlpha(colors.accent.amber, 0.12), marginRight: 12 }]}
+                    >
+                        <Ionicons name="trophy-outline" size={22} color={colors.accent.amber} />
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => router.push('/(community)/leaderboard')}>
-                        <Ionicons name="podium-outline" size={24} color={colors.text.primary} />
+                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Leaderboard"
+                        activeOpacity={0.85}
+                        onPress={() => router.push('/(community)/leaderboard')}
+                        style={[styles.headerIconBtn, { backgroundColor: colors.background.tertiary }]}
+                    >
+                        <Ionicons name="podium-outline" size={22} color={colors.text.primary} />
                     </TouchableOpacity>
                 </View>
             </View>
@@ -70,23 +81,26 @@ export default function CommunityFeedScreen() {
                 {challenges && challenges.length > 0 && (
                     <View style={styles.challengeSection}>
                         <View style={styles.sectionHeader}>
-                            <Text style={[typography.caption, { color: colors.text.tertiary, fontWeight: 'bold' }]}>ACTIVE CHALLENGES</Text>
-                            <TouchableOpacity onPress={() => router.push('/(community)/challenges')}>
-                                <Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: 'bold' }]}>SEE ALL</Text>
+                            <Text style={[typography.overline, { color: colors.text.secondary }]}>ACTIVE CHALLENGES</Text>
+                            <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="See all challenges" onPress={() => router.push('/(community)/challenges')}>
+                                <Text style={[typography.overline, { color: colors.accent.cyan }]}>SEE ALL</Text>
                             </TouchableOpacity>
                         </View>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 20 }}>
                             {challenges.slice(0, 3).map((chall) => (
                                 <TouchableOpacity
                                     key={chall.id}
-                                    style={[styles.challCard, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl, borderColor: colors.border.default }]}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`${chall.title}, ${chall.participants} participating`}
+                                    style={[styles.challCard, { backgroundColor: colors.background.tertiary, borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}
                                     onPress={() => router.push('/(community)/challenges')}
+                                    activeOpacity={0.85}
                                 >
-                                    <View style={[styles.challIcon, { backgroundColor: `${colors.accent.emerald}15` }]}>
+                                    <View style={[styles.challIcon, { backgroundColor: withAlpha(colors.accent.emerald, 0.12) }, shadows.glow(colors.accent.emerald)]}>
                                         <Ionicons name="flash" size={20} color={colors.accent.emerald} />
                                     </View>
-                                    <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold', marginTop: 12 }]} numberOfLines={1}>{chall.title}</Text>
-                                    <Text style={[typography.caption, { color: colors.text.tertiary }]}>{chall.participants} participating</Text>
+                                    <Text style={[typography.subhead, { color: colors.text.primary, marginTop: 14 }]} numberOfLines={1}>{chall.title}</Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>{chall.participants} participating</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -95,24 +109,43 @@ export default function CommunityFeedScreen() {
 
                 {/* Create Post Action */}
                 <TouchableOpacity
-                    style={[styles.postInputBtn, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl, borderColor: colors.border.default }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Create a post"
+                    style={[styles.postInputBtn, { backgroundColor: colors.background.secondary, borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}
                     onPress={() => router.push('/(modals)/create-post')}
+                    activeOpacity={0.85}
                 >
                     <View style={[styles.avatarMini, { backgroundColor: colors.background.tertiary }]}>
                         <Ionicons name="person" size={16} color={colors.text.tertiary} />
                     </View>
-                    <Text style={[typography.body, { color: colors.text.tertiary, marginLeft: 16 }]}>What's on your mind?</Text>
+                    <Text style={[typography.body, { color: colors.text.secondary, marginLeft: 16 }]}>What's on your mind?</Text>
                     <Ionicons name="image-outline" size={20} color={colors.accent.cyan} style={{ marginLeft: 'auto' }} />
                 </TouchableOpacity>
 
                 {/* Feed Items */}
                 <View style={{ paddingHorizontal: 20 }}>
                     {isFeedLoading ? (
-                        <ActivityIndicator size="large" color={colors.accent.cyan} style={{ marginTop: 40 }} />
-                    ) : feed?.length === 0 ? (
-                        <View style={styles.emptyFeed}>
-                            <Text style={[typography.body, { color: colors.text.tertiary }]}>No posts yet. Start the conversation!</Text>
+                        <View>
+                            {Array.from({ length: 3 }).map((_, i) => (
+                                <PostSkeleton key={i} />
+                            ))}
                         </View>
+                    ) : isFeedError ? (
+                        <EmptyState
+                            icon="cloud-offline-outline"
+                            title="Couldn't load the feed"
+                            subtitle="Something went wrong fetching community posts. Check your connection and try again."
+                            actionLabel="Try Again"
+                            onAction={() => refetch()}
+                        />
+                    ) : feed?.length === 0 ? (
+                        <EmptyState
+                            icon="chatbubbles-outline"
+                            title="No posts yet"
+                            subtitle="Be the first to share a win, ask a question, or start the conversation."
+                            actionLabel="Create a post"
+                            onAction={() => router.push('/(modals)/create-post')}
+                        />
                     ) : (
                         feed?.map((post) => (
                             <PostItem
@@ -120,6 +153,16 @@ export default function CommunityFeedScreen() {
                                 post={post}
                                 onLike={() => likeMutation.mutate(post.id)}
                                 onComment={() => router.push(`/(community)/${post.id}`)}
+                                onShare={async () => {
+                                    try {
+                                        const author = post.author?.name || 'A NightFuel member';
+                                        await Share.share({
+                                            message: `${author} on NightFuel:\n\n"${post.content}"`,
+                                        });
+                                    } catch {
+                                        // Share sheet dismissed or unavailable — no action needed.
+                                    }
+                                }}
                             />
                         ))
                     )}
@@ -127,37 +170,42 @@ export default function CommunityFeedScreen() {
             </ScrollView>
 
             {/* Fab for Posting */}
-            <TouchableOpacity
-                style={[styles.fab, { backgroundColor: colors.accent.cyan }]}
+            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Add"
+                style={[styles.fab, shadows.glow(colors.accent.coral)]}
                 onPress={() => router.push('/(modals)/create-post')}
+                activeOpacity={0.9}
             >
-                <Ionicons name="add" size={32} color="#0D1117" />
+                <LinearGradient
+                    colors={colors.gradients.coral}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.fabGradient}
+                >
+                    <Ionicons name="add" size={32} color={colors.text.primary} />
+                </LinearGradient>
             </TouchableOpacity>
         </View>
     );
 }
 
-function PostItem({ post, onLike, onComment }: { post: Post, onLike: () => void, onComment: () => void }) {
+function PostItem({ post, onLike, onComment, onShare }: { post: Post, onLike: () => void, onComment: () => void, onShare: () => void }) {
     const { colors, typography, borderRadius } = useTheme();
     return (
-        <Card style={[styles.postCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl }]}>
+        <Card variant="glass" style={[styles.postCard, { borderColor: colors.border.default, borderRadius: borderRadius['2xl'] }]}>
             <View style={styles.postHeader}>
                 <View style={[styles.avatarMini, { backgroundColor: colors.background.tertiary }]}>
                     {post.author?.avatarUrl ? (
-                        <Image source={{ uri: post.author.avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 16 }} />
+                        <Image source={{ uri: post.author.avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 16 }} cachePolicy="memory-disk" transition={200} />
                     ) : (
                         <Ionicons name="person" size={16} color={colors.text.tertiary} />
                     )}
                 </View>
                 <View style={{ marginLeft: 12 }}>
                     <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{post.author?.name || 'User'}</Text>
-                    <Text style={[typography.caption, { color: colors.text.tertiary }]}>
+                    <Text style={[typography.caption, { color: colors.text.secondary }]}>
                         {formatDistanceToNow(new Date(post.createdAt))} ago
                     </Text>
                 </View>
-                <TouchableOpacity style={{ marginLeft: 'auto' }}>
-                    <Ionicons name="ellipsis-horizontal" size={20} color={colors.text.tertiary} />
-                </TouchableOpacity>
             </View>
 
             <Text style={[typography.body, { color: colors.text.secondary, marginVertical: 16, lineHeight: 22 }]}>
@@ -165,21 +213,45 @@ function PostItem({ post, onLike, onComment }: { post: Post, onLike: () => void,
             </Text>
 
             {post.imageUrl && (
-                <Image source={{ uri: post.imageUrl }} style={[styles.postImg, { borderRadius: borderRadius.lg }]} contentFit="cover" />
+                <Image source={{ uri: post.imageUrl }} style={[styles.postImg, { borderRadius: borderRadius.lg }]} contentFit="cover" cachePolicy="memory-disk" transition={200} />
             )}
 
             <View style={[styles.postActions, { borderTopColor: colors.border.default }]}>
-                <TouchableOpacity style={styles.actionItem} onPress={onLike}>
+                <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`Like post, ${post.likes} likes`} style={styles.actionItem} onPress={onLike}>
                     <Ionicons name="heart-outline" size={20} color={colors.text.tertiary} />
-                    <Text style={[typography.caption, { color: colors.text.tertiary, marginLeft: 6, fontWeight: 'bold' }]}>{post.likes}</Text>
+                    <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]}>{post.likes}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionItem} onPress={onComment}>
+                <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`Comment on post, ${post.commentsCount} comments`} style={styles.actionItem} onPress={onComment}>
                     <Ionicons name="chatbubble-outline" size={18} color={colors.text.tertiary} />
-                    <Text style={[typography.caption, { color: colors.text.tertiary, marginLeft: 6, fontWeight: 'bold' }]}>{post.commentsCount}</Text>
+                    <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]}>{post.commentsCount}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.actionItem}>
+                <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Share" style={styles.actionItem} onPress={onShare}>
                     <Ionicons name="share-social-outline" size={18} color={colors.text.tertiary} />
                 </TouchableOpacity>
+            </View>
+        </Card>
+    );
+}
+
+function PostSkeleton() {
+    const { colors, borderRadius } = useTheme();
+    return (
+        <Card variant="glass" style={[styles.postCard, { borderColor: colors.border.default, borderRadius: borderRadius['2xl'] }]}>
+            <View style={styles.postHeader}>
+                <Skeleton width={32} height={32} radius={16} />
+                <View style={{ marginLeft: 12 }}>
+                    <Skeleton width={120} height={14} radius={4} />
+                    <Skeleton width={72} height={11} radius={4} style={{ marginTop: 6 }} />
+                </View>
+            </View>
+            <View style={{ marginVertical: 16 }}>
+                <Skeleton width="100%" height={14} radius={4} />
+                <Skeleton width="70%" height={14} radius={4} style={{ marginTop: 8 }} />
+            </View>
+            <View style={[styles.postActions, { borderTopColor: colors.border.default }]}>
+                <Skeleton width={48} height={16} radius={4} />
+                <Skeleton width={48} height={16} radius={4} />
+                <Skeleton width={24} height={16} radius={4} />
             </View>
         </Card>
     );
@@ -189,17 +261,18 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
     headerActions: { flexDirection: 'row', alignItems: 'center' },
-    challengeSection: { marginTop: 24, marginBottom: 32 },
+    headerIconBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+    challengeSection: { marginTop: 28, marginBottom: 32 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 },
-    challCard: { width: 150, padding: 16, borderWidth: 1 },
-    challIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    postInputBtn: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, padding: 16, borderWidth: 1, marginBottom: 24 },
+    challCard: { width: 160, padding: 18, borderWidth: 1 },
+    challIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    postInputBtn: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, padding: 18, borderWidth: 1, marginBottom: 24 },
     avatarMini: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-    emptyFeed: { alignItems: 'center', padding: 40 },
-    postCard: { padding: 16, marginBottom: 16, borderWidth: 1 },
+    postCard: { padding: 18, marginBottom: 16, borderWidth: 1 },
     postHeader: { flexDirection: 'row', alignItems: 'center' },
     postImg: { width: '100%', height: 220, marginBottom: 12 },
     postActions: { flexDirection: 'row', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, gap: 24 },
     actionItem: { flexDirection: 'row', alignItems: 'center' },
-    fab: { position: 'absolute', bottom: 160, right: 20, width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', elevation: 8, shadowColor: '#00D4AA', shadowOpacity: 0.3, shadowRadius: 10 },
+    fab: { position: 'absolute', bottom: 160, right: 20, width: 64, height: 64, borderRadius: 32 },
+    fabGradient: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
 });

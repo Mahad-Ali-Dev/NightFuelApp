@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-    ActivityIndicator, Alert, KeyboardAvoidingView, Platform
+    Alert, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -9,12 +9,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMyProfile, updateProfile } from '@/api/profile';
-import { Button } from '@/components/ui';
+import { Button, Skeleton } from '@/components/ui';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 
 export default function EditProfileScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -71,36 +71,64 @@ export default function EditProfileScreen() {
 
     if (isLoading) {
         return (
-            <View style={[styles.container, { backgroundColor: colors.background.primary, justifyContent: 'center' }]}>
-                <ActivityIndicator size="large" color={colors.accent.purple} />
+            <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+                <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
+                    <View style={styles.backBtn}>
+                        <Ionicons name="close" size={28} color={colors.text.primary} />
+                    </View>
+                    <Text style={[typography.h3, { color: colors.text.primary }]}>Edit Profile</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+                    <View style={styles.avatarSection}>
+                        <Skeleton width={100} height={100} radius={50} />
+                        <Skeleton width={120} height={14} radius={borderRadius.sm} style={{ marginTop: 16 }} />
+                    </View>
+                    <View style={styles.form}>
+                        {[0, 1].map((i) => (
+                            <View key={i}>
+                                <Skeleton width={120} height={12} radius={borderRadius.sm} style={{ marginBottom: 10 }} />
+                                <Skeleton width="100%" height={56} radius={borderRadius.xl} />
+                            </View>
+                        ))}
+                        <View>
+                            <Skeleton width={120} height={12} radius={borderRadius.sm} style={{ marginBottom: 10 }} />
+                            <Skeleton width="100%" height={120} radius={borderRadius.xl} />
+                        </View>
+                    </View>
+                    <Skeleton width="100%" height={60} radius={borderRadius.xl} style={{ marginTop: 40 }} />
+                </ScrollView>
             </View>
         );
     }
 
     return (
         <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={[styles.container, { backgroundColor: colors.background.primary }]}
         >
             <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.85}>
                     <Ionicons name="close" size={28} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Edit Profile</Text>
+                <Text style={[typography.h3, { color: colors.text.primary }]}>Edit Profile</Text>
                 <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: updateMutation.isPending }}
                     onPress={() => updateMutation.mutate(form)}
                     disabled={updateMutation.isPending}
+                    activeOpacity={0.85}
                 >
-                    <Text style={[typography.subhead, { color: colors.accent.purple, fontWeight: 'bold' }]}>Save</Text>
+                    <Text style={[typography.subhead, { color: colors.accent.purple, fontWeight: 'bold', opacity: updateMutation.isPending ? 0.5 : 1 }]}>Save</Text>
                 </TouchableOpacity>
             </View>
 
             <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
                 {/* Avatar Edit */}
                 <View style={styles.avatarSection}>
-                    <TouchableOpacity onPress={handlePickImage} style={[styles.avatarOutline, { borderColor: colors.accent.purple }]}>
+                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Change photo" onPress={handlePickImage} activeOpacity={0.85} style={[styles.avatarOutline, { borderColor: colors.accent.purple }, shadows.glow(colors.accent.purple)]}>
                         {form.avatarUrl ? (
-                            <Image source={{ uri: form.avatarUrl }} style={styles.avatarImg} />
+                            <Image source={{ uri: form.avatarUrl }} style={styles.avatarImg} cachePolicy="memory-disk" transition={200} />
                         ) : (
                             <View style={[styles.avatarImg, { backgroundColor: colors.background.tertiary, alignItems: 'center', justifyContent: 'center' }]}>
                                 <Ionicons name="camera" size={32} color={colors.text.tertiary} />
@@ -110,7 +138,7 @@ export default function EditProfileScreen() {
                             <Ionicons name="pencil" size={14} color="#FFF" />
                         </View>
                     </TouchableOpacity>
-                    <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 12 }]}>Tap to change photo</Text>
+                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 12 }]}>Tap to change photo</Text>
                 </View>
 
                 {/* Form Fields */}
@@ -153,17 +181,17 @@ function InputGroup({ label, value, onChangeText, placeholder, multiline, number
     const { colors, typography, borderRadius } = useTheme();
     return (
         <View style={styles.inputGroup}>
-            <Text style={[typography.caption, { color: colors.text.tertiary, fontWeight: 'bold', marginBottom: 8 }]}>{label}</Text>
+            <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 10 }]}>{label}</Text>
             <TextInput
                 style={[
                     styles.input,
                     {
                         color: colors.text.primary,
                         backgroundColor: colors.background.secondary,
-                        borderRadius: borderRadius.lg,
+                        borderRadius: borderRadius.xl,
                         borderColor: colors.border.default,
                         textAlignVertical: multiline ? 'top' : 'center',
-                        height: multiline ? 120 : 54
+                        height: multiline ? 120 : 56
                     }
                 ]}
                 value={value}

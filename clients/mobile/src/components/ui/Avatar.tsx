@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { Text, StyleSheet, ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme';
 
 interface AvatarProps {
@@ -11,7 +12,7 @@ interface AvatarProps {
   style?: ViewStyle;
 }
 
-export function Avatar({ uri, name, size = 40, borderColor, style }: AvatarProps) {
+function AvatarComponent({ uri, name, size = 40, borderColor, style }: AvatarProps) {
   const { colors } = useTheme();
 
   const initials = name
@@ -38,20 +39,23 @@ export function Avatar({ uri, name, size = 40, borderColor, style }: AvatarProps
           style as any,
         ]}
         contentFit="cover"
+        cachePolicy="memory-disk"
         transition={200}
       />
     );
   }
 
   return (
-    <View
+    <LinearGradient
+      colors={colors.gradients.coral}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
       style={[
         styles.fallback,
         {
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: colors.accent.coral,
           borderWidth: borderColor ? 2 : 0,
           borderColor: borderColor ?? 'transparent',
         },
@@ -59,9 +63,16 @@ export function Avatar({ uri, name, size = 40, borderColor, style }: AvatarProps
       ]}
     >
       <Text style={[styles.initials, { fontSize: size * 0.38 }]}>{initials}</Text>
-    </View>
+    </LinearGradient>
   );
 }
+
+/**
+ * Memoized: `uri`/`name`/`borderColor` are strings and `size` is a number.
+ * Avatars commonly repeat in lists (leaderboards, rosters, chat), so skipping
+ * unchanged ones on parent re-render pays off.
+ */
+export const Avatar = React.memo(AvatarComponent);
 
 const styles = StyleSheet.create({
   fallback: {

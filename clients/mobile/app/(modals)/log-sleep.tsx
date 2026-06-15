@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
+    TextInput, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -9,8 +9,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { log as logSleep, listSessions, SleepSession } from '@/api/sleep';
-import { Button } from '@/components/ui';
+import { Button, Card, Skeleton, EmptyState } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
+import { shadows } from '@/theme/shadows';
+import { typography as themeTypography } from '@/theme/typography';
 import { format, parseISO, differenceInMinutes } from 'date-fns';
 import { getErrorMessage } from '@/utils/validation';
 
@@ -58,7 +60,7 @@ export default function LogSleepModal() {
     const [showForm, setShowForm] = useState(false);
 
     // ── Fetch saved sessions ───────────────────────────────────────────────────
-    const { data: sessions = [], isLoading: sessionsLoading, refetch } = useQuery({
+    const { data: sessions = [], isLoading: sessionsLoading, isError: sessionsError, refetch } = useQuery({
         queryKey: ['sleep-sessions'],
         queryFn: () => listSessions(15),
     });
@@ -66,11 +68,21 @@ export default function LogSleepModal() {
     // ── Save mutation ──────────────────────────────────────────────────────────
     const mutation = useMutation({
         mutationFn: async () => {
-            const startStr = `${startDay}T${startTime}:00.000Z`;
-            const endStr = `${endDay}T${endTime}:00.000Z`;
+            // Interpret the entered date+time as LOCAL wall-clock, then convert to
+            // ISO. Appending `Z` previously treated local times as UTC, shifting
+            // every entry by the user's offset (rolling the date to "tomorrow" and
+            // breaking the duration). Roll the wake day forward for overnight sleep.
+            const start = new Date(`${startDay}T${startTime}:00`);
+            let end = new Date(`${endDay}T${endTime}:00`);
+            if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+                throw new Error('Please enter a valid date and time (YYYY-MM-DD and HH:MM).');
+            }
+            if (end.getTime() <= start.getTime()) {
+                end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+            }
             return logSleep({
-                startTime: startStr,
-                endTime: endStr,
+                startTime: start.toISOString(),
+                endTime: end.toISOString(),
                 quality,
                 disturbances,
                 notes: notes.trim() || undefined,
@@ -103,12 +115,11 @@ export default function LogSleepModal() {
         const dur = session.durationMins ?? (end ? differenceInMinutes(end, start) : null);
 
         return (
-            <View
+            <Card
                 key={session.id}
-                style={[styles.sessionCard, {
-                    backgroundColor: colors.background.secondary,
-                    borderColor: colors.border.default,
-                }]}
+                variant="glass"
+                noPadding
+                style={styles.sessionCard}
             >
                 {/* Top row: date + duration badge */}
                 <View style={styles.sessionHeader}>
@@ -129,21 +140,21 @@ export default function LogSleepModal() {
                 {/* Time row */}
                 <View style={[styles.timeRow, { borderTopColor: withAlpha(colors.border.default, 0.5) }]}>
                     <View style={styles.timeBlock}>
-                        <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Slept</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Slept</Text>
                         <Text style={[typography.body, { color: colors.text.secondary, fontSize: 13 }]}>
                             {format(start, 'hh:mm a')}
                         </Text>
                     </View>
                     <Ionicons name="arrow-forward" size={14} color={colors.text.tertiary} />
                     <View style={styles.timeBlock}>
-                        <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Woke</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Woke</Text>
                         <Text style={[typography.body, { color: colors.text.secondary, fontSize: 13 }]}>
                             {end ? format(end, 'hh:mm a') : '—'}
                         </Text>
                     </View>
                     <View style={[styles.dividerVert, { backgroundColor: colors.border.default }]} />
                     <View style={styles.timeBlock}>
-                        <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Quality</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Quality</Text>
                         <Text style={[typography.body, { color: qualityColor(session.quality, colors), fontSize: 13, fontWeight: '600' }]}>
                             {session.quality ? `${session.quality}/10` : '—'}
                         </Text>
@@ -152,7 +163,7 @@ export default function LogSleepModal() {
                         <>
                             <View style={[styles.dividerVert, { backgroundColor: colors.border.default }]} />
                             <View style={styles.timeBlock}>
-                                <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Wake-ups</Text>
+                                <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }]}>Wake-ups</Text>
                                 <Text style={[typography.body, { color: colors.accent.amber, fontSize: 13, fontWeight: '600' }]}>
                                     {session.disturbances}×
                                 </Text>
@@ -175,12 +186,12 @@ export default function LogSleepModal() {
                 {session.circadianAlignmentScore != null && (
                     <View style={[styles.alignmentRow, { borderTopColor: withAlpha(colors.border.default, 0.3) }]}>
                         <Ionicons name="sunny-outline" size={13} color={colors.accent.amber} />
-                        <Text style={[typography.caption, { color: colors.text.tertiary, marginLeft: 6 }]}>
+                        <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6 }]}>
                             Circadian Alignment: <Text style={{ color: colors.accent.cyan, fontWeight: '600' }}>{session.circadianAlignmentScore}%</Text>
                         </Text>
                     </View>
                 )}
-            </View>
+            </Card>
         );
     };
 
@@ -190,7 +201,7 @@ export default function LogSleepModal() {
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border.default, backgroundColor: colors.background.secondary }]}>
-                <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Ionicons name="close" size={28} color={colors.text.primary} />
                 </TouchableOpacity>
                 <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Sleep & Recovery</Text>
@@ -203,7 +214,9 @@ export default function LogSleepModal() {
                     {/* ── Add New Button ─────────────────────────────────────── */}
                     {!showForm && (
                         <TouchableOpacity
-                            style={[styles.addButton, { backgroundColor: withAlpha(colors.accent.cyan, 0.12), borderColor: withAlpha(colors.accent.cyan, 0.25) }]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Log new sleep"
+                            style={[styles.addButton, { backgroundColor: withAlpha(colors.accent.cyan, 0.12), borderColor: withAlpha(colors.accent.cyan, 0.25) }, shadows.glow(colors.accent.cyan)]}
                             onPress={() => setShowForm(true)}
                             activeOpacity={0.7}
                         >
@@ -228,7 +241,7 @@ export default function LogSleepModal() {
                                 <Text style={[typography.heading, { color: colors.accent.cyan, fontSize: 16 }]}>
                                     <Ionicons name="moon" size={16} color={colors.accent.cyan} /> New Sleep Entry
                                 </Text>
-                                <TouchableOpacity onPress={() => setShowForm(false)}>
+                                <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Clear" onPress={() => setShowForm(false)}>
                                     <Ionicons name="close-circle" size={24} color={colors.text.tertiary} />
                                 </TouchableOpacity>
                             </View>
@@ -291,6 +304,10 @@ export default function LogSleepModal() {
                                 {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
                                     <TouchableOpacity
                                         key={num}
+                                        activeOpacity={0.85}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={`Sleep quality ${num} out of 10`}
+                                        accessibilityState={{ selected: quality === num }}
                                         style={[
                                             styles.qualityBtn,
                                             { backgroundColor: quality >= num ? qualityColor(quality, colors) : colors.background.primary },
@@ -300,14 +317,14 @@ export default function LogSleepModal() {
                                 ))}
                             </View>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                                <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 10 }]}>Poor</Text>
-                                <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 10 }]}>Deep</Text>
+                                <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>Poor</Text>
+                                <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>Deep</Text>
                             </View>
 
                             {/* Disturbances */}
                             <Text style={[styles.fieldLabel, typography.caption, { color: colors.text.secondary, marginTop: 16 }]}>NIGHT WAKE-UPS</Text>
                             <View style={styles.disturbanceRow}>
-                                <TouchableOpacity
+                                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Decrease"
                                     style={[styles.stepperBtn, { backgroundColor: colors.background.primary, borderColor: colors.border.default }]}
                                     onPress={() => setDisturbances(Math.max(0, disturbances - 1))}
                                 >
@@ -315,11 +332,11 @@ export default function LogSleepModal() {
                                 </TouchableOpacity>
                                 <View style={[styles.disturbanceDisplay, { backgroundColor: colors.background.primary, borderColor: colors.border.default }]}>
                                     <Ionicons name="alert-circle-outline" size={16} color={disturbances > 0 ? colors.accent.amber : colors.text.tertiary} />
-                                    <Text style={[typography.heading, { color: disturbances > 0 ? colors.accent.amber : colors.text.secondary, fontSize: 18, marginLeft: 6 }]}>
+                                    <Text style={[typography.statTiny, { color: disturbances > 0 ? colors.accent.amber : colors.text.secondary, fontSize: 18, marginLeft: 6 }]}>
                                         {disturbances}
                                     </Text>
                                 </View>
-                                <TouchableOpacity
+                                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Add"
                                     style={[styles.stepperBtn, { backgroundColor: colors.background.primary, borderColor: colors.border.default }]}
                                     onPress={() => setDisturbances(disturbances + 1)}
                                 >
@@ -362,28 +379,41 @@ export default function LogSleepModal() {
                                 Recovery History
                             </Text>
                         </View>
-                        <TouchableOpacity onPress={() => refetch()}>
+                        <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Refresh" onPress={() => refetch()}>
                             <Ionicons name="refresh-outline" size={18} color={colors.text.tertiary} />
                         </TouchableOpacity>
                     </View>
 
                     {sessionsLoading ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="small" color={colors.accent.cyan} />
-                            <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 8 }]}>
-                                Loading sleep data…
-                            </Text>
-                        </View>
+                        Array.from({ length: 3 }).map((_, i) => (
+                            <Card key={`sleep-skeleton-${i}`} variant="glass" noPadding style={styles.sessionCard}>
+                                <View style={styles.sessionHeader}>
+                                    <Skeleton width="45%" height={14} />
+                                    <Skeleton width={72} height={22} radius={20} />
+                                </View>
+                                <View style={[styles.timeRow, { borderTopColor: withAlpha(colors.border.default, 0.5) }]}>
+                                    <Skeleton width={48} height={28} />
+                                    <Skeleton width={48} height={28} />
+                                    <Skeleton width={48} height={28} />
+                                </View>
+                            </Card>
+                        ))
+                    ) : sessionsError ? (
+                        <EmptyState
+                            icon="cloud-offline-outline"
+                            title="Couldn't load sleep data"
+                            subtitle="Check your connection and try again."
+                            actionLabel="Retry"
+                            onAction={() => refetch()}
+                        />
                     ) : sessions.length === 0 ? (
-                        <View style={[styles.emptyState, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
-                            <Ionicons name="moon-outline" size={40} color={colors.text.tertiary} />
-                            <Text style={[typography.body, { color: colors.text.secondary, marginTop: 12, textAlign: 'center' }]}>
-                                No sleep data yet
-                            </Text>
-                            <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 4, textAlign: 'center' }]}>
-                                Log your first sleep to start tracking recovery
-                            </Text>
-                        </View>
+                        <EmptyState
+                            icon="moon-outline"
+                            title="No sleep data yet"
+                            subtitle="Log your first sleep to start tracking recovery."
+                            actionLabel="Log New Sleep"
+                            onAction={() => setShowForm(true)}
+                        />
                     ) : (
                         sessions.map(renderSessionCard)
                     )}
@@ -458,7 +488,7 @@ const styles = StyleSheet.create({
     textInput: {
         flex: 1,
         marginLeft: 6,
-        fontFamily: 'Inter',
+        fontFamily: themeTypography.body.fontFamily,
         fontSize: 15,
     },
     qualityRow: {
@@ -506,7 +536,7 @@ const styles = StyleSheet.create({
         borderRadius: 10,
         padding: 12,
         minHeight: 80,
-        fontFamily: 'Inter',
+        fontFamily: themeTypography.body.fontFamily,
         fontSize: 14,
     },
     // Section header
@@ -518,8 +548,6 @@ const styles = StyleSheet.create({
     },
     // Session card
     sessionCard: {
-        borderRadius: 14,
-        borderWidth: 1,
         padding: 14,
         marginBottom: 12,
     },
@@ -564,16 +592,5 @@ const styles = StyleSheet.create({
         marginTop: 10,
         paddingTop: 10,
         borderTopWidth: 1,
-    },
-    // States
-    loadingContainer: {
-        alignItems: 'center',
-        paddingVertical: 32,
-    },
-    emptyState: {
-        alignItems: 'center',
-        paddingVertical: 40,
-        borderRadius: 14,
-        borderWidth: 1,
     },
 });

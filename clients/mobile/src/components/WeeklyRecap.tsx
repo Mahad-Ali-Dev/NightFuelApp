@@ -44,10 +44,10 @@ export function WeeklyRecap() {
 
   return (
     <View style={styles.grid}>
-      <StatCard label="Days Logged" value={String(data.daysLogged)} icon="calendar" color={colors.accent.coral} />
-      <StatCard label="Streak" value={`${data.streakDays}d`} icon="flame" color={colors.accent.amber} />
-      <StatCard label="Avg Calories" value={`${Math.round(data.avgCalories)}`} icon="restaurant" color={colors.accent.emerald} />
-      <StatCard label="Avg Score" value={`${Math.round(data.avgScore)}%`} icon="star" color={colors.accent.cyan} />
+      <StatCard label="Days Logged" value={String(data.daysLogged ?? 0)} icon="calendar" color={colors.accent.coral} />
+      <StatCard label="Streak" value={`${data.streakDays ?? 0}d`} icon="flame" color={colors.accent.amber} />
+      <StatCard label="Avg Calories" value={`${Math.round(data.avgCalories || 0)}`} icon="restaurant" color={colors.accent.emerald} />
+      <StatCard label="Avg Score" value={`${Math.round(data.avgScore || 0)}%`} icon="star" color={colors.accent.cyan} />
     </View>
   );
 }

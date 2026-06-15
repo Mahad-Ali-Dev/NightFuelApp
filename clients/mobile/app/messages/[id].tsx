@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Alert, View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 
 import { useTheme } from '@/theme';
@@ -8,9 +8,12 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMessages, sendMessage, startConversation, createSocketConnection } from '@/api/chat';
 import type { Socket } from 'socket.io-client';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Skeleton, EmptyState } from '@/components/ui';
+import { withAlpha } from '@/theme/utils';
 
 export default function UnifiedChatScreen() {
-    const { colors, typography } = useTheme();
+    const { colors, typography, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const { id: targetId } = useLocalSearchParams<{ id: string }>(); // This could be user ID or conversation ID.
     const router = useRouter();
@@ -21,7 +24,7 @@ export default function UnifiedChatScreen() {
     const [socket, setSocket] = useState<Socket | null>(null);
 
     // 1. Resolve or start conversation with the target
-    const { data: conversation, isLoading: startingConv } = useQuery({
+    const { data: conversation, isLoading: startingConv, isError: convError, refetch: refetchConv } = useQuery({
         queryKey: ['conversation', targetId],
         queryFn: () => startConversation(targetId as string),
     });
@@ -29,7 +32,7 @@ export default function UnifiedChatScreen() {
     const conversationId = conversation?.id;
 
     // 2. Load messages for the resolved conversation
-    const { data: messages, isLoading: loadingMessages } = useQuery({
+    const { data: messages, isLoading: loadingMessages, isError: messagesError, refetch: refetchMessages } = useQuery({
         queryKey: ['messages', conversationId],
         queryFn: () => getMessages(conversationId!),
         enabled: !!conversationId,
@@ -86,63 +89,101 @@ export default function UnifiedChatScreen() {
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     };
 
-    const renderMessage = ({ item }: { item: any }) => {
+    const renderMessage = useCallback(({ item }: { item: any }) => {
         // Find if it was sent by the current user
         // The backend returns an `isOwn` boolean for us on GET /messages.
         // For optimistically sent messages (via WS or mutation), we might need a fallback.
         const isMe = item.isOwn ?? (item.senderId !== targetId);
 
+        const timeStamp = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        if (isMe) {
+            return (
+                <View style={[styles.bubbleRow, styles.myRow]}>
+                    <LinearGradient
+                        colors={colors.gradients.coral}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={[styles.bubble, shadows.glow(colors.accent.pink)]}
+                    >
+                        <Text style={[typography.body, { color: colors.text.primary, lineHeight: 22 }]}>
+                            {item.text}
+                        </Text>
+                        <Text style={[typography.caption, { color: withAlpha(colors.text.primary, 0.7), fontSize: 10, marginTop: 6, alignSelf: 'flex-end' }]}>
+                            {timeStamp}
+                        </Text>
+                    </LinearGradient>
+                </View>
+            );
+        }
+
         return (
-            <View style={[styles.bubbleRow, isMe ? styles.myRow : styles.theirRow]}>
-                <View style={[styles.bubble, isMe ? { backgroundColor: colors.accent.purple } : { backgroundColor: colors.background.secondary, borderWidth: 1, borderColor: colors.border.default }]}>
-                    <Text style={[typography.body, { color: isMe ? '#FFFFFF' : colors.text.primary, lineHeight: 22 }]}>
+            <View style={[styles.bubbleRow, styles.theirRow]}>
+                <View style={[styles.bubble, { backgroundColor: colors.background.secondary, borderWidth: 1, borderColor: colors.border.default }]}>
+                    <Text style={[typography.body, { color: colors.text.primary, lineHeight: 22 }]}>
                         {item.text}
                     </Text>
-                    <Text style={[typography.caption, { color: isMe ? '#FFFFFF80' : colors.text.tertiary, fontSize: 10, marginTop: 6, alignSelf: 'flex-end' }]}>
-                        {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10, marginTop: 6, alignSelf: 'flex-end' }]}>
+                        {timeStamp}
                     </Text>
                 </View>
             </View>
         );
-    };
+    }, [colors, typography, shadows, targetId]);
+
+    const keyExtractor = useCallback((item: any) => item.id, []);
 
     const isLoading = startingConv || loadingMessages;
+    const isError = convError || messagesError;
 
     return (
         <KeyboardAvoidingView style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" activeOpacity={0.85} onPress={() => router.back()} style={[styles.headerBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>
-                    {isLoading ? <ActivityIndicator size="small" color={colors.accent.purple} /> : <View style={[styles.onlineDot, { backgroundColor: colors.success }]} />}
-                    <Text style={[typography.heading, { color: colors.text.primary, fontSize: 16 }]}>Chat</Text>
+                    {isLoading ? <ActivityIndicator size="small" color={colors.accent.purple} /> : <View style={[styles.onlineDot, { backgroundColor: colors.success }, shadows.glow(colors.success)]} />}
+                    <Text style={[typography.subtitle, { color: colors.text.primary }]}>Chat</Text>
                 </View>
-                <TouchableOpacity style={{ padding: 4 }}>
-                    <Ionicons name="call" size={20} color={colors.accent.purple} />
-                </TouchableOpacity>
+                <View style={{ width: 40 }} />
             </View>
 
             {/* Messages */}
             {isLoading ? (
-                <View style={{ flex: 1 }} />
+                <View style={styles.skeletonList}>
+                    <MessageBubbleSkeleton align="left" width="62%" />
+                    <MessageBubbleSkeleton align="right" width="48%" />
+                    <MessageBubbleSkeleton align="left" width="70%" />
+                    <MessageBubbleSkeleton align="right" width="55%" />
+                    <MessageBubbleSkeleton align="left" width="40%" />
+                </View>
+            ) : isError ? (
+                <EmptyState
+                    style={{ flex: 1 }}
+                    icon="cloud-offline-outline"
+                    title="Couldn't load this chat"
+                    subtitle="Something went wrong loading the conversation. Check your connection and try again."
+                    actionLabel="Try Again"
+                    onAction={() => (convError ? refetchConv() : refetchMessages())}
+                />
             ) : (
                 <FlatList
                     ref={flatListRef}
                     data={messages || []}
                     renderItem={renderMessage}
-                    keyExtractor={(item) => item.id}
+                    keyExtractor={keyExtractor}
                     contentContainerStyle={{ padding: 20, paddingBottom: 20 }}
                     onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+                    initialNumToRender={10}
+                    maxToRenderPerBatch={10}
+                    windowSize={11}
                 />
             )}
 
             {/* Input Bar */}
             <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8, borderTopColor: colors.border.default, backgroundColor: colors.background.primary }]}>
-                <TouchableOpacity style={[styles.attachBtn, { backgroundColor: colors.background.secondary }]}>
-                    <Ionicons name="add" size={24} color={colors.text.secondary} />
-                </TouchableOpacity>
                 <TextInput
                     style={[styles.textInput, { backgroundColor: colors.background.secondary, color: colors.text.primary, borderColor: colors.border.default }]}
                     placeholder="Type a message..."
@@ -152,29 +193,53 @@ export default function UnifiedChatScreen() {
                     onSubmitEditing={handleSend}
                     returnKeyType="send"
                 />
-                <TouchableOpacity
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Send message"
                     onPress={handleSend}
-                    style={[styles.sendBtn, { backgroundColor: inputText.trim() ? colors.accent.purple : colors.background.secondary }]}
+                    style={[styles.sendBtn, inputText.trim() ? shadows.glow(colors.accent.coral) : undefined]}
                     disabled={!inputText.trim()}
+                    activeOpacity={0.85}
                 >
-                    <Ionicons name="send" size={20} color={inputText.trim() ? '#FFFFFF' : colors.text.tertiary} />
+                    {inputText.trim() ? (
+                        <LinearGradient
+                            colors={colors.gradients.coral}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.sendBtnInner}
+                        >
+                            <Ionicons name="send" size={20} color={colors.text.primary} />
+                        </LinearGradient>
+                    ) : (
+                        <View style={[styles.sendBtnInner, { backgroundColor: colors.background.secondary, borderWidth: 1, borderColor: colors.border.default }]}>
+                            <Ionicons name="send" size={20} color={colors.text.tertiary} />
+                        </View>
+                    )}
                 </TouchableOpacity>
             </View>
         </KeyboardAvoidingView>
     );
 }
 
+function MessageBubbleSkeleton({ align, width }: { align: 'left' | 'right'; width: number | string }) {
+    return (
+        <View style={[styles.bubbleRow, align === 'right' ? styles.myRow : styles.theirRow]}>
+            <Skeleton width={width as any} height={48} radius={22} />
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, height: 56, borderBottomWidth: 1 },
+    skeletonList: { flex: 1, padding: 20 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, height: 64, borderBottomWidth: 1 },
+    headerBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     onlineDot: { width: 8, height: 8, borderRadius: 4 },
     bubbleRow: { marginBottom: 16 },
     myRow: { alignItems: 'flex-end' },
     theirRow: { alignItems: 'flex-start' },
-    bubble: { maxWidth: '80%', padding: 14, borderRadius: 20 },
+    bubble: { maxWidth: '80%', padding: 14, borderRadius: 22 },
     inputBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
-    attachBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-    textInput: { flex: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, borderWidth: 1 },
-    sendBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
+    textInput: { flex: 1, borderRadius: 22, paddingHorizontal: 18, paddingVertical: 12, fontSize: 14, borderWidth: 1 },
+    sendBtn: { width: 44, height: 44, borderRadius: 22, marginLeft: 10 },
+    sendBtnInner: { flex: 1, borderRadius: 22, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
 });

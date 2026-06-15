@@ -7,6 +7,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
+import { withAlpha } from '@/theme/utils';
+import { typography as typo } from '@/theme/typography';
 
 function formatElapsed(totalSeconds: number): string {
     const hours = Math.floor(totalSeconds / 3600);
@@ -22,14 +24,16 @@ function formatElapsed(totalSeconds: number): string {
 }
 
 export default function WorkoutCompleteScreen() {
-    const { colors, typography, spacing } = useTheme();
+    const { colors, typography, spacing, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
-    const { elapsed } = useLocalSearchParams<{ elapsed?: string }>();
+    const { elapsed, volume, kcal } = useLocalSearchParams<{ elapsed?: string; volume?: string; kcal?: string }>();
 
     const elapsedSeconds = elapsed ? parseInt(elapsed, 10) : 0;
     const displayTime = formatElapsed(isNaN(elapsedSeconds) ? 0 : elapsedSeconds);
+    const totalVolume = volume ? Math.max(0, Math.round(parseFloat(volume))) : 0;
+    const totalKcal = kcal ? Math.max(0, Math.round(parseFloat(kcal))) : 0;
 
     const handleReturn = () => {
         queryClient.invalidateQueries({ queryKey: ['active-session'] });
@@ -41,48 +45,56 @@ export default function WorkoutCompleteScreen() {
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             <LinearGradient
-                colors={['rgba(0, 212, 170, 0.2)', 'transparent']}
+                colors={[withAlpha(colors.accent.cyan, 0.2), 'transparent']}
                 style={StyleSheet.absoluteFillObject}
             />
 
             <View style={[styles.content, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 20 }]}>
-                <View style={styles.iconCircle}>
-                    <Ionicons name="trophy" size={56} color="#00D4AA" />
+                <View style={[styles.iconCircle, { backgroundColor: withAlpha(colors.accent.cyan, 0.1), borderColor: withAlpha(colors.accent.cyan, 0.3) }, shadows.glow(colors.accent.cyan)]}>
+                    <Ionicons name="trophy" size={56} color={colors.accent.cyan} />
                 </View>
 
                 <Text style={[typography.display, { color: colors.text.primary, fontSize: 40, marginTop: 24, textAlign: 'center' }]}>
                     Session{'\n'}Complete
                 </Text>
 
-                <Text style={[typography.body, { color: '#8B949E', textAlign: 'center', marginTop: 12, marginHorizontal: 32 }]}>
+                <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: 12, marginHorizontal: 32 }]}>
                     Amazing work. You've logged another powerful session, optimizing your performance window.
                 </Text>
 
                 <View style={styles.statsRow}>
-                    <Card style={styles.statBox}>
+                    <Card variant="glass" style={styles.statBox}>
                         <Ionicons name="flash-outline" size={24} color={colors.accent.coral} style={{ marginBottom: 8 }} />
                         <Text style={[typography.caption, { color: colors.text.secondary }]}>Volume</Text>
-                        <Text style={[typography.heading, { color: colors.text.primary, fontSize: 20 }]}>2,450 kg</Text>
+                        <Text style={[styles.statValue, { color: colors.text.primary }]}>{totalVolume.toLocaleString()} <Text style={[styles.statUnit, { color: colors.text.secondary }]}>kg</Text></Text>
                     </Card>
-                    <Card style={styles.statBox}>
+                    <Card variant="glass" style={styles.statBox}>
                         <Ionicons name="time-outline" size={24} color={colors.accent.cyan} style={{ marginBottom: 8 }} />
                         <Text style={[typography.caption, { color: colors.text.secondary }]}>Time</Text>
-                        <Text style={[typography.heading, { color: colors.text.primary, fontSize: 20 }]}>{displayTime}</Text>
+                        <Text style={[styles.statValue, { color: colors.text.primary }]}>{displayTime}</Text>
                     </Card>
-                    <Card style={styles.statBox}>
+                    <Card variant="glass" style={styles.statBox}>
                         <Ionicons name="flame-outline" size={24} color={colors.accent.amber} style={{ marginBottom: 8 }} />
                         <Text style={[typography.caption, { color: colors.text.secondary }]}>Burn</Text>
-                        <Text style={[typography.heading, { color: colors.text.primary, fontSize: 20 }]}>420 kcal</Text>
+                        <Text style={[styles.statValue, { color: colors.text.primary }]}>{totalKcal} <Text style={[styles.statUnit, { color: colors.text.secondary }]}>kcal</Text></Text>
                     </Card>
                 </View>
 
                 <View style={{ flex: 1 }} />
 
                 <TouchableOpacity
-                    style={[styles.returnBtn, { backgroundColor: colors.accent.cyan }]}
+                    style={[styles.returnBtn, shadows.glow(colors.accent.cyan)]}
                     onPress={handleReturn}
+                    activeOpacity={0.9}
                 >
-                    <Text style={[typography.heading, { color: '#000', fontSize: 18, fontWeight: '700' }]}>Return to Dashboard</Text>
+                    <LinearGradient
+                        colors={colors.gradients.cyan}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.returnBtnInner}
+                    >
+                        <Text style={[typography.h3, { color: colors.text.inverse, fontWeight: '700' }]}>Return to Dashboard</Text>
+                    </LinearGradient>
                 </TouchableOpacity>
             </View>
         </View>
@@ -92,8 +104,11 @@ export default function WorkoutCompleteScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     content: { flex: 1, paddingHorizontal: 24, alignItems: 'center' },
-    iconCircle: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(0, 212, 170, 0.1)', borderWidth: 2, borderColor: 'rgba(0, 212, 170, 0.3)', alignItems: 'center', justifyContent: 'center' },
+    iconCircle: { width: 120, height: 120, borderRadius: 60, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
     statsRow: { flexDirection: 'row', gap: 12, marginTop: 40, width: '100%' },
-    statBox: { flex: 1, backgroundColor: 'transparent', borderColor: 'transparent', borderWidth: 1, padding: 16, alignItems: 'center' },
-    returnBtn: { width: '100%', height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#00D4AA', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
+    statBox: { flex: 1, padding: 16, alignItems: 'center' },
+    statValue: { fontFamily: typo.statSmall.fontFamily, fontSize: 20, lineHeight: 28, marginTop: 2 },
+    statUnit: { fontFamily: typo.statTiny.fontFamily, fontSize: 13 },
+    returnBtn: { width: '100%', height: 56, borderRadius: 28 },
+    returnBtnInner: { flex: 1, borderRadius: 28, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
 });

@@ -262,6 +262,28 @@ const generateRoutineSchema = z.object({
     equipment:  z.string().optional(),
 });
 
+// Deterministic routine used when the AI pipeline is unavailable, so the
+// "Generate My Plan" CTA always produces a usable routine instead of 500ing.
+function buildFallbackRoutine(goal: string, level: string, daysPerWeek: number, focusAreas?: string[], equipment?: string) {
+    const scheme = goal === 'strength' ? { sets: 5, reps: 5 }
+        : goal === 'endurance' ? { sets: 3, reps: 15 }
+        : goal === 'fat_loss' ? { sets: 3, reps: 12 }
+        : { sets: 4, reps: 10 };
+    const bodyweight = !equipment || /body|home|none|band/i.test(equipment);
+    const GYM = ['Barbell Squat', 'Bench Press', 'Deadlift', 'Overhead Press', 'Barbell Row', 'Lat Pulldown', 'Leg Press', 'Dumbbell Curl'];
+    const HOME = ['Push Up', 'Bodyweight Squat', 'Walking Lunge', 'Plank', 'Glute Bridge', 'Pike Push Up', 'Mountain Climbers', 'Burpee'];
+    const pool = bodyweight ? HOME : GYM;
+    const count = Math.min(pool.length, 5 + Math.max(0, daysPerWeek - 2));
+    const exercises = pool.slice(0, count).map((name) => ({ name, sets: scheme.sets, reps: scheme.reps }));
+    return {
+        title: `${level[0].toUpperCase()}${level.slice(1)} ${goal.replace('_', ' ')} plan`,
+        description: `A balanced ${daysPerWeek}-day ${goal.replace('_', ' ')} routine${bodyweight ? ' (no equipment needed)' : ''}.`,
+        splitType: daysPerWeek >= 4 ? 'UPPER_LOWER' : 'FULL_BODY',
+        muscleGroups: focusAreas && focusAreas.length ? focusAreas : ['full body'],
+        exercises,
+    };
+}
+
 fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generate', {
     onRequest: [(fastify as any).authenticate],
     schema: { body: generateRoutineSchema },
@@ -279,6 +301,7 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generat
         '{"title":"...","description":"...","splitType":"...","muscleGroups":["..."],"exercises":[{"name":"...","sets":3,"reps":10}]}',
     ].filter(Boolean).join('\n');
 
+    let routineData: any = null;
     try {
         // Call AI pipeline chat endpoint
         const aiRes = await fetch(`${config.AI_PIPELINE_URL}/chat`, {
@@ -296,32 +319,26 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generat
         if (!aiRes.ok) throw new Error(`AI pipeline returned ${aiRes.status}`);
 
         const aiBody = await aiRes.json() as { reply: string };
-        let routineData: any;
-
-        // Extract the JSON block from the AI reply
         const jsonMatch = aiBody.reply.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            routineData = JSON.parse(jsonMatch[0]);
-        } else {
-            // Fallback: build a minimal routine from the text
-            routineData = {
-                title: `Ria's ${level} ${goal} plan`,
-                description: aiBody.reply.slice(0, 200),
-                splitType: goal.toUpperCase(),
-                muscleGroups: focusAreas ?? [],
-                exercises: [],
-            };
-        }
+        if (jsonMatch) routineData = JSON.parse(jsonMatch[0]);
+    } catch (err: any) {
+        logger.warn({ err: err?.message }, 'AI routine generation unavailable — using deterministic fallback');
+    }
 
-        // Ensure required fields
-        routineData.title ??= `AI ${goal} routine`;
-        routineData.exercises ??= [];
+    // If the AI was unreachable or returned no usable exercises, fall back to a
+    // deterministic template so the CTA always succeeds instead of 500ing.
+    if (!routineData || !Array.isArray(routineData.exercises) || routineData.exercises.length === 0) {
+        routineData = buildFallbackRoutine(goal, level, daysPerWeek, focusAreas, equipment);
+    }
+    routineData.title ??= `${goal} routine`;
+    routineData.exercises ??= [];
 
+    try {
         const created = await exerciseSvc.createRoutine(userId, routineData);
         return reply.code(201).send(created);
     } catch (err: any) {
-        logger.error({ err }, 'AI routine generation failed');
-        return reply.code(500).send({ error: 'Failed to generate routine. Please try again.' });
+        logger.error({ err }, 'AI routine persistence failed');
+        return reply.code(500).send({ error: 'Failed to save routine. Please try again.' });
     }
 });
 

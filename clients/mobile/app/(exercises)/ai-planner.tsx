@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Alert,
+    Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -16,6 +16,17 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { generateRoutineWithAI, type GenerateRoutinePayload } from '@/api/exercises';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
+import { shadows } from '@/theme/shadows';
+import { GeneratingSteps } from '@/components/ui';
+
+// Staged status lines shown while Coach Ria builds the routine (10–30s).
+const WORKOUT_GEN_STEPS = [
+    'Reading your training profile…',
+    'Selecting exercises for your goal…',
+    'Balancing sets, reps & volume…',
+    'Sequencing your weekly split…',
+    'Finalizing your plan…',
+];
 
 // ── Option data ───────────────────────────────────────────────────────────────
 
@@ -89,23 +100,23 @@ export default function AIWorkoutPlannerScreen() {
         <View style={[s.container, { backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <LinearGradient
-                colors={['#6D28D920', 'transparent']}
+                colors={[withAlpha(colors.accent.purple, 0.18), 'transparent']}
                 style={[s.headerGrad, { paddingTop: insets.top + 16 }]}
             >
                 <View style={s.headerRow}>
-                    <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
+                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={{ padding: 4 }}>
                         <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
                     </TouchableOpacity>
                     <View style={{ flex: 1, marginLeft: 16 }}>
-                        <Text style={[typography.display, { color: colors.text.primary, fontSize: 22, fontWeight: '900' }]}>
+                        <Text style={[typography.h2, { color: colors.text.primary }]}>
                             AI Workout Planner
                         </Text>
-                        <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 2 }]}>
+                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
                             Coach Ria builds your perfect routine
                         </Text>
                     </View>
                     {/* Ria avatar */}
-                    <LinearGradient colors={['#6D28D9', '#A855F7']} style={s.riaAvatar}>
+                    <LinearGradient colors={colors.gradients.purple} style={[s.riaAvatar, shadows.glow(colors.accent.purple)]}>
                         <Ionicons name="sparkles" size={20} color="#FFF" />
                     </LinearGradient>
                 </View>
@@ -125,6 +136,9 @@ export default function AIWorkoutPlannerScreen() {
                     {GOALS.map(g => (
                         <TouchableOpacity
                             key={g.key}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: goal === g.key }}
+                            accessibilityLabel={g.label}
                             style={[
                                 s.goalCard,
                                 {
@@ -143,7 +157,7 @@ export default function AIWorkoutPlannerScreen() {
                             <Text style={[typography.subhead, { color: goal === g.key ? g.color : colors.text.primary, fontWeight: '800', marginTop: 10 }]}>
                                 {g.label}
                             </Text>
-                            <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 4, fontSize: 10, textAlign: 'center' }]}>
+                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4, fontSize: 10, textAlign: 'center' }]}>
                                 {g.desc}
                             </Text>
                             {goal === g.key && (
@@ -161,6 +175,9 @@ export default function AIWorkoutPlannerScreen() {
                     {LEVELS.map(l => (
                         <TouchableOpacity
                             key={l.key}
+                            accessibilityRole="radio"
+                            accessibilityState={{ selected: level === l.key }}
+                            accessibilityLabel={l.label}
                             style={[
                                 s.levelRow,
                                 {
@@ -169,12 +186,13 @@ export default function AIWorkoutPlannerScreen() {
                                 },
                             ]}
                             onPress={() => setLevel(l.key)}
+                            activeOpacity={0.85}
                         >
                             <View style={{ flex: 1 }}>
                                 <Text style={[typography.subhead, { color: level === l.key ? selectedGoal.color : colors.text.primary, fontWeight: '700' }]}>
                                     {l.label}
                                 </Text>
-                                <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 2 }]}>
+                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
                                     {l.desc}
                                 </Text>
                             </View>
@@ -191,6 +209,9 @@ export default function AIWorkoutPlannerScreen() {
                     {DAYS_OPTIONS.map(d => (
                         <TouchableOpacity
                             key={d}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: days === d }}
+                            accessibilityLabel={`${d} days per week`}
                             style={[
                                 s.dayBtn,
                                 {
@@ -199,11 +220,12 @@ export default function AIWorkoutPlannerScreen() {
                                 },
                             ]}
                             onPress={() => setDays(d)}
+                            activeOpacity={0.85}
                         >
-                            <Text style={[typography.heading, { color: days === d ? '#FFF' : colors.text.primary, fontSize: 20, fontWeight: '900' }]}>
+                            <Text style={[typography.statSmall, { color: days === d ? '#FFF' : colors.text.primary, fontSize: 22 }]}>
                                 {d}
                             </Text>
-                            <Text style={[typography.caption, { color: days === d ? 'rgba(255,255,255,0.8)' : colors.text.tertiary, fontSize: 9 }]}>
+                            <Text style={[typography.overline, { color: days === d ? 'rgba(255,255,255,0.85)' : colors.text.tertiary, fontSize: 9 }]}>
                                 DAYS
                             </Text>
                         </TouchableOpacity>
@@ -218,6 +240,9 @@ export default function AIWorkoutPlannerScreen() {
                         return (
                             <TouchableOpacity
                                 key={area}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: active }}
+                                accessibilityLabel={area}
                                 style={[
                                     s.chip,
                                     {
@@ -226,6 +251,7 @@ export default function AIWorkoutPlannerScreen() {
                                     },
                                 ]}
                                 onPress={() => toggleFocus(area)}
+                                activeOpacity={0.85}
                             >
                                 <Text style={[typography.caption, { color: active ? selectedGoal.color : colors.text.secondary, fontWeight: '600' }]}>
                                     {area}
@@ -243,6 +269,9 @@ export default function AIWorkoutPlannerScreen() {
                         return (
                             <TouchableOpacity
                                 key={eq.key}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: active }}
+                                accessibilityLabel={eq.key}
                                 style={[
                                     s.equipBtn,
                                     {
@@ -251,6 +280,7 @@ export default function AIWorkoutPlannerScreen() {
                                     },
                                 ]}
                                 onPress={() => setEquipment(eq.key)}
+                                activeOpacity={0.85}
                             >
                                 <Ionicons name={eq.icon as any} size={18} color={active ? selectedGoal.color : colors.text.tertiary} />
                                 <Text style={[typography.caption, { color: active ? selectedGoal.color : colors.text.secondary, fontWeight: '600', marginLeft: 8 }]}>
@@ -274,7 +304,7 @@ export default function AIWorkoutPlannerScreen() {
                         {focusAreas.length > 0 ? ` · ${focusAreas.join(', ')}` : ''}
                         {` · ${equipment}`}
                     </Text>
-                    <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 6, lineHeight: 18 }]}>
+                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 6, lineHeight: 18 }]}>
                         Ria will create a full exercise list with sets, reps, and progression logic for your shift schedule.
                     </Text>
                 </View>
@@ -283,18 +313,22 @@ export default function AIWorkoutPlannerScreen() {
             {/* Generate CTA */}
             <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
                 <TouchableOpacity
-                    style={[s.generateBtn, { backgroundColor: selectedGoal.color, opacity: generateMutation.isPending ? 0.7 : 1 }]}
+                    style={[s.generateBtn, shadows.glow(selectedGoal.color), { backgroundColor: selectedGoal.color, opacity: generateMutation.isPending ? 0.7 : 1 }]}
                     onPress={() => generateMutation.mutate()}
                     disabled={generateMutation.isPending}
+                    accessibilityRole="button"
+                    accessibilityLabel="Generate my plan"
+                    accessibilityState={{ disabled: generateMutation.isPending }}
                     activeOpacity={0.85}
                 >
                     {generateMutation.isPending ? (
-                        <>
-                            <ActivityIndicator color="#FFF" size="small" />
-                            <Text style={[typography.subhead, { color: '#FFF', fontWeight: '900', marginLeft: 10, fontSize: 16 }]}>
-                                Ria is building your plan...
-                            </Text>
-                        </>
+                        <GeneratingSteps
+                            active={generateMutation.isPending}
+                            steps={WORKOUT_GEN_STEPS}
+                            color="#FFF"
+                            textColor="#FFF"
+                            showDots={false}
+                        />
                     ) : (
                         <>
                             <Ionicons name="sparkles" size={22} color="#FFF" />
@@ -314,7 +348,7 @@ export default function AIWorkoutPlannerScreen() {
 function SectionTitle({ label, colors, typography }: any) {
     return (
         <Text style={[typography.caption, {
-            color: colors.text.tertiary,
+            color: colors.text.secondary,
             fontWeight: 'bold',
             letterSpacing: 1,
             fontSize: 11,
@@ -382,7 +416,5 @@ const s = StyleSheet.create({
     generateBtn: {
         height: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
         borderRadius: 30,
-        shadowColor: '#FF6B35', shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.35, shadowRadius: 12, elevation: 8,
     },
 });

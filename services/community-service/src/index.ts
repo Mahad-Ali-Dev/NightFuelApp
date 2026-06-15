@@ -6,11 +6,13 @@ import { z } from 'zod';
 import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
 import { CommunityService } from './community.service';
+import { AuthorResolver } from './author-resolver';
 import routes from './routes';
 
 const envSchema = z.object({
     COMMUNITY_PORT: z.string().default('3013'),
     JWT_SECRET: z.string(),
+    USER_SERVICE_URL: z.string().default('http://user-service:3009'),
 });
 
 const config = loadConfig(envSchema);
@@ -32,7 +34,8 @@ fastify.get('/health', async () => {
     return { status: 'ok', service: 'community-service' };
 });
 
-const communityService = new CommunityService(prisma);
+const authorResolver = new AuthorResolver(config.JWT_SECRET, config.USER_SERVICE_URL);
+const communityService = new CommunityService(prisma, authorResolver);
 fastify.register(routes, { communityService, jwtSecret: config.JWT_SECRET });
 
 

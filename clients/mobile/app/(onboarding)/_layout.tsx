@@ -28,24 +28,24 @@ export default function OnboardingLayout() {
     const CustomHeader = () => (
         <View style={[styles.headerContainer, { backgroundColor: colors.background.primary, paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 50 : 20) }]}>
             <View style={styles.headerTop}>
-                <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Go back" activeOpacity={0.85} onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={[styles.backButton, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    <Ionicons name="arrow-back" size={20} color={colors.text.primary} />
                 </TouchableOpacity>
                 <Text style={[typography.subhead, { color: colors.text.primary }]}>
                     {getStepTitle(currentRoute as string)}
                 </Text>
-                <View style={{ width: 24 }} />
+                <View style={{ width: 36 }} />
             </View>
             <View style={styles.progressContainer}>
                 <View style={styles.progressTextRow}>
-                    <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                    <Text style={[typography.overline, { color: colors.text.secondary }]}>
                         STEP {Math.min(stepNumber, 4)} OF 4
                     </Text>
-                    <Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: '700' }]}>
+                    <Text style={[typography.overline, { color: colors.accent.cyan }]}>
                         {Math.round(progress * 100)}%
                     </Text>
                 </View>
-                <ProgressBar progress={progress} color={colors.accent.cyan} trackColor={colors.border.default} height={4} />
+                <ProgressBar progress={progress * 100} color={colors.accent.cyan} trackColor={colors.border.default} height={4} />
             </View>
         </View>
     );
@@ -82,6 +82,14 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: 24,
+    },
+    backButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 12,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     progressContainer: {
         gap: 8,

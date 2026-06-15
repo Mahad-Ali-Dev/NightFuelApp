@@ -26,14 +26,14 @@
 import { Platform } from 'react-native';
 import { captureException } from '@/lib/sentry';
 
-type FileSystemModule = typeof import('expo-file-system');
+type FileSystemModule = typeof import('expo-file-system/legacy');
 let fs: FileSystemModule | null = null;
 
 function getFs(): FileSystemModule | null {
   if (fs !== null) return fs;
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    fs = require('expo-file-system') as FileSystemModule;
+    fs = require('expo-file-system/legacy') as FileSystemModule;
     return fs;
   } catch {
     return null;

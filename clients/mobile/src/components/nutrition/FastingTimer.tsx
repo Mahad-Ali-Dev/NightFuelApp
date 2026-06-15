@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { colors } from '@/theme';
 
 interface FastingTimerProps {
     isFasting: boolean;
@@ -43,7 +44,7 @@ export function FastingTimer({ isFasting, elapsedMinutes, targetMinutes = 960, o
                 <View style={[styles.barFill, { width: `${pct}%` }]} />
             </View>
 
-            <TouchableOpacity style={[styles.toggleBtn, isFasting ? styles.stopBtn : styles.startBtn]} onPress={onToggle}>
+            <TouchableOpacity style={[styles.toggleBtn, isFasting ? styles.stopBtn : styles.startBtn]} onPress={onToggle} activeOpacity={0.85}>
                 <Ionicons name={isFasting ? 'stop-circle' : 'play-circle'} size={20} color="#FFFFFF" />
                 <Text style={styles.toggleText}>{isFasting ? 'Break Fast' : 'Start Fast'}</Text>
             </TouchableOpacity>
@@ -52,15 +53,15 @@ export function FastingTimer({ isFasting, elapsedMinutes, targetMinutes = 960, o
 }
 
 const styles = StyleSheet.create({
-    container: { backgroundColor: '#161B22', borderRadius: 24, padding: 20, borderWidth: 1, borderColor: '#21262D', marginBottom: 16 },
+    container: { backgroundColor: colors.background.secondary, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: colors.border.default, marginBottom: 16 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     headerText: { color: '#FF6B35', fontWeight: '800', fontSize: 12, letterSpacing: 1 },
-    protocol: { color: '#8B949E', fontSize: 12 },
+    protocol: { color: colors.text.secondary, fontSize: 12 },
     timerRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 16 },
     time: { color: '#FFFFFF', fontSize: 42, fontWeight: '800', fontFamily: 'monospace' },
-    unit: { color: '#8B949E', fontSize: 16 },
-    barBg: { height: 6, backgroundColor: '#2D3748', borderRadius: 3, marginBottom: 16 },
+    unit: { color: colors.text.secondary, fontSize: 16 },
+    barBg: { height: 6, backgroundColor: colors.border.light, borderRadius: 3, marginBottom: 16 },
     barFill: { height: '100%', backgroundColor: '#FF6B35', borderRadius: 3 },
     toggleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 44, borderRadius: 22, gap: 8 },
     startBtn: { backgroundColor: '#00D4AA' },

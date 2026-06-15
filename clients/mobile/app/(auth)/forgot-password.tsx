@@ -3,9 +3,12 @@ import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Input, Button } from '@/components/ui';
+import { Input, Button, Card } from '@/components/ui';
 import { useTheme } from '@/theme';
-import { spacing } from '@/theme/spacing';
+import { spacing, borderRadius } from '@/theme/spacing';
+import { typography } from '@/theme/typography';
+import { shadows } from '@/theme/shadows';
+import { withAlpha } from '@/theme/utils';
 import { forgotPassword } from '@/api/auth';
 import { isValidEmail, sanitizeInput } from '@/utils/validation';
 
@@ -39,25 +42,68 @@ export default function ForgotPasswordScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]}>
-      <Pressable onPress={() => router.back()} style={styles.backBtn}>
-        <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+      <Pressable
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        onPress={() => router.back()}
+        style={({ pressed }) => [
+          styles.backBtn,
+          {
+            backgroundColor: colors.background.secondary,
+            borderColor: colors.border.default,
+          },
+          pressed && styles.pressed,
+        ]}
+      >
+        <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
       </Pressable>
 
       <View style={styles.content}>
+        {!sent && (
+          <Text style={[styles.kicker, { color: colors.accent.coral }]}>Account recovery</Text>
+        )}
         <Text style={[styles.title, { color: colors.text.primary }]}>
           Reset your{'\n'}
           <Text style={{ color: colors.accent.coral }}>password</Text>
         </Text>
 
         {sent ? (
-          <View style={styles.successBox}>
-            <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+          <Card variant="glass" padding="2xl" style={styles.successBox}>
+            <View
+              style={[
+                styles.successIcon,
+                {
+                  backgroundColor: withAlpha(colors.success, 0.12),
+                  borderColor: withAlpha(colors.success, 0.35),
+                },
+                shadows.glow(colors.success),
+              ]}
+            >
+              <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+            </View>
+            <Text style={[styles.successKicker, { color: colors.success }]}>Link sent</Text>
             <Text style={[styles.successTitle, { color: colors.text.primary }]}>
               Check your email
             </Text>
             <Text style={[styles.successText, { color: colors.text.secondary }]}>
-              We've sent password reset instructions to {email}
+              We've sent password reset instructions to{' '}
+              <Text style={{ color: colors.text.primary }}>{email}</Text>
             </Text>
+            <View
+              style={[
+                styles.hintRow,
+                {
+                  backgroundColor: colors.background.secondary,
+                  borderColor: colors.border.default,
+                },
+              ]}
+            >
+              <Ionicons name="information-circle-outline" size={16} color={colors.text.tertiary} />
+              <Text style={[styles.hintText, { color: colors.text.tertiary }]}>
+                Didn't get it? Check your spam folder.
+              </Text>
+            </View>
             <Button
               title="Back to Sign In"
               variant="outline"
@@ -66,7 +112,7 @@ export default function ForgotPasswordScreen() {
               size="lg"
               style={{ marginTop: spacing['2xl'] }}
             />
-          </View>
+          </Card>
         ) : (
           <>
             <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
@@ -101,28 +147,35 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: spacing.lg,
+    marginLeft: spacing['2xl'],
     marginTop: spacing.sm,
+  },
+  pressed: {
+    opacity: 0.6,
   },
   content: {
     flex: 1,
     paddingHorizontal: spacing['2xl'],
     paddingTop: spacing['3xl'],
   },
+  kicker: {
+    ...typography.overline,
+    marginBottom: spacing.sm,
+  },
   title: {
+    ...typography.display,
     fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: -0.5,
     lineHeight: 40,
     marginBottom: spacing.lg,
   },
   subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
+    ...typography.body,
     marginBottom: spacing['3xl'],
   },
   successBox: {
@@ -130,14 +183,37 @@ const styles = StyleSheet.create({
     marginTop: spacing['4xl'],
     gap: spacing.md,
   },
+  successIcon: {
+    width: 88,
+    height: 88,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  successKicker: {
+    ...typography.overline,
+  },
   successTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginTop: spacing.lg,
+    ...typography.h2,
+    marginTop: spacing.xxs,
   },
   successText: {
-    fontSize: 15,
+    ...typography.body,
     textAlign: 'center',
-    lineHeight: 22,
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    marginTop: spacing.sm,
+  },
+  hintText: {
+    ...typography.caption,
   },
 });

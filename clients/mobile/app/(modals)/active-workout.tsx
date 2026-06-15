@@ -7,7 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Skeleton, EmptyState } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
+import { shadows } from '@/theme/shadows';
+import { typography as themeTypography } from '@/theme/typography';
 import { useQuery } from '@tanstack/react-query';
 import { getActiveSession, SessionExercise } from '@/api/exercises';
 
@@ -37,7 +40,7 @@ export default function ActiveWorkoutScreen() {
     const [restRemaining, setRestRemaining] = useState(0);
     const [exercises, setExercises] = useState<LocalExercise[]>([]);
 
-    const { data: session } = useQuery({
+    const { data: session, isLoading: sessionLoading, isError: sessionError, refetch: refetchSession } = useQuery({
         queryKey: ['active-session'],
         queryFn: getActiveSession,
     });
@@ -101,49 +104,84 @@ export default function ActiveWorkoutScreen() {
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
                 <View>
-                    <Text style={[typography.heading, { color: colors.text.primary }]}>Night Shift Prep</Text>
-                    <Text style={[typography.caption, { color: colors.text.secondary }]}>{formatTime(timer)} • Hypertrophy</Text>
+                    <Text style={[typography.h2, { color: colors.text.primary }]}>Night Shift Prep</Text>
+                    <View style={styles.headerMeta}>
+                        <Text style={[typography.statTiny, { color: colors.accent.coral }]}>{formatTime(timer)}</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary }]}>• Hypertrophy</Text>
+                    </View>
                 </View>
                 <Button title="Finish" onPress={() => router.back()} size="sm" style={{ paddingHorizontal: 16 }} />
             </View>
 
             {/* Rest Timer Overlay */}
             {restRemaining > 0 && (
-                <View style={[styles.restBanner, { backgroundColor: `${colors.accent.cyan}10` }]}>
+                <View style={[styles.restBanner, { backgroundColor: withAlpha(colors.accent.cyan, 0.1), borderBottomColor: withAlpha(colors.accent.cyan, 0.25) }, shadows.glow(colors.accent.cyan)]}>
                     <Ionicons name="timer" size={24} color={colors.accent.cyan} />
-                    <Text style={[typography.subhead, { color: colors.accent.cyan, marginLeft: 12, flex: 1 }]}>
+                    <Text style={[typography.statTiny, { color: colors.accent.cyan, marginLeft: 12, flex: 1 }]}>
                         Resting: {formatTime(restRemaining)}
                     </Text>
-                    <TouchableOpacity onPress={() => setRestRemaining(0)} style={{ padding: 8 }}>
+                    <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close" onPress={() => setRestRemaining(0)} style={{ padding: 8 }}>
                         <Ionicons name="close" size={20} color={colors.accent.cyan} />
                     </TouchableOpacity>
                 </View>
             )}
 
             <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}>
+                {sessionLoading && exercises.length === 0 && (
+                    Array.from({ length: 3 }).map((_, i) => (
+                        <Card key={`ex-skeleton-${i}`} variant="glass" style={styles.exerciseCard}>
+                            <View style={styles.exHeader}>
+                                <Skeleton width="55%" height={20} />
+                                <Skeleton width={20} height={20} radius={10} />
+                            </View>
+                            <Skeleton width="35%" height={12} style={{ marginTop: spacing.sm, marginBottom: spacing.lg }} />
+                            <Skeleton width="100%" height={36} style={{ marginBottom: spacing.sm }} />
+                            <Skeleton width="100%" height={36} />
+                        </Card>
+                    ))
+                )}
+
+                {sessionError && exercises.length === 0 && (
+                    <EmptyState
+                        icon="cloud-offline-outline"
+                        title="Couldn't load workout"
+                        subtitle="We couldn't reach your active session. Check your connection and try again."
+                        actionLabel="Retry"
+                        onAction={() => refetchSession()}
+                    />
+                )}
+
+                {!sessionLoading && !sessionError && exercises.length === 0 && (
+                    <EmptyState
+                        icon="barbell-outline"
+                        title="No exercises yet"
+                        subtitle="Add your first exercise to start logging this workout."
+                    />
+                )}
+
                 {exercises.map((ex, exIndex) => (
-                    <Card key={ex.id} style={styles.exerciseCard}>
+                    <Card key={ex.id} variant="glass" style={styles.exerciseCard}>
                         <View style={styles.exHeader}>
-                            <Text style={[typography.heading, { color: colors.text.primary }]}>{ex.name}</Text>
-                            <TouchableOpacity>
+                            <Text style={[typography.h3, { color: colors.text.primary }]}>{ex.name}</Text>
+                            <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="More options">
                                 <Ionicons name="ellipsis-horizontal" size={20} color={colors.text.secondary} />
                             </TouchableOpacity>
                         </View>
-                        <Text style={[typography.caption, { color: colors.text.tertiary, marginBottom: 16 }]}>
+                        <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 16 }]}>
                             Target: {ex.targetReps} reps
                         </Text>
 
                         <View style={styles.setHeaderRow}>
-                            <Text style={[typography.caption, { color: colors.text.tertiary, width: 32 }]}>SET</Text>
-                            <Text style={[typography.caption, { color: colors.text.tertiary, flex: 1, textAlign: 'center' }]}>KG</Text>
-                            <Text style={[typography.caption, { color: colors.text.tertiary, flex: 1, textAlign: 'center' }]}>REPS</Text>
+                            <Text style={[typography.caption, { color: colors.text.secondary, width: 32 }]}>SET</Text>
+                            <Text style={[typography.caption, { color: colors.text.secondary, flex: 1, textAlign: 'center' }]}>KG</Text>
+                            <Text style={[typography.caption, { color: colors.text.secondary, flex: 1, textAlign: 'center' }]}>REPS</Text>
                             <View style={{ width: 40 }} />
                         </View>
 
                         {ex.loggedSets.map((s, sIndex) => {
                             const prevSet = sIndex === 0 ? '-' : '135x10'; // Mock prev
                             return (
-                                <View key={sIndex} style={[styles.setRow, s.done && { backgroundColor: colors.background.secondary }]}>
+                                <View key={sIndex} style={[styles.setRow, s.done && { backgroundColor: withAlpha(colors.accent.cyan, 0.1) }]}>
                                     <Text style={[typography.subhead, { color: colors.text.secondary, width: 32 }]}>{sIndex + 1}</Text>
 
                                     <View style={styles.inputBox}>
@@ -168,11 +206,12 @@ export default function ActiveWorkoutScreen() {
                                         />
                                     </View>
 
-                                    <TouchableOpacity
+                                    <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Complete set" accessibilityState={{ selected: s.done }}
                                         onPress={() => toggleSet(exIndex, sIndex)}
                                         style={[
                                             styles.checkBtn,
-                                            s.done ? { backgroundColor: colors.accent.cyan } : { backgroundColor: colors.background.tertiary }
+                                            s.done ? { backgroundColor: colors.accent.cyan } : { backgroundColor: colors.background.tertiary },
+                                            s.done && shadows.glow(colors.accent.cyan),
                                         ]}
                                     >
                                         <Ionicons name="checkmark" size={20} color={s.done ? colors.background.primary : colors.text.secondary} />
@@ -181,7 +220,7 @@ export default function ActiveWorkoutScreen() {
                             );
                         })}
 
-                        <TouchableOpacity style={styles.addSetBtn}>
+                        <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Add set" style={styles.addSetBtn}>
                             <Text style={[typography.subhead, { color: colors.text.secondary, textAlign: 'center' }]}>+ Add Set</Text>
                         </TouchableOpacity>
                     </Card>
@@ -211,6 +250,12 @@ const styles = StyleSheet.create({
         paddingBottom: 16,
         borderBottomWidth: 1,
         borderBottomColor: 'transparent',
+    },
+    headerMeta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 2,
     },
     restBanner: {
         flexDirection: 'row',
@@ -247,7 +292,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     numericInput: {
-        fontFamily: 'JetBrainsMono-Bold',
+        fontFamily: themeTypography.statSmall.fontFamily,
         fontSize: 18,
         minWidth: 60,
         textAlign: 'center',

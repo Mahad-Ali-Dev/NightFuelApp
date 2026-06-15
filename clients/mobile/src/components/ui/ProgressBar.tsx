@@ -13,7 +13,7 @@ interface ProgressBarProps {
   style?: ViewStyle;
 }
 
-export function ProgressBar({
+function ProgressBarComponent({
   progress,
   color,
   gradientColors,
@@ -61,6 +61,12 @@ export function ProgressBar({
     </View>
   );
 }
+
+/**
+ * Memoized: `progress`/`height` are numbers and colors are strings. The
+ * optional `gradientColors`/`style` may be inline (just no skip then) — safe.
+ */
+export const ProgressBar = React.memo(ProgressBarComponent);
 
 const styles = StyleSheet.create({
   track: {

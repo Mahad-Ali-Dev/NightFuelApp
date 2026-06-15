@@ -35,10 +35,14 @@ export interface UpdateShiftPayload {
 // Endpoints
 // ---------------------------------------------------------------------------
 
-/** Fetch the user's current active shift. */
-export async function getCurrent(): Promise<Shift> {
-  const { data } = await apiClient.get<Shift>('/v1/shifts/current');
-  return data;
+/** Fetch the user's current active shift (null when none is scheduled). */
+export async function getCurrent(): Promise<Shift | null> {
+  const { data } = await apiClient.get<any>('/v1/shifts/current');
+  // Backend sends 204 (empty body) when there is no active shift, and persists
+  // the kind under `shiftType` — normalise to `type` so the whole app can read
+  // a single field without crashing on a missing `.type`.
+  if (!data || typeof data !== 'object') return null;
+  return { ...data, type: data.type ?? data.shiftType } as Shift;
 }
 
 /** Create a new shift. */

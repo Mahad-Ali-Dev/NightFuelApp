@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Alert, TextInput, Modal, KeyboardAvoidingView, Platform
+    Alert, TextInput, Modal, KeyboardAvoidingView, Platform
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
+import { withAlpha } from '@/theme/utils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPreferences, updatePreferences, UserPreferences } from '@/api/profile';
-import { Button, Card, Input } from '@/components/ui';
+import { Button, Card, Input, Skeleton } from '@/components/ui';
 
 const DIETARY_OPTIONS = ['Classic', 'Keto', 'Vegan', 'Vegetarian', 'Pescatarian', 'Paleo'];
 
@@ -22,7 +23,7 @@ type EditTarget =
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 export default function PreferencesScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -40,7 +41,15 @@ export default function PreferencesScreen() {
 
     useEffect(() => {
         if (initialPrefs) {
-            setPrefs(initialPrefs);
+            // Defensively default the array fields the UI iterates over, in case
+            // the backend omits them — prevents `.some`/`.filter`/`.map` crashes.
+            setPrefs({
+                ...initialPrefs,
+                allergies: initialPrefs.allergies ?? [],
+                dislikedIngredients: initialPrefs.dislikedIngredients ?? [],
+                medications: initialPrefs.medications ?? [],
+                supplements: initialPrefs.supplements ?? [],
+            });
         }
     }, [initialPrefs]);
 
@@ -57,8 +66,29 @@ export default function PreferencesScreen() {
 
     if (isLoading || !prefs) {
         return (
-            <View style={[styles.container, { backgroundColor: colors.background.primary, justifyContent: 'center' }]}>
-                <ActivityIndicator size="large" color={colors.accent.cyan} />
+            <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+                <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
+                    <View style={styles.backBtn}>
+                        <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+                    </View>
+                    <Text style={[typography.h3, { color: colors.text.primary }]}>Preferences</Text>
+                    <View style={{ width: 40 }} />
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+                    <View style={styles.section}>
+                        <Skeleton width={180} height={14} radius={borderRadius.sm} style={{ marginBottom: 16 }} />
+                        <Skeleton width="100%" height={300} radius={borderRadius['2xl']} />
+                    </View>
+                    <View style={[styles.section, { marginTop: 32 }]}>
+                        <Skeleton width={200} height={14} radius={borderRadius.sm} style={{ marginBottom: 16 }} />
+                        <Skeleton width={120} height={12} radius={borderRadius.sm} style={{ marginBottom: 12 }} />
+                        <View style={styles.grid}>
+                            {[0, 1, 2, 3, 4, 5].map((i) => (
+                                <Skeleton key={i} width="30%" height={44} radius={borderRadius.lg} />
+                            ))}
+                        </View>
+                    </View>
+                </ScrollView>
             </View>
         );
     }
@@ -124,15 +154,18 @@ export default function PreferencesScreen() {
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.85}>
                     <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Preferences</Text>
+                <Text style={[typography.h3, { color: colors.text.primary }]}>Preferences</Text>
                 <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: updateMutation.isPending }}
                     onPress={() => updateMutation.mutate(prefs)}
                     disabled={updateMutation.isPending}
+                    activeOpacity={0.85}
                 >
-                    <Text style={[typography.subhead, { color: colors.accent.cyan, fontWeight: 'bold' }]}>Save</Text>
+                    <Text style={[typography.subhead, { color: colors.accent.cyan, fontWeight: 'bold', opacity: updateMutation.isPending ? 0.5 : 1 }]}>Save</Text>
                 </TouchableOpacity>
             </View>
 
@@ -142,9 +175,9 @@ export default function PreferencesScreen() {
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Ionicons name="moon-outline" size={20} color={colors.accent.purple} />
-                        <Text style={[typography.subhead, { color: colors.accent.purple, fontWeight: 'bold', marginLeft: 12 }]}>CIRCADIAN RHYTHM</Text>
+                        <Text style={[typography.overline, { color: colors.accent.purple, marginLeft: 12 }]}>CIRCADIAN RHYTHM</Text>
                     </View>
-                    <Card style={[styles.prefCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    <Card variant="glass" style={[styles.prefCard, { borderColor: colors.border.default }]}>
                         <TimeRow
                             label="Sleep Target"
                             value={`${prefs.sleepTargetHours}h`}
@@ -178,29 +211,33 @@ export default function PreferencesScreen() {
                 <View style={[styles.section, { marginTop: 32 }]}>
                     <View style={styles.sectionHeader}>
                         <Ionicons name="nutrition-outline" size={20} color={colors.accent.emerald} />
-                        <Text style={[typography.subhead, { color: colors.accent.emerald, fontWeight: 'bold', marginLeft: 12 }]}>METABOLIC PREFERENCES</Text>
+                        <Text style={[typography.overline, { color: colors.accent.emerald, marginLeft: 12 }]}>METABOLIC PREFERENCES</Text>
                     </View>
 
-                    <Text style={[typography.caption, { color: colors.text.tertiary, marginBottom: 12 }]}>DIETARY TYPE</Text>
+                    <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 12 }]}>DIETARY TYPE</Text>
                     <View style={styles.grid}>
                         {DIETARY_OPTIONS.map(diet => (
                             <TouchableOpacity
                                 key={diet}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: prefs.dietaryType === diet }}
                                 style={[
                                     styles.dietBtn,
-                                    { backgroundColor: prefs.dietaryType === diet ? colors.accent.emerald : colors.background.secondary, borderColor: colors.border.default }
+                                    prefs.dietaryType === diet && shadows.glow(colors.accent.emerald),
+                                    { backgroundColor: prefs.dietaryType === diet ? colors.accent.emerald : colors.background.secondary, borderColor: prefs.dietaryType === diet ? colors.accent.emerald : colors.border.default }
                                 ]}
                                 onPress={() => toggleDiet(diet)}
+                                activeOpacity={0.85}
                             >
-                                <Text style={[typography.caption, { color: prefs.dietaryType === diet ? '#FFF' : colors.text.secondary, fontWeight: 'bold' }]}>{diet.toUpperCase()}</Text>
+                                <Text style={[typography.captionMedium, { color: prefs.dietaryType === diet ? colors.text.primary : colors.text.secondary, fontWeight: 'bold' }]}>{diet.toUpperCase()}</Text>
                             </TouchableOpacity>
                         ))}
                     </View>
 
-                    <View style={{ marginTop: 24 }}>
-                        <Text style={[typography.caption, { color: colors.text.tertiary, marginBottom: 12 }]}>RESTRICTIONS & ALLERGIES</Text>
+                    <View style={{ marginTop: 28 }}>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 12 }]}>RESTRICTIONS & ALLERGIES</Text>
                         <TextInput
-                            style={[styles.tagInput, { color: colors.text.primary, backgroundColor: colors.background.secondary, borderRadius: borderRadius.lg, borderColor: colors.border.default }]}
+                            style={[styles.tagInput, { color: colors.text.primary, backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl, borderColor: colors.border.default }]}
                             placeholder="Add allergy..."
                             placeholderTextColor={colors.text.tertiary}
                             value={allergyInput}
@@ -214,8 +251,10 @@ export default function PreferencesScreen() {
                                 <TouchableOpacity
                                     key={a}
                                     onPress={() => removeAllergy(a)}
-                                    style={[styles.tag, { backgroundColor: 'rgba(255,255,255,0.05)', borderColor: colors.border.default }]}
+                                    style={[styles.tag, { backgroundColor: withAlpha(colors.text.primary, 0.05), borderColor: colors.border.default }]}
+                                    accessibilityRole="button"
                                     accessibilityLabel={`Remove ${a}`}
+                                    activeOpacity={0.85}
                                 >
                                     <Text style={[typography.caption, { color: colors.text.primary }]}>{a}</Text>
                                     <Ionicons name="close-circle" size={14} color={colors.text.tertiary} style={{ marginLeft: 6 }} />
@@ -255,10 +294,10 @@ export default function PreferencesScreen() {
                             maxLength={editing?.kind === 'time' ? 5 : 4}
                         />
                         <View style={styles.modalActions}>
-                            <TouchableOpacity onPress={closeEdit} style={[styles.modalBtn, { borderColor: colors.border.default }]}>
+                            <TouchableOpacity accessibilityRole="button" onPress={closeEdit} style={[styles.modalBtn, { borderColor: colors.border.default }]} activeOpacity={0.85}>
                                 <Text style={[typography.body, { color: colors.text.secondary, fontWeight: '600' }]}>Cancel</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={saveEdit} style={[styles.modalBtn, styles.modalBtnPrimary, { backgroundColor: colors.accent.cyan }]}>
+                            <TouchableOpacity accessibilityRole="button" onPress={saveEdit} style={[styles.modalBtn, styles.modalBtnPrimary, { backgroundColor: colors.accent.cyan }]} activeOpacity={0.85}>
                                 <Text style={[typography.body, { color: '#000', fontWeight: '700' }]}>Save</Text>
                             </TouchableOpacity>
                         </View>
@@ -273,12 +312,15 @@ function TimeRow({ label, value, onEdit, isLast }: { label: string; value: strin
     const { colors, typography } = useTheme();
     return (
         <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`${label}, ${value}`}
             style={[styles.timeRow, isLast ? { borderBottomWidth: 0 } : { borderBottomColor: colors.border.default }]}
             onPress={onEdit}
+            activeOpacity={0.85}
         >
             <Text style={[typography.body, { color: colors.text.primary }]}>{label}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={[typography.body, { color: colors.text.tertiary, fontWeight: 'bold' }]}>{value}</Text>
+                <Text style={[typography.body, { color: colors.text.secondary, fontWeight: 'bold' }]}>{value}</Text>
                 <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} style={{ marginLeft: 8 }} />
             </View>
         </TouchableOpacity>
@@ -291,15 +333,15 @@ const styles = StyleSheet.create({
     backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     section: { paddingHorizontal: 20, marginTop: 24 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-    prefCard: { borderWidth: 1, paddingHorizontal: 16, borderRadius: 20 },
+    prefCard: { borderWidth: 1, paddingHorizontal: 18, borderRadius: 24 },
     timeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1 },
     grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    dietBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, minWidth: '30%', alignItems: 'center' },
-    tagInput: { height: 50, paddingHorizontal: 16, borderWidth: 1, marginBottom: 12 },
+    dietBtn: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, borderWidth: 1, minWidth: '30%', alignItems: 'center' },
+    tagInput: { height: 52, paddingHorizontal: 16, borderWidth: 1, marginBottom: 12 },
     tagGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    tag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
+    tag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, borderWidth: 1 },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
-    modalCard: { width: '100%', maxWidth: 360, padding: 20, borderRadius: 16, borderWidth: 1 },
+    modalCard: { width: '100%', maxWidth: 360, padding: 24, borderRadius: 24, borderWidth: 1 },
     modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 16 },
     modalBtn: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: 'transparent' },
     modalBtnPrimary: { borderWidth: 0 },

@@ -1,19 +1,21 @@
 // NightFuel Design System — Color Palette
-// Derived from 49 Stitch-generated UI screens
+// "Aurora" — premium dark glass. Deep cool near-black surfaces, coral→pink brand
+// gradient, refined low-contrast glass borders. Keys are stable (screens depend on
+// them); only the values changed from the original GitHub-dark palette.
 
 export const colors = {
-  // Core backgrounds
+  // Core backgrounds — deep, cool, premium (was GitHub-gray #0D1117)
   background: {
-    primary: '#0D1117',    // Deep navy black
-    secondary: '#161B22',  // Card surface
-    tertiary: '#1C2333',   // Elevated surface
-    quaternary: '#21262D', // Higher elevation
+    primary: '#0A0C12',    // Deep near-black, cool undertone
+    secondary: '#13161F',  // Card surface
+    tertiary: '#1B2030',   // Elevated surface
+    quaternary: '#242B3D', // Higher elevation
   },
 
-  // Borders & dividers
+  // Borders & dividers — subtle "glass" hairlines
   border: {
-    default: '#2D3748',    // Subtle borders
-    light: '#373E4A',      // Lighter border
+    default: '#222838',    // Subtle borders
+    light: '#2F3650',      // Lighter border
     focus: '#FF6B35',      // Focus ring
   },
 
@@ -22,6 +24,7 @@ export const colors = {
     coral: '#FF6B35',      // Primary CTA, brand
     coralLight: '#FF8A5C',
     coralDark: '#E55A25',
+    pink: '#FF4D8D',       // Aurora gradient partner / highlights
     cyan: '#00D4AA',       // Success, progress
     cyanLight: '#33DDBB',
     cyanDark: '#00B894',
@@ -41,10 +44,10 @@ export const colors = {
   // Text colors
   text: {
     primary: '#FFFFFF',
-    secondary: '#8B949E',
-    tertiary: '#484F58',
+    secondary: '#9BA3B4',  // brighter for better contrast on the deeper bg
+    tertiary: '#5A6373',
     accent: '#FF6B35',
-    inverse: '#0D1117',
+    inverse: '#0A0C12',
   },
 
   // Semantic colors
@@ -55,28 +58,28 @@ export const colors = {
 
   // Gradient stops
   gradients: {
-    coral: ['#FF6B35', '#FF4444'] as const,
+    coral: ['#FF7A45', '#FF4D8D'] as const,   // premium coral→pink (brand hero)
     cyan: ['#00D4AA', '#4FC3F7'] as const,
     purple: ['#7C4DFF', '#B47CFF'] as const,
-    dark: ['#161B22', '#0D1117'] as const,
-    card: ['rgba(22,27,34,0.8)', 'rgba(13,17,23,0.9)'] as const,
+    dark: ['#13161F', '#0A0C12'] as const,
+    card: ['rgba(25,29,40,0.72)', 'rgba(12,14,20,0.88)'] as const,
   },
 
   // Light mode overrides
   light: {
     background: {
-      primary: '#F0F2F5',
+      primary: '#F4F5F7',
       secondary: '#FFFFFF',
       tertiary: '#F7F8FA',
       quaternary: '#E8ECF0',
     },
     border: {
-      default: '#D0D7DE',
-      light: '#E1E7ED',
+      default: '#E2E5EA',
+      light: '#EDEFF2',
       focus: '#FF6B35',
     },
     text: {
-      primary: '#1B1F23',
+      primary: '#16181D',
       secondary: '#57606A',
       tertiary: '#8B949E',
       accent: '#FF6B35',

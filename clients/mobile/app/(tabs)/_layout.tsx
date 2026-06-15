@@ -12,8 +12,9 @@
  *   circadian → accessed from Insights / home
  */
 import React from 'react';
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs, useRouter, Redirect } from 'expo-router';
 import { useTheme } from '@/theme';
+import { useAuthStore } from '@/store/authStore';
 import { Ionicons } from '@expo/vector-icons';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, useColorScheme } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -55,14 +56,14 @@ const ti = StyleSheet.create({
 
 function CentreButton({ onPress }: { onPress?: () => void }) {
     return (
-        <TouchableOpacity style={cb.outer} onPress={onPress} activeOpacity={0.88}>
+        <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Log meal" style={cb.outer} onPress={onPress} activeOpacity={0.88}>
             <LinearGradient
                 colors={['#FF8A5C', '#FF6B35']}
                 style={cb.gradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
             >
-                <Ionicons name="restaurant" size={26} color="#fff" />
+                <Ionicons name="add" size={32} color="#fff" />
             </LinearGradient>
         </TouchableOpacity>
     );
@@ -93,7 +94,7 @@ const cb = StyleSheet.create({
 
 function RiaFAB({ onPress }: { onPress: () => void }) {
     return (
-        <TouchableOpacity style={fab.container} onPress={onPress} activeOpacity={0.85}>
+        <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Generate with AI" style={fab.container} onPress={onPress} activeOpacity={0.85}>
             <LinearGradient
                 colors={C.gradients.purple}
                 style={fab.gradient}
@@ -147,6 +148,13 @@ const fab = StyleSheet.create({
 export default function TabLayout() {
     const { colors } = useTheme();
     const router = useRouter();
+    const { isAuthenticated, isLoading } = useAuthStore();
+
+    // Auth gate: a deep link or mid-session token expiry can otherwise mount the
+    // tabs in a logged-out state. Bounce to login once we know auth has resolved.
+    if (!isLoading && !isAuthenticated) {
+        return <Redirect href="/(auth)/login" />;
+    }
 
     const barBg = colors.background.secondary;
     const active = colors.accent.coral;

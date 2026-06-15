@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { apiClient } from '@/api/client';
+import { EmptyState } from '@/components/ui';
 
 // ---------------------------------------------------------------------------
 // Barcode lookup via the Next.js API gateway → Open Food Facts
@@ -34,7 +35,7 @@ const lookupBarcode = async (code: string): Promise<FoodResult | null> => {
 // ---------------------------------------------------------------------------
 
 export default function BarcodeScannerModal() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
 
@@ -48,17 +49,14 @@ export default function BarcodeScannerModal() {
 
     if (!permission.granted) {
         return (
-            <View style={[styles.container, { backgroundColor: colors.background.primary, padding: spacing.xl, justifyContent: 'center', alignItems: 'center' }]}>
-                <Ionicons name="camera-outline" size={64} color={colors.text.tertiary} />
-                <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing.md }]}>
-                    We need your permission to show the camera
-                </Text>
-                <TouchableOpacity
-                    style={[styles.btn, { backgroundColor: colors.accent.coral, borderRadius: borderRadius.xl, marginTop: spacing.xl }]}
-                    onPress={requestPermission}
-                >
-                    <Text style={[typography.subhead, { color: '#fff', fontWeight: '700' }]}>Grant Permission</Text>
-                </TouchableOpacity>
+            <View style={[styles.container, { backgroundColor: colors.background.primary, justifyContent: 'center' }]}>
+                <EmptyState
+                    icon="camera-outline"
+                    title="Camera access needed"
+                    subtitle="Allow camera access to scan food barcodes and log meals instantly."
+                    actionLabel="Grant Permission"
+                    onAction={requestPermission}
+                />
             </View>
         );
     }
@@ -124,7 +122,7 @@ export default function BarcodeScannerModal() {
             {/* Overlay */}
             <View style={styles.overlay}>
                 <View style={styles.topArea}>
-                    <TouchableOpacity
+                    <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close"
                         style={[styles.closeBtn, { marginTop: insets.top + 10 }]}
                         onPress={() => router.back()}
                     >
@@ -167,7 +165,6 @@ export default function BarcodeScannerModal() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    btn: { paddingHorizontal: 24, paddingVertical: 14 },
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'space-between' },
     topArea: { padding: 20 },
     closeBtn: { alignSelf: 'flex-start', padding: 8 },

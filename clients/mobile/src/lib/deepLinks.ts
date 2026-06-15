@@ -75,7 +75,14 @@ export function resolveDeepLink(rawUrl: string): DeepLinkResolution {
     return { safe: false, route: '', reason: 'unsafe_scheme', source };
   }
 
-  const path = '/' + (parsed.path ?? '').replace(/^\/+/, '');
+  // For the custom app scheme (e.g. nightfuel://reset), expo-linking puts the
+  // first segment in `hostname`, not `path`. Fold it back in so app-launched
+  // URLs resolve the same as their https:// equivalents.
+  let rawPath = parsed.path ?? '';
+  if (scheme === 'nightfuel' && parsed.hostname) {
+    rawPath = parsed.hostname + (rawPath ? '/' + rawPath : '');
+  }
+  const path = '/' + rawPath.replace(/^\/+/, '');
   const queryParams = parsed.queryParams ?? {};
 
   for (const entry of DEEP_LINK_ROUTES) {

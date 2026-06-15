@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    Dimensions, ActivityIndicator,
+    Dimensions,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -10,6 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { getAnalytics, getHeatmap, getOneRepMaxes, OneRepMax } from '@/api/exercises';
 import { LineChart, PieChart } from 'react-native-gifted-charts';
+import { withAlpha } from '@/theme/utils';
+import { Skeleton, EmptyState } from '@/components/ui';
 
 const { width } = Dimensions.get('window');
 
@@ -73,7 +75,7 @@ export default function ExerciseAnalyticsScreen() {
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
                 <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Performance Analytics</Text>
@@ -84,13 +86,13 @@ export default function ExerciseAnalyticsScreen() {
                 {/* Overall Stats */}
                 <View style={styles.statsOverview}>
                     <View style={styles.ovItem}>
-                        <Text style={[typography.display, { color: colors.accent.coral, fontSize: 24 }]}>{heatmap.activeDays}</Text>
-                        <Text style={[typography.caption, { color: colors.text.tertiary }]}>ACTIVE DAYS</Text>
+                        <Text style={[typography.statMedium, { color: colors.accent.coral }]}>{heatmap.activeDays}</Text>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 4 }]}>ACTIVE DAYS</Text>
                     </View>
                     <View style={[styles.ovDivider, { backgroundColor: colors.border.default }]} />
                     <View style={styles.ovItem}>
-                        <Text style={[typography.display, { color: colors.accent.cyan, fontSize: 24 }]}>{oneRmQuery.data?.length || 0}</Text>
-                        <Text style={[typography.caption, { color: colors.text.tertiary }]}>RECORDS</Text>
+                        <Text style={[typography.statMedium, { color: colors.accent.cyan }]}>{oneRmQuery.data?.length || 0}</Text>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 4 }]}>RECORDS</Text>
                     </View>
                 </View>
 
@@ -100,7 +102,7 @@ export default function ExerciseAnalyticsScreen() {
                         <View style={styles.cardHeader}>
                             <View>
                                 <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>Strength Progression</Text>
-                                <Text style={[typography.caption, { color: colors.text.tertiary }]}>
+                                <Text style={[typography.caption, { color: colors.text.secondary }]}>
                                     {selectedExercise || 'Select an exercise below'}
                                 </Text>
                             </View>
@@ -109,7 +111,14 @@ export default function ExerciseAnalyticsScreen() {
 
                         {selectedExercise ? (
                             analyticsQuery.isLoading ? (
-                                <ActivityIndicator color={colors.accent.coral} style={{ marginVertical: 40 }} />
+                                <View style={{ marginTop: 10 }}>
+                                    <Skeleton width="100%" height={160} radius={borderRadius.lg} />
+                                </View>
+                            ) : analyticsQuery.isError ? (
+                                <View style={styles.emptyChart}>
+                                    <Ionicons name="cloud-offline-outline" size={32} color={colors.text.tertiary} />
+                                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 10 }]}>Couldn't load progression. Pull to refresh or pick another record.</Text>
+                                </View>
                             ) : chartData.length > 1 ? (
                                 <View style={{ alignItems: 'center', marginTop: 10 }}>
                                     <LineChart
@@ -125,19 +134,19 @@ export default function ExerciseAnalyticsScreen() {
                                         noOfSections={4}
                                         yAxisThickness={0}
                                         xAxisThickness={0}
-                                        yAxisTextStyle={{ color: colors.text.tertiary, fontSize: 10 }}
-                                        xAxisLabelTextStyle={{ color: colors.text.tertiary, fontSize: 10 }}
+                                        yAxisTextStyle={{ color: colors.text.secondary, fontSize: 10 }}
+                                        xAxisLabelTextStyle={{ color: colors.text.secondary, fontSize: 10 }}
                                     />
                                 </View>
                             ) : (
                                 <View style={styles.emptyChart}>
-                                    <Text style={[typography.caption, { color: colors.text.tertiary }]}>Not enough data to plot progression</Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary }]}>Not enough data to plot progression</Text>
                                 </View>
                             )
                         ) : (
                             <View style={styles.emptyChart}>
                                 <Ionicons name="bar-chart-outline" size={40} color={colors.text.tertiary} />
-                                <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 10 }]}>Choose a personal record to track</Text>
+                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 10 }]}>Choose a personal record to track</Text>
                             </View>
                         )}
                     </View>
@@ -148,28 +157,55 @@ export default function ExerciseAnalyticsScreen() {
                     <Text style={[typography.heading, { color: colors.text.primary, marginBottom: 16 }]}>Personal Records (1RM)</Text>
 
                     {oneRmQuery.isLoading ? (
-                        <ActivityIndicator color={colors.accent.coral} />
-                    ) : topExercises.length === 0 ? (
-                        <View style={styles.emptyRecords}>
-                            <Text style={[typography.body, { color: colors.text.tertiary }]}>No records yet.</Text>
+                        <View>
+                            {[0, 1, 2, 3].map((i) => (
+                                <View key={i} style={[styles.prRow, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl, borderColor: colors.border.default }]}>
+                                    <Skeleton width={40} height={40} radius={borderRadius.full} />
+                                    <View style={{ flex: 1, marginLeft: 16 }}>
+                                        <Skeleton width="55%" height={16} radius={borderRadius.sm} />
+                                        <Skeleton width="40%" height={12} radius={borderRadius.sm} style={{ marginTop: spacing.sm }} />
+                                    </View>
+                                    <Skeleton width={48} height={18} radius={borderRadius.sm} />
+                                </View>
+                            ))}
                         </View>
+                    ) : oneRmQuery.isError ? (
+                        <EmptyState
+                            icon="cloud-offline-outline"
+                            title="Couldn't load records"
+                            subtitle="Something went wrong fetching your personal records. Check your connection and try again."
+                            actionLabel="Try Again"
+                            onAction={() => oneRmQuery.refetch()}
+                        />
+                    ) : topExercises.length === 0 ? (
+                        <EmptyState
+                            icon="trophy-outline"
+                            title="No records yet"
+                            subtitle="Log a lift in the 1RM calculator to start tracking your personal records and strength progression."
+                            actionLabel="Open 1RM Calculator"
+                            onAction={() => router.push('/(exercises)/calculator' as any)}
+                        />
                     ) : (
                         topExercises.map((pr: OneRepMax) => (
                             <TouchableOpacity
                                 key={pr.exerciseName}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: selectedExercise === pr.exerciseName }}
+                                accessibilityLabel={pr.exerciseName}
                                 style={[styles.prRow, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl, borderColor: selectedExercise === pr.exerciseName ? colors.accent.coral : colors.border.default }]}
                                 onPress={() => setSelectedExercise(pr.exerciseName)}
+                                activeOpacity={0.85}
                             >
-                                <View style={[styles.prIcon, { backgroundColor: `${colors.accent.amber}15` }]}>
+                                <View style={[styles.prIcon, { backgroundColor: withAlpha(colors.accent.amber, 0.14) }]}>
                                     <Ionicons name="trophy" size={18} color={colors.accent.amber} />
                                 </View>
                                 <View style={{ flex: 1, marginLeft: 16 }}>
                                     <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{pr.exerciseName}</Text>
-                                    <Text style={[typography.caption, { color: colors.text.tertiary }]}>{new Date(pr.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary }]}>{new Date(pr.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
                                 </View>
                                 <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={[typography.heading, { color: colors.accent.cyan, fontSize: 18 }]}>{pr.estimated1RMKg}kg</Text>
-                                    <Text style={[typography.caption, { color: colors.text.tertiary }]}>PR</Text>
+                                    <Text style={[typography.statTiny, { color: colors.accent.cyan, fontSize: 18 }]}>{pr.estimated1RMKg}kg</Text>
+                                    <Text style={[typography.overline, { color: colors.text.secondary, fontSize: 9 }]}>PR</Text>
                                 </View>
                             </TouchableOpacity>
                         ))
@@ -218,7 +254,6 @@ const styles = StyleSheet.create({
     card: { padding: 20, borderWidth: 1 },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     emptyChart: { height: 160, alignItems: 'center', justifyContent: 'center' },
-    emptyRecords: { padding: 40, alignItems: 'center' },
     prRow: { flexDirection: 'row', alignItems: 'center', padding: 16, marginBottom: 12, borderWidth: 1 },
     prIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
     pieRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

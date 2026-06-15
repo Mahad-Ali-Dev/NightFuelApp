@@ -16,7 +16,7 @@ export default function RootIndex() {
   }
 
   if (isAuthenticated && user && !user.onboardingComplete) {
-    return <Redirect href="/(onboarding)/shift-type" />;
+    return <Redirect href="/(onboarding)/metrics-goals" />;
   }
 
   if (isAuthenticated) {

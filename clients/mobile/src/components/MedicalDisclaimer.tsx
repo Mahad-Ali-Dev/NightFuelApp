@@ -44,7 +44,7 @@ export const MEDICAL_DISCLAIMER_SHORT =
 // Inline banner — small, dismissable, embeddable above AI content
 // ─────────────────────────────────────────────────────────────────────
 
-export function MedicalDisclaimerBanner({
+function MedicalDisclaimerBannerComponent({
     text = MEDICAL_DISCLAIMER_SHORT,
     style,
 }: {
@@ -77,6 +77,12 @@ export function MedicalDisclaimerBanner({
         </View>
     );
 }
+
+/**
+ * Memoized: the inline banner takes only a `text` string and an optional
+ * `style`, with no internal state — safe to skip re-renders on equal props.
+ */
+export const MedicalDisclaimerBanner = React.memo(MedicalDisclaimerBannerComponent);
 
 // ─────────────────────────────────────────────────────────────────────
 // First-run acknowledgement modal
@@ -162,6 +168,7 @@ export function MedicalDisclaimerScreen({
                 <View style={[styles.modalFooter, { paddingBottom: spacing['2xl'] }]}>
                     <TouchableOpacity
                         onPress={handleAck}
+                        activeOpacity={0.85}
                         style={[styles.ackButton, { backgroundColor: colors.accent.coral, borderRadius: borderRadius.lg }]}
                         accessibilityRole="button"
                         accessibilityLabel="I understand and accept"

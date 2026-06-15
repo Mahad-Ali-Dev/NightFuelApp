@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -9,13 +9,18 @@ import { useQuery } from '@tanstack/react-query';
 import { getRecipes, getRecipe } from '@/api/meals';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
+import { shadows } from '@/theme/shadows';
+import { spacing, borderRadius } from '@/theme/spacing';
+import { Skeleton, EmptyState } from '@/components/ui';
+// Filter accents map to canonical Aurora theme tokens. Module scope can't read
+// the hook, so we use the exact accent hex values from '@/theme/colors'.
 const TAGS = [
-    { id:'all', label:'All', color:'#FF6B35' },
-    { id:'high-protein', label:'High Protein', color:'#EF4444' },
-    { id:'keto', label:'Keto', color:'#F59E0B' },
-    { id:'vegan', label:'Vegan', color:'#2ECC71' },
-    { id:'meal-prep', label:'Meal Prep', color:'#A855F7' },
-    { id:'under-30', label:'Under 30m', color:'#00D4FF' },
+    { id:'all', label:'All', color:'#FF6B35' },          // accent.coral
+    { id:'high-protein', label:'High Protein', color:'#FF4444' }, // accent.red
+    { id:'keto', label:'Keto', color:'#FFB300' },        // accent.amber
+    { id:'vegan', label:'Vegan', color:'#10B981' },      // accent.emerald
+    { id:'meal-prep', label:'Meal Prep', color:'#7C4DFF' }, // accent.purple
+    { id:'under-30', label:'Under 30m', color:'#00D4AA' }, // accent.cyan
 ];
 export default function RecipesScreen() {
     const { colors, typography } = useTheme();
@@ -29,30 +34,53 @@ export default function RecipesScreen() {
     return (
         <View style={[s.container,{backgroundColor:colors.background.primary}]}>
             <View style={[s.header,{paddingTop:insets.top+16,borderBottomColor:colors.border.default}]}>
-                <TouchableOpacity onPress={()=>router.back()}><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></TouchableOpacity>
-                <Text style={[typography.heading,{color:colors.text.primary,fontSize:20}]}>Ria's Kitchen</Text>
-                <View style={{width:24}} />
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Go back" onPress={()=>router.back()} style={[s.iconBtn,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Ionicons name="arrow-back" size={22} color={colors.text.primary} /></TouchableOpacity>
+                <Text style={[typography.h2,{color:colors.text.primary}]}>Ria's Kitchen</Text>
+                <View style={{width:40}} />
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal:20,gap:8,paddingVertical:14}} style={{flexGrow:0,borderBottomWidth:1,borderBottomColor:colors.border.default}}>
                 {TAGS.map((tag)=>(
-                    <TouchableOpacity key={tag.id} style={[s.tagChip,{backgroundColor:selTag===tag.id?tag.color:colors.background.secondary,borderColor:selTag===tag.id?tag.color:colors.border.default}]} onPress={()=>setSelTag(tag.id)}>
+                    <TouchableOpacity key={tag.id} activeOpacity={0.85} accessibilityRole="button" accessibilityState={{ selected: selTag===tag.id }} accessibilityLabel={tag.label} style={[s.tagChip,{backgroundColor:selTag===tag.id?tag.color:colors.background.secondary,borderColor:selTag===tag.id?tag.color:colors.border.default},selTag===tag.id&&shadows.glow(tag.color)]} onPress={()=>setSelTag(tag.id)}>
                         <Text style={[typography.caption,{color:selTag===tag.id?'#FFF':colors.text.secondary,fontWeight:'bold'}]}>{tag.label.toUpperCase()}</Text>
                     </TouchableOpacity>
                 ))}
             </ScrollView>
-            {recipesQ.isLoading?<ActivityIndicator size="large" color={colors.accent.coral} style={{marginTop:40}} />:
-            recipes.length===0?<View style={s.empty}><Ionicons name="restaurant-outline" size={64} color={colors.text.tertiary} /><Text style={[typography.body,{color:colors.text.secondary,marginTop:10}]}>No recipes match your filter</Text></View>:(
+            {recipesQ.isLoading?(
+                <View style={{padding:20}}>
+                    {[0,1,2].map((i)=>(
+                        <Skeleton key={i} width="100%" height={220} radius={borderRadius['2xl']} style={{marginBottom:16}} />
+                    ))}
+                </View>
+            ):
+            recipesQ.isError?(
+                <EmptyState
+                    icon="cloud-offline-outline"
+                    title="Couldn't load recipes"
+                    subtitle="Something went wrong loading Ria's Kitchen. Check your connection and try again."
+                    actionLabel="Try Again"
+                    onAction={()=>recipesQ.refetch()}
+                />
+            ):
+            recipes.length===0?(
+                <EmptyState
+                    icon="restaurant-outline"
+                    title={selTag==='all'?'No recipes yet':'No matches found'}
+                    subtitle={selTag==='all'?"Ria's Kitchen is warming up. Check back soon for chef-crafted, protocol-ready meals.":'Nothing matches this filter right now. Try another tag or browse the full collection.'}
+                    actionLabel={selTag==='all'?undefined:'Browse all recipes'}
+                    onAction={selTag==='all'?undefined:()=>setSelTag('all')}
+                />
+            ):(
                 <ScrollView contentContainerStyle={{padding:20,paddingBottom:100}} showsVerticalScrollIndicator={false}>
                     {recipes.map((r)=>(
-                        <TouchableOpacity key={r.id} style={s.recCard} activeOpacity={0.9} onPress={()=>setDetailId(r.id)}>
-                            <Image source={{uri:r.image||'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80'}} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+                        <TouchableOpacity key={r.id} accessibilityRole="button" accessibilityLabel={r.title} style={[s.recCard,{borderColor:colors.border.default},shadows.lg]} activeOpacity={0.9} onPress={()=>setDetailId(r.id)}>
+                            <Image source={{uri:r.image||'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80'}} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                             <LinearGradient colors={['rgba(0,0,0,0.05)','rgba(0,0,0,0.88)']} style={StyleSheet.absoluteFillObject} />
                             <View style={s.topRow}>
                                 <View style={[s.badge,{backgroundColor:'rgba(0,0,0,0.5)'}]}><Ionicons name="time-outline" size={12} color="#FFF" /><Text style={[typography.caption,{color:'#FFF',fontWeight:'bold',fontSize:11,marginLeft:4}]}>{(r.prepTimeMins||0)+(r.cookTimeMins||0)}m</Text></View>
                                 <View style={[s.badge,{backgroundColor:'rgba(0,0,0,0.5)'}]}><Text style={[typography.caption,{color:'#FFF',fontWeight:'bold',fontSize:11}]}>{r.servings} serv.</Text></View>
                             </View>
                             <View style={s.recInfo}>
-                                <Text style={[typography.heading,{color:'#FFF',fontSize:20,fontWeight:'900'}]}>{r.title}</Text>
+                                <Text style={[typography.h2,{color:'#FFF'}]}>{r.title}</Text>
                                 <View style={{flexDirection:'row',gap:14,marginTop:8}}>
                                     {[{l:Math.round(r.calories)+' kcal',c:colors.accent.coral},{l:Math.round(r.protein)+'g PRO',c:colors.accent.emerald},{l:Math.round(r.carbs)+'g CHO',c:colors.accent.cyan}].map((m)=>(
                                         <Text key={m.l} style={[typography.caption,{color:m.c,fontWeight:'bold',fontSize:11}]}>{m.l}</Text>
@@ -66,38 +94,67 @@ export default function RecipesScreen() {
             <Modal visible={!!detailId} animationType="slide" transparent>
                 <View style={{flex:1,backgroundColor:'rgba(0,0,0,0.9)'}}>
                     <View style={[s.modalCnt,{backgroundColor:colors.background.primary}]}>
-                        {detailQ.isLoading?<ActivityIndicator size="large" color={colors.accent.coral} style={{marginTop:100}} />:detailQ.data&&(
+                        {detailQ.isLoading?(
+                            <View>
+                                <Skeleton width="100%" height={300} radius={0} />
+                                <View style={s.modalBody}>
+                                    <Skeleton width="70%" height={28} radius={borderRadius.md} />
+                                    <View style={{flexDirection:'row',justifyContent:'space-around',paddingVertical:20,marginTop:8}}>
+                                        {[0,1,2].map((i)=>(
+                                            <View key={i} style={{alignItems:'center'}}>
+                                                <Skeleton width={48} height={24} radius={borderRadius.sm} />
+                                                <Skeleton width={36} height={10} radius={6} style={{marginTop:8}} />
+                                            </View>
+                                        ))}
+                                    </View>
+                                    <Skeleton width={120} height={20} radius={borderRadius.sm} style={{marginTop:8,marginBottom:16}} />
+                                    {[0,1,2,3].map((i)=>(
+                                        <Skeleton key={i} width="100%" height={16} radius={6} style={{marginTop:12}} />
+                                    ))}
+                                </View>
+                            </View>
+                        ):detailQ.data?(
                             <ScrollView showsVerticalScrollIndicator={false}>
-                                <Image source={{uri:detailQ.data.image||'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80'}} style={s.modalHero} contentFit="cover" />
-                                <TouchableOpacity style={[s.closeBtn,{backgroundColor:'rgba(0,0,0,0.5)',top:insets.top+12}]} onPress={()=>setDetailId(null)}><Ionicons name="close" size={24} color="#FFF" /></TouchableOpacity>
+                                <Image source={{uri:detailQ.data.image||'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&q=80'}} style={s.modalHero} contentFit="cover" cachePolicy="memory-disk" transition={300} />
+                                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close" style={[s.closeBtn,{backgroundColor:'rgba(0,0,0,0.5)',top:insets.top+12}]} onPress={()=>setDetailId(null)}><Ionicons name="close" size={24} color="#FFF" /></TouchableOpacity>
                                 <View style={s.modalBody}>
                                     <Text style={[typography.display,{color:colors.text.primary,fontSize:26,fontWeight:'900'}]}>{detailQ.data.title}</Text>
                                     <View style={{flexDirection:'row',justifyContent:'space-around',paddingVertical:20}}>
                                         {[{v:detailQ.data.prepTimeMins,l:'PREP'},{v:detailQ.data.cookTimeMins,l:'COOK'},{v:Math.round(detailQ.data.calories),l:'KCAL'}].map((m)=>(
-                                            <View key={m.l} style={{alignItems:'center'}}><Text style={[typography.heading,{color:colors.text.primary,fontSize:20}]}>{m.v}</Text><Text style={[typography.caption,{color:colors.text.tertiary}]}>{m.l}</Text></View>
+                                            <View key={m.l} style={{alignItems:'center'}}><Text style={[typography.statSmall,{color:colors.text.primary}]}>{m.v}</Text><Text style={[typography.overline,{color:colors.text.secondary,marginTop:4}]}>{m.l}</Text></View>
                                         ))}
                                     </View>
-                                    <Text style={[typography.heading,{color:colors.text.primary,borderBottomWidth:1,borderBottomColor:colors.border.default,paddingBottom:8,marginTop:8}]}>Ingredients</Text>
+                                    <Text style={[typography.h3,{color:colors.text.primary,borderBottomWidth:1,borderBottomColor:colors.border.default,paddingBottom:8,marginTop:8}]}>Ingredients</Text>
                                     {detailQ.data.ingredients.map((ing:any,i:number)=>(
                                         <View key={i} style={{flexDirection:'row',alignItems:'center',marginTop:12}}>
                                             <Ionicons name="radio-button-on" size={12} color={colors.accent.emerald} />
-                                            <Text style={[typography.body,{color:colors.text.primary,flex:1,marginLeft:12}]}>{ing.name}</Text>
-                                            <Text style={[typography.body,{color:colors.text.tertiary}]}>{ing.amount} {ing.unit||''}</Text>
+                                            <Text style={[typography.body,{color:colors.text.primary,flex:1,marginLeft:12}]}>{typeof ing === 'string' ? ing : ing.name}</Text>
+                                            {typeof ing !== 'string' && <Text style={[typography.body,{color:colors.text.secondary}]}>{ing.amount} {ing.unit||''}</Text>}
                                         </View>
                                     ))}
-                                    <Text style={[typography.heading,{color:colors.text.primary,borderBottomWidth:1,borderBottomColor:colors.border.default,paddingBottom:8,marginTop:28}]}>Instructions</Text>
+                                    <Text style={[typography.h3,{color:colors.text.primary,borderBottomWidth:1,borderBottomColor:colors.border.default,paddingBottom:8,marginTop:28}]}>Instructions</Text>
                                     {detailQ.data.instructions.map((step:string,i:number)=>(
                                         <View key={i} style={{flexDirection:'row',marginTop:18}}>
                                             <View style={[s.stepNum,{backgroundColor:colors.background.secondary}]}><Text style={[typography.caption,{color:colors.text.primary,fontWeight:'bold'}]}>{i+1}</Text></View>
                                             <Text style={[typography.body,{color:colors.text.secondary,flex:1,marginLeft:14,lineHeight:22}]}>{step}</Text>
                                         </View>
                                     ))}
-                                    <TouchableOpacity style={[s.ctaBtn,{backgroundColor:colors.accent.coral,marginTop:40}]} onPress={()=>{ setDetailId(null); router.push({pathname:'/(meals)/log-meal',params:{recipeId:detailQ.data?.id}}); }}>
-                                        <Ionicons name="restaurant" size={20} color="#FFF" />
-                                        <Text style={[typography.subhead,{color:'#FFF',fontWeight:'900',marginLeft:8,fontSize:16}]}>LOG AS MEAL</Text>
+                                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Log as meal" style={[s.ctaWrap,{marginTop:40},shadows.glow(colors.accent.coral)]} activeOpacity={0.85} onPress={()=>{ setDetailId(null); router.push({pathname:'/(meals)/log-meal',params:{recipeId:detailQ.data?.id}}); }}>
+                                        <LinearGradient colors={colors.gradients.coral} start={{x:0,y:0}} end={{x:1,y:0}} style={s.ctaBtn}>
+                                            <Ionicons name="restaurant" size={20} color="#FFF" />
+                                            <Text style={[typography.subhead,{color:'#FFF',fontWeight:'900',marginLeft:8,fontSize:16}]}>LOG AS MEAL</Text>
+                                        </LinearGradient>
                                     </TouchableOpacity>
                                 </View>
                             </ScrollView>
+                        ):(
+                            <EmptyState
+                                icon="cloud-offline-outline"
+                                title="Couldn't load recipe"
+                                subtitle="Something went wrong loading this recipe. Please close and try again."
+                                actionLabel="Close"
+                                onAction={()=>setDetailId(null)}
+                            />
                         )}
                     </View>
                 </View>
@@ -107,9 +164,9 @@ export default function RecipesScreen() {
 }
 const s = StyleSheet.create({
     container:{flex:1}, header:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',paddingHorizontal:20,paddingBottom:16,borderBottomWidth:1},
+    iconBtn:{width:40,height:40,borderRadius:12,borderWidth:1,alignItems:'center',justifyContent:'center'},
     tagChip:{paddingHorizontal:14,paddingVertical:8,borderRadius:20,borderWidth:1},
-    empty:{flex:1,alignItems:'center',justifyContent:'center',padding:40},
-    recCard:{height:220,borderRadius:20,overflow:'hidden',marginBottom:16,justifyContent:'space-between'},
+    recCard:{height:220,borderRadius:24,borderWidth:1,overflow:'hidden',marginBottom:16,justifyContent:'space-between'},
     topRow:{flexDirection:'row',gap:8,padding:14}, badge:{flexDirection:'row',alignItems:'center',paddingHorizontal:8,paddingVertical:4,borderRadius:8},
     recInfo:{padding:16},
     modalCnt:{flex:1,marginTop:60,borderTopLeftRadius:28,borderTopRightRadius:28,overflow:'hidden'},
@@ -117,5 +174,6 @@ const s = StyleSheet.create({
     closeBtn:{position:'absolute',right:20,width:44,height:44,borderRadius:22,alignItems:'center',justifyContent:'center'},
     modalBody:{padding:24,marginTop:-40},
     stepNum:{width:30,height:30,borderRadius:15,alignItems:'center',justifyContent:'center'},
-    ctaBtn:{height:60,borderRadius:30,flexDirection:'row',alignItems:'center',justifyContent:'center',marginBottom:40},
+    ctaWrap:{borderRadius:30,marginBottom:40,overflow:'hidden'},
+    ctaBtn:{height:60,borderRadius:30,flexDirection:'row',alignItems:'center',justifyContent:'center'},
 });

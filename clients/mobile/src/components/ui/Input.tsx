@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
 import { borderRadius as br, spacing } from '@/theme/spacing';
+import { shadows } from '@/theme/shadows';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -40,13 +41,15 @@ export function Input({
         style={[
           styles.inputContainer,
           {
-            backgroundColor: colors.background.tertiary,
+            backgroundColor: colors.background.secondary,
             borderColor: error
               ? colors.error
               : focused
               ? colors.accent.coral
               : colors.border.default,
+            borderWidth: focused || error ? 1.5 : 1,
           },
+          focused && !error && shadows.glow(colors.accent.coral),
         ]}
       >
         {icon && (
@@ -93,7 +96,6 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
     borderRadius: br.lg,
     height: 52,
     paddingHorizontal: spacing.lg,

@@ -7,16 +7,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getRoutines, startSession } from '@/api/exercises';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { withAlpha } from '@/theme/utils';
 
 export default function TrainingOnboardingScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
 
-    const [selectedRoutine, setSelectedRoutine] = useState<string | null>(null);
+    const { routineId } = useLocalSearchParams<{ routineId?: string }>();
+    const [selectedRoutine, setSelectedRoutine] = useState<string | null>(routineId ?? null);
 
     const { data: routines, isLoading: loadingRoutines } = useQuery({
         queryKey: ['routines'],
@@ -41,18 +43,18 @@ export default function TrainingOnboardingScreen() {
             <ImageBackgroundGradient />
 
             <View style={[styles.header, { paddingTop: insets.top }]}>
-                <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
-                    <Ionicons name="close" size={28} color="#FFFFFF" />
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={[styles.closeBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    <Ionicons name="close" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
             </View>
 
             <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 150 }}>
                 <Text style={[typography.display, { color: colors.text.primary, fontSize: 36, marginBottom: 8 }]}>Ready to Train?</Text>
-                <Text style={[typography.body, { color: '#8B949E', marginBottom: 32 }]}>
+                <Text style={[typography.body, { color: colors.text.secondary, marginBottom: 32 }]}>
                     Select a routine or jump into a freestyle session. We'll track your volume and rest times according to your shift phase.
                 </Text>
 
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 20, marginBottom: 16 }]}>Your Routines</Text>
+                <Text style={[typography.h3, { color: colors.text.primary, marginBottom: 16 }]}>Your Routines</Text>
 
                 {loadingRoutines ? (
                     <ActivityIndicator color={colors.accent.purple} />
@@ -62,13 +64,13 @@ export default function TrainingOnboardingScreen() {
                             activeOpacity={0.8}
                             onPress={() => setSelectedRoutine(null)}
                         >
-                            <Card style={[styles.routineCard, !selectedRoutine && styles.selectedCard]}>
-                                <View style={[styles.iconBox, { backgroundColor: `${colors.accent.cyan}20` }]}>
+                            <Card style={[styles.routineCard, { borderColor: colors.border.default }, !selectedRoutine && { borderColor: colors.accent.cyan, backgroundColor: colors.background.tertiary }]}>
+                                <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.cyan, 0.16) }]}>
                                     <Ionicons name="infinite" size={24} color={colors.accent.cyan} />
                                 </View>
                                 <View style={{ flex: 1, marginLeft: 16 }}>
-                                    <Text style={[typography.subhead, { color: '#FFF', fontSize: 18 }]}>Freestyle Session</Text>
-                                    <Text style={[typography.caption, { color: '#8B949E', marginTop: 4 }]}>Log any exercise as you go</Text>
+                                    <Text style={[typography.subtitle, { color: colors.text.primary }]}>Freestyle Session</Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>Log any exercise as you go</Text>
                                 </View>
                                 {selectedRoutine === null && <Ionicons name="checkmark-circle" size={24} color={colors.accent.cyan} />}
                             </Card>
@@ -80,13 +82,13 @@ export default function TrainingOnboardingScreen() {
                                 activeOpacity={0.8}
                                 onPress={() => setSelectedRoutine(routine.id)}
                             >
-                                <Card style={[styles.routineCard, selectedRoutine === routine.id && styles.selectedCard]}>
-                                    <View style={[styles.iconBox, { backgroundColor: `${colors.accent.purple}20` }]}>
+                                <Card style={[styles.routineCard, { borderColor: colors.border.default }, selectedRoutine === routine.id && { borderColor: colors.accent.purple, backgroundColor: colors.background.tertiary }]}>
+                                    <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.purple, 0.16) }]}>
                                         <Ionicons name="list" size={24} color={colors.accent.purple} />
                                     </View>
                                     <View style={{ flex: 1, marginLeft: 16 }}>
-                                        <Text style={[typography.subhead, { color: '#FFF', fontSize: 18 }]}>{routine.name}</Text>
-                                        <Text style={[typography.caption, { color: '#8B949E', marginTop: 4 }]}>
+                                        <Text style={[typography.subtitle, { color: colors.text.primary }]}>{routine.name}</Text>
+                                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>
                                             {routine.exercises?.length || 0} Exercises • {(routine.exercises?.length || 0) * 8} min
                                         </Text>
                                     </View>
@@ -100,18 +102,26 @@ export default function TrainingOnboardingScreen() {
 
             <View style={[styles.footer, { paddingBottom: insets.bottom || 24, backgroundColor: colors.background.primary, borderTopColor: colors.border.default }]}>
                 <TouchableOpacity
-                    style={[styles.startBtn, { backgroundColor: colors.accent.coral }]}
+                    style={[styles.startBtn, shadows.glow(colors.accent.coral)]}
                     onPress={handleStart}
                     disabled={startMutation.isPending}
+                    activeOpacity={0.9}
                 >
-                    {startMutation.isPending ? (
-                        <ActivityIndicator color="#FFF" />
-                    ) : (
-                        <>
-                            <Text style={[typography.heading, { color: '#FFF', fontSize: 18, marginRight: 8 }]}>Start Workout</Text>
-                            <Ionicons name="play" size={20} color="#FFF" />
-                        </>
-                    )}
+                    <LinearGradient
+                        colors={colors.gradients.coral}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.startBtnInner}
+                    >
+                        {startMutation.isPending ? (
+                            <ActivityIndicator color={colors.text.primary} />
+                        ) : (
+                            <>
+                                <Text style={[typography.h3, { color: colors.text.primary, marginRight: 8 }]}>Start Workout</Text>
+                                <Ionicons name="play" size={20} color={colors.text.primary} />
+                            </>
+                        )}
+                    </LinearGradient>
                 </TouchableOpacity>
             </View>
         </View>
@@ -119,10 +129,11 @@ export default function TrainingOnboardingScreen() {
 }
 
 function ImageBackgroundGradient() {
+    const { colors } = useTheme();
     return (
         <View style={StyleSheet.absoluteFillObject}>
             <LinearGradient
-                colors={['rgba(255, 107, 53, 0.15)', 'transparent']}
+                colors={[withAlpha(colors.accent.coral, 0.15), 'transparent']}
                 style={{ height: 300, width: '100%' }}
             />
         </View>
@@ -132,18 +143,20 @@ function ImageBackgroundGradient() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { paddingHorizontal: 20, paddingTop: 40, paddingBottom: 16 },
+    closeBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     routineCard: {
         flexDirection: 'row',
         alignItems: 'center',
         padding: 16,
         marginBottom: 12,
-        backgroundColor: 'transparent',
         borderWidth: 2,
-        borderColor: 'transparent',
-    },
-    selectedCard: {
-        borderColor: '#A78BFA',
-        backgroundColor: '#1C2333',
     },
     iconBox: {
         width: 48,
@@ -162,15 +175,15 @@ const styles = StyleSheet.create({
         borderTopWidth: 1,
     },
     startBtn: {
-        flexDirection: 'row',
         height: 56,
         borderRadius: 28,
+    },
+    startBtnInner: {
+        flex: 1,
+        flexDirection: 'row',
+        borderRadius: 28,
+        overflow: 'hidden',
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#FF6B35',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 6,
     }
 });

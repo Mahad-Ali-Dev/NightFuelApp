@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -9,6 +9,8 @@ import { useQuery } from '@tanstack/react-query';
 import { searchLibrary, Exercise } from '@/api/exercises';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
+import { shadows } from '@/theme/shadows';
+import { Skeleton, EmptyState } from '@/components/ui';
 const MUSCLE_GROUPS = [
     { id:'chest', label:'Chest', searchKey:'chest', color:'#FF6B35', image:'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=400&auto=format&fit=crop&q=80' },
     { id:'back', label:'Back', searchKey:'back', color:'#00D4FF', image:'https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?w=400&auto=format&fit=crop&q=80' },
@@ -45,13 +47,13 @@ export default function MuscleMapScreen() {
     return (
         <View style={[s.container,{backgroundColor:colors.background.primary}]}>
             <View style={[s.header,{paddingTop:insets.top+16,borderBottomColor:colors.border.default}]}>
-                <TouchableOpacity onPress={()=>router.back()}><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></TouchableOpacity>
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={()=>router.back()}><Ionicons name="arrow-back" size={24} color={colors.text.primary} /></TouchableOpacity>
                 <Text style={[typography.heading,{color:colors.text.primary,fontSize:20}]}>Muscle Groups</Text>
                 <View style={{width:24}} />
             </View>
             <View style={[s.switcher,{backgroundColor:colors.background.secondary,margin:20,marginBottom:4}]}>
                 {(['muscles','stretching'] as T[]).map((t)=>(
-                    <TouchableOpacity key={t} style={[s.switchBtn, tab===t&&{backgroundColor:colors.accent.coral}]} onPress={()=>{setTab(t);setSelectedId(null);}}>
+                    <TouchableOpacity key={t} accessibilityRole="tab" accessibilityState={{ selected: tab===t }} accessibilityLabel={t} style={[s.switchBtn, tab===t&&{backgroundColor:colors.accent.coral},tab===t&&shadows.glow(colors.accent.coral)]} onPress={()=>{setTab(t);setSelectedId(null);}}>
                         <Text style={[typography.caption,{color:tab===t?'#FFF':colors.text.tertiary,fontWeight:'bold'}]}>{t.toUpperCase()}</Text>
                     </TouchableOpacity>
                 ))}
@@ -61,8 +63,8 @@ export default function MuscleMapScreen() {
                     {items.map((m)=>{
                         const isSel = selectedId===m.id;
                         return (
-                            <TouchableOpacity key={m.id} style={[s.card, isSel&&{borderColor:m.color,borderWidth:2}]} activeOpacity={0.85} onPress={()=>setSelectedId(isSel?null:m.id)}>
-                                <Image source={{uri:m.image}} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+                            <TouchableOpacity key={m.id} accessibilityRole="button" accessibilityState={{ selected: isSel }} accessibilityLabel={m.label} style={[s.card, isSel&&{borderColor:m.color,borderWidth:2}]} activeOpacity={0.85} onPress={()=>setSelectedId(isSel?null:m.id)}>
+                                <Image source={{uri:m.image}} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                                 <LinearGradient colors={[isSel?withAlpha(m.color,0.5):'transparent','rgba(0,0,0,0.8)']} style={StyleSheet.absoluteFillObject} />
                                 {isSel&&<View style={[s.chk,{backgroundColor:m.color}]}><Ionicons name="checkmark" size={12} color="#FFF" /></View>}
                                 <View style={s.cardContent}>
@@ -81,19 +83,29 @@ export default function MuscleMapScreen() {
                         <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'baseline',marginBottom:14}}>
                             <Text style={[typography.heading,{color:colors.text.primary}]}>{sel.label} Exercises</Text>
                             {!exQ.isLoading && exercises.length > 0 && (
-                                <Text style={[typography.caption,{color:colors.text.tertiary}]}>{exercises.length} total</Text>
+                                <Text style={[typography.caption,{color:colors.text.secondary}]}>{exercises.length} total</Text>
                             )}
                         </View>
                         {exQ.isLoading
-                            ? <ActivityIndicator color={sel.color} style={{marginTop:20}} />
-                            : exercises.length===0
-                                ? <Text style={[typography.body,{color:colors.text.tertiary,textAlign:'center',paddingVertical:20}]}>No exercises found</Text>
-                                : exercises.map((ex)=>(
-                                    <TouchableOpacity key={ex.id} style={[s.exRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]} onPress={()=>router.push(`/(exercises)/${ex.id}` as any)} activeOpacity={0.8}>
-                                        <Image source={{uri:ex.imageUrl||'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=200&auto=format&fit=crop&q=60'}} style={s.exThumb} contentFit="cover" />
+                            ? <View>{[0,1,2,3,4].map((i)=>(
+                                <View key={i} style={[s.exRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
+                                    <Skeleton width={52} height={52} radius={10} />
+                                    <View style={{flex:1,marginLeft:12}}>
+                                        <Skeleton width="65%" height={16} radius={6} />
+                                        <Skeleton width="45%" height={12} radius={6} style={{marginTop:8}} />
+                                    </View>
+                                </View>
+                              ))}</View>
+                            : exQ.isError
+                                ? <EmptyState icon="cloud-offline-outline" title="Couldn't load exercises" subtitle="Something went wrong. Check your connection and try again." actionLabel="Try Again" onAction={()=>exQ.refetch()} />
+                                : exercises.length===0
+                                    ? <EmptyState icon="barbell-outline" title="No exercises found" subtitle={`We don't have any ${sel.label.toLowerCase()} exercises tagged yet. Try another group.`} />
+                                    : exercises.map((ex)=>(
+                                    <TouchableOpacity key={ex.id} accessibilityRole="button" accessibilityLabel={ex.name} style={[s.exRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]} onPress={()=>router.push(`/(exercises)/${ex.id}` as any)} activeOpacity={0.8}>
+                                        <Image source={{uri:ex.imageUrl||'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=200&auto=format&fit=crop&q=60'}} style={s.exThumb} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                                         <View style={{flex:1,marginLeft:12}}>
                                             <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold'}]}>{ex.name}</Text>
-                                            <Text style={[typography.caption,{color:colors.text.tertiary}]}>{ex.equipment} • {ex.difficulty}</Text>
+                                            <Text style={[typography.caption,{color:colors.text.secondary}]}>{ex.equipment} • {ex.difficulty}</Text>
                                         </View>
                                         <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
                                     </TouchableOpacity>

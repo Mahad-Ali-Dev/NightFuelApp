@@ -10,7 +10,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getChallenges, joinChallenge, updateChallengeProgress } from '@/api/community';
 import { withAlpha } from '@/theme/utils';
-import { Card, Button } from '@/components/ui';
+import { Card, Button, EmptyState } from '@/components/ui';
+import { shadows } from '@/theme';
 
 export default function ChallengesScreen() {
     const { colors, typography, spacing, borderRadius } = useTheme();
@@ -72,10 +73,10 @@ export default function ChallengesScreen() {
             <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
                 {/* Header */}
                 <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                    <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backBtn}>
                         <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
                     </TouchableOpacity>
-                    <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>
+                    <Text style={[typography.h3, { color: colors.text.primary }]}>
                         Community Challenges
                     </Text>
                     <View style={{ width: 40 }} />
@@ -89,12 +90,11 @@ export default function ChallengesScreen() {
                     {isLoading ? (
                         <ActivityIndicator size="large" color={colors.accent.cyan} style={{ marginTop: 40 }} />
                     ) : !challenges || challenges.length === 0 ? (
-                        <View style={styles.emptyState}>
-                            <Ionicons name="trophy-outline" size={64} color={colors.text.tertiary} />
-                            <Text style={[typography.subhead, { color: colors.text.secondary, marginTop: 16 }]}>
-                                No active challenges at the moment.
-                            </Text>
-                        </View>
+                        <EmptyState
+                            icon="trophy-outline"
+                            title="No active challenges"
+                            subtitle="There are no community challenges running right now. Check back soon to compete and earn XP."
+                        />
                     ) : (
                         challenges.map((chall) => {
                             const isJoined   = chall.myProgress !== undefined;
@@ -126,7 +126,7 @@ export default function ChallengesScreen() {
 
                                     <View style={styles.challBody}>
                                         {/* Icon */}
-                                        <View style={[styles.challIcon, { backgroundColor: withAlpha(colors.accent.cyan, 0.1) }]}>
+                                        <View style={[styles.challIcon, { backgroundColor: withAlpha(colors.accent.cyan, 0.1) }, shadows.glow(colors.accent.cyan)]}>
                                             <Ionicons name="flash" size={28} color={colors.accent.cyan} />
                                         </View>
 
@@ -142,7 +142,7 @@ export default function ChallengesScreen() {
                                             {/* Meta row */}
                                             <View style={styles.metaRow}>
                                                 <Ionicons name="people" size={13} color={colors.text.tertiary} />
-                                                <Text style={[typography.caption, { color: colors.text.tertiary, marginLeft: 4 }]}>
+                                                <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 4 }]}>
                                                     {chall.participants} joined
                                                 </Text>
                                                 {isJoined && chall.myProgress !== undefined && (
@@ -150,7 +150,7 @@ export default function ChallengesScreen() {
                                                         <View style={[styles.dot, { backgroundColor: colors.text.tertiary }]} />
                                                         <Ionicons name="stats-chart" size={13} color={colors.accent.emerald} />
                                                         <Text style={[typography.caption, { color: colors.accent.emerald, fontWeight: 'bold', marginLeft: 4 }]}>
-                                                            {chall.myProgress} logged
+                                                            <Text style={[typography.statTiny, { color: colors.accent.emerald, fontSize: 13 }]}>{chall.myProgress}</Text> logged
                                                         </Text>
                                                     </>
                                                 )}
@@ -159,6 +159,9 @@ export default function ChallengesScreen() {
                                             {/* CTA */}
                                             {isJoined ? (
                                                 <TouchableOpacity
+                                                    accessibilityRole="button"
+                                                    accessibilityLabel={isExpanded ? 'Cancel logging progress' : 'Log progress'}
+                                                    accessibilityState={{ expanded: isExpanded }}
                                                     style={[
                                                         styles.progressBtn,
                                                         {
@@ -216,15 +219,15 @@ export default function ChallengesScreen() {
                                                     returnKeyType="done"
                                                     onSubmitEditing={() => handleLogProgress(chall.id)}
                                                 />
-                                                <TouchableOpacity
+                                                <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Log progress"
                                                     style={[styles.submitBtn, { backgroundColor: colors.accent.emerald }]}
                                                     onPress={() => handleLogProgress(chall.id)}
                                                     disabled={progressMutation.isPending}
                                                 >
                                                     {progressMutation.isPending ? (
-                                                        <ActivityIndicator color="#fff" size="small" />
+                                                        <ActivityIndicator color={colors.text.primary} size="small" />
                                                     ) : (
-                                                        <Ionicons name="checkmark" size={22} color="#fff" />
+                                                        <Ionicons name="checkmark" size={22} color={colors.text.primary} />
                                                     )}
                                                 </TouchableOpacity>
                                             </View>
@@ -251,7 +254,6 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
     },
     backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-    emptyState: { alignItems: 'center', paddingVertical: 80 },
 
     challCard: { marginBottom: 16, borderWidth: 1, overflow: 'hidden' },
     joinedBadge: {

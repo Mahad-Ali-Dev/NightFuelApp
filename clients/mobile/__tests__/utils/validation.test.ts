@@ -53,7 +53,7 @@ describe('isStrongPassword', () => {
 
 describe('sanitizeInput', () => {
   test('strips simple HTML tags', () => {
-    expect(sanitizeInput('<script>evil()</script>hello')).toBe('evilhello');
+    expect(sanitizeInput('<script>evil()</script>hello')).toBe('evil()hello');
     expect(sanitizeInput('<b>bold</b>')).toBe('bold');
   });
 

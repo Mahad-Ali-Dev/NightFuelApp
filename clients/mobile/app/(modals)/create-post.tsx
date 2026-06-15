@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPost } from '@/api/community';
 import { Button } from '@/components/ui';
+import { withAlpha } from '@/theme/utils';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 
@@ -50,16 +51,20 @@ export default function CreatePostModal() {
 
     return (
         <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={[styles.container, { backgroundColor: colors.background.primary }]}
         >
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="close" size={28} color={colors.text.primary} />
                 </TouchableOpacity>
                 <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>New Post</Text>
                 <TouchableOpacity
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Share post"
+                    accessibilityState={{ disabled: postMutation.isPending || !content.trim() }}
                     onPress={() => postMutation.mutate()}
                     disabled={postMutation.isPending || !content.trim()}
                 >
@@ -83,11 +88,11 @@ export default function CreatePostModal() {
                 {image && (
                     <View style={styles.imagePreview}>
                         <Image source={{ uri: image }} style={[styles.previewImg, { borderRadius: borderRadius.lg }]} />
-                        <TouchableOpacity
-                            style={[styles.removeImg, { backgroundColor: 'rgba(0,0,0,0.6)' }]}
+                        <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close"
+                            style={[styles.removeImg, { backgroundColor: withAlpha(colors.background.primary, 0.7), borderColor: colors.border.default }]}
                             onPress={() => setImage(null)}
                         >
-                            <Ionicons name="close" size={20} color="#FFF" />
+                            <Ionicons name="close" size={20} color={colors.text.primary} />
                         </TouchableOpacity>
                     </View>
                 )}
@@ -105,6 +110,9 @@ export default function CreatePostModal() {
                     {FITNESS_EMOJIS.map(emoji => (
                         <TouchableOpacity
                             key={emoji}
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Insert ${emoji} emoji`}
                             style={styles.emojiBtn}
                             onPress={() => {
                                 setContent(prev => prev + emoji);
@@ -119,17 +127,17 @@ export default function CreatePostModal() {
 
             {/* Toolbar */}
             <View style={[styles.toolbar, { borderTopColor: colors.border.default, paddingBottom: insets.bottom + 10 }]}>
-                <TouchableOpacity style={styles.toolBtn} onPress={handlePickImage}>
+                <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Add photo" style={styles.toolBtn} onPress={handlePickImage}>
                     <Ionicons name="image-outline" size={24} color={colors.accent.cyan} />
                     <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 8 }]}>Photo</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Mention"
                     style={styles.toolBtn}
                     onPress={() => setContent(prev => prev.endsWith('@') ? prev : prev + (prev.length > 0 && !prev.endsWith(' ') ? ' @' : '@'))}
                 >
                     <Ionicons name="at-outline" size={24} color={colors.accent.cyan} />
                 </TouchableOpacity>
-                <TouchableOpacity
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Add emoji"
                     style={styles.toolBtn}
                     onPress={() => setShowEmojis(v => !v)}
                 >
@@ -156,7 +164,7 @@ const styles = StyleSheet.create({
     input: { fontSize: 18, lineHeight: 28 },
     imagePreview: { marginTop: 20, position: 'relative' },
     previewImg: { width: '100%', height: 250 },
-    removeImg: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    removeImg: { position: 'absolute', top: 12, right: 12, width: 32, height: 32, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, alignItems: 'center', justifyContent: 'center' },
     toolbar: { flexDirection: 'row', alignItems: 'center', padding: 16, borderTopWidth: 1 },
     toolBtn: { flexDirection: 'row', alignItems: 'center', marginRight: 24 },
     emojiRow: { borderTopWidth: 1, maxHeight: 60 },

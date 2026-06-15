@@ -8,7 +8,7 @@ interface RiaCoachFABProps {
     onPress: () => void;
 }
 
-export const RiaCoachFAB: React.FC<RiaCoachFABProps> = ({ onPress }) => {
+const RiaCoachFABComponent: React.FC<RiaCoachFABProps> = ({ onPress }) => {
     return (
         <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.8}>
             <LinearGradient
@@ -23,6 +23,12 @@ export const RiaCoachFAB: React.FC<RiaCoachFABProps> = ({ onPress }) => {
         </TouchableOpacity>
     );
 };
+
+/**
+ * Memoized: the only prop is a stable `onPress`. This floating button is
+ * mounted on screens that re-render often, so memo avoids needless re-renders.
+ */
+export const RiaCoachFAB = React.memo(RiaCoachFABComponent);
 
 const styles = StyleSheet.create({
     container: {
