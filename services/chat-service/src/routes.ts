@@ -107,18 +107,51 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
             body: z.object({
                 message: z.string().min(1).max(4000),
                 // context is forwarded verbatim to the AI pipeline — keep it a
-                // plain object and bound its serialized size to limit abuse.
+                // plain object and bound its serialized size, nesting depth,
+                // total key count, and individual string lengths to limit
+                // downstream LLM-prompt-injection / DoS abuse.
                 context: z
                     .record(z.unknown())
                     .refine(
                         (c) => {
+                            // Single iterative walk: enforces all four bounds at once.
+                            // No recursion — adversarial payloads can't blow the stack.
+                            const MAX_BYTES = 16_000;
+                            const MAX_DEPTH = 8;
+                            const MAX_KEYS = 200;
+                            const MAX_STRING = 4096;
                             try {
-                                return JSON.stringify(c).length <= 16_000;
+                                if (JSON.stringify(c).length > MAX_BYTES) return false;
                             } catch {
                                 return false;
                             }
+                            // Stack entries: [node, depth]. Root object is depth 1.
+                            const stack: Array<[unknown, number]> = [[c, 1]];
+                            let keyCount = 0;
+                            while (stack.length > 0) {
+                                const [node, depth] = stack.pop() as [unknown, number];
+                                if (depth > MAX_DEPTH) return false;
+                                if (node === null || typeof node !== 'object') {
+                                    if (typeof node === 'string' && node.length > MAX_STRING) return false;
+                                    continue;
+                                }
+                                if (Array.isArray(node)) {
+                                    for (let i = 0; i < node.length; i++) {
+                                        stack.push([node[i], depth + 1]);
+                                    }
+                                    continue;
+                                }
+                                const obj = node as Record<string, unknown>;
+                                for (const k in obj) {
+                                    if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+                                    keyCount++;
+                                    if (keyCount > MAX_KEYS) return false;
+                                    stack.push([obj[k], depth + 1]);
+                                }
+                            }
+                            return true;
                         },
-                        { message: 'context is too large' }
+                        { message: 'context exceeds size/depth/key/string bounds' }
                     )
                     .optional(),
             })
@@ -132,33 +165,37 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
     });
 
     // ── WebSocket route for real-time chat ──────────────────────────────────
-    (fastify as any).get('/v1/chat/ws', { websocket: true }, (connection: any, req: any) => {
+    (fastify as any).get('/v1/chat/ws', { websocket: true }, (socket: any, req: any) => {
         // Authenticate the upgrade from the Bearer token. Unlike the dev-fallback
         // `authenticate` decorator, the socket MUST close on a bad/missing token —
         // the sender identity below is trusted to come from this verified payload.
+        // NOTE: @fastify/websocket v11 passes the raw WebSocket as the first arg
+        // (not the v10-era wrapper object). The pre-v11 nested-property access
+        // pattern silently threw and left the socket OPEN — a critical auth-bypass
+        // vector. Always invoke close/on/send directly on this `socket` arg.
         const token = (req.headers?.authorization as string | undefined)?.replace('Bearer ', '');
         let wsUser: any;
         try {
             if (!token) throw new Error('missing');
             wsUser = jwt.verify(token, jwtSecret);
         } catch {
-            try { connection.socket.close(4401, 'Unauthorized'); } catch {}
+            socket.close(4401, 'Unauthorized');
             return;
         }
 
-        connection.socket.on('message', async (message: Buffer) => {
+        socket.on('message', async (message: Buffer) => {
             try {
                 let raw: unknown;
                 try {
                     raw = JSON.parse(message.toString());
                 } catch {
-                    connection.socket.send(JSON.stringify({ type: 'error', error: 'invalid_frame' }));
+                    socket.send(JSON.stringify({ type: 'error', error: 'invalid_frame' }));
                     return;
                 }
 
                 const parsed = wsFrameSchema.safeParse(raw);
                 if (!parsed.success) {
-                    connection.socket.send(JSON.stringify({ type: 'error', error: 'invalid_frame' }));
+                    socket.send(JSON.stringify({ type: 'error', error: 'invalid_frame' }));
                     return;
                 }
 
@@ -171,7 +208,7 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
                     parsed.data.text
                 );
 
-                connection.socket.send(JSON.stringify({
+                socket.send(JSON.stringify({
                     type: 'new_message',
                     data: savedMessage
                 }));

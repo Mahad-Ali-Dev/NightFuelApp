@@ -7,20 +7,23 @@
  * must never stay open.
  *
  * Test strategy — why we drive the handler directly instead of a live socket:
- *   The work-item permits asserting "the documented close-on-bad-token path via
- *   the upgrade handler" when a live socket is flaky under jest. Here a live
- *   socket is worse than flaky: under @fastify/websocket v11 the user handler
- *   receives the ws socket as its FIRST argument, whereas routes.ts addresses
- *   it as `connection.socket.*`. Against a real v11 socket that mismatch means
- *   the `connection.socket.close(4401)` call throws and is swallowed by the
- *   handler's try/catch — so a real socket would never actually emit 4401, and
- *   a live-socket assertion would test the transport quirk rather than the
- *   authored security contract. We therefore invoke the genuine routes.ts WS
- *   closure with a mock connection shaped the way the code expects
- *   (`connection.socket.close`), which deterministically exercises the real
- *   jwt.verify gate and its close(4401) decision with no ports, sockets, or
- *   timers. (The 4401-on-the-wire behaviour itself is tracked separately as a
- *   routes.ts v11 API-shape fix; this suite locks the auth DECISION.)
+ *   This suite is the FAST in-process companion to ws-wire.test.ts (which boots
+ *   a real Fastify listener and asserts the actual close frame over the wire).
+ *   Here we capture the v11 user-handler closure registered by routes.ts and
+ *   invoke it with a hand-rolled socket mock. That deterministically exercises
+ *   the real jwt.verify gate and its close(4401) decision with no ports, no OS
+ *   sockets, and no timers — every branch fires in microseconds.
+ *
+ *   The mock's shape mirrors the @fastify/websocket v11 contract, which is what
+ *   routes.ts is now written against: the handler's FIRST argument IS the raw
+ *   WebSocket, NOT a `{ socket }` wrapper. So we pass `socket` directly and the
+ *   handler calls `socket.close(...)`, `socket.on(...)`, `socket.send(...)`
+ *   straight on it — exactly as it would against a real v11 socket.
+ *
+ *   The on-the-wire behaviour (a peer actually receiving the 4401 close frame)
+ *   is locked separately by ws-wire.test.ts. Together the two files form a
+ *   defense in depth: this file proves the auth DECISION; ws-wire.test.ts
+ *   proves the v11 TRANSPORT actually delivers it.
  */
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
@@ -59,7 +62,7 @@ function makeMockChatService(): MockChatService {
  * Everything else (zod compilers, @fastify/websocket) is wired like src/index.ts
  * so the schemas and plugin context match production.
  */
-type WsHandler = (connection: unknown, req: unknown) => unknown | Promise<unknown>;
+type WsHandler = (socket: unknown, req: unknown) => unknown | Promise<unknown>;
 
 async function buildAppCapturingWsHandler(
     chatService: MockChatService,
@@ -95,10 +98,11 @@ async function buildAppCapturingWsHandler(
 }
 
 /**
- * A mock connection matching the shape routes.ts addresses (`connection.socket`).
+ * A mock raw WebSocket matching the @fastify/websocket v11 contract: the handler
+ * receives this object directly as its first argument (no `{ socket }` wrapper).
  * Records every close() call and lets us drive inbound 'message' frames.
  */
-function makeMockConnection() {
+function makeMockSocket() {
     const listeners: Record<string, Array<(...a: any[]) => void>> = {};
     const sent: string[] = [];
     const closeCalls: Array<{ code?: number; reason?: string }> = [];
@@ -121,7 +125,7 @@ function makeMockConnection() {
         hasListener: (event: string) => (listeners[event]?.length ?? 0) > 0,
     };
 
-    return { connection: { socket }, socket };
+    return socket;
 }
 
 function validToken(payload: Record<string, unknown> = { userId: 'real-user-1' }): string {
@@ -154,9 +158,9 @@ describe('chat-service WebSocket upgrade — closes 4401 on missing/forged/expir
 
     for (const scenario of badTokenScenarios) {
         it(`closes the socket with code 4401 — ${scenario.label}`, async () => {
-            const { connection, socket } = makeMockConnection();
+            const socket = makeMockSocket();
 
-            await getWsHandler()(connection, { headers: scenario.headers });
+            await getWsHandler()(socket, { headers: scenario.headers });
 
             // The authored contract: a single close(4401, 'Unauthorized').
             expect(socket.closeCalls).toHaveLength(1);
@@ -168,9 +172,9 @@ describe('chat-service WebSocket upgrade — closes 4401 on missing/forged/expir
         });
 
         it(`never registers a message handler nor calls ChatService — ${scenario.label}`, async () => {
-            const { connection, socket } = makeMockConnection();
+            const socket = makeMockSocket();
 
-            await getWsHandler()(connection, { headers: scenario.headers });
+            await getWsHandler()(socket, { headers: scenario.headers });
 
             // Even if a (would-be) client tried to send after a rejected upgrade,
             // there is no listener, so saveMessage can never fire.
@@ -187,9 +191,9 @@ describe('chat-service WebSocket upgrade — closes 4401 on missing/forged/expir
     }
 
     it('keeps the socket open (no close) for a valid token', async () => {
-        const { connection, socket } = makeMockConnection();
+        const socket = makeMockSocket();
 
-        await getWsHandler()(connection, {
+        await getWsHandler()(socket, {
             headers: { authorization: `Bearer ${validToken()}` },
         });
 
@@ -203,7 +207,7 @@ describe('chat-service WebSocket upgrade — closes 4401 on missing/forged/expir
         // Positive control for the no-fallback guarantee: on a valid socket, a
         // saved message must use the token's userId — never a client value and
         // never the impersonated dev identity.
-        const { connection, socket } = makeMockConnection();
+        const socket = makeMockSocket();
         const conversationId = '11111111-1111-1111-1111-111111111111';
 
         chatService.saveMessage.mockResolvedValueOnce({
@@ -213,7 +217,7 @@ describe('chat-service WebSocket upgrade — closes 4401 on missing/forged/expir
             text: 'authentic',
         } as unknown);
 
-        await getWsHandler()(connection, {
+        await getWsHandler()(socket, {
             headers: { authorization: `Bearer ${validToken({ userId: 'real-user-1' })}` },
         });
 

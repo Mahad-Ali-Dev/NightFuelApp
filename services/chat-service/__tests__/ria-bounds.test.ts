@@ -194,4 +194,121 @@ describe('chat-service POST /v1/chat/ria/send — free-text bounds (message.max(
             expect(chatService.sendRiaMessage).toHaveBeenCalledTimes(1);
         });
     });
+
+    /**
+     * The context refine in routes.ts caps four things at once: total bytes,
+     * nesting depth, total key count, and individual string length. The total-
+     * bytes bound is already locked above; this block covers the other three
+     * structural bounds (depth, keys, strings) plus a realistic positive
+     * control that crosses none of them.
+     *
+     * Why these matter: a downstream LLM is the consumer of `context`. Without
+     * these bounds, an attacker (or a buggy client) could send a 1KB JSON blob
+     * that explodes the LLM-prompt token count via deep nesting, key flooding,
+     * or a single giant string value — all of which slip past a pure byte cap
+     * if the bytes happen to fit.
+     */
+    describe('context structural bounds (depth/key/string)', () => {
+        // Builds an `{a:{a:{...}}}` chain `depth` levels deep. The chain itself
+        // is tiny — far under CONTEXT_MAX_BYTES — so a rejection here is
+        // attributable to the DEPTH bound (MAX_DEPTH=8), not the byte bound.
+        function deepNestedContext(depth: number): Record<string, unknown> {
+            let node: Record<string, unknown> = { leaf: 1 };
+            for (let i = 0; i < depth; i++) {
+                node = { a: node };
+            }
+            // Self-check: stays well under the byte cap so the failure mode is
+            // unambiguously the depth bound, not byte overflow.
+            expect(JSON.stringify(node).length).toBeLessThanOrEqual(CONTEXT_MAX_BYTES);
+            return node;
+        }
+
+        // Builds a single-level object with `n` keys. The serialized size of
+        // 240 short keys (`k000:0,...k239:0`) is small (~2-3KB) — well under
+        // the byte cap — so a rejection is attributable to the KEY-COUNT bound
+        // (MAX_KEYS=200), not the byte cap.
+        function keyFloodContext(n: number): Record<string, unknown> {
+            const ctx: Record<string, unknown> = {};
+            for (let i = 0; i < n; i++) {
+                ctx[`k${i.toString().padStart(3, '0')}`] = 0;
+            }
+            expect(JSON.stringify(ctx).length).toBeLessThanOrEqual(CONTEXT_MAX_BYTES);
+            return ctx;
+        }
+
+        // One value is a 5KB string — under the byte cap (16KB total) but well
+        // past the per-string cap (MAX_STRING=4096). Rejection must therefore
+        // come from the STRING-LENGTH bound, not the byte cap.
+        function giantStringContext(): Record<string, unknown> {
+            const ctx = { note: 'x'.repeat(5000) };
+            expect(JSON.stringify(ctx).length).toBeLessThanOrEqual(CONTEXT_MAX_BYTES);
+            return ctx;
+        }
+
+        // Realistic in-bounds payload — 4 keys, ~6KB total when serialised,
+        // each string well under the per-string cap, nesting only 2-3 deep.
+        // This is the positive control: NONE of the structural bounds fire and
+        // the route must accept it AND forward it unchanged.
+        function realisticContext(): Record<string, unknown> {
+            // Three ~2KB strings + a tiny meta object => ~6KB serialised. Each
+            // string stays under the MAX_STRING=4096 per-value cap; total stays
+            // well under MAX_BYTES=16_000; key/depth counts stay under their caps.
+            const summary = 'a'.repeat(2000);
+            const log = 'b'.repeat(2000);
+            const goals = 'c'.repeat(2000);
+            const meta = {
+                streak: 7,
+                tz: 'America/Los_Angeles',
+                weight_kg: 82.4,
+            };
+            const ctx = { summary, log, goals, meta };
+            // Self-check: comfortably in bounds on EVERY axis (~6KB total).
+            const serialized = JSON.stringify(ctx);
+            expect(serialized.length).toBeGreaterThanOrEqual(6000);
+            expect(serialized.length).toBeLessThanOrEqual(CONTEXT_MAX_BYTES);
+            return ctx;
+        }
+
+        it('rejects a deeply nested context (>8 levels) with 400 and never calls sendRiaMessage', async () => {
+            // 12 levels of {a:{...}} ensures the *root depth=1 + 12 = 13* far
+            // exceeds MAX_DEPTH=8, so we never sit ambiguously on the boundary.
+            const res = await sendRia(app, { message: 'ok', context: deepNestedContext(12) });
+
+            expect(res.statusCode).toBe(400);
+            expect(chatService.sendRiaMessage).not.toHaveBeenCalled();
+        });
+
+        it('rejects a key-flood context (>200 shallow keys) with 400 and never calls sendRiaMessage', async () => {
+            const res = await sendRia(app, { message: 'ok', context: keyFloodContext(240) });
+
+            expect(res.statusCode).toBe(400);
+            expect(chatService.sendRiaMessage).not.toHaveBeenCalled();
+        });
+
+        it('rejects a giant single-string context (one >4KB value) with 400 and never calls sendRiaMessage', async () => {
+            const res = await sendRia(app, { message: 'ok', context: giantStringContext() });
+
+            expect(res.statusCode).toBe(400);
+            expect(chatService.sendRiaMessage).not.toHaveBeenCalled();
+        });
+
+        it('accepts a realistic 4-key ~6KB context (positive control) and forwards it verbatim', async () => {
+            const message = 'plan my recovery week';
+            const context = realisticContext();
+
+            const res = await sendRia(app, { message, context });
+
+            expect(res.statusCode).not.toBe(400);
+            expect(res.statusCode).toBeLessThan(500);
+            expect(chatService.sendRiaMessage).toHaveBeenCalledTimes(1);
+
+            const [, passedMessage, passedContext] = chatService.sendRiaMessage.mock.calls[0] as [
+                string,
+                string,
+                Record<string, unknown>,
+            ];
+            expect(passedMessage).toBe(message);
+            expect(passedContext).toEqual(context);
+        });
+    });
 });

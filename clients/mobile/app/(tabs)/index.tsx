@@ -25,6 +25,8 @@ import { withAlpha } from '@/theme/utils';
 import { WeeklyRecap } from '@/components/WeeklyRecap';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { searchLibrary } from '@/api/exercises';
+import ShiftTransitionCard from '@/components/home/ShiftTransitionCard';
+import { CaffeineTimerTile } from '@/components/home/CaffeineTimerTile';
 
 const { width } = Dimensions.get('window');
 const H_PAD = 20;
@@ -175,9 +177,15 @@ export default function DashboardScreen() {
     const [refreshing, setRefreshing] = useState(false);
 
     // ── Queries ──
-    const { data: shift, isLoading: shiftLoading } = useQuery({ queryKey: ['current-shift'], queryFn: getCurrentShift, retry: 1 });
-    const { data: progress, isLoading: progressLoading } = useQuery({ queryKey: ['today-progress'], queryFn: getTodayProgress, retry: 1 });
-    const { data: plan, isLoading: planLoading } = useQuery({ queryKey: ['today-plan'], queryFn: getTodayPlan, retry: 1 });
+    // Each query exposes isError + refetch so the dashboard can render a uniform
+    // "Couldn't load … / Retry" EmptyState (instead of crashing or staying
+    // empty) and re-fire the request on tap.
+    const { data: shift, isLoading: shiftLoading, isError: shiftError, refetch: shiftRefetch } =
+        useQuery({ queryKey: ['current-shift'], queryFn: getCurrentShift, retry: 1 });
+    const { data: progress, isLoading: progressLoading, isError: progressError, refetch: progressRefetch } =
+        useQuery({ queryKey: ['today-progress'], queryFn: getTodayProgress, retry: 1 });
+    const { data: plan, isLoading: planLoading, isError: planError, refetch: planRefetch } =
+        useQuery({ queryKey: ['today-plan'], queryFn: getTodayPlan, retry: 1 });
 
     // Fetch exercise counts per category
     const exerciseCountQueries = EXERCISE_CATEGORY_META.map(cat => cat.filter);
@@ -245,49 +253,11 @@ export default function DashboardScreen() {
         return name.split(' ').map((n: string) => n[0] ?? '').join('').toUpperCase().slice(0, 2);
     }, [displayName]);
 
-    if (shiftLoading) {
-        return (
-            <View style={[s.root, { backgroundColor: colors.background.primary }]}>
-                <ScrollView
-                    contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16 }]}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {/* Header skeleton */}
-                    <View style={s.header}>
-                        <View style={s.headerLeft}>
-                            <Skeleton width={44} height={44} radius={borderRadius.full} />
-                            <View>
-                                <Skeleton width={96} height={13} radius={borderRadius.sm} />
-                                <Skeleton width={140} height={22} radius={borderRadius.sm} style={{ marginTop: spacing.sm }} />
-                            </View>
-                        </View>
-                        <Skeleton width={38} height={38} radius={borderRadius.full} />
-                    </View>
-                    <Skeleton width={180} height={13} radius={borderRadius.sm} style={{ marginTop: spacing.md, marginBottom: spacing.xl }} />
-
-                    {/* Hero skeleton */}
-                    <Skeleton width="100%" height={104} radius={borderRadius['2xl']} style={{ marginBottom: spacing.md }} />
-                    {/* Insight chip skeleton */}
-                    <Skeleton width={240} height={36} radius={borderRadius.xl} style={{ marginBottom: spacing.xl }} />
-                    {/* Up-next skeleton */}
-                    <Skeleton width="100%" height={196} radius={borderRadius['2xl']} style={{ marginBottom: spacing.lg }} />
-                    {/* Mini-card row skeleton */}
-                    <View style={s.miniRow}>
-                        <Skeleton width={MINI_W} height={150} radius={borderRadius.xl} />
-                        <Skeleton width={MINI_W} height={150} radius={borderRadius.xl} />
-                    </View>
-                    {/* Quick-actions grid skeleton */}
-                    <Skeleton width={120} height={12} radius={borderRadius.sm} style={{ marginBottom: spacing.lg }} />
-                    <View style={s.quickGrid}>
-                        {[0, 1, 2, 3].map(i => (
-                            <Skeleton key={i} width={MINI_W} height={110} radius={borderRadius.xl} />
-                        ))}
-                    </View>
-                </ScrollView>
-            </View>
-        );
-    }
-
+    // NB: we no longer block the whole dashboard on `shiftLoading`. The
+    // ShiftTransitionCard owns its own loading + error skeleton, and every
+    // other section (UP NEXT meal, hydration mini, etc.) similarly handles its
+    // own loading/error/empty branches. This keeps the layout stable while any
+    // single query is in flight and lets each section surface its own retry.
     const heroColor = countdown ? colors.accent.coral : colors.accent.cyan;
 
     return (
@@ -402,7 +372,17 @@ export default function DashboardScreen() {
                 </View>
 
                 {/* ══ UP NEXT MEAL ════════════════════════════════════════════ */}
-                {planLoading ? (
+                {planError ? (
+                    <View style={s.emptyCard}>
+                        <EmptyState
+                            icon="cloud-offline-outline"
+                            title="Couldn't load"
+                            subtitle="We couldn't reach today's meal plan. Try again in a moment."
+                            actionLabel="Retry"
+                            onAction={() => planRefetch()}
+                        />
+                    </View>
+                ) : planLoading ? (
                     <View style={s.upNextSkeleton}>
                         <View style={s.upNextTop}>
                             <Skeleton width={120} height={26} radius={borderRadius.md} />
@@ -475,7 +455,17 @@ export default function DashboardScreen() {
                     </View>
                 )}
 
-                {/* ══ SLEEP + HYDRATION MINI CARDS ════════════════════════════ */}
+                {/* ══ NEXT SHIFT TRANSITION (circadian readiness) ══════════════ */}
+                <ShiftTransitionCard
+                    shift={shift ?? null}
+                    loading={shiftLoading}
+                    error={shiftError}
+                    onRetry={() => shiftRefetch()}
+                />
+
+                {/* ══ SLEEP + HYDRATION + CAFFEINE MINI CARDS ════════════════ */
+                /* Sleep + Hydration share row 1; CaffeineTimerTile wraps to row
+                 * 2 as the 3rd tile (kept at MINI_W width for visual rhythm). */}
                 <View style={s.miniRow}>
                     {/* Sleep Window */}
                     <TouchableOpacity
@@ -504,41 +494,60 @@ export default function DashboardScreen() {
                         </SafeBlurView>
                     </TouchableOpacity>
 
-                    {/* Hydration */}
-                    <View style={{ width: MINI_W, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}>
-                        <SafeBlurView
-                            tint="dark"
-                            intensity={40}
-                            style={[s.miniCard, { borderWidth: 0, width: '100%' }]}
-                        >
-                            <View style={[s.miniIcon, { backgroundColor: withAlpha(colors.accent.blue, 0.14) }]}>
-                                <Ionicons name="water" size={20} color={colors.accent.blue} />
-                            </View>
-                            <Text style={[typography.overline, s.miniLbl, { color: colors.text.secondary }]}>Hydration</Text>
-                            <Text style={[s.miniVal, { color: colors.text.primary }]}>
-                                <Text style={typography.statMedium}>
-                                    {progress ? ((progress.hydrationActual || progress.hydrationMl || 0) / 1000).toFixed(1) : '0'}
-                                </Text>
-                                <Text style={[typography.captionMedium, { color: colors.text.secondary }]}>
-                                    {' / 2.5L'}
-                                </Text>
-                            </Text>
-                            <View style={[s.hydBarBg, { backgroundColor: withAlpha(colors.accent.blue, 0.15) }]}>
-                                <View style={[s.hydBarFill, { width: (hydPct + '%') as any, backgroundColor: colors.accent.blue }]} />
-                            </View>
-                            <TouchableOpacity
-                                style={[s.addWaterBtn, {
-                                    backgroundColor: withAlpha(colors.accent.blue, 0.12),
-                                    borderColor: withAlpha(colors.accent.blue, 0.22),
-                                }]}
-                                onPress={() => addWater()}
-                                activeOpacity={0.85}
-                                accessibilityRole="button"
-                                accessibilityLabel="Add 250 millilitres of water"
+                    {/* Hydration (with uniform error EmptyState on failure) */}
+                    {progressError ? (
+                        <View style={{ width: MINI_W }}>
+                            <EmptyState
+                                icon="cloud-offline-outline"
+                                title="Couldn't load"
+                                subtitle="Hydration is offline. Tap retry to try again."
+                                actionLabel="Retry"
+                                onAction={() => progressRefetch()}
+                            />
+                        </View>
+                    ) : (
+                        <View style={{ width: MINI_W, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}>
+                            <SafeBlurView
+                                tint="dark"
+                                intensity={40}
+                                style={[s.miniCard, { borderWidth: 0, width: '100%' }]}
                             >
-                                <Text style={[typography.captionMedium, s.addWaterTxt, { color: colors.accent.blue }]}>+ Add 250ml</Text>
-                            </TouchableOpacity>
-                        </SafeBlurView>
+                                <View style={[s.miniIcon, { backgroundColor: withAlpha(colors.accent.blue, 0.14) }]}>
+                                    <Ionicons name="water" size={20} color={colors.accent.blue} />
+                                </View>
+                                <Text style={[typography.overline, s.miniLbl, { color: colors.text.secondary }]}>Hydration</Text>
+                                <Text style={[s.miniVal, { color: colors.text.primary }]}>
+                                    <Text style={typography.statMedium}>
+                                        {progress ? ((progress.hydrationActual || progress.hydrationMl || 0) / 1000).toFixed(1) : '0'}
+                                    </Text>
+                                    <Text style={[typography.captionMedium, { color: colors.text.secondary }]}>
+                                        {' / 2.5L'}
+                                    </Text>
+                                </Text>
+                                <View style={[s.hydBarBg, { backgroundColor: withAlpha(colors.accent.blue, 0.15) }]}>
+                                    <View style={[s.hydBarFill, { width: (hydPct + '%') as any, backgroundColor: colors.accent.blue }]} />
+                                </View>
+                                <TouchableOpacity
+                                    style={[s.addWaterBtn, {
+                                        backgroundColor: withAlpha(colors.accent.blue, 0.12),
+                                        borderColor: withAlpha(colors.accent.blue, 0.22),
+                                    }]}
+                                    onPress={() => addWater()}
+                                    activeOpacity={0.85}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Add 250 millilitres of water"
+                                >
+                                    <Text style={[typography.captionMedium, s.addWaterTxt, { color: colors.accent.blue }]}>+ Add 250ml</Text>
+                                </TouchableOpacity>
+                            </SafeBlurView>
+                        </View>
+                    )}
+                </View>
+
+                {/* ── Caffeine Timer (mini-card row continuation) ───────────── */}
+                <View style={s.caffeineRow}>
+                    <View style={{ width: MINI_W }}>
+                        <CaffeineTimerTile shift={shift ?? null} />
                     </View>
                 </View>
 
@@ -810,7 +819,8 @@ const s = StyleSheet.create({
     logBtnTxt: { color: '#fff', fontSize: 15, fontWeight: '800' },
 
     // Mini cards
-    miniRow: { flexDirection: 'row', gap: CARD_GAP, marginBottom: 28 },
+    miniRow: { flexDirection: 'row', gap: CARD_GAP, marginBottom: 12 },
+    caffeineRow: { marginBottom: 28 },
     miniCard: { width: MINI_W, padding: 16, borderRadius: 20, borderWidth: 1 },
     miniIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
     miniLbl: { marginBottom: 4 },

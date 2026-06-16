@@ -85,9 +85,9 @@ beforeEach(() => {
 });
 
 describe('useCircadianReminders', () => {
-  test('schedules all five reminders for a future shift when prefs allow', async () => {
+  test('schedules all six reminders for a future shift when prefs allow', async () => {
     renderHook(() => useCircadianReminders());
-    await waitFor(() => expect(mockScheduleNotification).toHaveBeenCalledTimes(5));
+    await waitFor(() => expect(mockScheduleNotification).toHaveBeenCalledTimes(6));
 
     // Each scheduled notification carries the reminder tag + a DATE trigger.
     for (const call of mockScheduleNotification.mock.calls) {
@@ -98,10 +98,19 @@ describe('useCircadianReminders', () => {
       expect(arg.trigger.date).toBeInstanceOf(Date);
     }
 
-    // The tagged ids match buildShiftReminders' output set.
+    // The tagged ids match buildShiftReminders' output set (now includes
+    // 'nf-bright-light' as the reconciliation anchor with the coach card's
+    // brightLightWindow — see buildShiftReminders for the source of truth).
     const ids = mockScheduleNotification.mock.calls.map((c) => c[0].content.data.nfReminderId).sort();
     expect(ids).toEqual(
-      ['nf-caffeine-cutoff', 'nf-log-sleep', 'nf-midshift-fuel', 'nf-preshift-meal', 'nf-winddown'].sort(),
+      [
+        'nf-bright-light',
+        'nf-caffeine-cutoff',
+        'nf-log-sleep',
+        'nf-midshift-fuel',
+        'nf-preshift-meal',
+        'nf-winddown',
+      ].sort(),
     );
   });
 
@@ -149,7 +158,7 @@ describe('useCircadianReminders', () => {
     ]);
 
     renderHook(() => useCircadianReminders());
-    await waitFor(() => expect(mockScheduleNotification).toHaveBeenCalledTimes(5));
+    await waitFor(() => expect(mockScheduleNotification).toHaveBeenCalledTimes(6));
 
     expect(mockCancelScheduled).toHaveBeenCalledTimes(2);
     const cancelled = mockCancelScheduled.mock.calls.map((c) => c[0]).sort();
@@ -160,17 +169,18 @@ describe('useCircadianReminders', () => {
 
   test('skips reminders whose preference is explicitly disabled', async () => {
     // Disable meal reminders -> the two mealReminderEnabled reminders drop out,
-    // leaving the three sleepReminderEnabled ones.
+    // leaving the four sleepReminderEnabled ones (including the new
+    // 'nf-bright-light' anchor, which piggy-backs on the sleep toggle).
     mockGetPrefs.mockResolvedValue({ mealReminderEnabled: false, sleepReminderEnabled: true });
 
     renderHook(() => useCircadianReminders());
-    await waitFor(() => expect(mockScheduleNotification).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(mockScheduleNotification).toHaveBeenCalledTimes(4));
 
     const ids = mockScheduleNotification.mock.calls.map((c) => c[0].content.data.nfReminderId);
     expect(ids).not.toContain('nf-preshift-meal');
     expect(ids).not.toContain('nf-midshift-fuel');
     expect(ids).toEqual(
-      expect.arrayContaining(['nf-caffeine-cutoff', 'nf-winddown', 'nf-log-sleep']),
+      expect.arrayContaining(['nf-bright-light', 'nf-caffeine-cutoff', 'nf-winddown', 'nf-log-sleep']),
     );
   });
 

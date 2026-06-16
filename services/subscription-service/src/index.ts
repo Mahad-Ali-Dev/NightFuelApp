@@ -17,6 +17,7 @@ import rateLimit from '@fastify/rate-limit';
 import { PrismaClient } from './generated/prisma';
 import Redis from 'ioredis';
 import pino from 'pino';
+import { sendUnauthorized } from '@nightfuel/config';
 
 import { SubscriptionService } from './subscription.service';
 import { subscriptionRoutes } from './routes';
@@ -130,17 +131,17 @@ export async function buildApp(): Promise<ReturnType<typeof Fastify>> {
   });
 
   // Decorate `fastify.authenticate` — a preHandler that verifies the Bearer token.
+  // The shared `sendUnauthorized` helper (packages/config/src/auth-errors.ts) is
+  // the only place that owns the 401 body — keeping it canonical avoids per-service
+  // drift and stops jwtVerify()'s typed FST_JWT_* error shapes from leaking on the
+  // wire. The real cause is logged via `request.log.error` inside the helper.
   app.decorate(
     'authenticate',
     async function authenticate(request: any, reply: any) {
       try {
         await request.jwtVerify();
       } catch (err) {
-        reply.status(401).send({
-          statusCode: 401,
-          error: 'Unauthorized',
-          message: 'A valid Bearer token is required.',
-        });
+        return sendUnauthorized(reply, request, err);
       }
     },
   );
@@ -189,16 +190,31 @@ export async function buildApp(): Promise<ReturnType<typeof Fastify>> {
   registerStripeRoutes(app, subscriptionService, rootLogger);
 
   // ── Global error handler ────────────────────────────────────────────────────
+  // Redaction contract (mirrors user-service/src/index.ts setErrorHandler — see
+  // __tests__/error-redaction.test.ts for the locked-in shape):
+  //   • The structured `rootLogger.error` line below STILL captures the full
+  //     error object server-side (stack, Prisma details, conn-string fragments).
+  //   • On the wire we NEVER reflect `error.message` or `error.stack` on the 500
+  //     branch — it just returns the fixed generic 'Internal server error'.
+  //   • On the <500 branch we reflect `error.message` only when `error.validation`
+  //     is truthy (i.e. a Fastify-generated user-facing schema error); every other
+  //     4xx gets the generic 'Bad request' so internal error.message can't leak.
   app.setErrorHandler((error, request, reply) => {
-    const statusCode = error.statusCode ?? 500;
     rootLogger.error(
       { err: error, url: request.url, method: request.method },
       'index: unhandled route error',
     );
-    reply.status(statusCode).send({
-      statusCode,
-      error: error.name ?? 'Internal Server Error',
-      message: error.message ?? 'An unexpected error occurred.',
+    if (error.statusCode && error.statusCode < 500) {
+      return reply.status(error.statusCode).send({
+        statusCode: error.statusCode,
+        error: error.name ?? 'Bad Request',
+        message: error.validation ? error.message : 'Bad request',
+      });
+    }
+    return reply.status(500).send({
+      statusCode: 500,
+      error: 'Internal Server Error',
+      message: 'Internal server error',
     });
   });
 

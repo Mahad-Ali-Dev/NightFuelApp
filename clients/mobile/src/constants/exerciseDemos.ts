@@ -634,3 +634,21 @@ export function tipsFor(bodyPart: string | null | undefined): { tips: string[]; 
   if (specific && specific.length > 0) return { tips: specific, isGeneral: false };
   return { tips: GENERAL_TIPS, isGeneral: true };
 }
+
+// ---------------------------------------------------------------------------
+// Curated demo map (sibling module) — strictly additive re-export.
+//
+// {@link ./curatedDemos.ts} grows the 35-entry DEMO_FALLBACK map to >=100
+// distinct exercise names via a single `getCuratedDemo()` accessor, tagging
+// each entry with a `verified` flag and one of three source shapes:
+//
+//   - 'youtube'      → a specific watch URL (grandfathered + a few pending);
+//   - 'fedb_frames'  → the free-exercise-db 0.jpg|1.jpg pair (zero new fetch);
+//   - 'gif'          → reserved for static animated demos (currently unused).
+//
+// Re-exported here so callers that already import from `@/constants/exerciseDemos`
+// get the new accessor without a new import path. None of the existing exports
+// (DEMO_FALLBACK, DEMO_FRAMES, DEMO_GIF, resolveDemo, resolveDemoFrames,
+// resolveDemoGif, tipsFor, etc.) change.
+// ---------------------------------------------------------------------------
+export { getCuratedDemo, CURATED_DEMOS, type CuratedDemo } from './curatedDemos';

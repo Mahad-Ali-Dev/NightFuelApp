@@ -1,13 +1,19 @@
 /**
  * Tests for buildShiftReminders — the pure time-deriving core of
  * useCircadianReminders. It maps a shift's ISO start/end timestamps to the
- * five circadian-coach reminders and their fire times.
+ * six circadian-coach reminders and their fire times.
  *
  * buildShiftReminders is a pure function with no React / native dependencies,
- * so it needs no mocks. We assert both the shape (5 reminders, ids, prefKeys,
+ * so it needs no mocks. We assert both the shape (6 reminders, ids, prefKeys,
  * titles) and the exact derived Date for each reminder relative to the shift.
+ *
+ * The 'nf-bright-light' reminder is the reconciliation anchor with the coach
+ * card's brightLightWindow — see the parity test in __tests__/lib/shiftTransition.test.ts
+ * for the bit-identical assertion that the reminder fires at the same instant
+ * the card advertises.
  */
 import { buildShiftReminders } from '@/hooks/useCircadianReminders';
+import { OFFSETS } from '@/lib/shiftTransition';
 
 const HOUR = 3_600_000;
 
@@ -24,13 +30,14 @@ function build() {
 }
 
 describe('buildShiftReminders', () => {
-  test('returns exactly five reminders', () => {
-    expect(build()).toHaveLength(5);
+  test('returns exactly six reminders', () => {
+    expect(build()).toHaveLength(6);
   });
 
   test('emits the expected reminder ids in order', () => {
     expect(build().map((r) => r.id)).toEqual([
       'nf-preshift-meal',
+      'nf-bright-light',
       'nf-midshift-fuel',
       'nf-caffeine-cutoff',
       'nf-winddown',
@@ -50,10 +57,27 @@ describe('buildShiftReminders', () => {
   test('maps each reminder to the correct preference gate key', () => {
     const byId = Object.fromEntries(build().map((r) => [r.id, r.prefKey]));
     expect(byId['nf-preshift-meal']).toBe('mealReminderEnabled');
+    expect(byId['nf-bright-light']).toBe('sleepReminderEnabled');
     expect(byId['nf-midshift-fuel']).toBe('mealReminderEnabled');
     expect(byId['nf-caffeine-cutoff']).toBe('sleepReminderEnabled');
     expect(byId['nf-winddown']).toBe('sleepReminderEnabled');
     expect(byId['nf-log-sleep']).toBe('sleepReminderEnabled');
+  });
+
+  test('bright-light reminder uses sleepReminderEnabled pref key (no new pref this sprint)', () => {
+    // Piggy-backs on the existing sleep-toggle so users who already opted out
+    // of sleep nudges aren't surprised by a new alert channel. When/if we add a
+    // dedicated 'lightReminderEnabled' preference, this test should flip.
+    const brightLight = build().find((r) => r.id === 'nf-bright-light');
+    expect(brightLight).toBeDefined();
+    expect(brightLight!.prefKey).toBe('sleepReminderEnabled');
+  });
+
+  test('bright-light reminder body mentions bright light', () => {
+    // Acceptance: the body must contain "bright light" so the user understands
+    // the anchor maps to the coach card's brightLightWindow guidance.
+    const brightLight = build().find((r) => r.id === 'nf-bright-light')!;
+    expect(brightLight.body.toLowerCase()).toContain('bright light');
   });
 
   test('every reminder fire time is a valid Date', () => {
@@ -68,6 +92,11 @@ describe('buildShiftReminders', () => {
 
     test('pre-shift meal fires 1 hour before clock-in', () => {
       expect(byId()['nf-preshift-meal']).toBe(startMs - 1 * HOUR);
+    });
+
+    test('bright-light reminder fires at start + OFFSETS.brightLightStartAfterStart', () => {
+      // Bit-identical to the card's brightLightWindow.start (asserted in lib parity test).
+      expect(byId()['nf-bright-light']).toBe(startMs + OFFSETS.brightLightStartAfterStart * HOUR);
     });
 
     test('mid-shift fuel fires at the exact midpoint of the shift', () => {
@@ -86,15 +115,22 @@ describe('buildShiftReminders', () => {
       expect(byId()['nf-log-sleep']).toBe(endMs + 9 * HOUR);
     });
 
-    test('all five fire times are distinct', () => {
+    test('all six fire times are distinct or document the exact tie', () => {
       // The reminders are emitted in a logical (not strictly chronological)
       // order — e.g. for a short night shift the caffeine cutoff (end-6h) can
-      // precede the midpoint. But every fire time should still be unique.
+      // precede the midpoint. The bright-light reminder fires at clock-in
+      // (start + OFFSETS.brightLightStartAfterStart), which on a real shift
+      // ties only with anchors derived from `start` at the same offset — and
+      // we have none others at offset 0 from start. For this night fixture
+      // every fire time should be unique; if a future offset change introduces
+      // a tie, this test should be relaxed with a deliberate comment.
       const times = build().map((r) => r.date.getTime());
       expect(new Set(times).size).toBe(times.length);
     });
 
     test('the earliest reminder is the pre-shift meal and the latest is log-sleep', () => {
+      // preshift-meal at start-1h is still earlier than bright-light at start+0h,
+      // and log-sleep at end+9h is still latest. Bright-light slots in second.
       const reminders = build();
       const sorted = [...reminders].sort((a, b) => a.date.getTime() - b.date.getTime());
       expect(sorted[0]!.id).toBe('nf-preshift-meal');
@@ -123,9 +159,10 @@ describe('buildShiftReminders', () => {
     const reminders = buildShiftReminders({ startTime: s, endTime: e });
     const byId = Object.fromEntries(reminders.map((r) => [r.id, r.date.getTime()]));
     expect(byId['nf-preshift-meal']).toBe(sMs - HOUR);
+    expect(byId['nf-bright-light']).toBe(sMs + OFFSETS.brightLightStartAfterStart * HOUR);
     expect(byId['nf-midshift-fuel']).toBe((sMs + eMs) / 2);
-    expect(byId['nf-caffeine-cutoff']).toBe(eMs - 6 * HOUR);
-    expect(byId['nf-winddown']).toBe(eMs + HOUR);
-    expect(byId['nf-log-sleep']).toBe(eMs + 9 * HOUR);
+    expect(byId['nf-caffeine-cutoff']).toBe(eMs + OFFSETS.caffeineCutoffBeforeEnd * HOUR);
+    expect(byId['nf-winddown']).toBe(eMs + OFFSETS.sleepStartAfterEnd * HOUR);
+    expect(byId['nf-log-sleep']).toBe(eMs + OFFSETS.sleepEndAfterEnd * HOUR);
   });
 });

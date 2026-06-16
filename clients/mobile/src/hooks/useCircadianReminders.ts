@@ -19,6 +19,7 @@ import Constants from 'expo-constants';
 import { getCurrent as getCurrentShift } from '@/api/shifts';
 import { getNotificationPreferences } from '@/api/notifications';
 import { useAuthStore } from '@/store/authStore';
+import { OFFSETS } from '@/lib/shiftTransition';
 
 const IS_EXPO_GO = Constants.appOwnership === 'expo';
 
@@ -40,14 +41,16 @@ export function buildShiftReminders(shift: { startTime: string; endTime: string 
   return [
     { id: 'nf-preshift-meal', prefKey: 'mealReminderEnabled', title: 'Pre-shift fuel 🍽️',
       body: 'Eat your pre-shift meal about an hour before clock-in to stay steady through the night.', date: shift_(start, -1) },
+    { id: 'nf-bright-light', prefKey: 'sleepReminderEnabled', title: 'Seek bright light ☀️',
+      body: 'Anchor your alertness — get bright light at the start of your shift.', date: shift_(start, OFFSETS.brightLightStartAfterStart) },
     { id: 'nf-midshift-fuel', prefKey: 'mealReminderEnabled', title: 'Mid-shift fuel ⚡',
       body: 'Time a light, protein-forward meal to hold your energy.', date: mid },
     { id: 'nf-caffeine-cutoff', prefKey: 'sleepReminderEnabled', title: 'Last call for caffeine ☕',
-      body: "Cut caffeine now so it doesn't wreck your post-shift sleep.", date: shift_(end, -6) },
+      body: "Cut caffeine now so it doesn't wreck your post-shift sleep.", date: shift_(end, OFFSETS.caffeineCutoffBeforeEnd) },
     { id: 'nf-winddown', prefKey: 'sleepReminderEnabled', title: 'Wind down 🌙',
-      body: 'Dim the lights and start winding down — melatonin is rising.', date: shift_(end, 1) },
+      body: 'Dim the lights and start winding down — melatonin is rising.', date: shift_(end, OFFSETS.sleepStartAfterEnd) },
     { id: 'nf-log-sleep', prefKey: 'sleepReminderEnabled', title: 'How did you sleep? 😴',
-      body: "Log last night's rest to keep your recovery score accurate.", date: shift_(end, 9) },
+      body: "Log last night's rest to keep your recovery score accurate.", date: shift_(end, OFFSETS.sleepEndAfterEnd) },
   ];
 }
 

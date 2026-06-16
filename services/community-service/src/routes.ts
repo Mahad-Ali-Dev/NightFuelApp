@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { CommunityService } from './community.service';
 import jwt from 'jsonwebtoken';
+import { sendUnauthorized } from '@nightfuel/config';
 
 export default async function (fastify: FastifyInstance, opts: { communityService: CommunityService, jwtSecret: string }) {
     const { communityService, jwtSecret } = opts;
@@ -14,11 +15,7 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
             request.user = jwt.verify(token, jwtSecret);
         } catch (err: any) {
             // invalid/missing token -> 401, never a fallback identity
-            return reply.code(401).send({
-                statusCode: 401,
-                error: 'Unauthorized',
-                message: 'A valid Bearer token is required.',
-            });
+            return sendUnauthorized(reply, request, err);
         }
     });
 

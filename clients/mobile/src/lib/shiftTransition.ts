@@ -39,7 +39,7 @@
 const HOUR_MS = 3_600_000;
 
 /** Hour offsets relative to the shift's start/end instants. Mirrors buildShiftReminders. */
-const OFFSETS = {
+export const OFFSETS = {
   /** Last call for caffeine: 6h before the shift ends (== nf-caffeine-cutoff). */
   caffeineCutoffBeforeEnd: -6,
   /** Sleep opportunity opens 1h after clock-out (== nf-winddown). */

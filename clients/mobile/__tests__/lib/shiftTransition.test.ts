@@ -128,6 +128,37 @@ describe('computeShiftTransition', () => {
     });
   });
 
+  describe('parity — bright-light reconciliation', () => {
+    // The coach card shows a brightLightWindow but, prior to reconciliation,
+    // buildShiftReminders never fired a corresponding reminder — two stories
+    // for the user. With the shared OFFSETS export and the new 'nf-bright-light'
+    // reminder, the card's anchor and the scheduled notification MUST land on
+    // the exact same instant. This bit-identical assertion is the lock that
+    // keeps them from drifting again — if anyone tweaks one without the other,
+    // this test breaks loudly.
+    const START = '2026-06-13T22:00:00.000Z';
+    const END = '2026-06-14T06:00:00.000Z';
+
+    test("nf-bright-light reminder anchor === brightLightWindow.start (bit-identical)", () => {
+      const { brightLightWindow } = computeShiftTransition({ startTime: START, endTime: END });
+      const reminder = buildShiftReminders({ startTime: START, endTime: END }).find(
+        (r) => r.id === 'nf-bright-light',
+      );
+      expect(reminder).toBeDefined();
+      expect(reminder!.date.getTime()).toBe(brightLightWindow.start.getTime());
+    });
+
+    test('holds for a day shift too (offsets are absolute-instant, not wall-clock)', () => {
+      const dayStart = '2026-01-02T07:00:00.000Z';
+      const dayEnd = '2026-01-02T19:00:00.000Z';
+      const { brightLightWindow } = computeShiftTransition({ startTime: dayStart, endTime: dayEnd });
+      const reminder = buildShiftReminders({ startTime: dayStart, endTime: dayEnd }).find(
+        (r) => r.id === 'nf-bright-light',
+      )!;
+      expect(reminder.date.getTime()).toBe(brightLightWindow.start.getTime());
+    });
+  });
+
   describe('malformed timestamps', () => {
     test('throws when startTime is an empty string', () => {
       expect(() => computeShiftTransition({ startTime: '', endTime: '2026-06-14T06:00:00.000Z' })).toThrow(/startTime/);

@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, bootstrapCluster, connectWithRetry, registerGlobalProcessHandlers } from '@nightfuel/config';
+import { createLogger, loadConfig, bootstrapCluster, connectWithRetry, registerGlobalProcessHandlers, sendUnauthorized } from '@nightfuel/config';
 import { z } from 'zod';
 import { UserService } from './user.service';
 import { userRoutes } from './routes';
@@ -81,11 +81,7 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
     try {
         await request.jwtVerify();
     } catch (err) {
-        return reply.code(401).send({
-            statusCode: 401,
-            error: 'Unauthorized',
-            message: 'A valid Bearer token is required.',
-        });
+        return sendUnauthorized(reply, request, err);
     }
 });
 
@@ -117,19 +113,23 @@ fastify.setErrorHandler((error, request, reply) => {
         'Unhandled route error'
     );
 
-    // Fastify validation errors have a statusCode of 400
+    // Fastify validation errors have a statusCode of 400. Fastify-generated
+    // validation messages are user-facing and safe to reflect; any other <500
+    // error gets a generic string so internal error.message never leaks.
     if (error.statusCode && error.statusCode < 500) {
         return reply.code(error.statusCode).send({
             error: error.name,
-            message: error.message,
+            message: error.validation ? error.message : 'Bad request',
             statusCode: error.statusCode,
         });
     }
 
+    // 500 branch: NEVER reflect error.message or error.stack on the wire — the
+    // real cause is already in the structured `logger.error` above.
     return reply.code(500).send({
-        error: 'Internal server error',
-        message: error.message,
-        stack: error.stack,
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'Internal server error',
     });
 });
 

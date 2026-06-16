@@ -270,13 +270,16 @@ export class UserService {
 
             return prefs;
         } catch (err: any) {
+            // Dev-only debug file write — redact raw err.message/stack so PII
+            // (user inputs, query fragments) never lands on disk. The real
+            // cause is still in the structured logger.error below.
             const errorLog = {
                 method: 'updatePreferences',
                 timestamp: new Date().toISOString(),
                 userId,
                 err: {
-                    message: err.message,
-                    stack: err.stack,
+                    message: 'redacted',
+                    stack: 'redacted',
                     code: err.code,
                     meta: err.meta
                 },
