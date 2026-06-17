@@ -9,7 +9,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { log as logSleep, listSessions, SleepSession } from '@/api/sleep';
-import { Button, Card, Skeleton, EmptyState } from '@/components/ui';
+import {
+    Button,
+    Card,
+    Skeleton,
+    EmptyState,
+    DateTimeField,
+    nowDateString,
+    nowTimeString,
+} from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { typography as themeTypography } from '@/theme/typography';
@@ -294,47 +302,36 @@ export default function LogSleepModal() {
                             {/* Sleep Started */}
                             <Text style={[styles.fieldLabel, typography.caption, { color: colors.text.secondary }]}>SLEEP STARTED</Text>
                             <View style={styles.row}>
-                                <View
-                                    style={[
-                                        styles.inputBox,
-                                        {
-                                            backgroundColor: colors.background.primary,
-                                            borderColor: fieldErrors.startDay ? colors.accent.red : colors.border.default,
-                                        },
-                                    ]}
-                                >
-                                    <Ionicons name="calendar-outline" size={18} color={colors.text.tertiary} />
-                                    <TextInput
-                                        style={[styles.textInput, { color: colors.text.primary }]}
+                                <View style={{ flex: 1 }}>
+                                    <DateTimeField
+                                        mode="date"
+                                        accessibilityLabel={`Select sleep start date${startDay ? `, currently ${startDay}` : ''}`}
                                         value={startDay}
-                                        onChangeText={(v) => {
+                                        onChange={(v) => {
                                             setStartDay(v);
                                             clearFieldError('startDay');
                                         }}
-                                        placeholder="YYYY-MM-DD"
-                                        placeholderTextColor={colors.text.tertiary}
+                                        error={fieldErrors.startDay}
                                     />
                                 </View>
-                                <View
-                                    style={[
-                                        styles.inputBox,
-                                        {
-                                            backgroundColor: colors.background.primary,
-                                            borderColor: fieldErrors.startTime ? colors.accent.red : colors.border.default,
-                                            marginLeft: 10,
-                                        },
-                                    ]}
-                                >
-                                    <Ionicons name="time-outline" size={18} color={colors.text.tertiary} />
-                                    <TextInput
-                                        style={[styles.textInput, { color: colors.text.primary }]}
+                                <View style={{ flex: 1, marginLeft: 10 }}>
+                                    <DateTimeField
+                                        mode="time"
+                                        accessibilityLabel={`Select sleep start time${startTime ? `, currently ${startTime}` : ''}`}
                                         value={startTime}
-                                        onChangeText={(v) => {
+                                        onChange={(v) => {
                                             setStartTime(v);
                                             clearFieldError('startTime');
                                         }}
-                                        placeholder="HH:MM"
-                                        placeholderTextColor={colors.text.tertiary}
+                                        onNow={() => {
+                                            // One-tap "I fell asleep just now" — fill both the
+                                            // start day and time for this row.
+                                            setStartDay(nowDateString());
+                                            setStartTime(nowTimeString());
+                                            clearFieldError('startDay');
+                                            clearFieldError('startTime');
+                                        }}
+                                        error={fieldErrors.startTime}
                                     />
                                 </View>
                             </View>
@@ -352,47 +349,36 @@ export default function LogSleepModal() {
                             {/* Sleep Ended */}
                             <Text style={[styles.fieldLabel, typography.caption, { color: colors.text.secondary, marginTop: 16 }]}>SLEEP ENDED</Text>
                             <View style={styles.row}>
-                                <View
-                                    style={[
-                                        styles.inputBox,
-                                        {
-                                            backgroundColor: colors.background.primary,
-                                            borderColor: fieldErrors.endDay ? colors.accent.red : colors.border.default,
-                                        },
-                                    ]}
-                                >
-                                    <Ionicons name="calendar-outline" size={18} color={colors.text.tertiary} />
-                                    <TextInput
-                                        style={[styles.textInput, { color: colors.text.primary }]}
+                                <View style={{ flex: 1 }}>
+                                    <DateTimeField
+                                        mode="date"
+                                        accessibilityLabel={`Select sleep end date${endDay ? `, currently ${endDay}` : ''}`}
                                         value={endDay}
-                                        onChangeText={(v) => {
+                                        onChange={(v) => {
                                             setEndDay(v);
                                             clearFieldError('endDay');
                                         }}
-                                        placeholder="YYYY-MM-DD"
-                                        placeholderTextColor={colors.text.tertiary}
+                                        error={fieldErrors.endDay}
                                     />
                                 </View>
-                                <View
-                                    style={[
-                                        styles.inputBox,
-                                        {
-                                            backgroundColor: colors.background.primary,
-                                            borderColor: fieldErrors.endTime ? colors.accent.red : colors.border.default,
-                                            marginLeft: 10,
-                                        },
-                                    ]}
-                                >
-                                    <Ionicons name="time-outline" size={18} color={colors.text.tertiary} />
-                                    <TextInput
-                                        style={[styles.textInput, { color: colors.text.primary }]}
+                                <View style={{ flex: 1, marginLeft: 10 }}>
+                                    <DateTimeField
+                                        mode="time"
+                                        accessibilityLabel={`Select sleep end time${endTime ? `, currently ${endTime}` : ''}`}
                                         value={endTime}
-                                        onChangeText={(v) => {
+                                        onChange={(v) => {
                                             setEndTime(v);
                                             clearFieldError('endTime');
                                         }}
-                                        placeholder="HH:MM"
-                                        placeholderTextColor={colors.text.tertiary}
+                                        onNow={() => {
+                                            // One-tap "I woke up just now" — fill both the wake
+                                            // day and time for this row.
+                                            setEndDay(nowDateString());
+                                            setEndTime(nowTimeString());
+                                            clearFieldError('endDay');
+                                            clearFieldError('endTime');
+                                        }}
+                                        error={fieldErrors.endTime}
                                     />
                                 </View>
                             </View>
@@ -506,6 +492,9 @@ export default function LogSleepModal() {
                                 loading={mutation.isPending}
                                 disabled={hasErrors}
                                 style={{ marginTop: 20 }}
+                                accessibilityRole="button"
+                                accessibilityLabel={mutation.isPending ? 'Saving recovery data' : 'Save recovery data'}
+                                accessibilityState={{ disabled: hasErrors || mutation.isPending, busy: mutation.isPending }}
                             />
                         </View>
                     )}
@@ -614,21 +603,6 @@ const styles = StyleSheet.create({
     row: {
         flexDirection: 'row',
         alignItems: 'center',
-    },
-    inputBox: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderWidth: 1,
-        borderRadius: 10,
-        paddingHorizontal: 10,
-        minHeight: 44,
-    },
-    textInput: {
-        flex: 1,
-        marginLeft: 6,
-        fontFamily: themeTypography.body.fontFamily,
-        fontSize: 15,
     },
     qualityRow: {
         flexDirection: 'row',

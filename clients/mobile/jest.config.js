@@ -15,9 +15,11 @@ module.exports = {
   ],
   // jest-expo's default transformIgnorePatterns whitelists Expo packages.
   // We extend it to also pass through @sentry/react-native (which ships
-  // ESM that needs Babel transform).
+  // ESM that needs Babel transform) and @nightfuel/* workspace packages
+  // (e.g. @nightfuel/dates) whose `main` points at raw TypeScript source —
+  // those must be Babel-transformed rather than required as-is.
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@sentry/.*))',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|@sentry/.*|@nightfuel/.*))',
   ],
   moduleNameMapper: (() => {
     const END = String.fromCharCode(36); // literal end-of-string anchor for the regex

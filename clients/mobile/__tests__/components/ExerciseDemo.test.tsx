@@ -32,7 +32,7 @@
  */
 import React from 'react';
 import { View } from 'react-native';
-import { render, fireEvent, screen } from '@testing-library/react-native';
+import { render, fireEvent, screen, act } from '@testing-library/react-native';
 import {
   ThemeContext,
   getThemeColors,
@@ -183,5 +183,69 @@ describe('ExerciseDemo', () => {
     );
     // The wrap View + the still + the pill all mount — never an empty render.
     expect(UNSAFE_getAllByType(View).length).toBeGreaterThanOrEqual(1);
+  });
+
+  // ── Play/pause control accessibility (the toggle Pressable) ─────────────────
+  // With 2+ frames the wrapping Pressable IS the play/pause control. It must
+  // expose a `button` role and a label that flips between "Pause demo" (while
+  // playing) and "Resume demo" (while paused), with the paused state reflected
+  // in accessibilityState/accessibilityValue — so a screen-reader user knows
+  // both what the control does AND its current state.
+  describe('animated play/pause control — accessibility', () => {
+    // Fake timers keep the cross-fade loop (setInterval) deterministic so a
+    // pending frame advance never fires mid-assertion.
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    test('exposes a button role, "Pause demo" label, and not-paused state while playing', () => {
+      renderWithTheme(
+        <ExerciseDemo frames={[FRAME_A, FRAME_B]} imageUrl={IMAGE_URL} fallback={FALLBACK} />,
+      );
+
+      // The control is reachable by its dynamic label and carries the button role.
+      const control = screen.getByLabelText('Pause demo');
+      expect(control).toBeTruthy();
+      expect(control.props.accessibilityRole).toBe('button');
+      // Playing (not paused) → not "selected", and "busy" reflects the live loop.
+      expect(control.props.accessibilityState).toMatchObject({ selected: false, busy: true });
+      expect(control.props.accessibilityValue).toMatchObject({ text: 'Playing' });
+      // Sanity: the "Resume demo" label is NOT present while playing.
+      expect(screen.queryByLabelText('Resume demo')).toBeNull();
+    });
+
+    test('toggles label/state to "Resume demo" + paused on press, and back on a second press', () => {
+      renderWithTheme(
+        <ExerciseDemo frames={[FRAME_A, FRAME_B]} imageUrl={IMAGE_URL} fallback={FALLBACK} />,
+      );
+
+      // First press → pause.
+      act(() => {
+        fireEvent.press(screen.getByLabelText('Pause demo'));
+      });
+      const paused = screen.getByLabelText('Resume demo');
+      expect(paused.props.accessibilityRole).toBe('button');
+      expect(paused.props.accessibilityState).toMatchObject({ selected: true, busy: false });
+      expect(paused.props.accessibilityValue).toMatchObject({ text: 'Paused' });
+      // The visible status pill also flips to "Paused".
+      expect(screen.getByText('Paused')).toBeTruthy();
+
+      // Second press → resume (label flips back).
+      act(() => {
+        fireEvent.press(screen.getByLabelText('Resume demo'));
+      });
+      expect(screen.getByLabelText('Pause demo')).toBeTruthy();
+      expect(screen.queryByLabelText('Resume demo')).toBeNull();
+    });
+
+    test('a single-frame still is NOT a button — it stays a labelled image', () => {
+      // One frame → not animated → no play/pause toggle. The wrapper keeps the
+      // non-interactive "image" role and the generic "Exercise demo" label.
+      renderWithTheme(<ExerciseDemo frames={[FRAME_A]} imageUrl={IMAGE_URL} fallback={FALLBACK} />);
+
+      expect(screen.queryByLabelText('Pause demo')).toBeNull();
+      expect(screen.queryByLabelText('Resume demo')).toBeNull();
+      const still = screen.getByLabelText('Exercise demo');
+      expect(still.props.accessibilityRole).toBe('image');
+    });
   });
 });

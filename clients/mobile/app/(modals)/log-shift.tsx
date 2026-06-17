@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { create as createShift } from '@/api/shifts';
-import { Button } from '@/components/ui';
+import { Button, DateTimeField, nowDateString, nowTimeString } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { typography as themeTypography } from '@/theme/typography';
@@ -118,8 +118,8 @@ export default function LogShiftModal() {
                 <TouchableOpacity
                     activeOpacity={0.85}
                     accessibilityRole="button"
-                    accessibilityLabel="Save shift"
-                    accessibilityState={{ disabled: mutation.isPending || hasErrors }}
+                    accessibilityLabel={mutation.isPending ? 'Saving shift' : 'Save shift'}
+                    accessibilityState={{ disabled: mutation.isPending || hasErrors, busy: mutation.isPending }}
                     onPress={handleSave}
                     disabled={mutation.isPending || hasErrors}
                 >
@@ -148,34 +148,30 @@ export default function LogShiftModal() {
                     </Text>
 
                     {/* Date Section */}
-                    <Text style={[typography.heading, { color: colors.text.primary, marginBottom: 12, fontSize: 16 }]}>Shift Date</Text>
-                    <View
-                        style={[
-                            styles.inputBox,
-                            {
-                                backgroundColor: colors.background.secondary,
-                                borderColor: fieldErrors.shiftDate ? colors.accent.red : colors.border.default,
-                                marginBottom: fieldErrors.shiftDate ? 4 : 20,
-                            },
-                        ]}
-                    >
-                        <Ionicons name="calendar-outline" size={20} color={colors.text.secondary} />
-                        <TextInput
-                            style={[styles.textInput, { color: colors.text.primary }]}
-                            value={shiftDate}
-                            onChangeText={(v) => {
-                                setShiftDate(v);
-                                if (fieldErrors.shiftDate) {
-                                    setFieldErrors((p) => {
-                                        const { shiftDate: _omit, ...rest } = p;
-                                        return rest;
-                                    });
-                                }
-                            }}
-                            placeholder="YYYY-MM-DD"
-                            placeholderTextColor={colors.text.tertiary}
-                        />
-                    </View>
+                    <DateTimeField
+                        label="Shift Date"
+                        mode="date"
+                        value={shiftDate}
+                        onChange={(v) => {
+                            setShiftDate(v);
+                            if (fieldErrors.shiftDate) {
+                                setFieldErrors((p) => {
+                                    const { shiftDate: _omit, ...rest } = p;
+                                    return rest;
+                                });
+                            }
+                        }}
+                        onNow={() => {
+                            setShiftDate(nowDateString());
+                            if (fieldErrors.shiftDate) {
+                                setFieldErrors((p) => {
+                                    const { shiftDate: _omit, ...rest } = p;
+                                    return rest;
+                                });
+                            }
+                        }}
+                        error={fieldErrors.shiftDate}
+                    />
                     {fieldErrors.shiftDate ? (
                         <Text
                             accessibilityRole="alert"
@@ -183,38 +179,37 @@ export default function LogShiftModal() {
                         >
                             {fieldErrors.shiftDate}
                         </Text>
-                    ) : null}
+                    ) : (
+                        <View style={{ height: 20 }} />
+                    )}
 
                     {/* Times Section */}
                     <View style={styles.row}>
                         <View style={{ flex: 1 }}>
-                            <Text style={[typography.heading, { color: colors.text.primary, marginBottom: 12, fontSize: 16 }]}>Start Time</Text>
-                            <View
-                                style={[
-                                    styles.inputBox,
-                                    {
-                                        backgroundColor: colors.background.secondary,
-                                        borderColor: fieldErrors.startTime ? colors.accent.red : colors.border.default,
-                                    },
-                                ]}
-                            >
-                                <Ionicons name="time-outline" size={20} color={colors.text.secondary} />
-                                <TextInput
-                                    style={[styles.textInput, { color: colors.text.primary }]}
-                                    value={startTime}
-                                    onChangeText={(v) => {
-                                        setStartTime(v);
-                                        if (fieldErrors.startTime) {
-                                            setFieldErrors((p) => {
-                                                const { startTime: _omit, ...rest } = p;
-                                                return rest;
-                                            });
-                                        }
-                                    }}
-                                    placeholder="HH:MM"
-                                    placeholderTextColor={colors.text.tertiary}
-                                />
-                            </View>
+                            <DateTimeField
+                                label="Start Time"
+                                mode="time"
+                                value={startTime}
+                                onChange={(v) => {
+                                    setStartTime(v);
+                                    if (fieldErrors.startTime) {
+                                        setFieldErrors((p) => {
+                                            const { startTime: _omit, ...rest } = p;
+                                            return rest;
+                                        });
+                                    }
+                                }}
+                                onNow={() => {
+                                    setStartTime(nowTimeString());
+                                    if (fieldErrors.startTime) {
+                                        setFieldErrors((p) => {
+                                            const { startTime: _omit, ...rest } = p;
+                                            return rest;
+                                        });
+                                    }
+                                }}
+                                error={fieldErrors.startTime}
+                            />
                             {fieldErrors.startTime ? (
                                 <Text
                                     accessibilityRole="alert"
@@ -225,33 +220,30 @@ export default function LogShiftModal() {
                             ) : null}
                         </View>
                         <View style={{ flex: 1, marginLeft: 12 }}>
-                            <Text style={[typography.heading, { color: colors.text.primary, marginBottom: 12, fontSize: 16 }]}>End Time</Text>
-                            <View
-                                style={[
-                                    styles.inputBox,
-                                    {
-                                        backgroundColor: colors.background.secondary,
-                                        borderColor: fieldErrors.endTime ? colors.accent.red : colors.border.default,
-                                    },
-                                ]}
-                            >
-                                <Ionicons name="time-outline" size={20} color={colors.text.secondary} />
-                                <TextInput
-                                    style={[styles.textInput, { color: colors.text.primary }]}
-                                    value={endTime}
-                                    onChangeText={(v) => {
-                                        setEndTime(v);
-                                        if (fieldErrors.endTime) {
-                                            setFieldErrors((p) => {
-                                                const { endTime: _omit, ...rest } = p;
-                                                return rest;
-                                            });
-                                        }
-                                    }}
-                                    placeholder="HH:MM"
-                                    placeholderTextColor={colors.text.tertiary}
-                                />
-                            </View>
+                            <DateTimeField
+                                label="End Time"
+                                mode="time"
+                                value={endTime}
+                                onChange={(v) => {
+                                    setEndTime(v);
+                                    if (fieldErrors.endTime) {
+                                        setFieldErrors((p) => {
+                                            const { endTime: _omit, ...rest } = p;
+                                            return rest;
+                                        });
+                                    }
+                                }}
+                                onNow={() => {
+                                    setEndTime(nowTimeString());
+                                    if (fieldErrors.endTime) {
+                                        setFieldErrors((p) => {
+                                            const { endTime: _omit, ...rest } = p;
+                                            return rest;
+                                        });
+                                    }
+                                }}
+                                error={fieldErrors.endTime}
+                            />
                             {fieldErrors.endTime ? (
                                 <Text
                                     accessibilityRole="alert"
@@ -366,6 +358,9 @@ export default function LogShiftModal() {
                         loading={mutation.isPending}
                         disabled={hasErrors}
                         style={{ marginTop: 40 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={mutation.isPending ? 'Saving shift' : 'Save shift'}
+                        accessibilityState={{ disabled: hasErrors || mutation.isPending, busy: mutation.isPending }}
                     />
                 </ScrollView>
             </KeyboardAvoidingView>

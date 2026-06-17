@@ -139,8 +139,11 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.code(200).send({ success: true });
             } catch (err: any) {
                 logger.error(err);
-                if (err.message.includes('not found')) {
-                    return reply.code(404).send({ error: err.message });
+                // Preserve a safe 404 for the business "not found" case; use a
+                // fixed message (never echo raw err.message) and guard the
+                // .includes() against a missing message. Everything else → 500.
+                if (typeof err?.message === 'string' && err.message.includes('not found')) {
+                    return reply.code(404).send({ error: 'Plan not found' });
                 }
                 return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
@@ -236,8 +239,10 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.send(protocol);
             } catch (err: any) {
                 logger.error(err);
-                const status = err.message.includes('not found') ? 404 : 403;
-                return status === 404 ? reply.code(404).send({ error: 'Not found' }) : reply.code(403).send({ error: 'Forbidden' });
+                // Guard .includes() against a missing message; messages are
+                // fixed copy ('Not found' / 'Forbidden') so nothing raw leaks.
+                const isNotFound = typeof err?.message === 'string' && err.message.includes('not found');
+                return isNotFound ? reply.code(404).send({ error: 'Not found' }) : reply.code(403).send({ error: 'Forbidden' });
             }
         }
     );
@@ -261,8 +266,10 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.send(protocol);
             } catch (err: any) {
                 logger.error(err);
-                const status = err.message.includes('not found') ? 404 : 403;
-                return status === 404 ? reply.code(404).send({ error: 'Not found' }) : reply.code(403).send({ error: 'Forbidden' });
+                // Guard .includes() against a missing message; messages are
+                // fixed copy ('Not found' / 'Forbidden') so nothing raw leaks.
+                const isNotFound = typeof err?.message === 'string' && err.message.includes('not found');
+                return isNotFound ? reply.code(404).send({ error: 'Not found' }) : reply.code(403).send({ error: 'Forbidden' });
             }
         }
     );
@@ -285,8 +292,10 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.code(204).send();
             } catch (err: any) {
                 logger.error(err);
-                const status = err.message.includes('not found') ? 404 : 403;
-                return status === 404 ? reply.code(404).send({ error: 'Not found' }) : reply.code(403).send({ error: 'Forbidden' });
+                // Guard .includes() against a missing message; messages are
+                // fixed copy ('Not found' / 'Forbidden') so nothing raw leaks.
+                const isNotFound = typeof err?.message === 'string' && err.message.includes('not found');
+                return isNotFound ? reply.code(404).send({ error: 'Not found' }) : reply.code(403).send({ error: 'Forbidden' });
             }
         }
     );

@@ -61,6 +61,53 @@ export function isValidWallTime(s: string): boolean {
 }
 
 /**
+ * Max number of whole calendar days a logged date may sit in the future before
+ * we treat it as a data-entry mistake. The DateTimeField pickers already clamp
+ * normal entry, so this is a programmatic / edge guard only. A small tolerance
+ * (rather than zero) lets a worker pre-log an upcoming shift or a sleep that
+ * ends tomorrow without being blocked, while still catching obviously wrong
+ * values like a year typo (2026 → 2062).
+ */
+export const MAX_FUTURE_DAYS = 2;
+
+/**
+ * Whole-day distance from `from` to `to`, both `YYYY-MM-DD`, measured in UTC so
+ * it never drifts by a day across timezones (matches `isValidCalendarDate`,
+ * which also round-trips through UTC). Positive when `to` is after `from`.
+ *
+ * Returns `null` when either input is not a real calendar date — callers should
+ * have already validated format/calendar-ness and can treat `null` as "skip the
+ * distance check, the format error already covers it".
+ */
+export function daysFromUtc(from: string, to: string): number | null {
+  if (!isValidCalendarDate(from) || !isValidCalendarDate(to)) return null;
+  const toUtc = (s: string): number => {
+    const [y, m, d] = s.split('-').map((n) => Number(n));
+    return Date.UTC(y as number, (m as number) - 1, d as number);
+  };
+  const MS_PER_DAY = 86_400_000;
+  return Math.round((toUtc(to) - toUtc(from)) / MS_PER_DAY);
+}
+
+/**
+ * True when calendar-date `day` (YYYY-MM-DD) is more than `MAX_FUTURE_DAYS`
+ * whole days after the `now` reference. Pure: the caller supplies `now`, so the
+ * function never reads the clock itself. A non-calendar `day` returns `false`
+ * (the dedicated format check owns that error).
+ */
+export function isImplausibleFutureDate(day: string, now: Date): boolean {
+  if (!isValidCalendarDate(day)) return false;
+  // Compare against `now`'s UTC calendar day. We only care about whole-day
+  // distance, so collapse `now` to its YYYY-MM-DD first.
+  const nowDay = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(
+    2,
+    '0',
+  )}-${String(now.getUTCDate()).padStart(2, '0')}`;
+  const distance = daysFromUtc(nowDay, day);
+  return distance !== null && distance > MAX_FUTURE_DAYS;
+}
+
+/**
  * Pure helper for the "is the shift overnight?" decision used by the shift
  * modal to roll the end date forward. The convention matches the existing
  * mutationFn: when start > end as plain strings (lexicographic comparison
@@ -94,11 +141,19 @@ export function humanizeFieldError(path: string, message: string): string {
     case 'shiftDate':
     case 'startDay':
     case 'endDay':
+      // A range / future / ordering message wins over the generic format copy
+      // when the caller provided one (e.g. the future-date and end-before-start
+      // guards below, or a server-side equivalent).
+      if (/before|after|range|order|future|cannot|can't/i.test(message)) {
+        return message;
+      }
       return 'Enter a real date (YYYY-MM-DD)';
     case 'startTime':
     case 'endTime':
       // Time-range message wins over format if the caller provided it
-      if (/before|after|range|order/i.test(message)) return message;
+      if (/before|after|range|order|future|cannot|can't/i.test(message)) {
+        return message;
+      }
       return 'Enter a time as HH:MM (24-hour)';
     case 'commuteMinutes':
       return 'Commute must be 0-180 minutes';
@@ -143,10 +198,21 @@ const SHIFT_TYPES = new Set([
   'TWELVE_HOUR',
 ]);
 
+/** Field-error copy for the additive shift guards (kept as constants so tests
+ * can assert against them without re-typing the wording). */
+export const SHIFT_FUTURE_DATE_MSG = "Shift date can't be that far in the future";
+export const SHIFT_END_ORDER_MSG = 'Shift end must be after start (or overnight)';
+export const SHIFT_ZERO_LENGTH_MSG = 'Shift start and end cannot be the same';
+
 export function validateLogShiftForm(
   input: LogShiftFormInput,
+  options?: { now?: Date },
 ): ValidationResult<LogShiftFormValue> {
   const fieldErrors: Record<string, string> = {};
+  // Pure-with-injectable-clock: callers (and tests) may pin `now`; when omitted
+  // we read the wall clock exactly once here. The comparison itself lives in
+  // `isImplausibleFutureDate`, which only ever sees the supplied reference.
+  const now = options?.now ?? new Date();
 
   if (!isValidCalendarDate(input.shiftDate)) {
     fieldErrors.shiftDate = humanizeFieldError('shiftDate', '');
@@ -159,6 +225,34 @@ export function validateLogShiftForm(
   }
   if (!SHIFT_TYPES.has(input.shiftType)) {
     fieldErrors.shiftType = humanizeFieldError('shiftType', '');
+  }
+
+  // Implausible future date — only when the date itself parsed cleanly, so the
+  // format error (above) is never masked by this one.
+  if (!fieldErrors.shiftDate && isImplausibleFutureDate(input.shiftDate, now)) {
+    fieldErrors.shiftDate = humanizeFieldError('shiftDate', SHIFT_FUTURE_DATE_MSG);
+  }
+
+  // Start/end ordering — only meaningful once both times are valid HH:MM.
+  // A night-shift worker's end may legitimately be *before* the start
+  // (overnight, e.g. 19:00 → 07:00): `isOvernightShift` flags that and we allow
+  // it. The two cases we reject:
+  //   • end === start            → zero-length shift, never legitimate
+  //   • end <  start, not overnight → impossible on a single day
+  // Since `isOvernightShift` is defined as start > end, every `end < start`
+  // already counts as overnight, so the equal case is the only same-day
+  // ordering error that survives. We still gate on `isOvernightShift` (rather
+  // than collapsing to an equality test) so the rule reads as written and stays
+  // correct if the overnight convention is ever refined.
+  if (!fieldErrors.startTime && !fieldErrors.endTime) {
+    const overnight = isOvernightShift(input.startTime, input.endTime);
+    if (!overnight && input.endTime <= input.startTime) {
+      const msg =
+        input.endTime === input.startTime
+          ? SHIFT_ZERO_LENGTH_MSG
+          : SHIFT_END_ORDER_MSG;
+      fieldErrors.endTime = humanizeFieldError('endTime', msg);
+    }
   }
 
   // Commute: must be an integer 0-180. Empty string is treated as 0 because
@@ -217,10 +311,19 @@ export interface LogSleepFormValue {
   notes: string;
 }
 
+/** Field-error copy for the additive sleep guards (constants so tests assert
+ * against them without duplicating the wording). */
+export const SLEEP_FUTURE_DAY_MSG = "Sleep day can't be in the future";
+export const SLEEP_FUTURE_END_MSG = "Sleep can't end in the future";
+
 export function validateLogSleepForm(
   input: LogSleepFormInput,
+  options?: { now?: Date },
 ): ValidationResult<LogSleepFormValue> {
   const fieldErrors: Record<string, string> = {};
+  // Pure-with-injectable-clock (see validateLogShiftForm): tests pin `now`;
+  // production reads the wall clock once here.
+  const now = options?.now ?? new Date();
 
   if (!isValidCalendarDate(input.startDay)) {
     fieldErrors.startDay = humanizeFieldError('startDay', '');
@@ -255,6 +358,17 @@ export function validateLogSleepForm(
     fieldErrors.notes = humanizeFieldError('notes', '');
   }
 
+  // Implausible future days — each gated on its own format being clean so the
+  // format error is never masked. You can't have slept on a day that is well in
+  // the future. (Tolerance = MAX_FUTURE_DAYS; an end-tomorrow overnight session
+  // logged at the day boundary stays within it.)
+  if (!fieldErrors.startDay && isImplausibleFutureDate(input.startDay, now)) {
+    fieldErrors.startDay = humanizeFieldError('startDay', SLEEP_FUTURE_DAY_MSG);
+  }
+  if (!fieldErrors.endDay && isImplausibleFutureDate(input.endDay, now)) {
+    fieldErrors.endDay = humanizeFieldError('endDay', SLEEP_FUTURE_DAY_MSG);
+  }
+
   // Range check: only meaningful once both day+time pairs are individually
   // valid. The existing screen rolls "end <= start on the same day" forward by
   // 24h (overnight sleep), so the only ambiguous case is start === end — that
@@ -279,6 +393,32 @@ export function validateLogSleepForm(
       // entry mistake — overnight only rolls within the same day pair.
       if (input.endDay < input.startDay) {
         fieldErrors.endDay = 'Sleep end day cannot be before sleep start day';
+      }
+
+      // Future wake-time guard. Mirror the screen's overnight roll-forward to
+      // recover the *effective* end day: an end at/earlier-than start on the
+      // SAME day means the session crossed midnight, so the real wake-up is the
+      // next calendar day. Reject only when that effective end day is well past
+      // `now` (MAX_FUTURE_DAYS tolerance) — a sleep that genuinely ended in the
+      // future is a data-entry mistake, but normal "woke up this morning"
+      // logging stays comfortably inside the tolerance.
+      let effectiveEndDay = input.endDay;
+      const rollsOvernight =
+        input.endDay === input.startDay && input.endTime <= input.startTime;
+      if (rollsOvernight) {
+        const rolled = daysFromUtc('1970-01-01', input.endDay);
+        if (rolled !== null) {
+          effectiveEndDay = new Date((rolled + 1) * 86_400_000)
+            .toISOString()
+            .slice(0, 10);
+        }
+      }
+      if (
+        !fieldErrors.endTime &&
+        !fieldErrors.endDay &&
+        isImplausibleFutureDate(effectiveEndDay, now)
+      ) {
+        fieldErrors.endTime = humanizeFieldError('endTime', SLEEP_FUTURE_END_MSG);
       }
     }
   }

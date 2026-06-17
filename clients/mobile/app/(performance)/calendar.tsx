@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { getHistory } from '@/api/progress';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 
 const { width } = Dimensions.get('window');
@@ -82,26 +83,41 @@ export default function TrainingCalendarScreen() {
                             {DAYS.map(d => <Text key={d} style={[styles.dayLabel, { color: colors.text.secondary }]}>{d[0]}</Text>)}
                         </View>
 
-                        <View style={styles.grid}>
-                            {/* Mock Grid */}
-                            {Array.from({ length: 31 }).map((_, i) => {
-                                const day = i + 1;
-                                const hasActivity = history.some(h => new Date(h.date).getDate() === day);
-                                return (
-                                    <TouchableOpacity
-                                        key={i}
-                                        activeOpacity={0.7}
-                                        accessibilityRole="button"
-                                        accessibilityLabel={`Day ${day}${hasActivity ? ', has activity' : ''}`}
-                                        accessibilityState={{ selected: isToday(day) }}
-                                        style={[styles.dayCell, isToday(day) && { backgroundColor: withAlpha(colors.accent.coral, 0.18), borderRadius: 12, borderWidth: 1, borderColor: withAlpha(colors.accent.coral, 0.35) }]}
-                                    >
-                                        <Text style={[typography.body, { color: isToday(day) ? colors.accent.coral : colors.text.primary, fontWeight: isToday(day) ? '700' : '400' }]}>{day}</Text>
-                                        {hasActivity && <View style={[styles.activityDot, { backgroundColor: colors.success }]} />}
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
+                        {historyQuery.isError ? (
+                            <EmptyState
+                                icon="cloud-offline-outline"
+                                title="Couldn't load activity"
+                                subtitle="We couldn't reach your training history. Check your connection and try again."
+                                actionLabel="Retry"
+                                onAction={() => historyQuery.refetch()}
+                            />
+                        ) : history.length === 0 && !historyQuery.isLoading ? (
+                            <EmptyState
+                                icon="calendar-outline"
+                                title="No activity logged this month"
+                                subtitle="Complete a workout to start filling in your training calendar."
+                            />
+                        ) : (
+                            <View style={styles.grid}>
+                                {Array.from({ length: 31 }).map((_, i) => {
+                                    const day = i + 1;
+                                    const hasActivity = history.some(h => new Date(h.date).getDate() === day);
+                                    return (
+                                        <TouchableOpacity
+                                            key={i}
+                                            activeOpacity={0.7}
+                                            accessibilityRole="button"
+                                            accessibilityLabel={`Day ${day}${hasActivity ? ', has activity' : ''}`}
+                                            accessibilityState={{ selected: isToday(day) }}
+                                            style={[styles.dayCell, isToday(day) && { backgroundColor: withAlpha(colors.accent.coral, 0.18), borderRadius: 12, borderWidth: 1, borderColor: withAlpha(colors.accent.coral, 0.35) }]}
+                                        >
+                                            <Text style={[typography.body, { color: isToday(day) ? colors.accent.coral : colors.text.primary, fontWeight: isToday(day) ? '700' : '400' }]}>{day}</Text>
+                                            {hasActivity && <View style={[styles.activityDot, { backgroundColor: colors.success }]} />}
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        )}
                     </Card>
                 </View>
 

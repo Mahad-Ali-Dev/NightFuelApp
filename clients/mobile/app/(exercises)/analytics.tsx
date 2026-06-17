@@ -55,20 +55,19 @@ export default function ExerciseAnalyticsScreen() {
     }, [analyticsQuery.data]);
 
     const muscleDistribution = useMemo(() => {
-        // Mocking muscle distribution based on 1RM data for visual variety
+        // Real distribution aggregated from logged 1RM records by muscle group.
+        // No synthetic placeholder — when empty the UI shows an EmptyState instead.
         const muscles: Record<string, number> = {};
         (oneRmQuery.data ?? []).forEach(item => {
             const m = (item as any).muscleGroup || 'Other';
             muscles[m] = (muscles[m] || 0) + 1;
         });
 
-        const data = Object.entries(muscles).map(([text, value], i) => ({
+        return Object.entries(muscles).map(([text, value], i) => ({
             value,
             text,
             color: [colors.accent.coral, colors.accent.cyan, colors.accent.purple, colors.accent.amber][i % 4],
         }));
-
-        return data.length > 0 ? data : [{ value: 1, text: 'No Data', color: colors.background.tertiary }];
     }, [oneRmQuery.data, colors]);
 
     return (
@@ -216,26 +215,34 @@ export default function ExerciseAnalyticsScreen() {
                 <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
                     <View style={[styles.card, { backgroundColor: colors.background.secondary, borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}>
                         <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginBottom: 20 }]}>Volume Distribution</Text>
-                        <View style={styles.pieRow}>
-                            <PieChart
-                                data={muscleDistribution}
-                                donut
-                                showText
-                                textColor="#FFF"
-                                radius={70}
-                                innerRadius={45}
-                                textSize={10}
-                                focusOnPress
-                            />
-                            <View style={styles.legend}>
-                                {muscleDistribution.map((item, idx) => (
-                                    <View key={idx} style={styles.legendItem}>
-                                        <View style={[styles.legendDot, { backgroundColor: item.color }]} />
-                                        <Text style={[typography.caption, { color: colors.text.secondary }]}>{item.text}</Text>
-                                    </View>
-                                ))}
+                        {muscleDistribution.length > 0 ? (
+                            <View style={styles.pieRow}>
+                                <PieChart
+                                    data={muscleDistribution}
+                                    donut
+                                    showText
+                                    textColor="#FFF"
+                                    radius={70}
+                                    innerRadius={45}
+                                    textSize={10}
+                                    focusOnPress
+                                />
+                                <View style={styles.legend}>
+                                    {muscleDistribution.map((item, idx) => (
+                                        <View key={idx} style={styles.legendItem}>
+                                            <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                                            <Text style={[typography.caption, { color: colors.text.secondary }]}>{item.text}</Text>
+                                        </View>
+                                    ))}
+                                </View>
                             </View>
-                        </View>
+                        ) : (
+                            <EmptyState
+                                icon="pie-chart-outline"
+                                title="No volume data yet"
+                                subtitle="Log lifts in the 1RM calculator to see how your training volume is distributed across muscle groups."
+                            />
+                        )}
                     </View>
                 </View>
 

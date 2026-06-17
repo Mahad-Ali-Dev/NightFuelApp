@@ -13,13 +13,26 @@ import {
   isValidCalendarDate,
   isValidWallTime,
   isOvernightShift,
+  daysFromUtc,
+  isImplausibleFutureDate,
+  MAX_FUTURE_DAYS,
   humanizeFieldError,
   validateLogShiftForm,
   validateLogSleepForm,
   fieldErrorsFromAxiosError,
+  SHIFT_FUTURE_DATE_MSG,
+  SHIFT_END_ORDER_MSG,
+  SHIFT_ZERO_LENGTH_MSG,
+  SLEEP_FUTURE_DAY_MSG,
+  SLEEP_FUTURE_END_MSG,
   type LogShiftFormInput,
   type LogSleepFormInput,
 } from '@/lib/logFormSchemas';
+
+// A fixed "now" used by every future-date assertion so the suite never depends
+// on the real wall clock. Chosen to sit one day after the factory default day
+// (2026-06-16) so "today" / "yesterday" logging is comfortably valid.
+const NOW = new Date('2026-06-17T12:00:00Z');
 
 // ── Factories ────────────────────────────────────────────────────────────────
 
@@ -105,6 +118,67 @@ describe('isOvernightShift', () => {
   });
 });
 
+// ── daysFromUtc ──────────────────────────────────────────────────────────────
+
+describe('daysFromUtc', () => {
+  test('same day is 0', () => {
+    expect(daysFromUtc('2026-06-16', '2026-06-16')).toBe(0);
+  });
+
+  test('one day forward is +1', () => {
+    expect(daysFromUtc('2026-06-16', '2026-06-17')).toBe(1);
+  });
+
+  test('one day backward is -1', () => {
+    expect(daysFromUtc('2026-06-17', '2026-06-16')).toBe(-1);
+  });
+
+  test('crosses a month boundary correctly', () => {
+    expect(daysFromUtc('2026-06-30', '2026-07-01')).toBe(1);
+  });
+
+  test('crosses a leap day correctly', () => {
+    expect(daysFromUtc('2024-02-28', '2024-03-01')).toBe(2); // 29th exists
+  });
+
+  test('returns null when either side is not a real date', () => {
+    expect(daysFromUtc('2026-13-01', '2026-06-16')).toBeNull();
+    expect(daysFromUtc('2026-06-16', 'nope')).toBeNull();
+  });
+});
+
+// ── isImplausibleFutureDate ──────────────────────────────────────────────────
+
+describe('isImplausibleFutureDate', () => {
+  test('today is not implausible', () => {
+    expect(isImplausibleFutureDate('2026-06-17', NOW)).toBe(false);
+  });
+
+  test('yesterday (the past) is never implausible', () => {
+    expect(isImplausibleFutureDate('2026-06-16', NOW)).toBe(false);
+    expect(isImplausibleFutureDate('1999-01-01', NOW)).toBe(false);
+  });
+
+  test('exactly MAX_FUTURE_DAYS ahead is allowed (boundary inclusive)', () => {
+    // NOW is 2026-06-17, MAX_FUTURE_DAYS = 2 → 2026-06-19 is still OK.
+    expect(MAX_FUTURE_DAYS).toBe(2);
+    expect(isImplausibleFutureDate('2026-06-19', NOW)).toBe(false);
+  });
+
+  test('one day past the tolerance is implausible', () => {
+    expect(isImplausibleFutureDate('2026-06-20', NOW)).toBe(true);
+  });
+
+  test('a wildly future year (typo) is implausible', () => {
+    expect(isImplausibleFutureDate('2062-06-17', NOW)).toBe(true);
+  });
+
+  test('a non-calendar string is not flagged (format check owns that)', () => {
+    expect(isImplausibleFutureDate('2026-13-40', NOW)).toBe(false);
+    expect(isImplausibleFutureDate('', NOW)).toBe(false);
+  });
+});
+
 // ── humanizeFieldError ───────────────────────────────────────────────────────
 
 describe('humanizeFieldError', () => {
@@ -124,6 +198,27 @@ describe('humanizeFieldError', () => {
     expect(humanizeFieldError('endTime', 'Sleep start must be before sleep end')).toBe(
       'Sleep start must be before sleep end',
     );
+  });
+
+  test('passes through a future-date message on a date path rather than the format copy', () => {
+    expect(humanizeFieldError('shiftDate', SHIFT_FUTURE_DATE_MSG)).toBe(
+      SHIFT_FUTURE_DATE_MSG,
+    );
+    expect(humanizeFieldError('startDay', SLEEP_FUTURE_DAY_MSG)).toBe(
+      SLEEP_FUTURE_DAY_MSG,
+    );
+  });
+
+  test('an empty message on a date path still yields the generic format copy', () => {
+    expect(humanizeFieldError('shiftDate', '')).toBe('Enter a real date (YYYY-MM-DD)');
+    expect(humanizeFieldError('endDay', '')).toBe('Enter a real date (YYYY-MM-DD)');
+  });
+
+  test('passes through the shift end-order message on the endTime path', () => {
+    // The shift overnight convention means end<start is always overnight, so
+    // this exact copy is only ever surfaced if that convention is later
+    // refined — but the humanizer must still forward it verbatim.
+    expect(humanizeFieldError('endTime', SHIFT_END_ORDER_MSG)).toBe(SHIFT_END_ORDER_MSG);
   });
 });
 
@@ -188,6 +283,90 @@ describe('validateLogShiftForm', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.fieldErrors.shiftType).toBe('Pick a shift type');
+    }
+  });
+
+  // ── additive guards: overnight / end-before-start / zero-length ────────────
+
+  test('overnight shift (19:00 → 07:00) still passes — end before start is legitimate', () => {
+    const result = validateLogShiftForm(
+      shiftInput({ startTime: '19:00', endTime: '07:00' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  test('normal same-day shift (07:00 → 15:00) still passes', () => {
+    const result = validateLogShiftForm(
+      shiftInput({ startTime: '07:00', endTime: '15:00' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  test('zero-length shift (start === end) is rejected with the dedicated message', () => {
+    const result = validateLogShiftForm(
+      shiftInput({ startTime: '09:00', endTime: '09:00' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fieldErrors.endTime).toBe(SHIFT_ZERO_LENGTH_MSG);
+    }
+  });
+
+  test('malformed time skips the ordering check (only the format error shows)', () => {
+    const result = validateLogShiftForm(
+      shiftInput({ startTime: '09:00', endTime: 'oops' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fieldErrors.endTime).toBe('Enter a time as HH:MM (24-hour)');
+    }
+  });
+
+  // ── additive guard: implausible future date ────────────────────────────────
+
+  test('a shift date well in the future is rejected with a humanized message', () => {
+    const result = validateLogShiftForm(
+      shiftInput({ shiftDate: '2062-06-17' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fieldErrors.shiftDate).toBe(SHIFT_FUTURE_DATE_MSG);
+    }
+  });
+
+  test('a shift date just past the tolerance is rejected', () => {
+    // NOW = 2026-06-17, tolerance = 2 days → 2026-06-20 is one day too far.
+    const result = validateLogShiftForm(
+      shiftInput({ shiftDate: '2026-06-20' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fieldErrors.shiftDate).toBe(SHIFT_FUTURE_DATE_MSG);
+    }
+  });
+
+  test('a shift date within the small future tolerance still passes (pre-logging an upcoming shift)', () => {
+    const result = validateLogShiftForm(
+      shiftInput({ shiftDate: '2026-06-19' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  test('a malformed date surfaces the format error, not the future-date message', () => {
+    const result = validateLogShiftForm(
+      shiftInput({ shiftDate: '2026-13-01' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fieldErrors.shiftDate).toBe('Enter a real date (YYYY-MM-DD)');
     }
   });
 });
@@ -280,6 +459,103 @@ describe('validateLogSleepForm', () => {
       expect(result.fieldErrors.startTime).toBeDefined();
       expect(result.fieldErrors.endTime).toBeUndefined();
     }
+  });
+
+  // ── additive guards: future days / future wake-time ────────────────────────
+
+  test('the default overnight sleep logged "this morning" still passes with a pinned now', () => {
+    // start 2026-06-16 23:00 → end 2026-06-16 07:00 rolls to 2026-06-17, which
+    // equals NOW's day — comfortably inside the tolerance.
+    const result = validateLogSleepForm(sleepInput(), { now: NOW });
+    expect(result.ok).toBe(true);
+  });
+
+  test('a start day well in the future is rejected with a humanized message', () => {
+    const result = validateLogSleepForm(
+      sleepInput({ startDay: '2062-06-16', endDay: '2062-06-16' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fieldErrors.startDay).toBe(SLEEP_FUTURE_DAY_MSG);
+    }
+  });
+
+  test('an end day just past the tolerance is rejected', () => {
+    // NOW = 2026-06-17, tolerance = 2 → 2026-06-20 is one day too far. Use a
+    // non-overnight (later) end time so endDay is taken at face value.
+    const result = validateLogSleepForm(
+      sleepInput({
+        startDay: '2026-06-20',
+        endDay: '2026-06-20',
+        startTime: '01:00',
+        endTime: '08:00',
+      }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      // Both days are out of tolerance; assert the one the user is most likely
+      // editing surfaced a humanized future message.
+      expect(result.fieldErrors.startDay).toBe(SLEEP_FUTURE_DAY_MSG);
+      expect(result.fieldErrors.endDay).toBe(SLEEP_FUTURE_DAY_MSG);
+    }
+  });
+
+  test('a day within the small future tolerance still passes', () => {
+    const result = validateLogSleepForm(
+      sleepInput({
+        startDay: '2026-06-18',
+        endDay: '2026-06-18',
+        startTime: '01:00',
+        endTime: '08:00',
+      }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  test('an overnight sleep whose rolled-forward end lands well in the future is rejected on endTime', () => {
+    // Same future day for start+end, overnight (end <= start) so it rolls one
+    // more day forward. Both days are within tolerance individually here so the
+    // day guards stay quiet and the effective-end guard is what fires.
+    const result = validateLogSleepForm(
+      sleepInput({
+        startDay: '2026-06-19',
+        endDay: '2026-06-19',
+        startTime: '23:00',
+        endTime: '07:00', // rolls effective end to 2026-06-20 → > tolerance
+      }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fieldErrors.endTime).toBe(SLEEP_FUTURE_END_MSG);
+      // Day-level guards did NOT fire (2026-06-19 is exactly at tolerance).
+      expect(result.fieldErrors.startDay).toBeUndefined();
+      expect(result.fieldErrors.endDay).toBeUndefined();
+    }
+  });
+
+  test('a malformed start day surfaces the format error, not the future-day message', () => {
+    const result = validateLogSleepForm(
+      sleepInput({ startDay: '2026-13-01' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fieldErrors.startDay).toBe('Enter a real date (YYYY-MM-DD)');
+    }
+  });
+
+  test('overnight roll-forward semantics are preserved (23:00 → 22:00 same day still valid)', () => {
+    // Re-assert the pre-existing valid case under a pinned now to prove the new
+    // future guards did not regress it.
+    const result = validateLogSleepForm(
+      sleepInput({ startTime: '23:00', endTime: '22:00' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(true);
   });
 });
 

@@ -178,8 +178,14 @@ export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }
   return (
     <Pressable
       onPress={() => animated && setPaused((p) => !p)}
-      accessibilityRole="image"
-      accessibilityLabel="Exercise demo"
+      // When the demo animates, this Pressable IS the play/pause control, so it
+      // exposes the `button` role with a state-reflecting label/value/state.
+      // A single still has no toggle (onPress is a no-op) — there it stays a
+      // non-interactive `image` labelled "Exercise demo".
+      accessibilityRole={animated ? 'button' : 'image'}
+      accessibilityLabel={animated ? (paused ? 'Resume demo' : 'Pause demo') : 'Exercise demo'}
+      accessibilityValue={animated ? { text: paused ? 'Paused' : 'Playing' } : undefined}
+      accessibilityState={animated ? { selected: paused, busy: !paused } : undefined}
       accessibilityHint={animated ? 'Double tap to pause or resume the looping demo' : undefined}
       style={styles.wrap}
     >

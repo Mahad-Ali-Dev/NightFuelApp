@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPreferences, updatePreferences, UserPreferences } from '@/api/profile';
-import { Button, Card, Input, Skeleton } from '@/components/ui';
+import { Button, Card, DateTimeField, Input, Skeleton } from '@/components/ui';
 
 const DIETARY_OPTIONS = ['Classic', 'Keto', 'Vegan', 'Vegetarian', 'Pescatarian', 'Paleo'];
 
@@ -284,15 +284,24 @@ export default function PreferencesScreen() {
                         <Text style={[typography.subhead, { color: colors.text.primary, marginBottom: 16, fontWeight: 'bold' }]}>
                             {editing?.label}
                         </Text>
-                        <Input
-                            value={editValue}
-                            onChangeText={(t) => { setEditValue(t); if (editError) setEditError(''); }}
-                            placeholder={editing?.kind === 'time' ? 'HH:MM' : 'Hours'}
-                            keyboardType={editing?.kind === 'hours' ? 'numeric' : 'default'}
-                            autoFocus
-                            error={editError || undefined}
-                            maxLength={editing?.kind === 'time' ? 5 : 4}
-                        />
+                        {editing?.kind === 'time' ? (
+                            <DateTimeField
+                                mode="time"
+                                value={editValue}
+                                onChange={(t) => { setEditValue(t); if (editError) setEditError(''); }}
+                                error={editError || undefined}
+                            />
+                        ) : (
+                            <Input
+                                value={editValue}
+                                onChangeText={(t) => { setEditValue(t); if (editError) setEditError(''); }}
+                                placeholder="Hours"
+                                keyboardType="numeric"
+                                autoFocus
+                                error={editError || undefined}
+                                maxLength={4}
+                            />
+                        )}
                         <View style={styles.modalActions}>
                             <TouchableOpacity accessibilityRole="button" onPress={closeEdit} style={[styles.modalBtn, { borderColor: colors.border.default }]} activeOpacity={0.85}>
                                 <Text style={[typography.body, { color: colors.text.secondary, fontWeight: '600' }]}>Cancel</Text>

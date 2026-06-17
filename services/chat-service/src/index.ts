@@ -35,8 +35,22 @@ fastify.register(fastifyCors, { origin: true });
 // JWT verifies / DB writes from a single IP. Stays generous enough for a
 // normal phone client (a few polls + the upgrade) and is layered on top of
 // the per-socket token bucket inside the WS handler.
+//
+// max:60/min (was 10) — 10/min false-trips legitimate users who share one
+// egress IP behind cellular-carrier and hospital/corporate NAT. 60/min keeps
+// abuse protection (the per-socket token bucket, 8KB frame cap, and 5-min
+// idle close in routes.ts remain the real floor) without punishing NAT'd
+// clients.
+//
+// keyGenerator stays IP-based: the JWT is only verified INSIDE the WS route
+// handler (routes.ts) — i.e. AFTER this pre-handler limiter has already run —
+// so no authenticated user-id is cleanly resolvable here. Keying by user-id
+// would force this limiter to verify the token itself, duplicating the very
+// crypto cost the IP cap exists to bound and re-opening the attack surface on
+// unauthenticated input. IP keying remains correct; see risks for the NAT
+// trade-off this still carries.
 fastify.register(fastifyRateLimit, {
-    max: 10,
+    max: 60,
     timeWindow: '1 minute',
     keyGenerator: (req) => req.ip,
 });

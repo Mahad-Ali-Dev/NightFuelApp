@@ -105,7 +105,8 @@ import {
   borderRadius,
   shadows,
 } from '@/theme';
-import { getCuratedDemoFrames, getCuratedDemoVerified } from '@/constants/curatedDemos';
+import { getCuratedDemo, getCuratedDemoFrames, getCuratedDemoVerified } from '@/constants/curatedDemos';
+import { resolveDemo, resolveDemoFrames } from '@/constants/exerciseDemos';
 import ExerciseDetailScreen from '../../app/(exercises)/[id]';
 
 // ── Pure data accessor tests ─────────────────────────────────────────────────
@@ -168,6 +169,123 @@ describe('getCuratedDemoVerified — typed boolean accessor', () => {
   test('returns null for an unknown name', () => {
     expect(getCuratedDemoVerified('Made Up Name')).toBeNull();
     expect(getCuratedDemoVerified('')).toBeNull();
+  });
+});
+
+// ── resolveDemoFrames — frames branch precedence ─────────────────────────────
+// The screen's demo precedence (in app/(exercises)/[id].tsx) consults the
+// curated map ONLY when resolveDemoFrames AND resolveDemo both miss. These
+// cases pin the default resolvers' frames/youtube/fallback branches so that
+// precedence walk is well-defined.
+
+describe('resolveDemoFrames — frames branch', () => {
+  test('a backend demoGifUrl wins as a single-frame source', () => {
+    const frames = resolveDemoFrames({ name: 'Anything', demoGifUrl: 'https://cdn.example.com/demo.gif' });
+    expect(frames).toEqual(['https://cdn.example.com/demo.gif']);
+  });
+
+  test('derives the ordered [0.jpg, 1.jpg] pair from a free-exercise-db CDN imageUrl', () => {
+    const frames = resolveDemoFrames({
+      name: 'Some Exercise',
+      imageUrl:
+        'https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@main/exercises/Barbell_Deadlift/0.jpg',
+    });
+    expect(frames).not.toBeNull();
+    expect(frames!.length).toBe(2);
+    expect(frames![0]!.endsWith('/Barbell_Deadlift/0.jpg')).toBe(true);
+    expect(frames![1]!.endsWith('/Barbell_Deadlift/1.jpg')).toBe(true);
+    expect(frames!.every((u) => u.startsWith('https://'))).toBe(true);
+  });
+
+  test('resolves frames from the exercise NAME via the bundled FEDB slug index', () => {
+    // "Romanian Deadlift" normalizes to a key present in FEDB_SLUGS.
+    const frames = resolveDemoFrames({ name: 'Romanian Deadlift' });
+    expect(frames).not.toBeNull();
+    expect(frames!.length).toBe(2);
+    expect(frames![0]!.endsWith('/0.jpg')).toBe(true);
+    expect(frames![1]!.endsWith('/1.jpg')).toBe(true);
+  });
+
+  test('returns null for a name with no FEDB slug and no image (the "coming soon" gate)', () => {
+    // A bare "Bench Press" is NOT a FEDB_SLUGS key (the slug is the fully-
+    // qualified barbell name), so the default resolver misses → the curated
+    // fallback in [id].tsx takes over (covered below).
+    expect(resolveDemoFrames({ name: 'Bench Press' })).toBeNull();
+    expect(resolveDemoFrames({ name: 'Totally Made Up 9000' })).toBeNull();
+    expect(resolveDemoFrames(null)).toBeNull();
+  });
+});
+
+// ── resolveDemo — youtube / fallback branch ──────────────────────────────────
+
+describe('resolveDemo — youtube + fallback branch', () => {
+  test('prefers an explicit backend demoUrl over the curated map', () => {
+    const url = resolveDemo({ name: 'Barbell Bench Press', demoUrl: 'https://youtu.be/explicit' });
+    expect(url).toBe('https://youtu.be/explicit');
+  });
+
+  test('falls back to the curated DEMO_FALLBACK watch URL by name (case-insensitive)', () => {
+    const url = resolveDemo({ name: '  barbell BENCH press ' });
+    expect(url).toBe('https://www.youtube.com/watch?v=rT7DgCr-3pg');
+  });
+
+  test('returns null for an unknown name and for nullish input', () => {
+    expect(resolveDemo({ name: 'Totally Made Up 9000' })).toBeNull();
+    expect(resolveDemo(null)).toBeNull();
+    expect(resolveDemo({ name: '' })).toBeNull();
+  });
+});
+
+// ── Newly-added curated coverage (the gap the default resolvers leave) ───────
+// These high-traffic short names hit the "coming soon" fallback before this
+// sprint (resolveDemoFrames + resolveDemo both miss). They now resolve to real
+// in-app FEDB frame pairs via the curated map that [id].tsx consults as the
+// final step of its precedence walk.
+
+describe('curated fallback coverage — newly added fedb_frames keys', () => {
+  // A representative slice of the names added this sprint. Each must (a) miss
+  // the default resolvers and (b) resolve to a 2-frame HTTPS pair via the
+  // curated accessor — i.e. exactly the screen's fallback path.
+  const NEW_KEYS = [
+    'Bench Press',
+    'Squat',
+    'Lat Pulldown',
+    'Standing Calf Raise',
+    'Side Plank',
+    'Bicycle Crunch',
+    'Pec Deck',
+    'Skull Crusher',
+  ] as const;
+
+  test.each(NEW_KEYS)('"%s" misses the default resolvers but resolves via the curated map', (name) => {
+    // (a) The default frames/url resolvers both miss → the curated fallback is
+    // the ONLY thing that lights this exercise up.
+    expect(resolveDemoFrames({ name })).toBeNull();
+    expect(resolveDemo({ name })).toBeNull();
+
+    // (b) The curated entry is an unreviewed in-app frame pair.
+    const demo = getCuratedDemo(name);
+    expect(demo).not.toBeNull();
+    expect(demo!.kind).toBe('fedb_frames');
+    expect(demo!.verified).toBe(false);
+
+    const frames = getCuratedDemoFrames(name);
+    expect(frames).not.toBeNull();
+    expect(frames!.length).toBe(2);
+    expect(frames![0]!.endsWith('/0.jpg')).toBe(true);
+    expect(frames![1]!.endsWith('/1.jpg')).toBe(true);
+    expect(frames!.every((u) => u.startsWith('https://'))).toBe(true);
+  });
+
+  test('the curated map still surfaces a YouTube tutorial link for a pending youtube entry', () => {
+    // The youtube branch of the curated fallback (kind:'youtube') feeds the
+    // "Full tutorial" deep-link slot rather than in-app frames.
+    const demo = getCuratedDemo('Reverse Kegel');
+    expect(demo).not.toBeNull();
+    expect(demo!.kind).toBe('youtube');
+    expect(demo!.url).toMatch(/^https:\/\/www\.youtube\.com\/watch\?v=/);
+    // A youtube entry has no in-app frame pair.
+    expect(getCuratedDemoFrames('Reverse Kegel')).toBeNull();
   });
 });
 

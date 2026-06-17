@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { DateTimeField } from '@/components/ui';
 import { Card } from '@/components/ui/Card';
 import { shadows } from '@/theme/shadows';
 import { useOnboardingStore } from '@/store/onboardingStore';
@@ -71,13 +72,13 @@ export default function BiologicalDataScreen() {
                     We use this to calculate your personalized macro targets and caloric needs.
                 </Text>
 
-                <Input
-                    label="Date of Birth (YYYY-MM-DD)"
-                    placeholder="1990-01-01"
+                <DateTimeField
+                    mode="date"
+                    label="Date of Birth"
                     value={dob}
-                    onChangeText={setDob}
-                    keyboardType="numeric"
+                    onChange={setDob}
                     error={dobError}
+                    maximumDate={new Date()}
                 />
 
                 <View style={{ height: spacing.md }} />

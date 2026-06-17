@@ -120,15 +120,20 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
             const list = await mealService.generateGroceryList(userId, date);
             return reply.status(200).send(list);
         } catch (err: any) {
+            // Redaction: the wrapped err.message can carry a raw upstream/fetch
+            // error (plan-service URL, network detail). Log it server-side and
+            // return a fixed, non-leaky business message. Status unchanged (400).
             request.log.error(err);
-            return reply.status(400).send({ error: err.message });
+            return reply.status(400).send({ error: 'Could not find an active plan to generate a grocery list from.' });
         }
     });
 
     // ── Recipes ───────────────────────────────────────────────────────────────
 
     fastify.get('/recipes', {
-        schema: { querystring: z.object({ tags: z.string().optional(), limit: z.coerce.number().default(20) }) },
+        // Bound the free-form tag string and clamp limit to a sane range so it
+        // can't reach Prisma `take` as a negative or absurd value.
+        schema: { querystring: z.object({ tags: z.string().max(100).optional(), limit: z.coerce.number().int().min(1).max(100).default(20) }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const { tags, limit } = request.query as any;
@@ -175,7 +180,7 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
     // ── Fasting ───────────────────────────────────────────────────────────────
 
     fastify.get('/fasting', {
-        schema: { querystring: z.object({ limit: z.coerce.number().default(10) }) },
+        schema: { querystring: z.object({ limit: z.coerce.number().int().min(1).max(100).default(10) }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const userId = (request.user as any).id || (request.user as any).userId;
@@ -184,7 +189,8 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
     });
 
     fastify.post('/fasting/start', {
-        schema: { body: z.object({ targetHours: z.number().min(1).default(16) }) },
+        // Upper bound: a fasting target above ~1 week (168h) is not plausible.
+        schema: { body: z.object({ targetHours: z.number().min(1).max(168).default(16) }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const userId = (request.user as any).id || (request.user as any).userId;
@@ -199,7 +205,13 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
         try {
             return reply.send(await mealService.endFasting(userId));
         } catch (err: any) {
-            return reply.code(400).send({ error: err.message });
+            // The only user-facing error here is the "no active fast" business
+            // case; preserve that safe copy and redact anything unexpected.
+            request.log.error(err);
+            if (typeof err?.message === 'string' && err.message.includes('No active fast')) {
+                return reply.code(400).send({ error: 'No active fast found' });
+            }
+            return reply.code(500).send({ error: 'An unexpected error occurred' });
         }
     });
 };

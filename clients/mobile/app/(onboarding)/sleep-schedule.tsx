@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from '
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { DateTimeField } from '@/components/ui';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
 import { useOnboardingStore } from '@/store/onboardingStore';
@@ -146,11 +146,11 @@ export default function LifestyleScreen() {
                 <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.md }]}>Sleep Window</Text>
                 <View style={styles.row}>
                     <View style={{ flex: 1 }}>
-                        <Input label="Bedtime" placeholder="08:00" value={startHour} onChangeText={setStartHour} error={startHourError} />
+                        <DateTimeField mode="time" label="Bedtime" value={startHour} onChange={setStartHour} error={startHourError} />
                     </View>
                     <View style={{ width: spacing.md }} />
                     <View style={{ flex: 1 }}>
-                        <Input label="Wake Up" placeholder="16:00" value={endHour} onChangeText={setEndHour} error={endHourError} />
+                        <DateTimeField mode="time" label="Wake Up" value={endHour} onChange={setEndHour} error={endHourError} />
                     </View>
                 </View>
 

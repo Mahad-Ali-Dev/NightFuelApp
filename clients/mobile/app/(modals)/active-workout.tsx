@@ -179,10 +179,18 @@ export default function ActiveWorkoutScreen() {
                         </View>
 
                         {ex.loggedSets.map((s, sIndex) => {
-                            const prevSet = sIndex === 0 ? '-' : '135x10'; // Mock prev
+                            // Previous logged set within THIS session (no cross-session
+                            // history is exposed here). Only show real values — never a
+                            // fabricated number. Falls back to '-' for set 1 or when the
+                            // prior set hasn't been filled in yet.
+                            const prev = sIndex === 0 ? undefined : ex.loggedSets[sIndex - 1];
+                            const prevSet = prev && prev.weight && prev.reps ? `${prev.weight}x${prev.reps}` : '-';
                             return (
                                 <View key={sIndex} style={[styles.setRow, s.done && { backgroundColor: withAlpha(colors.accent.cyan, 0.1) }]}>
-                                    <Text style={[typography.subhead, { color: colors.text.secondary, width: 32 }]}>{sIndex + 1}</Text>
+                                    <View style={{ width: 32 }}>
+                                        <Text style={[typography.subhead, { color: colors.text.secondary }]}>{sIndex + 1}</Text>
+                                        <Text style={[typography.overline, { color: colors.text.tertiary, fontSize: 9 }]}>{prevSet}</Text>
+                                    </View>
 
                                     <View style={styles.inputBox}>
                                         <TextInput

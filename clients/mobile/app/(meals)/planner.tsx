@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -11,6 +11,7 @@ import { getCurrent as getCurrentShift } from '@/api/shifts';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
+import { getErrorMessage } from '@/utils/validation';
 import { shadows } from '@/theme/shadows';
 import { spacing, borderRadius } from '@/theme/spacing';
 import { Skeleton, EmptyState } from '@/components/ui';
@@ -43,12 +44,12 @@ export default function MealPlannerScreen() {
             shiftType: shiftQ.data?.type,
         }),
         onSuccess:()=>{ qc.invalidateQueries({queryKey:['nutrition-plan',dateStr]}); Alert.alert('Plan Generated','Your AI-powered nutrition protocol is ready.'); },
-        onError:(err:any)=>Alert.alert('Generation Failed', err?.response?.data?.error || err.message || 'Could not connect to Ria engine.'),
+        onError:(err:unknown)=>Alert.alert('Generation Failed', getErrorMessage(err)),
     });
     const rateM = useMutation({
         mutationFn:(rating:number)=>ratePlan(planQ.data!.id,rating),
         onSuccess:()=>qc.invalidateQueries({queryKey:['nutrition-plan',dateStr]}),
-        onError:(err:any)=>Alert.alert('Rating Failed', err?.response?.data?.error || err.message || 'Could not save your rating. Please try again.'),
+        onError:(err:unknown)=>Alert.alert('Rating Failed', getErrorMessage(err)),
     });
     const weekDays = useMemo(()=>{ const start=startOfWeek(new Date(),{weekStartsOn:1}); return Array.from({length:7}).map((_,i)=>addDays(start,i)); },[]);
     const plan = planQ.data;
@@ -165,9 +166,11 @@ export default function MealPlannerScreen() {
                                 ))}
                             </View>
                         </View>
-                        <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Regenerate plan" accessibilityState={{ disabled: genM.isPending }} style={[s.genBtn,{backgroundColor:colors.background.secondary,marginTop:32,borderWidth:1,borderColor:colors.border.default}]} onPress={()=>genM.mutate()} disabled={genM.isPending}>
-                            <Ionicons name="refresh" size={20} color={colors.text.primary} />
-                            <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'900',marginLeft:8}]}>REGENERATE PLAN</Text>
+                        <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Regenerate plan" accessibilityState={{ disabled: genM.isPending, busy: genM.isPending }} style={[s.genBtn,{backgroundColor:colors.background.secondary,marginTop:32,borderWidth:1,borderColor:colors.border.default},genM.isPending&&{opacity:0.6}]} onPress={()=>genM.mutate()} disabled={genM.isPending}>
+                            {genM.isPending
+                                ? <ActivityIndicator size="small" color={colors.text.primary} />
+                                : <Ionicons name="refresh" size={20} color={colors.text.primary} />}
+                            <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'900',marginLeft:8}]}>{genM.isPending?'GENERATING...':'REGENERATE PLAN'}</Text>
                         </TouchableOpacity>
                     </View>
                 )}

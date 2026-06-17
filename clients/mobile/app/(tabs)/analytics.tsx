@@ -47,6 +47,7 @@ export default function AnalyticsScreen() {
     });
     const score = scoreQuery.data;
     const isScoreLoading = scoreQuery.isLoading;
+    const isScoreError = scoreQuery.isError;
 
     const chartData = useMemo(() => {
         const weeklyData = (weekly as any)?.dailyBreakdown;
@@ -91,6 +92,18 @@ export default function AnalyticsScreen() {
                         height={150}
                         radius={borderRadius['2xl'] ?? 24}
                         style={{ marginBottom: spacing.lg }}
+                    />
+                ) : isScoreError ? (
+                    // Distinct error-with-retry for the XP/Level read. Without this
+                    // a failed scoreQuery silently rendered Level 1 / 0 XP, masking
+                    // the failure. Retry re-runs the query in one tap.
+                    <EmptyState
+                        style={{ marginBottom: spacing.lg }}
+                        icon="cloud-offline-outline"
+                        title="Couldn't load your level"
+                        subtitle="Check your connection and try again."
+                        actionLabel="Retry"
+                        onAction={() => scoreQuery.refetch()}
                     />
                 ) : (
                 <TouchableOpacity onPress={() => router.push('/(community)/achievements' as any)} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`Fitness level ${level}, ${xp.toLocaleString()} XP total, view badges`} style={shadows.glow(colors.accent.purple)}>

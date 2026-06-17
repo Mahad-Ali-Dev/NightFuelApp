@@ -14,6 +14,7 @@ import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Button, Card, Skeleton, EmptyState } from '@/components/ui';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
+import { getErrorMessage } from '@/utils/validation';
 import { format, differenceInSeconds, parseISO, addHours } from 'date-fns';
 
 const { width } = Dimensions.get('window');
@@ -42,13 +43,13 @@ export default function FastingScreen() {
 
     const startMutation = useMutation({
         mutationFn: (h: number) => startFasting(h),
-        onError: (err: any) => { Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Something went wrong'); },
+        onError: (err: unknown) => { Alert.alert('Error', getErrorMessage(err)); },
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['fasting-logs'] }),
     });
 
     const endMutation = useMutation({
         mutationFn: () => endFasting(),
-        onError: (err: any) => { Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Something went wrong'); },
+        onError: (err: unknown) => { Alert.alert('Error', getErrorMessage(err)); },
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['fasting-logs'] }),
     });
 
@@ -181,6 +182,7 @@ export default function FastingScreen() {
                     variant={activeFast ? "outline" : "primary"}
                     style={{ width: '100%', marginTop: 40, height: 60 }}
                     onPress={() => activeFast ? endMutation.mutate() : startMutation.mutate(selectedHours)}
+                    loading={startMutation.isPending || endMutation.isPending}
                     disabled={startMutation.isPending || endMutation.isPending}
                 />
 

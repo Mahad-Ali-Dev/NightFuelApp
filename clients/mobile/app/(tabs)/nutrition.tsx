@@ -62,6 +62,26 @@ export default function NutritionHubScreen() {
     const logs = Array.isArray(logsQuery.data) ? logsQuery.data : [];
     const fasting = fastingQuery.data?.[0];
 
+    // The macro dashboard is this tab's primary content; it's driven by the
+    // daily-progress (targets) + meal-logs (consumed) reads. Surface explicit
+    // loading / error-with-retry states for those instead of silently rendering
+    // fallback defaults (2400kcal / 0 consumed) while they load or after a
+    // failure. Retry re-runs every query feeding the tab in one tap.
+    const macroLoading = progressQuery.isLoading || logsQuery.isLoading;
+    const macroError = progressQuery.isError || logsQuery.isError;
+    // TanStack `refetch` fns are stable across renders, so depending on them
+    // keeps this callback stable too (avoids re-rendering the memoized EmptyState).
+    const planRefetch = planQuery.refetch;
+    const logsRefetch = logsQuery.refetch;
+    const progressRefetch = progressQuery.refetch;
+    const fastingRefetch = fastingQuery.refetch;
+    const refetchAll = useCallback(() => {
+        planRefetch();
+        logsRefetch();
+        progressRefetch();
+        fastingRefetch();
+    }, [planRefetch, logsRefetch, progressRefetch, fastingRefetch]);
+
     const stats = useMemo(() => {
         const target = {
             calories: progress?.caloriesTarget || 2400,
@@ -125,6 +145,26 @@ export default function NutritionHubScreen() {
                 </View>
 
                 {/* Macro Dashboard */}
+                {macroLoading ? (
+                    <Card variant="glass" style={styles.macroDashboard}>
+                        <Skeleton width={180} height={180} radius={borderRadius.full} style={{ marginBottom: 30 }} />
+                        <View style={styles.macroGrid}>
+                            {[0, 1, 2].map((i) => (
+                                <Skeleton key={i} width="100%" height={28} radius={borderRadius.md} />
+                            ))}
+                        </View>
+                    </Card>
+                ) : macroError ? (
+                    <Card variant="glass" style={styles.macroDashboard}>
+                        <EmptyState
+                            icon="cloud-offline-outline"
+                            title="Couldn't load your macros"
+                            subtitle="Check your connection and try again."
+                            actionLabel="Retry"
+                            onAction={refetchAll}
+                        />
+                    </Card>
+                ) : (
                 <Card variant="glass" style={styles.macroDashboard}>
                     <View style={[styles.mainCircle, shadows.glow(colors.accent.emerald)]}>
                         <CircularProgress
@@ -148,6 +188,7 @@ export default function NutritionHubScreen() {
                         <MacroItem label="Fat" current={stats.consumed.fat} target={stats.target.fat} color={colors.accent.amber} unit="g" />
                     </View>
                 </Card>
+                )}
 
                 {/* Quick Tools */}
                 <Text style={[typography.overline, { color: colors.text.secondary, marginHorizontal: 20, marginTop: 28, marginBottom: 12 }]}>
@@ -198,12 +239,7 @@ export default function NutritionHubScreen() {
                             title="Couldn't load nutrition"
                             subtitle="Check your connection and try again."
                             actionLabel="Retry"
-                            onAction={() => {
-                                planQuery.refetch();
-                                logsQuery.refetch();
-                                progressQuery.refetch();
-                                fastingQuery.refetch();
-                            }}
+                            onAction={refetchAll}
                         />
                     ) : !plan || !((plan.meals || []).some((m: any) => m && (m.label || m.name))) ? (
                         <TouchableOpacity

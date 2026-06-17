@@ -1,20 +1,26 @@
 /**
  * Regression suite — @fastify/rate-limit is registered on the chat-service
- * Fastify instance with a 10/min/IP ceiling. The IP cap is the FIRST line of
+ * Fastify instance with a 60/min/IP ceiling. The IP cap is the FIRST line of
  * defence on the only route that can open a long-lived expensive resource
  * (the /v1/chat/ws upgrade): without it, a single host can hammer the WS
  * upgrade unbounded, churning through JWT verifies, DB writes, and AI
  * pipeline calls. The per-socket token bucket inside routes.ts is the
  * second-line floor; this file locks in the first.
  *
+ * Why 60 and not 10: the prior 10/min ceiling false-tripped legitimate users
+ * sharing a single egress IP behind cellular-carrier and hospital/corporate
+ * NAT. 60/min keeps abuse protection while not punishing NAT'd clients; the
+ * per-socket token bucket / 8KB frame cap / 5-min idle close in routes.ts are
+ * the real per-connection floor and stay untouched.
+ *
  * Test strategy — what we actually prove:
  *   We boot a minimal Fastify app wired EXACTLY like src/index.ts: the
  *   `@fastify/rate-limit` plugin is registered BEFORE the routes plugin
- *   with `{ max: 10, timeWindow: '1 minute', keyGenerator: (req) => req.ip }`.
- *   We then fire 11 requests from the same simulated IP (fastify.inject
+ *   with `{ max: 60, timeWindow: '1 minute', keyGenerator: (req) => req.ip }`.
+ *   We then fire 61 requests from the same simulated IP (fastify.inject
  *   sets request.ip from the supplied `remoteAddress`) and assert:
- *     - the first 10 requests pass through the limiter (status != 429)
- *     - the 11th request is rejected with 429
+ *     - the first 60 requests pass through the limiter (status != 429)
+ *     - the 61st request is rejected with 429
  *
  *   We use the `/health` route as the request target because it has no auth
  *   gate (so a 401 doesn't confuse the assertion) and no body schema (so a
@@ -46,7 +52,7 @@ const JWT_SECRET = 'test-secret-of-at-least-32-chars-long';
 // Mirror the index.ts registration verbatim. If src/index.ts ever changes
 // these knobs, this constant MUST track it — that drift is the bug this
 // file exists to catch.
-const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_MAX = 60;
 const RATE_LIMIT_WINDOW = '1 minute';
 
 // All ChatService methods the routes plugin may try to access. None are
@@ -112,7 +118,7 @@ async function buildApp(chatService: MockChatService): Promise<FastifyInstance> 
     return app;
 }
 
-describe('chat-service global rate limit — 10/min/IP via @fastify/rate-limit', () => {
+describe('chat-service global rate limit — 60/min/IP via @fastify/rate-limit', () => {
     let app: FastifyInstance;
     let chatService: MockChatService;
 
@@ -126,17 +132,17 @@ describe('chat-service global rate limit — 10/min/IP via @fastify/rate-limit',
     });
 
     /**
-     * The contract: 11th request from the same IP within the window returns
-     * 429. The simulated IP is set via fastify.inject's `remoteAddress` so
-     * every request shares the same bucket. We exercise the boundary case
-     * (request #10 still passes, request #11 is rejected) so a future
-     * regression that loosens the limiter — e.g. drops the keyGenerator and
-     * partitions buckets per-route — is caught here.
+     * The contract: the (RATE_LIMIT_MAX + 1)th request from the same IP within
+     * the window returns 429. The simulated IP is set via fastify.inject's
+     * `remoteAddress` so every request shares the same bucket. We exercise the
+     * boundary case (request #60 still passes, request #61 is rejected) so a
+     * future regression that loosens the limiter — e.g. drops the keyGenerator
+     * and partitions buckets per-route — is caught here.
      */
-    it('rejects the 11th same-IP request within the window with 429', async () => {
+    it('rejects the 61st same-IP request within the window with 429', async () => {
         const sameIp = '203.0.113.42'; // RFC 5737 doc range — never routable.
 
-        // Requests 1..10 must all pass through. We assert each one
+        // Requests 1..60 must all pass through. We assert each one
         // individually so a regression that fires the 429 too early is
         // easy to diagnose (the failing iteration is in the error output).
         for (let i = 1; i <= RATE_LIMIT_MAX; i++) {
@@ -150,7 +156,7 @@ describe('chat-service global rate limit — 10/min/IP via @fastify/rate-limit',
             expect(res.statusCode).toBe(200);
         }
 
-        // Request 11 — the boundary case the test is named for.
+        // Request 61 — the boundary case the test is named for.
         const limited = await app.inject({
             method: 'GET',
             url: '/health',

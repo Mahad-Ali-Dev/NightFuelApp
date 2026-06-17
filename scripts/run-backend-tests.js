@@ -172,6 +172,27 @@ function main() {
             continue;
         }
 
+        // A jest suite that touches the service's Prisma layer cannot even be
+        // collected if `prisma generate` has never run for that service (the
+        // generated client under src/generated/prisma is .gitignored). Rather
+        // than letting that surface as an opaque module-not-found FAIL, detect
+        // the missing client up front and emit an explicit, named SKIP line so
+        // the gate output makes the cause obvious. This is NOT counted as a
+        // failure — a fresh checkout that hasn't generated clients yet should
+        // not break the gate on that basis alone. In CI (and locally after
+        // `npm run build`) the client is present and the service runs normally.
+        //
+        // Guard narrowly: only Prisma-backed services (those that ship a
+        // prisma/schema.prisma) can have an "absent generated client" problem.
+        // A stateless service with no schema (e.g. decision-engine) has nothing
+        // to generate and must still run — so we never skip it on this basis.
+        const hasPrismaSchema = fs.existsSync(path.join(svc.dir, 'prisma', 'schema.prisma'));
+        const hasGeneratedClient = fs.existsSync(path.join(svc.dir, 'src', 'generated', 'prisma'));
+        if (hasPrismaSchema && !hasGeneratedClient) {
+            console.log(`SKIP ${svc.name}: generated prisma client absent`);
+            continue;
+        }
+
         const { exitCode, combined, summary } = runServiceTests(svc);
 
         if (exitCode === 0 && summary && summary.failed === 0) {

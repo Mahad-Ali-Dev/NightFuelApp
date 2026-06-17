@@ -10,12 +10,57 @@
  * that pure core: no React, no network, no `Date.now()` (the caller passes
  * `today`), so it is fully deterministic and trivially testable.
  *
- * Dates are calendar-day strings in `YYYY-MM-DD` form (the same shape the rest
- * of the app uses via `new Date().toISOString().slice(0, 10)`). All arithmetic
- * is done in UTC day-numbers so it is immune to local timezone / DST shifts.
+ * Inputs may be either calendar-day strings in `YYYY-MM-DD` form (the shape the
+ * rest of the app uses via `new Date().toISOString().slice(0, 10)`) OR full
+ * ISO-8601 timestamps. Day-bucketing is delegated to the canonical
+ * `@nightfuel/dates` helpers so a night-shift activity logged after local
+ * midnight buckets into the correct *local* calendar day instead of silently
+ * rolling into the next UTC day:
+ *   - When a `tz` (IANA zone) is supplied, ISO timestamps are bucketed with
+ *     `toLocalDayKey(value, tz)` (DST-safe).
+ *   - With no `tz`, ISO timestamps fall back to `toUTCDayKey(value)`, which is
+ *     exactly the legacy `.slice(0, 10)` UTC behavior — so existing call sites
+ *     that pass no `tz` keep behaving identically.
+ * Values that are already a plain `YYYY-MM-DD` are passed through untouched, so
+ * the day-string call path (and every existing test) is byte-for-byte unchanged.
+ *
+ * Once bucketed to day-keys, all run arithmetic is done in UTC day-numbers
+ * (`toDayNumber`) so the consecutive-day math is immune to timezone / DST shifts.
  */
+import { toLocalDayKey, toUTCDayKey } from '@nightfuel/dates';
 
 const MS_PER_DAY = 86_400_000;
+
+/** Matches a bare calendar day with no time component, e.g. `2026-06-16`. */
+const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Reduce an input value to a `YYYY-MM-DD` day-key for bucketing.
+ *
+ * - A value that is already a bare `YYYY-MM-DD` (a calendar day, no time) is
+ *   returned verbatim — this keeps the existing day-string call path, and all
+ *   of its tests, completely unchanged.
+ * - A value that parses as a real ISO-8601 timestamp is routed through the
+ *   canonical `@nightfuel/dates` helpers: `toLocalDayKey` when a `tz` is given
+ *   (so a 23:30 local / next-day-UTC night-shift activity lands on the correct
+ *   local day), otherwise `toUTCDayKey` (the legacy UTC-slice behavior).
+ * - Anything else (empty, `'not-a-date'`, non-string) is returned verbatim so
+ *   the downstream `toDayNumber` rejects it and malformed entries stay ignored —
+ *   the `@nightfuel/dates` helpers map garbage to a `1970-01-01` epoch sentinel,
+ *   which we must NOT let masquerade as a real logged day.
+ */
+function toDayKey(value: string, tz?: string): string {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  // Already a bare calendar day (or empty): leave untouched for byte-for-byte
+  // parity with the legacy day-string path.
+  if (trimmed === '' || DAY_KEY_RE.test(trimmed)) return trimmed;
+  // Only delegate to the day-key helpers for values that are genuinely parseable
+  // dates; otherwise return as-is so toDayNumber treats it as malformed (rather
+  // than the helpers' epoch fallback turning it into day 0).
+  if (Number.isNaN(new Date(trimmed).getTime())) return trimmed;
+  return tz ? toLocalDayKey(trimmed, tz) : toUTCDayKey(trimmed);
+}
 
 /**
  * Parse a `YYYY-MM-DD` calendar date into a UTC "day number" (whole days since
@@ -57,16 +102,25 @@ function toDayNumber(date: string): number | null {
  * Duplicate dates are de-duplicated; malformed entries are ignored. Empty input
  * (or an unparseable `today`) yields `{ current: 0, longest: 0 }`.
  *
- * @param dates active calendar days as `YYYY-MM-DD` strings (any order)
- * @param today the reference "today" as a `YYYY-MM-DD` string
+ * @param dates active days as `YYYY-MM-DD` strings or ISO-8601 timestamps (any order)
+ * @param today the reference "today" as a `YYYY-MM-DD` string or ISO-8601 timestamp
+ * @param tz    optional IANA zone (e.g. `'America/New_York'`) used to bucket any
+ *              ISO-timestamp inputs to their *local* calendar day. Omit it to keep
+ *              the legacy UTC-day behavior; plain `YYYY-MM-DD` inputs ignore it.
  */
-export function computeStreaks(dates: string[], today: string): { current: number; longest: number } {
-  const todayNum = toDayNumber(today);
+export function computeStreaks(
+  dates: string[],
+  today: string,
+  tz?: string,
+): { current: number; longest: number } {
+  const todayNum = toDayNumber(toDayKey(today, tz));
 
-  // Collect the unique, valid day-numbers.
+  // Collect the unique, valid day-numbers, bucketing each input to its day-key
+  // first (local-day when a tz is supplied, else UTC) so cross-midnight
+  // night-shift activity lands on the correct calendar day.
   const days = new Set<number>();
   for (const d of dates) {
-    const n = toDayNumber(d);
+    const n = toDayNumber(toDayKey(d, tz));
     if (n !== null) days.add(n);
   }
 

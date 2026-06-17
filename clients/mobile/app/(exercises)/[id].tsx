@@ -88,13 +88,31 @@ export default function ExerciseDetailScreen() {
         // input slot. fedb_frames feeds the animated loop, youtube feeds the
         // "Full tutorial" link, gif feeds the single-still gifUrl input.
         if (curated.kind === 'fedb_frames') {
-            return { demoFrames: getCuratedDemoFrames(name), demoUrl: null, demoGifUrl: null };
+            // Defensive: only feed the animated-loop slot a non-empty list of
+            // real HTTPS frame URLs. A malformed entry that split to nothing
+            // falls through to { null, null, null } so <ExerciseDemo/> shows the
+            // still + honest "coming soon" rather than an empty/never-resolving
+            // player. (Every real fedb_frames entry yields a 2-frame pair, so
+            // this is belt-and-braces, not an expected path.)
+            const curatedFrames = getCuratedDemoFrames(name);
+            const validFrames = curatedFrames?.filter(
+                (u): u is string => typeof u === 'string' && u.trim().length > 0,
+            );
+            if (validFrames && validFrames.length > 0) {
+                return { demoFrames: validFrames, demoUrl: null, demoGifUrl: null };
+            }
+            return { demoFrames: null, demoUrl: null, demoGifUrl: null };
         }
         if (curated.kind === 'youtube') {
+            // A curated YouTube entry has no in-app frames — it surfaces ONLY as
+            // the "Full tutorial"/"Watch demo" deep-link (tutorialUrl). The
+            // player still renders the exercise's own imageUrl (or the bundled
+            // fallback) underneath, never an empty box.
             return { demoFrames: null, demoUrl: curated.url, demoGifUrl: null };
         }
-        // curated.kind === 'gif'
-        return { demoFrames: null, demoUrl: null, demoGifUrl: curated.url };
+        // curated.kind === 'gif' — single static still fed via the gifUrl slot.
+        const gifUrl = typeof curated.url === 'string' && curated.url.trim().length > 0 ? curated.url : null;
+        return { demoFrames: null, demoUrl: null, demoGifUrl: gifUrl };
     }, [exercise]);
     // Curated `verified` flag for the current exercise name. Null when no
     // curated entry exists; false renders the "Unreviewed" chip below.

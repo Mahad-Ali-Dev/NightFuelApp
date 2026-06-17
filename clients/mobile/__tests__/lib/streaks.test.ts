@@ -89,3 +89,57 @@ describe('computeStreaks — edge cases', () => {
     expect(computeStreaks(['2026-06-16'], 'garbage')).toEqual({ current: 0, longest: 0 });
   });
 });
+
+describe('computeStreaks — cross-midnight night-shift bucketing (tz)', () => {
+  // A night-shift worker logs activity at 23:30 local on four consecutive
+  // evenings in America/New_York (EDT, UTC-4). Each 23:30 local instant falls on
+  // the *next* day in UTC:
+  //   2026-06-13 23:30 EDT → 2026-06-14 03:30 UTC
+  //   2026-06-14 23:30 EDT → 2026-06-15 03:30 UTC
+  //   2026-06-15 23:30 EDT → 2026-06-16 03:30 UTC
+  //   2026-06-16 23:30 EDT → 2026-06-17 03:30 UTC
+  // The user's calendar says they worked out on the 13th–16th, so with
+  // today = 2026-06-16 their current streak is 4 (LOCAL days). The OLD UTC-only
+  // day math (slice(0,10) / Date.UTC) buckets these on the 14th–17th UTC — the
+  // 17th is "tomorrow", so that run reads as only 3 and the streak mis-rolls.
+  const NIGHT_SHIFT = [
+    '2026-06-14T03:30:00Z', // 2026-06-13 23:30 EDT  (anchor-3 local)
+    '2026-06-15T03:30:00Z', // 2026-06-14 23:30 EDT
+    '2026-06-16T03:30:00Z', // 2026-06-15 23:30 EDT
+    '2026-06-17T03:30:00Z', // 2026-06-16 23:30 EDT  (today, local)
+  ];
+
+  test('with a tz, late-night activity is counted on the correct LOCAL day', () => {
+    // Local days: 06-13, 06-14, 06-15, 06-16 → unbroken run of 4 ending today.
+    expect(computeStreaks(NIGHT_SHIFT, '2026-06-16', 'America/New_York')).toEqual({
+      current: 4,
+      longest: 4,
+    });
+  });
+
+  test('the same timestamps mis-roll under the legacy UTC bucketing (no tz)', () => {
+    // Regression guard: without a tz the ISO timestamps bucket to their UTC days
+    // (06-14..06-17). 06-17 is tomorrow relative to today (06-16), so the live
+    // anchor is 06-16 and the run reads as 3 — and would read differently again
+    // were today itself logged only at 23:30 local. This is the WRONG, pre-fix
+    // answer and proves the tz path above is doing real work.
+    const utcResult = computeStreaks(NIGHT_SHIFT, '2026-06-16');
+    expect(utcResult.current).toBe(3);
+    expect(utcResult.current).not.toBe(4);
+  });
+
+  test('a tz-bucketed today (ISO timestamp) anchors on the local day', () => {
+    // today passed as an ISO instant that is itself cross-midnight: 03:30 UTC on
+    // 06-17 is 23:30 EDT on 06-16 locally. It must anchor the streak on 06-16.
+    expect(
+      computeStreaks(NIGHT_SHIFT, '2026-06-17T03:30:00Z', 'America/New_York'),
+    ).toEqual({ current: 4, longest: 4 });
+  });
+
+  test('plain YYYY-MM-DD inputs are unaffected by a tz argument', () => {
+    // Passing a tz must not change behavior for already-bucketed day strings.
+    const dates = ['2026-06-14', '2026-06-15', '2026-06-16'];
+    expect(computeStreaks(dates, TODAY, 'America/New_York')).toEqual({ current: 3, longest: 3 });
+    expect(computeStreaks(dates, TODAY, 'Pacific/Auckland')).toEqual({ current: 3, longest: 3 });
+  });
+});

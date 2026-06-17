@@ -43,9 +43,12 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(200).send(result as any);
         } catch (err: any) {
             request.log.error(err);
+            // Redaction: never echo raw err.message (may carry DB/Prisma/stack
+            // detail) on a 5xx. The real error is logged above; the client gets
+            // a fixed, non-leaky string. Shape (`{ error: string }`) unchanged.
             return reply
                 .status(500)
-                .send({ error: err?.message ?? 'Internal server error' });
+                .send({ error: 'Internal server error' });
         }
     });
 
@@ -74,9 +77,12 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(200).send(result as any);
         } catch (err: any) {
             request.log.error(err);
+            // Redaction: never echo raw err.message (may carry DB/Prisma/stack
+            // detail) on a 5xx. The real error is logged above; the client gets
+            // a fixed, non-leaky string. Shape (`{ error: string }`) unchanged.
             return reply
                 .status(500)
-                .send({ error: err?.message ?? 'Internal server error' });
+                .send({ error: 'Internal server error' });
         }
     });
 
@@ -102,9 +108,12 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(200).send(result as any);
         } catch (err: any) {
             request.log.error(err);
+            // Redaction: never echo raw err.message (may carry DB/Prisma/stack
+            // detail) on a 5xx. The real error is logged above; the client gets
+            // a fixed, non-leaky string. Shape (`{ error: string }`) unchanged.
             return reply
                 .status(500)
-                .send({ error: err?.message ?? 'Internal server error' });
+                .send({ error: 'Internal server error' });
         }
     });
 
@@ -133,9 +142,12 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(200).send(result as any);
         } catch (err: any) {
             request.log.error(err);
+            // Redaction: never echo raw err.message (may carry DB/Prisma/stack
+            // detail) on a 5xx. The real error is logged above; the client gets
+            // a fixed, non-leaky string. Shape (`{ error: string }`) unchanged.
             return reply
                 .status(500)
-                .send({ error: err?.message ?? 'Internal server error' });
+                .send({ error: 'Internal server error' });
         }
     });
 
@@ -145,15 +157,19 @@ export const progressRoutes: FastifyPluginAsyncZod<{
     fastify.post('/metrics', {
         schema: {
             body: z.object({
-                weightKg: z.number().positive().optional(),
+                // Additive upper bounds: positives were already required; cap at
+                // physiologically plausible maxima so absurd/abusive values are
+                // rejected with a 400 instead of being persisted. Realistic app
+                // payloads stay valid.
+                weightKg: z.number().positive().max(1000).optional(),
                 bodyFatPct: z.number().min(1).max(70).optional(),
-                muscleMassKg: z.number().positive().optional(),
-                waistCm: z.number().positive().optional(),
-                hipsCm: z.number().positive().optional(),
-                chestCm: z.number().positive().optional(),
-                armsCm: z.number().positive().optional(),
-                thighsCm: z.number().positive().optional(),
-                calvesCm: z.number().positive().optional(),
+                muscleMassKg: z.number().positive().max(1000).optional(),
+                waistCm: z.number().positive().max(500).optional(),
+                hipsCm: z.number().positive().max(500).optional(),
+                chestCm: z.number().positive().max(500).optional(),
+                armsCm: z.number().positive().max(500).optional(),
+                thighsCm: z.number().positive().max(500).optional(),
+                calvesCm: z.number().positive().max(500).optional(),
                 notes: z.string().max(500).optional(),
             }),
             response: {
@@ -176,9 +192,12 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(201).send(result);
         } catch (err: any) {
             request.log.error(err);
+            // Redaction: never echo raw err.message (may carry DB/Prisma/stack
+            // detail) on a 5xx. The real error is logged above; the client gets
+            // a fixed, non-leaky string. Shape (`{ error: string }`) unchanged.
             return reply
                 .status(500)
-                .send({ error: err?.message ?? 'Internal server error' });
+                .send({ error: 'Internal server error' });
         }
     });
 
@@ -212,9 +231,12 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(200).send(result as any[]);
         } catch (err: any) {
             request.log.error(err);
+            // Redaction: never echo raw err.message (may carry DB/Prisma/stack
+            // detail) on a 5xx. The real error is logged above; the client gets
+            // a fixed, non-leaky string. Shape (`{ error: string }`) unchanged.
             return reply
                 .status(500)
-                .send({ error: err?.message ?? 'Internal server error' });
+                .send({ error: 'Internal server error' });
         }
     });
 
@@ -238,7 +260,8 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(200).send(result);
         } catch (err: any) {
             request.log.error(err);
-            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+            // Redaction: generic 5xx body, no raw err.message leak (logged above).
+            return reply.status(500).send({ error: 'Internal server error' });
         }
     });
 
@@ -262,7 +285,8 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(200).send(result);
         } catch (err: any) {
             request.log.error(err);
-            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+            // Redaction: generic 5xx body, no raw err.message leak (logged above).
+            return reply.status(500).send({ error: 'Internal server error' });
         }
     });
 
@@ -286,7 +310,8 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(200).send(result);
         } catch (err: any) {
             request.log.error(err);
-            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+            // Redaction: generic 5xx body, no raw err.message leak (logged above).
+            return reply.status(500).send({ error: 'Internal server error' });
         }
     });
 
@@ -295,7 +320,9 @@ export const progressRoutes: FastifyPluginAsyncZod<{
     // -------------------------------------------------------------------------
     fastify.post('/hydration', {
         schema: {
-            body: z.object({ amount: z.number().positive() }),
+            // Upper bound: a single hydration log can't sanely exceed 20L (20000ml).
+            // Caps an absurd value while keeping every realistic intake valid.
+            body: z.object({ amount: z.number().positive().max(20000) }),
             response: {
                 200: dailyProgressResponseSchema,
                 500: errorResponseSchema,
@@ -311,7 +338,8 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(200).send(result as any);
         } catch (err: any) {
             request.log.error(err);
-            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+            // Redaction: generic 5xx body, no raw err.message leak (logged above).
+            return reply.status(500).send({ error: 'Internal server error' });
         }
     });
 
@@ -320,7 +348,7 @@ export const progressRoutes: FastifyPluginAsyncZod<{
     // -------------------------------------------------------------------------
     fastify.post('/supplements', {
         schema: {
-            body: z.object({ supplementName: z.string(), isTaken: z.boolean() }),
+            body: z.object({ supplementName: z.string().min(1).max(200), isTaken: z.boolean() }),
             response: {
                 200: dailyProgressResponseSchema,
                 500: errorResponseSchema,
@@ -336,7 +364,8 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(200).send(result as any);
         } catch (err: any) {
             request.log.error(err);
-            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+            // Redaction: generic 5xx body, no raw err.message leak (logged above).
+            return reply.status(500).send({ error: 'Internal server error' });
         }
     });
 
@@ -361,7 +390,8 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(200).send(result as any);
         } catch (err: any) {
             request.log.error(err);
-            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+            // Redaction: generic 5xx body, no raw err.message leak (logged above).
+            return reply.status(500).send({ error: 'Internal server error' });
         }
     });
 
@@ -372,8 +402,10 @@ export const progressRoutes: FastifyPluginAsyncZod<{
     fastify.post('/wearable/sync', {
         schema: {
             body: z.object({
-                steps: z.number().int().min(0),
-                source: z.string().optional().default('WEARABLE')
+                // Upper bound: ~200k steps/day is already far beyond any human
+                // record; caps a poisoned wearable-sync payload. Source label bounded.
+                steps: z.number().int().min(0).max(200000),
+                source: z.string().min(1).max(60).optional().default('WEARABLE')
             }),
             response: {
                 200: dailyProgressResponseSchema,
@@ -390,7 +422,8 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(200).send(result as any);
         } catch (err: any) {
             request.log.error(err);
-            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+            // Redaction: generic 5xx body, no raw err.message leak (logged above).
+            return reply.status(500).send({ error: 'Internal server error' });
         }
     });
 
@@ -401,12 +434,16 @@ export const progressRoutes: FastifyPluginAsyncZod<{
     fastify.post('/ai-usage', {
         schema: {
             body: z.object({
-                userId: z.string(),
-                action: z.string(),
-                provider: z.string(),
-                promptTokens: z.number().int().min(0),
-                completionTokens: z.number().int().min(0),
-                totalTokens: z.number().int().min(0),
+                // Server-to-server call from the Python AI pipeline. Tighten the
+                // free-form fields: a UUID userId, bounded label strings, and a
+                // sane upper bound on token counts so a malformed/poisoned call
+                // can't write absurd values into the cost-telemetry table.
+                userId: z.string().uuid(),
+                action: z.string().min(1).max(120),
+                provider: z.string().min(1).max(120),
+                promptTokens: z.number().int().min(0).max(10_000_000),
+                completionTokens: z.number().int().min(0).max(10_000_000),
+                totalTokens: z.number().int().min(0).max(20_000_000),
             }),
             response: {
                 201: z.any(),
@@ -421,7 +458,8 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(201).send(result);
         } catch (err: any) {
             request.log.error(err);
-            return reply.status(500).send({ error: err?.message ?? 'Internal server error' });
+            // Redaction: generic 5xx body, no raw err.message leak (logged above).
+            return reply.status(500).send({ error: 'Internal server error' });
         }
     });
 };
