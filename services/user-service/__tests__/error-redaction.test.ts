@@ -1,69 +1,72 @@
 /**
- * Regression suite — user-service GLOBAL ERROR HANDLER no-leak contract
- * (src/index.ts setErrorHandler, ~lines 106-138).
+ * Regression suite — user-service routes through the SHARED Fastify error
+ * handler / redactor exposed by `@nightfuel/config`
+ * (`registerFastifyErrorHandler` + the pure `buildErrorResponse`,
+ * packages/config/src/server.ts). This file locks the shared redaction
+ * contract on a per-service basis.
  *
  * Background: the previous handler reflected `error.message` and `error.stack`
  * verbatim on the 500 branch, leaking stack frames (file paths, line numbers),
  * Prisma error text, and connection-string fragments (`localhost:5432`) to any
  * unauthenticated caller. P0 security items #3/#4 redact that: the 500 body is
- * a fixed generic, and the <500 body only reflects `error.message` when
- * `error.validation` is truthy (i.e. a Fastify-generated user-facing message).
+ * a fixed generic, and a non-validation <500 body replaces `error.message`
+ * with a generic 'Bad request'; only genuine Fastify validation errors
+ * (`error.validation` truthy) keep their user-facing message.
  *
- * This suite locks the redaction contract in permanently. It boots a tiny
- * Fastify app that mounts the SAME setErrorHandler shape as src/index.ts, then
- * exercises a deliberately leaky thrown error and asserts the response body
- * does NOT contain any of the high-risk substrings ('Prisma', 'stack', 'at /',
- * 'localhost', or the literal thrown message) and DOES contain the generic
- * 'Internal server error' copy. If anyone widens the surface (e.g. re-adds
- * `message: error.message` on the 500 branch, or reflects err.stack), this
- * file goes red.
+ * Why import the REAL function instead of byte-copying the handler?
+ *   - This suite proves THIS service's redaction resolves to the
+ *     redaction-hardened build of `@nightfuel/config`, not a stale local shim.
+ *   - Because we exercise the REAL `buildErrorResponse` / the REAL
+ *     `registerFastifyErrorHandler`, flipping the shared 500 branch to reflect
+ *     `error.message` turns THIS suite red — a divergent inline copy could not
+ *     catch that regression.
  *
- * The handler is duplicated here rather than imported from src/index.ts because
- * that module starts a real Prisma client + Redis bus + cluster bootstrap at
- * import time. Keeping the shapes byte-identical is enforced by the file-level
- * comment in src/index.ts pointing reviewers here.
+ * Implementation notes:
+ *   - The shared handler is imported directly and wired onto a tiny Fastify
+ *     app. Nothing from `src/` index bootstrap is touched — that module opens
+ *     real DB/Redis connections at import time and cannot be loaded in a unit
+ *     test. (The in-route 404 block below DOES mount the real `userRoutes`
+ *     plugin against a fully-mocked service.)
+ *   - The injected logger is a no-op so the handler's `logger.error(...)` side
+ *     effect is silenced in test output.
+ *   - Assertions mirror the CURRENT shared redactor output (see
+ *     packages/config/src/server.ts):
+ *       * 5xx body: `{ error: 'InternalServerError', message: 'An unexpected
+ *         error occurred', statusCode: 500 }` — fixed copy, no error.message
+ *         or stack escapes.
+ *       * validation <500 body: `{ error: error.name, message: error.message,
+ *         statusCode }` — message reflected (safe schema copy).
+ *       * non-validation <500 body: `{ error: error.name, message: 'Bad
+ *         request', statusCode }` — message redacted.
  */
 import Fastify, { FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import { registerFastifyErrorHandler, buildErrorResponse } from '@nightfuel/config';
 import { userRoutes } from '../src/routes';
 
 // Same leaky string the previous handler used to reflect — every substring
-// here is an attack signal the redactor MUST strip.
+// here is an attack signal the redactor MUST strip. Use the same string across
+// every per-service redaction suite so the negative-match list is identical
+// and easy to grep for.
 const LEAKY_THROWN_MESSAGE =
     'Prisma raw stack frame at /etc/passwd localhost:5432';
 
 /**
- * Builds a tiny Fastify app wired with the SAME setErrorHandler shape as
- * src/index.ts (post-fix). It also mounts:
- *   - GET /boom → throws LEAKY_THROWN_MESSAGE (drives the 500 branch)
+ * Builds a tiny Fastify app wired with the SHARED `registerFastifyErrorHandler`
+ * from `@nightfuel/config`. Three throwing routes drive every branch of the
+ * redactor:
+ *   - GET /boom → throws LEAKY_THROWN_MESSAGE (drives the 5xx branch)
  *   - GET /bad-validation → throws an err with statusCode<500 and
  *     `validation` truthy (drives the safe <500 branch)
  *   - GET /bad-internal → throws an err with statusCode<500 and NO
  *     `validation` flag (drives the redacted <500 branch)
- *
- * Imports nothing from src/ — the bootstrap module opens real DB/Redis
- * connections at import time and cannot be loaded in a unit test.
  */
 function buildApp(): FastifyInstance {
     const app = Fastify({ logger: false });
-
-    // Mirror src/index.ts setErrorHandler — keep this byte-for-byte identical
-    // to the production handler so any future regression on either side is
-    // caught here.
-    app.setErrorHandler((error: any, _request, reply) => {
-        if (error.statusCode && error.statusCode < 500) {
-            return reply.code(error.statusCode).send({
-                error: error.name,
-                message: error.validation ? error.message : 'Bad request',
-                statusCode: error.statusCode,
-            });
-        }
-        return reply.code(500).send({
-            statusCode: 500,
-            error: 'Internal Server Error',
-            message: 'Internal server error',
-        });
-    });
+    // No-op logger — the shared handler calls logger.error/warn/info; we
+    // silence them so test output stays clean.
+    const silentLogger = { error: () => {}, warn: () => {}, info: () => {} } as any;
+    registerFastifyErrorHandler(app, silentLogger);
 
     app.get('/boom', async () => {
         throw new Error(LEAKY_THROWN_MESSAGE);
@@ -90,7 +93,7 @@ function buildApp(): FastifyInstance {
     return app;
 }
 
-describe('user-service global error handler — 500 leak redaction', () => {
+describe('user-service shared error handler — 500 leak redaction (registerFastifyErrorHandler)', () => {
     let app: FastifyInstance;
 
     beforeAll(async () => {
@@ -103,14 +106,17 @@ describe('user-service global error handler — 500 leak redaction', () => {
     });
 
     describe('500 branch never leaks internal error detail', () => {
-        it('returns the generic 500 body (positive match)', async () => {
+        it('returns the shared redactor\'s fixed 500 body (positive match)', async () => {
             const res = await app.inject({ method: 'GET', url: '/boom' });
 
             expect(res.statusCode).toBe(500);
+            // Mirrors packages/config/src/server.ts exactly. If the shared
+            // redactor's 5xx copy changes, update this expectation in lockstep
+            // across every per-service redaction suite.
             expect(res.json()).toEqual({
+                error: 'InternalServerError',
+                message: 'An unexpected error occurred',
                 statusCode: 500,
-                error: 'Internal Server Error',
-                message: 'Internal server error',
             });
         });
 
@@ -171,6 +177,81 @@ describe('user-service global error handler — 500 leak redaction', () => {
             expect(res.body).not.toContain('127.0.0.1');
             expect(res.body).not.toContain('5432');
         });
+    });
+});
+
+/**
+ * Pure-function contract — `buildErrorResponse` (packages/config/src/server.ts).
+ *
+ * The HTTP suite above proves the handler wires correctly; this block pins the
+ * decision logic directly so a regression in the redactor's branching fails
+ * here regardless of Fastify wiring. These assertions FAIL the moment the 500
+ * branch starts reflecting `error.message`.
+ */
+describe('user-service redactor — buildErrorResponse pure contract', () => {
+    it('5xx (no explicit statusCode → 500) returns the fixed generic body, never err.message', () => {
+        const res = buildErrorResponse(new Error(LEAKY_THROWN_MESSAGE));
+        expect(res).toEqual({
+            statusCode: 500,
+            body: {
+                error: 'InternalServerError',
+                message: 'An unexpected error occurred',
+                statusCode: 500,
+            },
+        });
+        expect(JSON.stringify(res.body)).not.toContain('Prisma');
+        expect(JSON.stringify(res.body)).not.toContain('localhost');
+        expect(JSON.stringify(res.body)).not.toContain('5432');
+        expect(JSON.stringify(res.body)).not.toContain(LEAKY_THROWN_MESSAGE);
+    });
+
+    it('explicit 5xx statusCode is preserved with the fixed generic body', () => {
+        const err: any = new Error(LEAKY_THROWN_MESSAGE);
+        err.statusCode = 503;
+        const res = buildErrorResponse(err);
+        expect(res).toEqual({
+            statusCode: 503,
+            body: {
+                error: 'InternalServerError',
+                message: 'An unexpected error occurred',
+                statusCode: 503,
+            },
+        });
+        expect(JSON.stringify(res.body)).not.toContain(LEAKY_THROWN_MESSAGE);
+    });
+
+    it('validation <500 reflects the (safe) error.message', () => {
+        const err: any = new Error("body should have required property 'email'");
+        err.statusCode = 400;
+        err.name = 'FastifyError';
+        err.validation = [{ keyword: 'required' }];
+        const res = buildErrorResponse(err);
+        expect(res).toEqual({
+            statusCode: 400,
+            body: {
+                error: 'FastifyError',
+                message: "body should have required property 'email'",
+                statusCode: 400,
+            },
+        });
+    });
+
+    it('non-validation <500 redacts err.message to a generic "Bad request"', () => {
+        const err: any = new Error('connect ECONNREFUSED 127.0.0.1:5432');
+        err.statusCode = 400;
+        err.name = 'InternalError';
+        const res = buildErrorResponse(err);
+        expect(res).toEqual({
+            statusCode: 400,
+            body: {
+                error: 'InternalError',
+                message: 'Bad request',
+                statusCode: 400,
+            },
+        });
+        expect(JSON.stringify(res.body)).not.toContain('ECONNREFUSED');
+        expect(JSON.stringify(res.body)).not.toContain('127.0.0.1');
+        expect(JSON.stringify(res.body)).not.toContain('5432');
     });
 });
 

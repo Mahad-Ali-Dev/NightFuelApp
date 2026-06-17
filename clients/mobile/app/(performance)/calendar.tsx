@@ -35,11 +35,9 @@ const toLocalISODate = (year: number, month: number, day: number) =>
     `${year}-${pad2(month + 1)}-${pad2(day)}`;
 
 export default function TrainingCalendarScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, spacing } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
-
-    const [viewMode, setViewMode] = useState('Month');
 
     // Displayed month/year. Seeded to the current month so the calendar opens
     // on "today" rather than a hardcoded literal. `month` is 0-indexed.
@@ -92,35 +90,16 @@ export default function TrainingCalendarScreen() {
                     <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
                 <Text style={[typography.h3, { color: colors.text.primary }]}>Training Calendar</Text>
-                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Add" activeOpacity={0.85} style={[styles.headerBtn, { backgroundColor: withAlpha(colors.accent.coral, 0.14), borderColor: withAlpha(colors.accent.coral, 0.3) }]}>
-                    <Ionicons name="add" size={22} color={colors.accent.coral} />
-                </TouchableOpacity>
+                {/* Balancing spacer (mirrors the back button's width) so the title
+                    stays centered. There is no honest "add" action on this screen
+                    yet: activity is logged by completing a workout, and scheduling
+                    sessions has no backend, so a header "+" would have been a
+                    no-op. Reinstate a real TouchableOpacity here once a concrete
+                    add-flow exists. */}
+                <View style={{ width: 40 }} />
             </View>
 
             <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-                {/* View Switcher */}
-                <View style={[styles.viewSwitcher, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
-                    {['Week', 'Month', 'Year'].map((mode) => (
-                        <TouchableOpacity
-                            key={mode}
-                            activeOpacity={0.85}
-                            accessibilityRole="tab"
-                            accessibilityLabel={mode}
-                            accessibilityState={{ selected: viewMode === mode }}
-                            style={[
-                                styles.modeBtn,
-                                {
-                                    backgroundColor: viewMode === mode ? colors.background.tertiary : 'transparent',
-                                    borderRadius: borderRadius.md,
-                                }
-                            ]}
-                            onPress={() => setViewMode(mode)}
-                        >
-                            <Text style={[typography.captionMedium, { color: viewMode === mode ? colors.text.primary : colors.text.secondary, fontWeight: '700' }]}>{mode}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-
                 {/* Calendar Grid */}
                 <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.xl }}>
                     <Card variant="glass" style={styles.calendarBox} padding="xl">
@@ -218,8 +197,6 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1 },
     headerBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-    viewSwitcher: { flexDirection: 'row', marginHorizontal: 20, marginTop: 20, borderRadius: 14, borderWidth: 1, padding: 4 },
-    modeBtn: { flex: 1, height: 36, alignItems: 'center', justifyContent: 'center' },
     calendarBox: {},
     calHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
     dayLabels: { flexDirection: 'row', marginBottom: 12 },

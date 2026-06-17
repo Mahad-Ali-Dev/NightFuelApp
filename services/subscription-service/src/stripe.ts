@@ -236,8 +236,16 @@ export function registerStripeRoutes(
         );
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown';
+        // Log the real cause server-side, but NEVER echo Stripe's
+        // signature-verification internals (e.g. "No signatures found …",
+        // timestamps, payload hints) back on the wire to an unauthenticated
+        // caller. Ship a fixed, redacted body instead.
         logger.warn({ message }, '[stripe] webhook signature verification failed');
-        return reply.status(400).send({ error: `Webhook Error: ${message}` });
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'Webhook signature verification failed',
+        });
       }
 
       logger.info({ type: event.type, id: event.id }, '[stripe] webhook event received');

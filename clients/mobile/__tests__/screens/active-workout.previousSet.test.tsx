@@ -58,11 +58,17 @@ const mockSession = {
 type LastSetsState = { data: Record<string, { weightKg: number; reps: number } | null> };
 const mockLastSetsState: LastSetsState = { data: {} };
 
+// Mutable result for the ['active-session'] query. Defaults to `mockSession`
+// (the single Bench Press log the previous-set tests rely on); the demo tests
+// swap in a session seeded with a different exercise name. Reset in beforeEach.
+type SessionState = { data: typeof mockSession };
+const mockSessionState: SessionState = { data: mockSession };
+
 jest.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     const key = queryKey[0];
     if (key === 'active-session') {
-      return { data: mockSession, isLoading: false, isError: false, refetch: jest.fn() };
+      return { data: mockSessionState.data, isLoading: false, isError: false, refetch: jest.fn() };
     }
     if (key === 'exercise-last-sets') {
       return { data: mockLastSetsState.data, isLoading: false, isError: false, refetch: jest.fn() };
@@ -86,6 +92,21 @@ jest.mock('@expo/vector-icons', () => {
   return {
     Ionicons: ({ name }: { name?: string }) => <RNText>{`icon:${name ?? ''}`}</RNText>,
   };
+});
+
+// The exercise cards now render <ExerciseDemo/>, which pulls in expo-image and
+// expo-linear-gradient. Both use native loaders that never run under jest, so
+// replace them with passthrough host <View>s (same convention as
+// a11y-controls.test.tsx / ExerciseDemo.test.tsx). The stable `testID` on the
+// image lets us assert that a demo player actually mounted.
+jest.mock('expo-image', () => {
+  const RN = require('react-native');
+  return { Image: (props: any) => <RN.View testID="exercise-demo-image" {...props} /> };
+});
+
+jest.mock('expo-linear-gradient', () => {
+  const RN = require('react-native');
+  return { LinearGradient: (props: any) => <RN.View {...props} /> };
 });
 
 // Deterministic insets so the screen lays out without the native provider.
@@ -112,6 +133,8 @@ describe('Active Workout — cross-session "previous set" from analytics', () =>
     jest.useFakeTimers();
     jest.setSystemTime(new Date(2026, 5, 17, 20, 0, 0));
     mockLastSetsState.data = {};
+    // Restore the default single-Bench-Press session each test.
+    mockSessionState.data = mockSession;
   });
 
   afterEach(() => {
@@ -150,5 +173,69 @@ describe('Active Workout — cross-session "previous set" from analytics', () =>
     // Both set rows fall back to the honest '-' (set 1: no history; set 2: no
     // in-session prior values). This would FAIL if a placeholder were fabricated.
     expect(screen.getAllByText('-').length).toBe(2);
+  });
+});
+
+// Build a one-log active session seeded with the given exercise name so each
+// demo test drives a single card whose demo resolves purely from that name.
+function sessionWithExercise(name: string): typeof mockSession {
+  return {
+    ...mockSession,
+    logs: [{ exerciseName: name, sets: 2, reps: 8, weightKg: 0, durationSecs: 0 }],
+  };
+}
+
+describe('Active Workout — in-app exercise demo (real media, no empty player)', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2026, 5, 17, 20, 0, 0));
+    mockLastSetsState.data = {};
+    mockSessionState.data = mockSession;
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('a curated movement ("Barbell Bench Press") renders a real demo player', () => {
+    // "Barbell Bench Press" resolves to a free-exercise-db [0.jpg, 1.jpg] frame
+    // pair (via resolveDemoFrames' curated map, with getCuratedDemo as the
+    // additive fallback) — i.e. an animated in-app demo, NOT the coming-soon
+    // placeholder.
+    mockSessionState.data = sessionWithExercise('Barbell Bench Press');
+
+    renderScreen();
+
+    // The card seeded from the active session.
+    expect(screen.getByText('Barbell Bench Press')).toBeTruthy();
+
+    // <ExerciseDemo/> mounted: at least one frame <Image> (mocked with this
+    // testID) is present. A two-frame animated loop renders two such nodes.
+    expect(screen.getAllByTestId('exercise-demo-image').length).toBeGreaterThan(0);
+
+    // It is the ANIMATED demo, not the static "coming soon" fallback: the
+    // looping player shows a "Demo" status tag and no "coming soon" copy.
+    expect(screen.getByText('Demo')).toBeTruthy();
+    expect(screen.queryByText('Video demo coming soon')).toBeNull();
+  });
+
+  test('an exercise with no demo renders the honest "coming soon" region, never an empty player', () => {
+    // A name that matches nothing in DEMO_FRAMES / the FEDB name index /
+    // DEMO_FALLBACK / the curated map → no frames, no gif, no tutorial URL.
+    mockSessionState.data = sessionWithExercise('Zzz Imaginary Lift 9000');
+
+    renderScreen();
+
+    expect(screen.getByText('Zzz Imaginary Lift 9000')).toBeTruthy();
+
+    // The player still renders (the bundled-fallback still image is present) and
+    // is announced as a labelled region — it is NOT an empty/blank box.
+    expect(screen.getByLabelText('Exercise demo')).toBeTruthy();
+    expect(screen.getByTestId('exercise-demo-image')).toBeTruthy();
+
+    // The honest "coming soon" state is shown instead of a (non-existent)
+    // animated loop. No "Demo" status tag from the animated branch.
+    expect(screen.getByText('Video demo coming soon')).toBeTruthy();
+    expect(screen.queryByText('Demo')).toBeNull();
   });
 });

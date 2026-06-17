@@ -27,6 +27,14 @@
  *      EmptyState ("No sessions scheduled"). We assert the EmptyState renders
  *      and the fabricated strings do NOT.
  *
+ *   4. NO DEAD CONTROLS. The screen previously shipped two no-op controls: a
+ *      Week/Month/Year view switcher whose `viewMode` state was never read (the
+ *      grid always rendered a month, so Week/Year did nothing) and a header "+"
+ *      button (accessibilityLabel "Add") with no onPress. Both have been
+ *      removed — every remaining control changes what is displayed or navigates.
+ *      We assert the switcher tabs and the "Add" button are gone so they can't
+ *      silently creep back in as no-ops.
+ *
  * Mocks (same conventions as the dashboard suite):
  *  - `@tanstack/react-query` useQuery → the ['activity-history'] query is driven
  *    by a mutable `mockHistoryState` object so each test sets data / isError /
@@ -243,6 +251,29 @@ describe('Training Calendar — state-driven month, ISO-date matching, honest se
     expect(screen.queryByText('Full Body Power')).toBeNull();
     expect(screen.queryByText('Tomorrow, 08:30')).toBeNull();
     expect(screen.queryByText('Friday, 17:00')).toBeNull();
+  });
+
+  test('no dead controls: the Week/Month/Year view switcher and the header "+" (Add) button are gone', () => {
+    renderScreen();
+
+    // The view switcher was a no-op: `viewMode` state was never read, so Week
+    // and Year never changed the (always-monthly) grid. It must be removed —
+    // no "tab"-role controls and none of its labels survive. (The working
+    // prev/next chevrons are buttons, not tabs, so they are unaffected.)
+    expect(screen.queryByRole('tab')).toBeNull();
+    expect(screen.queryByLabelText('Week')).toBeNull();
+    expect(screen.queryByLabelText('Year')).toBeNull();
+    // "Month" only ever existed as a switcher tab; the month is now shown via
+    // the "<Month> <Year>" header label (e.g. "March 2026"), never a bare
+    // "Month" control.
+    expect(screen.queryByLabelText('Month')).toBeNull();
+    expect(screen.queryByText('Week')).toBeNull();
+    expect(screen.queryByText('Year')).toBeNull();
+
+    // The header "+" had no onPress (a dead button). It is replaced by a
+    // non-interactive spacer, so neither its a11y label nor its glyph remains.
+    expect(screen.queryByLabelText('Add')).toBeNull();
+    expect(screen.queryByText('icon:add')).toBeNull();
   });
 
   test('error state still renders the activity EmptyState with a working Retry', () => {

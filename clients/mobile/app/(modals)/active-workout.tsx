@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -13,6 +13,61 @@ import { shadows } from '@/theme/shadows';
 import { typography as themeTypography } from '@/theme/typography';
 import { useQuery } from '@tanstack/react-query';
 import { getActiveSession, getLastSet, LastSet, SessionExercise } from '@/api/exercises';
+import { ExerciseDemo } from '@/components/exercise/ExerciseDemo';
+import { resolveDemo, resolveDemoFrames } from '@/constants/exerciseDemos';
+import { getCuratedDemo, getCuratedDemoFrames } from '@/constants/curatedDemos';
+
+// Bundled neutral placeholder shown when an exercise has no demo media (no
+// network hit). Reuses the SAME bundled asset the exercise-detail screen
+// (app/(exercises)/[id].tsx) hands to <ExerciseDemo/> — no new asset added.
+const DEMO_FALLBACK_IMAGE = require('../../assets/images/exercise-detail-fallback.png');
+
+// The demo-source inputs we feed <ExerciseDemo/> for one exercise. Each slot is
+// independently null so the precedence walk below falls through cleanly when no
+// source resolves. Mirrors the shape used in app/(exercises)/[id].tsx.
+type DemoInputs = {
+    frames: readonly string[] | null;
+    tutorialUrl: string | null;
+    gifUrl: string | null;
+};
+
+// Resolve the demo-source inputs for an exercise NAME using the SAME precedence
+// as app/(exercises)/[id].tsx: the existing resolveDemoFrames/resolveDemo win,
+// and the curated map (getCuratedDemo) is consulted ONLY when both miss —
+// strictly additive coverage, never overriding an existing demo. Pure data
+// lookup (no network, no side effects); the CDN frame loads happen inside
+// <ExerciseDemo/>, which handles onError → bundled fallback.
+function resolveDemoInputs(name: string): DemoInputs {
+    const existingFrames = resolveDemoFrames({ name });
+    const existingUrl = resolveDemo({ name });
+    if (existingFrames || existingUrl) {
+        return { frames: existingFrames, tutorialUrl: existingUrl, gifUrl: null };
+    }
+    const curated = getCuratedDemo(name);
+    if (!curated) {
+        return { frames: null, tutorialUrl: null, gifUrl: null };
+    }
+    if (curated.kind === 'fedb_frames') {
+        // Only feed the animated-loop slot a non-empty list of real frame URLs;
+        // a malformed entry falls through so <ExerciseDemo/> shows the still +
+        // honest "coming soon" rather than an empty/never-resolving player.
+        const curatedFrames = getCuratedDemoFrames(name);
+        const validFrames = curatedFrames?.filter(
+            (u): u is string => typeof u === 'string' && u.trim().length > 0,
+        );
+        if (validFrames && validFrames.length > 0) {
+            return { frames: validFrames, tutorialUrl: null, gifUrl: null };
+        }
+        return { frames: null, tutorialUrl: null, gifUrl: null };
+    }
+    if (curated.kind === 'youtube') {
+        // No in-app frames — surfaces only as the "Full tutorial" deep-link.
+        return { frames: null, tutorialUrl: curated.url, gifUrl: null };
+    }
+    // curated.kind === 'gif' — single static still fed via the gifUrl slot.
+    const gifUrl = typeof curated.url === 'string' && curated.url.trim().length > 0 ? curated.url : null;
+    return { frames: null, tutorialUrl: null, gifUrl };
+}
 
 type LocalSet = { weight: string; reps: string; done: boolean };
 type LocalExercise = { id: string; name: string; sets: number; targetReps: string; loggedSets: LocalSet[] };
@@ -29,6 +84,123 @@ function sessionToLocal(se: SessionExercise, idx: number): LocalExercise {
             done: false,
         })),
     };
+}
+
+type ExerciseCardProps = {
+    exercise: LocalExercise;
+    exIndex: number;
+    /** Most-recent cross-session set for this exercise, or null when none. */
+    lastSet: LastSet | null;
+    onToggleSet: (exIndex: number, setIndex: number) => void;
+    onUpdateSet: (exIndex: number, setIndex: number, field: 'weight' | 'reps', val: string) => void;
+};
+
+/**
+ * One exercise in the active workout: a compact in-app demo (animated FEDB frame
+ * pair, curated still + "Full tutorial" link, or the honest "coming soon" state —
+ * resolved via {@link resolveDemoInputs}, the SAME precedence the exercise-detail
+ * screen uses) followed by the set-logging rows, the previous-set hints, and the
+ * "Add Set" control. Behaviour of the rows/timers/handlers is unchanged — only
+ * the demo player is new.
+ */
+function ExerciseCard({ exercise: ex, exIndex, lastSet, onToggleSet, onUpdateSet }: ExerciseCardProps) {
+    const { colors, typography } = useTheme();
+    // Memoize the per-exercise demo resolution so the precedence walk + curated
+    // lookup only re-runs when the exercise NAME changes (the resolvers key on it).
+    const demo = useMemo(() => resolveDemoInputs(ex.name), [ex.name]);
+
+    return (
+        <Card variant="glass" style={styles.exerciseCard}>
+            {/* Compact in-app demo. <ExerciseDemo/> self-contains the still /
+                animated / "coming soon" states and never renders an empty player. */}
+            <View style={styles.demoWrap}>
+                <ExerciseDemo
+                    frames={demo.frames}
+                    gifUrl={demo.gifUrl}
+                    imageUrl={null}
+                    fallback={DEMO_FALLBACK_IMAGE}
+                    tutorialUrl={demo.tutorialUrl}
+                />
+            </View>
+            <View style={styles.exHeader}>
+                <Text style={[typography.h3, { color: colors.text.primary }]}>{ex.name}</Text>
+                <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="More options">
+                    <Ionicons name="ellipsis-horizontal" size={20} color={colors.text.secondary} />
+                </TouchableOpacity>
+            </View>
+            <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 16 }]}>
+                Target: {ex.targetReps} reps
+            </Text>
+
+            <View style={styles.setHeaderRow}>
+                <Text style={[typography.caption, { color: colors.text.secondary, width: 32 }]}>SET</Text>
+                <Text style={[typography.caption, { color: colors.text.secondary, flex: 1, textAlign: 'center' }]}>KG</Text>
+                <Text style={[typography.caption, { color: colors.text.secondary, flex: 1, textAlign: 'center' }]}>REPS</Text>
+                <View style={{ width: 40 }} />
+            </View>
+
+            {ex.loggedSets.map((s, sIndex) => {
+                // Previous-set hint. For the FIRST set we show a REAL
+                // cross-session value sourced from the analytics endpoint
+                // (lastSet, most-recent completed set). For later
+                // sets we keep the in-session prior set. Only ever show real
+                // values — never a fabricated number — and fall back to '-'
+                // when there is genuinely no history and no in-session value.
+                let prevSet = '-';
+                if (sIndex === 0) {
+                    if (lastSet) prevSet = `last time: ${lastSet.weightKg}x${lastSet.reps}`;
+                } else {
+                    const prev = ex.loggedSets[sIndex - 1];
+                    if (prev && prev.weight && prev.reps) prevSet = `${prev.weight}x${prev.reps}`;
+                }
+                return (
+                    <View key={sIndex} style={[styles.setRow, s.done && { backgroundColor: withAlpha(colors.accent.cyan, 0.1) }]}>
+                        <View style={{ width: 32 }}>
+                            <Text style={[typography.subhead, { color: colors.text.secondary }]}>{sIndex + 1}</Text>
+                            <Text numberOfLines={1} style={[typography.overline, { color: colors.text.tertiary, fontSize: 9 }]}>{prevSet}</Text>
+                        </View>
+
+                        <View style={styles.inputBox}>
+                            <TextInput
+                                style={[styles.numericInput, { color: colors.text.primary, borderBottomColor: colors.border.default }]}
+                                keyboardType="numeric"
+                                value={s.weight}
+                                onChangeText={(val) => onUpdateSet(exIndex, sIndex, 'weight', val)}
+                                placeholder={sIndex === 0 ? "135" : ex.loggedSets[sIndex - 1]?.weight || "-"}
+                                placeholderTextColor={colors.text.tertiary}
+                            />
+                        </View>
+
+                        <View style={styles.inputBox}>
+                            <TextInput
+                                style={[styles.numericInput, { color: colors.text.primary, borderBottomColor: colors.border.default }]}
+                                keyboardType="numeric"
+                                value={s.reps}
+                                onChangeText={(val) => onUpdateSet(exIndex, sIndex, 'reps', val)}
+                                placeholder={ex.targetReps.split('-')[0]}
+                                placeholderTextColor={colors.text.tertiary}
+                            />
+                        </View>
+
+                        <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Complete set" accessibilityState={{ selected: s.done }}
+                            onPress={() => onToggleSet(exIndex, sIndex)}
+                            style={[
+                                styles.checkBtn,
+                                s.done ? { backgroundColor: colors.accent.cyan } : { backgroundColor: colors.background.tertiary },
+                                s.done && shadows.glow(colors.accent.cyan),
+                            ]}
+                        >
+                            <Ionicons name="checkmark" size={20} color={s.done ? colors.background.primary : colors.text.secondary} />
+                        </TouchableOpacity>
+                    </View>
+                );
+            })}
+
+            <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Add set" style={styles.addSetBtn}>
+                <Text style={[typography.subhead, { color: colors.text.secondary, textAlign: 'center' }]}>+ Add Set</Text>
+            </TouchableOpacity>
+        </Card>
+    );
 }
 
 export default function ActiveWorkoutScreen() {
@@ -189,86 +361,14 @@ export default function ActiveWorkoutScreen() {
                 )}
 
                 {exercises.map((ex, exIndex) => (
-                    <Card key={ex.id} variant="glass" style={styles.exerciseCard}>
-                        <View style={styles.exHeader}>
-                            <Text style={[typography.h3, { color: colors.text.primary }]}>{ex.name}</Text>
-                            <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="More options">
-                                <Ionicons name="ellipsis-horizontal" size={20} color={colors.text.secondary} />
-                            </TouchableOpacity>
-                        </View>
-                        <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 16 }]}>
-                            Target: {ex.targetReps} reps
-                        </Text>
-
-                        <View style={styles.setHeaderRow}>
-                            <Text style={[typography.caption, { color: colors.text.secondary, width: 32 }]}>SET</Text>
-                            <Text style={[typography.caption, { color: colors.text.secondary, flex: 1, textAlign: 'center' }]}>KG</Text>
-                            <Text style={[typography.caption, { color: colors.text.secondary, flex: 1, textAlign: 'center' }]}>REPS</Text>
-                            <View style={{ width: 40 }} />
-                        </View>
-
-                        {ex.loggedSets.map((s, sIndex) => {
-                            // Previous-set hint. For the FIRST set we show a REAL
-                            // cross-session value sourced from the analytics endpoint
-                            // (lastSets[ex.name], most-recent completed set). For later
-                            // sets we keep the in-session prior set. Only ever show real
-                            // values — never a fabricated number — and fall back to '-'
-                            // when there is genuinely no history and no in-session value.
-                            let prevSet = '-';
-                            if (sIndex === 0) {
-                                const last = lastSets?.[ex.name];
-                                if (last) prevSet = `last time: ${last.weightKg}x${last.reps}`;
-                            } else {
-                                const prev = ex.loggedSets[sIndex - 1];
-                                if (prev && prev.weight && prev.reps) prevSet = `${prev.weight}x${prev.reps}`;
-                            }
-                            return (
-                                <View key={sIndex} style={[styles.setRow, s.done && { backgroundColor: withAlpha(colors.accent.cyan, 0.1) }]}>
-                                    <View style={{ width: 32 }}>
-                                        <Text style={[typography.subhead, { color: colors.text.secondary }]}>{sIndex + 1}</Text>
-                                        <Text numberOfLines={1} style={[typography.overline, { color: colors.text.tertiary, fontSize: 9 }]}>{prevSet}</Text>
-                                    </View>
-
-                                    <View style={styles.inputBox}>
-                                        <TextInput
-                                            style={[styles.numericInput, { color: colors.text.primary, borderBottomColor: colors.border.default }]}
-                                            keyboardType="numeric"
-                                            value={s.weight}
-                                            onChangeText={(val) => updateSet(exIndex, sIndex, 'weight', val)}
-                                            placeholder={sIndex === 0 ? "135" : ex.loggedSets[sIndex - 1]?.weight || "-"}
-                                            placeholderTextColor={colors.text.tertiary}
-                                        />
-                                    </View>
-
-                                    <View style={styles.inputBox}>
-                                        <TextInput
-                                            style={[styles.numericInput, { color: colors.text.primary, borderBottomColor: colors.border.default }]}
-                                            keyboardType="numeric"
-                                            value={s.reps}
-                                            onChangeText={(val) => updateSet(exIndex, sIndex, 'reps', val)}
-                                            placeholder={ex.targetReps.split('-')[0]}
-                                            placeholderTextColor={colors.text.tertiary}
-                                        />
-                                    </View>
-
-                                    <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Complete set" accessibilityState={{ selected: s.done }}
-                                        onPress={() => toggleSet(exIndex, sIndex)}
-                                        style={[
-                                            styles.checkBtn,
-                                            s.done ? { backgroundColor: colors.accent.cyan } : { backgroundColor: colors.background.tertiary },
-                                            s.done && shadows.glow(colors.accent.cyan),
-                                        ]}
-                                    >
-                                        <Ionicons name="checkmark" size={20} color={s.done ? colors.background.primary : colors.text.secondary} />
-                                    </TouchableOpacity>
-                                </View>
-                            );
-                        })}
-
-                        <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Add set" style={styles.addSetBtn}>
-                            <Text style={[typography.subhead, { color: colors.text.secondary, textAlign: 'center' }]}>+ Add Set</Text>
-                        </TouchableOpacity>
-                    </Card>
+                    <ExerciseCard
+                        key={ex.id}
+                        exercise={ex}
+                        exIndex={exIndex}
+                        lastSet={lastSets?.[ex.name] ?? null}
+                        onToggleSet={toggleSet}
+                        onUpdateSet={updateSet}
+                    />
                 ))}
 
                 <Button
@@ -313,6 +413,18 @@ const styles = StyleSheet.create({
     exerciseCard: {
         padding: 16,
         marginBottom: 24,
+    },
+    // Compact demo band: pull the 320px-tall <ExerciseDemo/> flush to the card's
+    // top/side edges and crop it to a shorter strip so the card stays scannable.
+    // overflow:'hidden' clips both the crop and the card's rounded corners.
+    demoWrap: {
+        height: 168,
+        marginTop: -16,
+        marginHorizontal: -16,
+        marginBottom: 16,
+        borderTopLeftRadius: 16,
+        borderTopRightRadius: 16,
+        overflow: 'hidden',
     },
     exHeader: {
         flexDirection: 'row',

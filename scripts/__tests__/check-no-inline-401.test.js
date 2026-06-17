@@ -77,6 +77,24 @@ describe('check-no-inline-401 — regex contract', () => {
         expect(INLINE_401_GENERIC_RE.test(snippet)).toBe(true);
     });
 
+    test('fixture (b3): multi-line chained .send with a plain non-Bearer message — generic regex ONLY', () => {
+        // The generic detector is anchored `.send([\s\S]{0,150}statusCode:\s*401`
+        // precisely so the multi-line `reply.code(401).send({\n statusCode: 401,
+        // \n ... })` shape — the spread form every real route uses — is caught
+        // even when the message is a brand-new string the Bearer regex never
+        // knows about ('Invalid token'). Locks that the generic detector covers
+        // the chained-AND-multi-line case, not just the single-line one in (b).
+        const snippet = `
+            reply.code(401).send({
+                statusCode: 401,
+                error: 'Unauthorized',
+                message: 'Invalid token',
+            });
+        `;
+        expect(INLINE_401_RE.test(snippet)).toBe(false);
+        expect(INLINE_401_GENERIC_RE.test(snippet)).toBe(true);
+    });
+
     // ── Fixture (c): the canonical helper call site ─────────────────────────
     // The whole point of the migration is to delete the inline body and call
     // sendUnauthorized / sendUnauthorizedPayload instead. Those call sites
@@ -140,5 +158,28 @@ describe('check-no-inline-401 — regex contract', () => {
         // window (idx-2 .. idx+2) includes 'sendUnauthorizedPayload' on line 1,
         // so the pre-filter must return true.
         expect(isWithinCanonicalCall(lines, 3)).toBe(true);
+    });
+
+    test('fixture (d3): a genuine inline 401 with NO helper nearby — pre-filter must NOT suppress it', () => {
+        // The mirror of (d2), and the more important half: if isWithinCanonicalCall
+        // ever regressed to "always true" (or its window grew unbounded), every
+        // real offender would be silently suppressed and the guard would pass a
+        // leaky tree. Here the inline body sits in a route handler with no
+        // `sendUnauthorized` mention anywhere in the 5-line window, so the
+        // pre-filter MUST return false (i.e. this line IS reported as an offender).
+        const lines = [
+            "fastify.get('/v1/protected', async (request, reply) => {",
+            '    if (!request.user) {',
+            '        return reply.code(401).send({',
+            '            statusCode: 401,',
+            "            error: 'Unauthorized',",
+            "            message: 'Invalid token',",
+            '        });',
+            '    }',
+            '});',
+        ];
+        // `statusCode: 401` is on index 3; its window (idx 1..5) mentions no
+        // canonical helper, so the pre-filter does not suppress it.
+        expect(isWithinCanonicalCall(lines, 3)).toBe(false);
     });
 });

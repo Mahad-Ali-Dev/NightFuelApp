@@ -15,11 +15,27 @@
  *      only if the file exists; this script is the responsibility of a
  *      different work item and may land later — guarding with fs.existsSync
  *      means this gate does not break in the interim)
- *   3. npm run check-types --silent              (root turbo typecheck — all
+ *   3. node scripts/check-error-handler-registered.js (lint-tier guard —
+ *      OPTIONAL, same fs.existsSync mechanism as #2; owned by a different
+ *      work item that may not have landed yet)
+ *   4. harness-self-tests                         (runs scripts/__tests__/*.test.js
+ *      via the already-installed jest — these lock the gate's own helpers:
+ *      parseSuiteSummary's fail-closed contract and the inline-401 detectors.
+ *      No new dependency: we invoke the repo-hoisted jest CLI directly as a
+ *      NODE step. A regression that made parseSuiteSummary fail-OPEN, or that
+ *      narrowed the 401 regexes, turns this step RED before it reaches CI)
+ *   5. npm run check-types --silent              (root turbo typecheck — all
  *      packages and services)
- *   4. node scripts/run-backend-tests.js         (per-service jest/vitest
+ *   6. @nightfuel/config build                    (force-emit packages/config
+ *      via `tsc -b packages/config --force`; see the long note on the step for
+ *      WHY --force is mandatory — a stale tsconfig.tsbuildinfo makes a plain
+ *      `tsc`/`tsc -b` report 'up to date' and emit NOTHING even when dist/ is
+ *      missing, which would let the backend redaction suites import a stale or
+ *      absent @nightfuel/config. Runs BEFORE test:backend so the 11
+ *      shared-family redaction suites resolve packages/config/dist/index.js)
+ *   7. node scripts/run-backend-tests.js         (per-service jest/vitest
  *      runs with one PASS/FAIL line per service)
- *   5. npm test --workspace=@nightfuel/mobile -- --ci --silent
+ *   8. npm test --workspace=@nightfuel/mobile -- --ci --silent
  *      (mobile jest run; --ci so it doesn't wait for an interactive watcher
  *      and disables snapshot updates)
  *
@@ -43,6 +59,24 @@ const { spawnSync } = require('child_process');
 const REPO_ROOT = path.resolve(__dirname, '..');
 const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const NODE = process.execPath;
+
+// In-repo CLI entrypoints we spawn directly as NODE steps (shell:false). We
+// resolve the .js entrypoint and run it with `node <entrypoint> …` rather than
+// invoking the `.bin` shim through a shell. Two reasons, both already
+// documented for the NODE steps below:
+//   1. process.execPath on Windows is `C:\Program Files\nodejs\node.exe`; under
+//      a shell the unquoted space splits into a `C:\Program` token. Spawning
+//      node directly with shell:false sidesteps the shell entirely.
+//   2. shell:true on Windows merely *concatenates* argv without escaping (see
+//      Node DEP0190), so any arg containing quotes/braces — e.g. a jest
+//      `--config '{…}'` JSON string — gets mangled by cmd.exe and jest fails to
+//      parse it. Passing discrete flags as separate argv entries under
+//      shell:false avoids that class of bug.
+// jest is already installed (devDependency of @nightfuel/mobile, hoisted to the
+// repo root node_modules); typescript is a root devDependency. Neither adds a
+// new dependency to any package.json.
+const TSC_CLI = path.join(REPO_ROOT, 'node_modules', 'typescript', 'bin', 'tsc');
+const JEST_CLI = path.join(REPO_ROOT, 'node_modules', 'jest', 'bin', 'jest.js');
 
 /**
  * Run a step and return its exit code. Streams stdio inherit so each step's
@@ -111,9 +145,83 @@ function main() {
             args: [path.join(REPO_ROOT, 'scripts', 'check-demo-maps-in-sync.js')],
         },
         {
+            // Optional — same fs.existsSync mechanism as check-demo-maps-in-sync
+            // above. This guard (which asserts every Fastify service registers
+            // the centralized error handler) is owned by a different work item
+            // and may not have landed yet; the `file` guard makes the gate print
+            // SKIP and continue rather than fail in the interim. Once the script
+            // exists it runs automatically — no further change to this file.
+            name: 'check-error-handler-registered',
+            file: path.join(REPO_ROOT, 'scripts', 'check-error-handler-registered.js'),
+            cmd: NODE,
+            args: [path.join(REPO_ROOT, 'scripts', 'check-error-handler-registered.js')],
+        },
+        {
+            // Harness self-tests: run scripts/__tests__/*.test.js, which lock
+            // the gate's OWN load-bearing helpers — run-backend-tests.js's
+            // parseSuiteSummary (must stay fail-closed: an unparseable run reads
+            // as null/FAIL, never a silent pass) and check-no-inline-401.js's
+            // detection regexes. If either regresses, this step goes RED before
+            // it can wave a broken gate through CI.
+            //
+            // These are plain CommonJS tests (no JSX/TS), so we deliberately do
+            // NOT use @nightfuel/mobile's jest-expo preset — its babel transform
+            // chokes on plain JS and reports "0 tests". Instead we run the
+            // repo-hoisted jest CLI directly as a NODE step (shell:false) and
+            // pass discrete flags: an external --rootDir at the repo root,
+            // --roots scoped to scripts/__tests__, --testMatch for *.test.js, and
+            // --transform '{}' to disable transforms entirely. No new dependency
+            // (jest is already a @nightfuel/mobile devDependency hoisted to the
+            // root) and nothing is added to any package.json.
+            //
+            // We intentionally omit --passWithNoTests: if the two suites ever
+            // vanish or the path breaks, jest exits non-zero ("No tests found"),
+            // which is the fail-closed behaviour we want — a gate step that
+            // silently runs zero tests is worse than useless.
+            name: 'harness-self-tests',
+            cmd: NODE,
+            args: [
+                JEST_CLI,
+                '--rootDir', REPO_ROOT,
+                '--roots', path.join(REPO_ROOT, 'scripts', '__tests__'),
+                '--testMatch', '**/*.test.js',
+                '--transform', '{}',
+                '--ci',
+                '--silent',
+            ],
+        },
+        {
             name: 'check-types (turbo)',
             cmd: NPM,
             args: ['run', 'check-types', '--silent'],
+        },
+        {
+            // Force-emit @nightfuel/config BEFORE the backend tests run. The 11
+            // shared-family redaction suites import registerFastifyErrorHandler
+            // from @nightfuel/config, which resolves to its package `main`,
+            // packages/config/dist/index.js. If dist/ is missing or stale those
+            // suites import the wrong thing (or fail to resolve), so the gate
+            // must guarantee a fresh build first.
+            //
+            // WHY --force (this is the crux): packages/config is a `composite`
+            // TypeScript project with a tsconfig.tsbuildinfo. With a stale
+            // tsbuildinfo on disk, BOTH `tsc` and `tsc -b packages/config`
+            // report "up to date" and emit NOTHING — even when dist/ has been
+            // deleted (verified by hand: `rm -rf packages/config/dist` then
+            // `tsc -b packages/config` exits 0 but leaves dist/ absent). Only
+            // `tsc -b … --force` ignores the buildinfo and regenerates the full
+            // dist/ (index.js + server.js + auth-errors.js + …). So we do NOT
+            // use the package's `npm run build` (a plain `tsc` that hits the
+            // same no-emit trap); we invoke the repo-local tsc directly in
+            // build-force mode.
+            //
+            // Spawned as a NODE step (shell:false) pointing at the tsc .js
+            // entrypoint — same Windows-shell rationale documented on NODE/TSC
+            // above (avoids the `C:\Program Files` space split). The gate
+            // proceeds only on exit 0.
+            name: '@nightfuel/config build',
+            cmd: NODE,
+            args: [TSC_CLI, '-b', 'packages/config', '--force'],
         },
         {
             name: 'test:backend',

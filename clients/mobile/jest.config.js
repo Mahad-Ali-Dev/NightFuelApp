@@ -12,6 +12,10 @@ module.exports = {
     '<rootDir>/.expo/',
     '<rootDir>/android/',
     '<rootDir>/ios/',
+    // Shared render harness + mock factories imported BY the suites — not a
+    // suite itself. jest-expo's default testMatch would otherwise run any
+    // file under __tests__ and fail it for containing no tests.
+    '<rootDir>/__tests__/test-utils/',
   ],
   // jest-expo's default transformIgnorePatterns whitelists Expo packages.
   // We extend it to also pass through @sentry/react-native (which ships
