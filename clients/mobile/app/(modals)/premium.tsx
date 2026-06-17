@@ -173,10 +173,10 @@ export default function PremiumScreen() {
             {/* Sticky CTA footer */}
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: Math.max(insets.bottom, 16), borderTopColor: colors.border.default, backgroundColor: colors.background.primary }]}>
                 <CtaButton
+                    size="lg"
                     label={upgradeMutation.isPending ? 'Processing…' : 'Start 7-Day Free Trial'}
                     loading={upgradeMutation.isPending}
                     onPress={() => upgradeMutation.mutate()}
-                    style={styles.ctaLg}
                 />
                 <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginTop: 16 }]}>
                     Cancel anytime. Subscription auto-renews.
@@ -266,10 +266,5 @@ const styles = StyleSheet.create({
     footer: {
         borderTopWidth: 1,
         paddingTop: 16,
-    },
-    // CtaButton "lg" sizing achieved via style override (cannot edit the shared primitive this sprint).
-    ctaLg: {
-        paddingVertical: 16,
-        minHeight: 52,
     },
 });

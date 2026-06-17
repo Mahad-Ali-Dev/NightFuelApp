@@ -13,7 +13,8 @@ import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import Constants from 'expo-constants';
 import { LinearGradient } from 'expo-linear-gradient';
-import { SafeBlurView } from '@/components/SafeBlurView';
+import { StatusBar } from 'expo-status-bar';
+import { GlassCard } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import { TAB_BAR_H } from './_layout';
 
@@ -79,6 +80,8 @@ export default function MoreScreen() {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" translucent backgroundColor="transparent" />
+
             {/* Header */}
             <View style={styles.header}>
                 <Text style={[typography.display, { color: colors.text.primary }]}>More</Text>
@@ -88,13 +91,15 @@ export default function MoreScreen() {
                 contentContainerStyle={{ paddingBottom: TAB_BAR_H + 40, paddingTop: spacing.sm }}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Profile Summary — glass hero with coral→pink brand ring */}
-                <View style={[styles.profileWrap, { marginHorizontal: spacing.md }]}>
-                    <SafeBlurView tint="dark" intensity={40} style={styles.profileCard}>
+                {/* Profile Summary — shared glass hero with coral→pink brand ring + pink glow */}
+                <GlassCard radius={24} glow={colors.accent.pink} style={{ marginHorizontal: spacing.md }}>
+                    <View style={styles.profileInner}>
+                        {/* Warm wash layered inside GlassCard, above its blur fill, below the row content */}
                         <LinearGradient
                             colors={[withAlpha(colors.accent.coral, 0.10), withAlpha(colors.accent.pink, 0.04)]}
                             style={StyleSheet.absoluteFillObject}
                             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                            pointerEvents="none"
                         />
                         <LinearGradient
                             colors={colors.gradients.coral}
@@ -109,19 +114,19 @@ export default function MoreScreen() {
                             />
                         </LinearGradient>
                         <View style={{ marginLeft: spacing.lg, flex: 1 }}>
-                            <Text style={[typography.h2, { color: colors.text.primary }]} numberOfLines={1}>
+                            <Text style={[typography.h2, { color: colors.text.primary }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
                                 {(profile?.data as any)?.name || user?.name || 'User'}
                             </Text>
-                            <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: 2 }]} numberOfLines={1}>
+                            <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: 2 }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
                                 {(profile?.data as any)?.email || user?.email || ''}
                             </Text>
                             <View style={[styles.badge, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.30) }]}>
                                 <Ionicons name="moon" size={11} color={colors.accent.purple} />
-                                <Text style={[typography.captionMedium, { color: colors.accent.purple, marginLeft: 5 }]}>NightFuel User</Text>
+                                <Text style={[typography.captionMedium, { color: colors.accent.purple, marginLeft: 5 }]} maxFontSizeMultiplier={1.4}>NightFuel User</Text>
                             </View>
                         </View>
-                    </SafeBlurView>
-                </View>
+                    </View>
+                </GlassCard>
 
                 {/* Settings Sections */}
                 {SETTINGS_SECTIONS.map((section, idx) => (
@@ -129,18 +134,23 @@ export default function MoreScreen() {
                         <Text style={[typography.overline, { color: colors.text.secondary, marginLeft: spacing.xl, marginBottom: spacing.sm }]}>
                             {section.title}
                         </Text>
-                        <View style={[styles.sectionGroup, { borderColor: colors.border.default, borderRadius: borderRadius.xl, marginHorizontal: spacing.md }]}>
-                            <SafeBlurView tint="dark" intensity={40} style={StyleSheet.absoluteFillObject} />
+                        <GlassCard radius={borderRadius.xl} style={{ marginHorizontal: spacing.md }}>
+                            {/* Grouped-list wash inside GlassCard, above blur fill, below rows */}
                             <LinearGradient
                                 colors={colors.gradients.card}
                                 style={StyleSheet.absoluteFillObject}
+                                pointerEvents="none"
                             />
                             {section.items.map((item, itemIdx) => (
                                 <TouchableOpacity
                                     key={itemIdx}
                                     accessibilityRole={item.isSwitch ? undefined : 'button'}
                                     accessibilityLabel={item.isSwitch ? undefined : item.label}
-                                    style={[styles.settingItem, itemIdx !== section.items.length - 1 && { borderBottomColor: colors.border.default, borderBottomWidth: StyleSheet.hairlineWidth }]}
+                                    style={[
+                                        styles.settingItem,
+                                        itemIdx !== section.items.length - 1 && { borderBottomColor: colors.border.default, borderBottomWidth: StyleSheet.hairlineWidth },
+                                        (!item.route && !item.isSwitch) && { opacity: 0.45 },
+                                    ]}
                                     onPress={() => item.route && router.push(item.route as any)}
                                     disabled={!item.route && !item.isSwitch}
                                     activeOpacity={0.7}
@@ -149,7 +159,7 @@ export default function MoreScreen() {
                                         <View style={[styles.itemIcon, { backgroundColor: withAlpha(colors.accent.coral, 0.10) }]}>
                                             <Ionicons name={item.icon as any} size={19} color={colors.accent.coral} />
                                         </View>
-                                        <Text style={[typography.bodyMedium, { color: colors.text.primary, marginLeft: spacing.md }]}>{item.label}</Text>
+                                        <Text style={[typography.bodyMedium, { color: colors.text.primary, marginLeft: spacing.md }]} maxFontSizeMultiplier={1.4}>{item.label}</Text>
                                     </View>
 
                                     {item.isSwitch ? (
@@ -165,19 +175,20 @@ export default function MoreScreen() {
                                         />
                                     ) : (
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            {item.value && <Text style={[typography.captionMedium, { color: colors.text.secondary, marginRight: spacing.sm }]}>{item.value}</Text>}
+                                            {item.value && <Text style={[typography.captionMedium, { color: colors.text.secondary, marginRight: spacing.sm }]} maxFontSizeMultiplier={1.4}>{item.value}</Text>}
                                             <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} />
                                         </View>
                                     )}
                                 </TouchableOpacity>
                             ))}
-                        </View>
+                        </GlassCard>
                     </View>
                 ))}
 
-                {/* Logout Button */}
+                {/* Logout Button — bespoke coral outline (not a filled CTA) */}
                 <TouchableOpacity
                     accessibilityRole="button"
+                    accessibilityLabel="Log Out"
                     style={[styles.logoutBtn, { borderColor: withAlpha(colors.accent.coral, 0.40), backgroundColor: withAlpha(colors.accent.coral, 0.08), borderRadius: borderRadius.lg, marginHorizontal: spacing.md }]}
                     onPress={async () => {
                         await useAuthStore.getState().logout();
@@ -186,7 +197,7 @@ export default function MoreScreen() {
                     activeOpacity={0.8}
                 >
                     <Ionicons name="log-out-outline" size={18} color={colors.accent.coral} />
-                    <Text style={[typography.subhead, { color: colors.accent.coral, fontWeight: '700', marginLeft: spacing.sm }]}>Log Out</Text>
+                    <Text style={[typography.subhead, { color: colors.accent.coral, fontWeight: '700', marginLeft: spacing.sm }]} maxFontSizeMultiplier={1.4}>Log Out</Text>
                 </TouchableOpacity>
 
                 <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing['3xl'] }]}>
@@ -200,12 +211,10 @@ export default function MoreScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 },
-    profileWrap: { borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
-    profileCard: { flexDirection: 'row', alignItems: 'center', padding: 20 },
+    profileInner: { flexDirection: 'row', alignItems: 'center', padding: 20 },
     avatarRing: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },
     avatar: { width: 68, height: 68, borderRadius: 34, borderWidth: 3 },
     badge: { flexDirection: 'row', alignSelf: 'flex-start', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1, marginTop: 10 },
-    sectionGroup: { borderWidth: 1, overflow: 'hidden' },
     settingItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 14 },
     itemLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
     itemIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },

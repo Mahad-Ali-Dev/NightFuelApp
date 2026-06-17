@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getFastingLogs, startFasting, endFasting, FastingLog } from '@/api/meals';
 import { CircularProgress } from '@/components/ui/CircularProgress';
-import { Button, Card, Skeleton, EmptyState } from '@/components/ui';
+import { Button, Card, GlassCard, CtaButton, Skeleton, EmptyState } from '@/components/ui';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
 import { getErrorMessage } from '@/utils/validation';
@@ -138,20 +138,24 @@ export default function FastingScreen() {
 
                 {/* Info Cards */}
                 <View style={styles.infoRow}>
-                    <Card variant="glass" style={styles.infoCard}>
-                        <Text style={[typography.overline, { color: colors.text.secondary }]}>Target</Text>
-                        <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: 4 }]}>
-                            {activeFast ? activeFast.targetHours : selectedHours}h
-                        </Text>
-                    </Card>
-                    <Card variant="glass" style={styles.infoCard}>
-                        <Text style={[typography.overline, { color: colors.text.secondary }]}>Ends At</Text>
-                        <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: 4 }]}>
-                            {activeFast?.startedAt
-                                ? (() => { try { return format(addHours(parseISO(activeFast.startedAt), activeFast.targetHours), 'HH:mm'); } catch { return '--:--'; } })()
-                                : '--:--'}
-                        </Text>
-                    </Card>
+                    <GlassCard style={styles.infoCard} radius={borderRadius.xl}>
+                        <View style={styles.infoCardInner}>
+                            <Text style={[typography.overline, { color: colors.text.secondary }]}>Target</Text>
+                            <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: 4 }]}>
+                                {activeFast ? activeFast.targetHours : selectedHours}h
+                            </Text>
+                        </View>
+                    </GlassCard>
+                    <GlassCard style={styles.infoCard} radius={borderRadius.xl}>
+                        <View style={styles.infoCardInner}>
+                            <Text style={[typography.overline, { color: colors.text.secondary }]}>Ends At</Text>
+                            <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: 4 }]}>
+                                {activeFast?.startedAt
+                                    ? (() => { try { return format(addHours(parseISO(activeFast.startedAt), activeFast.targetHours), 'HH:mm'); } catch { return '--:--'; } })()
+                                    : '--:--'}
+                            </Text>
+                        </View>
+                    </GlassCard>
                 </View>
 
                 {/* Protocol Selection */}
@@ -179,14 +183,25 @@ export default function FastingScreen() {
                 )}
 
                 {/* Action Button */}
-                <Button
-                    title={activeFast ? (elapsed >= activeFast.targetHours * 3600 ? 'COMPLETE FAST' : 'END FAST EARLY') : 'START FASTING'}
-                    variant={activeFast ? "outline" : "primary"}
-                    style={{ width: '100%', marginTop: 40, height: 60 }}
-                    onPress={() => activeFast ? endMutation.mutate() : startMutation.mutate(selectedHours)}
-                    loading={startMutation.isPending || endMutation.isPending}
-                    disabled={startMutation.isPending || endMutation.isPending}
-                />
+                {activeFast ? (
+                    <Button
+                        title={elapsed >= activeFast.targetHours * 3600 ? 'COMPLETE FAST' : 'END FAST EARLY'}
+                        variant="outline"
+                        style={{ width: '100%', marginTop: 40, height: 60 }}
+                        onPress={() => endMutation.mutate()}
+                        loading={startMutation.isPending || endMutation.isPending}
+                        disabled={startMutation.isPending || endMutation.isPending}
+                    />
+                ) : (
+                    <CtaButton
+                        size="lg"
+                        label="START FASTING"
+                        style={{ width: '100%', marginTop: 40, height: 60 }}
+                        onPress={() => startMutation.mutate(selectedHours)}
+                        loading={startMutation.isPending || endMutation.isPending}
+                        disabled={startMutation.isPending || endMutation.isPending}
+                    />
+                )}
 
                 {/* Tips Card */}
                 <Card style={[styles.tipsCard, { backgroundColor: withAlpha(colors.accent.cyan, 0.08), borderColor: withAlpha(colors.accent.cyan, 0.4), marginTop: 40 }]}>
@@ -211,7 +226,8 @@ const styles = StyleSheet.create({
     timerContainer: { marginTop: 40, alignItems: 'center', justifyContent: 'center' },
     timerCenter: { position: 'absolute', alignItems: 'center' },
     infoRow: { flexDirection: 'row', gap: 16, marginTop: 40, width: '100%' },
-    infoCard: { flex: 1, alignItems: 'center' },
+    infoCard: { flex: 1 },
+    infoCardInner: { padding: 16, alignItems: 'center' },
     protocolGrid: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
     protocolBtn: { flex: 1, height: 60, alignItems: 'center', justifyContent: 'center', borderRadius: 16, borderWidth: 1, minWidth: '45%' },
     tipsCard: { padding: 20 },

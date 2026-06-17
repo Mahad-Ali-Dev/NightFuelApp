@@ -10,12 +10,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPlanByDate, generatePlan, ratePlan } from '@/api/plans';
 import { getCurrent as getCurrentShift } from '@/api/shifts';
 import { format, addDays, startOfWeek } from 'date-fns';
-import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { getErrorMessage } from '@/utils/validation';
 import { shadows } from '@/theme/shadows';
 import { spacing, borderRadius } from '@/theme/spacing';
-import { Skeleton, EmptyState } from '@/components/ui';
+import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
 // Per-meal accent stripes use canonical Aurora theme accent hexes (module scope
 // can't read the hook): amber / emerald / purple / cyan from '@/theme/colors'.
 const MEAL_COLORS: Record<string,string> = { breakfast:'#FFB300', lunch:'#10B981', dinner:'#7C4DFF', snack:'#00D4AA' };
@@ -105,12 +104,15 @@ export default function MealPlannerScreen() {
                         <Text style={[typography.overline,{color:colors.accent.purple,textAlign:'center',marginTop:24}]}>RIA NUTRITION ENGINE</Text>
                         <Text style={[typography.h2,{color:colors.text.primary,textAlign:'center',marginTop:8}]}>No plan for this day</Text>
                         <Text style={[typography.body,{color:colors.text.secondary,textAlign:'center',marginTop:8,maxWidth:300}]}>Let Ria analyze your shift schedule and build a perfect nutrition protocol.</Text>
-                        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Generate AI plan" accessibilityState={{ disabled: genM.isPending }} style={[s.genBtnWrap,{marginTop:32},!genM.isPending&&shadows.glow(colors.accent.coral)]} onPress={()=>genM.mutate()} disabled={genM.isPending} activeOpacity={0.85}>
-                            <LinearGradient colors={colors.gradients.coral} start={{x:0,y:0}} end={{x:1,y:0}} style={s.genBtn}>
-                                <Ionicons name="sparkles" size={20} color="#FFF" />
-                                <Text style={[typography.subhead,{color:'#FFF',fontWeight:'900',marginLeft:8}]}>{genM.isPending?'GENERATING...':'GENERATE AI PLAN'}</Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
+                        <CtaButton
+                            size="lg"
+                            icon="sparkles"
+                            label="GENERATE AI PLAN"
+                            accessibilityLabel="Generate AI plan"
+                            style={[s.genBtnWrap,{marginTop:32}]}
+                            onPress={()=>genM.mutate()}
+                            loading={genM.isPending}
+                        />
                     </View>
                 ):(
                     <View>
@@ -193,6 +195,6 @@ const s = StyleSheet.create({
     mealCard:{flex:1,flexDirection:'row',alignItems:'center',padding:10,borderRadius:14,borderWidth:1,overflow:'hidden'},
     mealThumb:{width:44,height:44,borderRadius:8}, mealAccent:{width:3,height:'70%',borderRadius:2,marginLeft:8},
     suppCard:{borderRadius:14,borderWidth:1,padding:4}, suppRow:{flexDirection:'row',alignItems:'center',padding:14},
-    genBtnWrap:{width:'100%',borderRadius:28,overflow:'hidden'},
+    genBtnWrap:{width:'100%',borderRadius:28,overflow:'hidden',marginBottom:20},
     genBtn:{height:56,borderRadius:28,flexDirection:'row',alignItems:'center',justifyContent:'center',marginBottom:20},
 });

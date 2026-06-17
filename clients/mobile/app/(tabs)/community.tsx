@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions, RefreshControl, ImageBackground, Share } from 'react-native';
-import { SafeBlurView } from '@/components/SafeBlurView';
+import { GlassCard } from '@/components/ui';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
@@ -88,20 +88,18 @@ export default function CommunityTab() {
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel={`${chall.title}, ${chall.participants} participating`}
-                style={{ width: 160, borderRadius: borderRadius['2xl'], overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}
+                style={{ width: 160 }}
                 onPress={() => router.push('/(community)/challenges' as any)}
             >
-                <SafeBlurView
-                    tint="dark"
-                    intensity={40}
-                    style={{ width: '100%', padding: 16, borderWidth: 0 }}
-                >
-                    <View style={[styles.challIcon, { backgroundColor: withAlpha(colors.accent.emerald, 0.14) }]}>
-                        <Ionicons name="flash" size={20} color={colors.accent.emerald} />
+                <GlassCard intensity={40}>
+                    <View style={{ width: '100%', padding: 16 }}>
+                        <View style={[styles.challIcon, { backgroundColor: withAlpha(colors.accent.emerald, 0.14) }]}>
+                            <Ionicons name="flash" size={20} color={colors.accent.emerald} />
+                        </View>
+                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 12 }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{chall.title}</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]} maxFontSizeMultiplier={1.4}>{chall.participants} participating</Text>
                     </View>
-                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 12 }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{chall.title}</Text>
-                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]} maxFontSizeMultiplier={1.4}>{chall.participants} participating</Text>
-                </SafeBlurView>
+                </GlassCard>
             </TouchableOpacity>
         )),
         [challenges, borderRadius, colors, typography, router]
@@ -169,20 +167,18 @@ export default function CommunityTab() {
                     activeOpacity={0.85}
                     accessibilityRole="button"
                     accessibilityLabel="Create a post"
-                    style={{ marginHorizontal: 20, marginBottom: 24, borderRadius: borderRadius['2xl'], overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}
+                    style={{ marginHorizontal: 20, marginBottom: 24 }}
                     onPress={() => router.push('/(modals)/create-post' as any)}
                 >
-                    <SafeBlurView
-                        tint="dark"
-                        intensity={40}
-                        style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderWidth: 0 }}
-                    >
-                        <View style={[styles.avatarMini, { backgroundColor: withAlpha(colors.background.tertiary, 0.5) }]}>
-                            <Ionicons name="person" size={16} color={colors.text.tertiary} />
+                    <GlassCard intensity={40}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
+                            <View style={[styles.avatarMini, { backgroundColor: withAlpha(colors.background.tertiary, 0.5) }]}>
+                                <Ionicons name="person" size={16} color={colors.text.tertiary} />
+                            </View>
+                            <Text style={[typography.body, { color: colors.text.secondary, marginLeft: 16 }]} maxFontSizeMultiplier={1.4}>What's on your mind?</Text>
+                            <Ionicons name="image-outline" size={20} color={colors.accent.cyan} style={{ marginLeft: 'auto' }} />
                         </View>
-                        <Text style={[typography.body, { color: colors.text.secondary, marginLeft: 16 }]} maxFontSizeMultiplier={1.4}>What's on your mind?</Text>
-                        <Ionicons name="image-outline" size={20} color={colors.accent.cyan} style={{ marginLeft: 'auto' }} />
-                    </SafeBlurView>
+                    </GlassCard>
                 </TouchableOpacity>
 
                 {/* Feed Items */}
@@ -230,12 +226,8 @@ const PostItem = React.memo(function PostItem({ post, onLike, onComment, onPress
     // field access here (would break tsc).
     const liked = false;
     return (
-        <View style={{ borderRadius: borderRadius['2xl'], overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1), marginBottom: 16 }}>
-            <SafeBlurView
-                tint="dark"
-                intensity={40}
-                style={{ padding: 16, borderWidth: 0 }}
-            >
+        <GlassCard intensity={40} style={{ marginBottom: 16 }}>
+            <View style={{ padding: 16 }}>
                 <TouchableOpacity activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`View ${post.author?.name || 'User'}'s profile`} style={styles.postHeader} onPress={onPressProfile}>
                     <View style={[styles.avatarMini, { backgroundColor: colors.background.tertiary }]}>
                         {post.author?.avatarUrl ? (
@@ -285,8 +277,8 @@ const PostItem = React.memo(function PostItem({ post, onLike, onComment, onPress
                         <Ionicons name="share-social-outline" size={18} color={colors.text.secondary} />
                     </TouchableOpacity>
                 </View>
-            </SafeBlurView>
-        </View>
+            </View>
+        </GlassCard>
     );
 });
 

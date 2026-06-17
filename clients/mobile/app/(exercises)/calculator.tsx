@@ -11,8 +11,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { logOneRepMax } from '@/api/exercises';
-import { SafeBlurView } from '@/components/SafeBlurView';
+import { GlassCard } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
 
@@ -83,6 +84,7 @@ export default function CalculatorScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border.default }]}>
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backBtn}>
@@ -98,8 +100,8 @@ export default function CalculatorScreen() {
             >
                 <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}>
                     {/* Input Card */}
-                    <View style={[styles.cardOuter, { borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}>
-                      <SafeBlurView tint="dark" intensity={40} style={styles.card}>
+                    <GlassCard intensity={40} radius={borderRadius['2xl']}>
+                      <View style={styles.card}>
                         <View style={styles.inputRow}>
                             <View style={styles.inputStack}>
                                 <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 8 }]}>WEIGHT (KG)</Text>
@@ -133,8 +135,8 @@ export default function CalculatorScreen() {
                             placeholder="e.g. Bench Press"
                             placeholderTextColor={colors.text.tertiary}
                         />
-                      </SafeBlurView>
-                    </View>
+                      </View>
+                    </GlassCard>
 
                     {/* Result Circle */}
                     <View style={styles.resultContainer}>
@@ -202,8 +204,7 @@ export default function CalculatorScreen() {
                     <Text style={[typography.heading, { color: colors.text.primary, marginTop: spacing['2xl'], marginBottom: spacing.md }]}>
                         Training Zones
                     </Text>
-                    <View style={[styles.zoneTableOuter, { borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}>
-                      <SafeBlurView tint="dark" intensity={40} style={styles.zoneTable}>
+                    <GlassCard intensity={40} radius={borderRadius['2xl']}>
                         {ZONES.map((zone, idx) => (
                             <View key={zone.pct} style={[styles.zoneRow, idx < ZONES.length - 1 && { borderBottomColor: colors.border.default, borderBottomWidth: 1 }]}>
                                 <View style={styles.zoneLeft}>
@@ -218,8 +219,7 @@ export default function CalculatorScreen() {
                                 </View>
                             </View>
                         ))}
-                      </SafeBlurView>
-                    </View>
+                    </GlassCard>
                 </ScrollView>
             </KeyboardAvoidingView>
         </View>
@@ -230,8 +230,7 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
     backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-    cardOuter: { borderWidth: 1, overflow: 'hidden' },
-    card: { padding: 24, backgroundColor: 'transparent' },
+    card: { padding: 24 },
     inputRow: { flexDirection: 'row', gap: 16 },
     inputStack: { flex: 1 },
     input: { height: 56, paddingHorizontal: 16, fontSize: 20, fontWeight: 'bold', textAlign: 'center' },
@@ -243,8 +242,6 @@ const styles = StyleSheet.create({
     formulaText: { fontSize: 10, fontWeight: 'bold', marginBottom: 2 },
     formulaVal: { fontSize: 14, fontWeight: '800' },
     saveBtn: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-    zoneTableOuter: { borderWidth: 1, overflow: 'hidden' },
-    zoneTable: { backgroundColor: 'transparent' },
     zoneRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
     zoneLeft: { flex: 1 },
     zoneRight: { alignItems: 'flex-end' },

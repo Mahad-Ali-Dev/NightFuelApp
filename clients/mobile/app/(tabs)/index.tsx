@@ -812,7 +812,6 @@ const s = StyleSheet.create({
     dateTxt: { marginBottom: 20, marginTop: 2 },
 
     // Hero
-    heroCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 24, borderRadius: 24, borderWidth: 1, overflow: 'hidden', marginBottom: 12 },
     // Press wrapper owns only the outer spacing now; the GlassCard owns the
     // radius/hairline/glow and the heroInner View owns the row layout + padding.
     heroPress: { marginBottom: 12 },
@@ -827,7 +826,6 @@ const s = StyleSheet.create({
     chipTxt: { flexShrink: 1 },
 
     // UP NEXT card
-    upNextCard: { padding: 22, borderRadius: 24, borderWidth: 1, overflow: 'hidden', marginBottom: 16 },
     // Inner content padding for the GlassCard-wrapped UP NEXT card.
     upNextInner: { padding: 22 },
     upNextSkeleton: { padding: 22, borderRadius: 24, borderWidth: 1, borderColor: palette.border.default, backgroundColor: withAlpha(palette.background.secondary, 0.5), marginBottom: 16 },
@@ -843,7 +841,6 @@ const s = StyleSheet.create({
     // Mini cards
     miniRow: { flexDirection: 'row', gap: CARD_GAP, marginBottom: 12 },
     caffeineRow: { marginBottom: 28 },
-    miniCard: { width: MINI_W, padding: 16, borderRadius: 20, borderWidth: 1 },
     // Inner content padding for the GlassCard-wrapped mini cards (sleep/hydration).
     miniInner: { padding: 16 },
     miniIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
@@ -869,9 +866,6 @@ const s = StyleSheet.create({
     // Quick actions
     sectionLbl: { marginBottom: 14 },
     quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: CARD_GAP, marginBottom: 28 },
-    quickCard: { width: MINI_W, padding: 18, borderRadius: 20, borderWidth: 1, alignItems: 'flex-start' },
-    quickIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-    quickLbl: { fontSize: 14, fontWeight: '700' },
 
     // Section row with link
     sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },

@@ -26,24 +26,29 @@
  *      no services/<svc>/src file constructs a raw pino logger — every service
  *      must use the shared createLogger from @nightfuel/config — so the logger
  *      contract can't drift back into per-service copies)
- *   5. harness-self-tests                         (runs scripts/__tests__/*.test.js
+ *   5. node scripts/check-no-inline-glass.js      (lint-tier guard — HARD /
+ *      unconditional, same as #2/#3/#4. No fs.existsSync guard. This guard
+ *      asserts no clients/mobile/app screen renders a direct <SafeBlurView> as a
+ *      CARD surface outside the GlassCard primitive — so the Aurora glass-card
+ *      contract can't drift back into duplicated inline card fills)
+ *   6. harness-self-tests                         (runs scripts/__tests__/*.test.js
  *      via the already-installed jest — these lock the gate's own helpers:
  *      parseSuiteSummary's fail-closed contract and the inline-401 detectors.
  *      No new dependency: we invoke the repo-hoisted jest CLI directly as a
  *      NODE step. A regression that made parseSuiteSummary fail-OPEN, or that
  *      narrowed the 401 regexes, turns this step RED before it reaches CI)
- *   6. npm run check-types --silent              (root turbo typecheck — all
+ *   7. npm run check-types --silent              (root turbo typecheck — all
  *      packages and services)
- *   7. @nightfuel/config build                    (force-emit packages/config
+ *   8. @nightfuel/config build                    (force-emit packages/config
  *      via `tsc -b packages/config --force`; see the long note on the step for
  *      WHY --force is mandatory — a stale tsconfig.tsbuildinfo makes a plain
  *      `tsc`/`tsc -b` report 'up to date' and emit NOTHING even when dist/ is
  *      missing, which would let the backend redaction suites import a stale or
  *      absent @nightfuel/config. Runs BEFORE test:backend so the 11
  *      shared-family redaction suites resolve packages/config/dist/index.js)
- *   8. node scripts/run-backend-tests.js         (per-service jest/vitest
+ *   9. node scripts/run-backend-tests.js         (per-service jest/vitest
  *      runs with one PASS/FAIL line per service)
- *   9. npm test --workspace=@nightfuel/mobile -- --ci --silent
+ *  10. npm test --workspace=@nightfuel/mobile -- --ci --silent
  *      (mobile jest run; --ci so it doesn't wait for an interactive watcher
  *      and disables snapshot updates)
  *
@@ -180,6 +185,19 @@ function buildSteps() {
             name: 'check-shared-logger',
             cmd: NODE,
             args: [path.join(REPO_ROOT, 'scripts', 'check-shared-logger.js')],
+        },
+        {
+            // HARD / unconditional — no `file` guard, same pattern as check-demo-
+            // maps-in-sync / check-error-handler-registered / check-shared-logger
+            // above. This guard asserts no clients/mobile/app screen renders a
+            // direct <SafeBlurView> as a CARD surface outside the GlassCard
+            // primitive (the Aurora glass-card contract); the script exists and
+            // passes on the post-migration tree, so it runs every gate. A missing
+            // or throwing script fails the gate rather than printing SKIP and
+            // continuing.
+            name: 'check-no-inline-glass',
+            cmd: NODE,
+            args: [path.join(REPO_ROOT, 'scripts', 'check-no-inline-glass.js')],
         },
         {
             // Harness self-tests: run scripts/__tests__/*.test.js, which lock
