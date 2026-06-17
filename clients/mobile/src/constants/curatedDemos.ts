@@ -413,6 +413,65 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Kettlebell Sumo High Pull': 'Kettlebell_Sumo_High_Pull',
   'Sledgehammer Swings': 'Sledgehammer_Swings',
   'Battling Ropes': 'Battling_Ropes',
+
+  // ── Widened FEDB-backed tranche #3 (data-only, zero new fetch) ───────────────
+  // Yet more distinct catalogue movements. Every key below is NEW — absent from
+  // GRANDFATHERED, the FEDB_BACKED_SLUGS entries above, YOUTUBE_PENDING and
+  // GIF_PENDING — so buildCuratedDemos() admits each one as kind:'fedb_frames',
+  // verified:false. Every slug VALUE was machine-verified present in FEDB_SLUGS
+  // (exerciseDemos.ts), so each resolves to an ordered 2-frame [0.jpg, 1.jpg]
+  // HTTPS pair with NO new HTTP call. Strictly additive: the kind:'youtube'-only
+  // sync guard (scripts/check-demo-maps-in-sync.js) and pendingHumanReviewIds.json
+  // (YouTube ids only) are untouched, so check-demo-maps-in-sync stays green.
+  //
+  // Roughly half are ALIAS-MISS — their normalized name is NOT a FEDB_SLUGS
+  // by-name index key, so resolveDemoFrames() in exerciseDemos.ts would miss them
+  // and only this curated map supplies frames: 'Seated One-Arm Cable Pulley Row',
+  // 'Powerlifting Bench Press', 'Cable Hammer Curls (Rope)', 'Seated Glute Stretch',
+  // 'Cable Deadlift', 'Standing Dumbbell Tricep Extension'. The rest are
+  // INDEX-BACKED (their normalized name already resolves), curated here for a
+  // cleaner display name + an explicit verified flag.
+
+  // Barbell / Smith — press, squat, posterior chain
+  'Powerlifting Bench Press': 'Bench_Press_-_Powerlifting',
+  'Bench Press with Chains': 'Bench_Press_with_Chains',
+  'Wide-Grip Decline Barbell Bench Press': 'Wide-Grip_Decline_Barbell_Bench_Press',
+  'Smith Machine Squat': 'Smith_Machine_Squat',
+  'Smith Machine Hip Raise': 'Smith_Machine_Hip_Raise',
+  'Barbell Glute Bridge': 'Barbell_Glute_Bridge',
+  'Floor Glute-Ham Raise': 'Floor_Glute-Ham_Raise',
+  'One-Arm Side Deadlift': 'One-Arm_Side_Deadlift',
+  'Cable Deadlift': 'Cable_Deadlifts',
+  // Dumbbell — press, curl, pronation
+  'Decline Dumbbell Bench Press': 'Decline_Dumbbell_Bench_Press',
+  'Dumbbell Bench Press with Neutral Grip': 'Dumbbell_Bench_Press_with_Neutral_Grip',
+  'Standing Dumbbell Reverse Curl': 'Standing_Dumbbell_Reverse_Curl',
+  'Dumbbell Lying Pronation': 'Dumbbell_Lying_Pronation',
+  // Rows / pulldowns
+  'Seated One-Arm Cable Pulley Row': 'Seated_One-arm_Cable_Pulley_Rows',
+  'Wide-Grip Pulldown Behind The Neck': 'Wide-Grip_Pulldown_Behind_The_Neck',
+  // Shoulders / delts
+  'Seated Cable Shoulder Press': 'Seated_Cable_Shoulder_Press',
+  'Standing Front Barbell Raise Over Head': 'Standing_Front_Barbell_Raise_Over_Head',
+  'Seated Bent-Over Rear Delt Raise': 'Seated_Bent-Over_Rear_Delt_Raise',
+  'Smith Machine Behind the Back Shrug': 'Smith_Machine_Behind_the_Back_Shrug',
+  'Dumbbell Shrug': 'Dumbbell_Shrug',
+  // Biceps
+  'Cable Hammer Curls (Rope)': 'Cable_Hammer_Curls_-_Rope_Attachment',
+  // Triceps
+  'Lying Dumbbell Tricep Extension': 'Lying_Dumbbell_Tricep_Extension',
+  'Standing Dumbbell Tricep Extension': 'Standing_Dumbbell_Triceps_Extension',
+  'Dumbbell One-Arm Triceps Extension': 'Dumbbell_One-Arm_Triceps_Extension',
+  'Cable Lying Triceps Extension': 'Cable_Lying_Triceps_Extension',
+  'Cable One-Arm Tricep Extension': 'Cable_One_Arm_Tricep_Extension',
+  // Calves
+  'Standing Dumbbell Calf Raise': 'Standing_Dumbbell_Calf_Raise',
+  'Standing Barbell Calf Raise': 'Standing_Barbell_Calf_Raise',
+  // Adduction / core / forearms
+  'Cable Hip Adduction': 'Cable_Hip_Adduction',
+  'Standing Cable Wood Chop': 'Standing_Cable_Wood_Chop',
+  'Seated Glute Stretch': 'Seated_Glute',
+  'Wrist Roller': 'Wrist_Roller',
 };
 
 /**

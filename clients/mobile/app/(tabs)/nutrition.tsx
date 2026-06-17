@@ -3,7 +3,8 @@ import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     Dimensions, ImageBackground
 } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { SafeBlurView } from '@/components/SafeBlurView';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -113,6 +114,10 @@ export default function NutritionHubScreen() {
             style={[styles.container, { backgroundColor: colors.background.primary }]}
             imageStyle={{ opacity: 0.25 }}
         >
+            {/* Translucent light status bar so the blurred food photo bleeds
+                under the notch. Mirrors the global root StatusBar (idempotent)
+                and makes the intent explicit at the screen level. */}
+            <StatusBar style="light" translucent backgroundColor="transparent" />
             <LinearGradient
                 colors={['rgba(10,10,13,0.85)', colors.background.primary]}
                 style={StyleSheet.absoluteFillObject}
@@ -132,7 +137,7 @@ export default function NutritionHubScreen() {
                             Nutrition
                         </Text>
                         <Text style={[typography.body, { color: colors.text.secondary, marginTop: 2 }]}>
-                            Fueling your {(progress as any)?.shiftType || 'Rotation'} phase.
+                            Fueling your {(progress as any)?.shiftType || 'Rotation'} shift.
                         </Text>
                     </View>
                     <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="View log"
@@ -166,7 +171,15 @@ export default function NutritionHubScreen() {
                     </Card>
                 ) : (
                 <Card variant="glass" style={styles.macroDashboard}>
-                    <View style={[styles.mainCircle, shadows.glow(colors.accent.emerald)]}>
+                    {/* SVG has no implicit text → expose the ring to TalkBack /
+                        VoiceOver as a single labelled summary. accessible groups
+                        the numeral + label so they aren't read as two fragments. */}
+                    <View
+                        style={[styles.mainCircle, shadows.glow(colors.accent.emerald)]}
+                        accessible
+                        accessibilityRole="image"
+                        accessibilityLabel={`${Math.max(0, stats.target.calories - stats.consumed.calories)} kcal left of ${stats.target.calories}`}
+                    >
                         <CircularProgress
                             progress={stats.target.calories > 0 ? stats.consumed.calories / stats.target.calories : 0}
                             size={180}
@@ -175,12 +188,21 @@ export default function NutritionHubScreen() {
                             trackColor={colors.background.tertiary}
                         />
                         <View style={styles.circleText}>
-                            <Text style={[typography.statLarge, { color: colors.text.primary, fontSize: 44, lineHeight: 50 }]}>
+                            <Text
+                                style={[typography.statLarge, { color: colors.text.primary, fontSize: 44, lineHeight: 50 }]}
+                                maxFontSizeMultiplier={1.3}
+                                allowFontScaling
+                            >
                                 {Math.max(0, stats.target.calories - stats.consumed.calories)}
                             </Text>
                             <Text style={[typography.overline, { color: colors.text.secondary }]}>KCAL LEFT</Text>
                         </View>
                     </View>
+
+                    {/* At-a-glance + screen-reader friendly consumed/target line. */}
+                    <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 18 }]}>
+                        {`consumed ${Math.round(stats.consumed.calories)} / target ${stats.target.calories} kcal`}
+                    </Text>
 
                     <View style={styles.macroGrid}>
                         <MacroItem label="Protein" current={stats.consumed.protein} target={stats.target.protein} color={colors.accent.emerald} unit="g" />
@@ -249,7 +271,7 @@ export default function NutritionHubScreen() {
                             style={{ borderRadius: borderRadius.xl, overflow: 'hidden', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border.default }}
                             onPress={() => router.push('/(meals)/planner' as any)}
                         >
-                            <BlurView
+                            <SafeBlurView
                                 tint="dark"
                                 intensity={40}
                                 style={[styles.emptyPlan, { backgroundColor: 'transparent' }]}
@@ -262,7 +284,7 @@ export default function NutritionHubScreen() {
                                 <View style={[styles.emptyPlanCta, { backgroundColor: withAlpha(colors.accent.purple, 0.14) }]}>
                                     <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', letterSpacing: 0.5 }]}>GENERATE PLAN</Text>
                                 </View>
-                            </BlurView>
+                            </SafeBlurView>
                         </TouchableOpacity>
                     ) : (
                         <View style={styles.planList}>
@@ -275,7 +297,7 @@ export default function NutritionHubScreen() {
                                     style={{ borderRadius: borderRadius.xl, overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}
                                     onPress={() => router.push({ pathname: '/(meals)/log-meal', params: { preset: m.label } })}
                                 >
-                                    <BlurView
+                                    <SafeBlurView
                                         tint="dark"
                                         intensity={40}
                                         style={styles.mealCard}
@@ -288,7 +310,7 @@ export default function NutritionHubScreen() {
                                             <Text style={[typography.caption, { color: colors.text.secondary }]} numberOfLines={1}>{m.description}</Text>
                                         </View>
                                         <Ionicons name="add-circle" size={24} color={colors.accent.emerald} />
-                                    </BlurView>
+                                    </SafeBlurView>
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -298,7 +320,7 @@ export default function NutritionHubScreen() {
                 {/* Fasting Card */}
                 <View style={styles.section}>
                     <View style={[{ borderRadius: borderRadius['2xl'], overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.accent.cyan, 0.4) }, shadows.glow(colors.accent.cyan)]}>
-                        <BlurView
+                        <SafeBlurView
                             tint="dark"
                             intensity={40}
                             style={styles.fastCard}
@@ -331,7 +353,7 @@ export default function NutritionHubScreen() {
                                     </Text>
                                 </TouchableOpacity>
                             </View>
-                        </BlurView>
+                        </SafeBlurView>
                     </View>
                 </View>
             </ScrollView>
@@ -346,7 +368,15 @@ const MacroItem = React.memo(function MacroItem({ label, current, target, color,
 
     return (
         <View style={styles.macroItem}>
-            <View style={styles.macroLabelRow}>
+            {/* Group the label + numeric value so screen readers announce one
+                coherent statement ("Protein: 90 of 180 grams") instead of two
+                disjoint fragments. Color is never the sole signal — every bar
+                carries a text label and numeric value. */}
+            <View
+                style={styles.macroLabelRow}
+                accessible
+                accessibilityLabel={`${label}: ${Math.round(current)} of ${target} grams`}
+            >
                 <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: 'bold' }]}>{label.toUpperCase()}</Text>
                 <Text style={[typography.caption, { color: colors.text.primary }]}>{Math.round(current)}{unit} / {target}{unit}</Text>
             </View>
@@ -367,7 +397,7 @@ const ToolCard = React.memo(function ToolCard({ icon, title, color, onPress }: a
             onPress={onPress}
             activeOpacity={0.85}
         >
-            <BlurView
+            <SafeBlurView
                 tint="dark"
                 intensity={40}
                 style={styles.toolCard}
@@ -376,7 +406,7 @@ const ToolCard = React.memo(function ToolCard({ icon, title, color, onPress }: a
                     <Ionicons name={icon} size={22} color={color} />
                 </View>
                 <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold', marginTop: 8 }]}>{title}</Text>
-            </BlurView>
+            </SafeBlurView>
         </TouchableOpacity>
     );
 });
@@ -386,7 +416,7 @@ const styles = StyleSheet.create({
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 20 },
     historyBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
     macroDashboard: { marginHorizontal: 20, padding: 24, alignItems: 'center' },
-    mainCircle: { width: 180, height: 180, alignItems: 'center', justifyContent: 'center', marginBottom: 30 },
+    mainCircle: { width: 180, height: 180, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
     circleText: { position: 'absolute', alignItems: 'center' },
     macroGrid: { width: '100%', gap: 16 },
     macroItem: { width: '100%' },
@@ -409,6 +439,6 @@ const styles = StyleSheet.create({
     fastTitle: { flexDirection: 'row', alignItems: 'center' },
     fastBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
     fastBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    fastAction: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+    fastAction: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
     fab: { position: 'absolute', width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: themeColors.accent.coral, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 },
 });

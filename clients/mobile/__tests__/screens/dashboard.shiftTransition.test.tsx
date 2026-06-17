@@ -188,8 +188,11 @@ describe('Dashboard — ShiftTransitionCard integration', () => {
     mockShiftState.isError = true;
     renderScreen();
     expect(screen.getByText('Next shift transition')).toBeTruthy();
-    // ShiftTransitionCard's error branch renders a <Button title="Retry" />.
-    expect(screen.getByText('Retry')).toBeTruthy();
+    // The error branches of BOTH shift-driven cards (ShiftTransitionCard and
+    // LightPlanCard — both fed off the same ['current-shift'] query) render a
+    // <Button title="Retry" />, so there are two on the errored dashboard.
+    const retries = screen.getAllByText('Retry');
+    expect(retries.length).toBeGreaterThanOrEqual(1);
   });
 
   test('(c) resolves null (no upcoming shift) → renders the empty state subtitle', () => {

@@ -282,6 +282,26 @@ describe('check-shared-logger — castEvadesSharedLogger: legitimate casts (true
         expect(fileConstructsRawPino(src)).toBe(false);
     });
 
+    // ── GENERIC pino Logger type — `as Logger<Bindings>`. The effective cast ──
+    // target reduces (trailing-generic strip) to the bare NAME `Logger`, which is
+    // allow-listed, so a parameterised pino Logger cast must stay clean. Removing
+    // the trailing-generic strip in the guard source turns this RED.
+    test('`createLogger(...) as Logger<Bindings>` (generic pino Logger type) is NOT flagged', () => {
+        const src = "const l = createLogger('svc') as Logger<Bindings>;";
+        expect(castEvadesSharedLogger(stripCommentsAndStrings(src))).toBe(false);
+        // …and the whole-file detector agrees.
+        expect(fileConstructsRawPino(src)).toBe(false);
+    });
+
+    // ── NAMESPACE-QUALIFIED GENERIC — `as pino.Logger<Bindings>`. Namespace ───
+    // strip drops `pino.`, trailing-generic strip drops `<Bindings>`, leaving the
+    // allow-listed `Logger`. Both reductions must compose for this to stay clean.
+    test('`createLogger(...) as pino.Logger<Bindings>` (namespaced generic pino Logger type) is NOT flagged', () => {
+        const src = "const l = createLogger('svc') as pino.Logger<Bindings>;";
+        expect(castEvadesSharedLogger(stripCommentsAndStrings(src))).toBe(false);
+        expect(fileConstructsRawPino(src)).toBe(false);
+    });
+
     test('the live `as any` reconciliation casts (plan-service / notification-service) are NOT flagged', () => {
         // plan-service/src/worker.ts:4 and notification-service/src/index.ts:34.
         const planWorker = [
@@ -318,8 +338,22 @@ describe('check-shared-logger — castEvadesSharedLogger: cast evasions (true po
         expect(fileConstructsRawPino(src)).toBe(true);
     });
 
+    // ── GENERIC-LOOKING evasion onto a NON-logger type — `as RawPinoLogger ───
+    // <Bindings>`. The trailing-generic strip reduces the target to the bare NAME
+    // `RawPinoLogger`, which is NOT allow-listed, so the cast is still flagged. A
+    // strip that dropped the type NAME too (back to empty) would let this pass —
+    // so this case turns RED if the strip is weakened that far.
+    test('`createLogger(...) as RawPinoLogger<Bindings>` (generic onto a non-logger type) IS flagged', () => {
+        const src = "const l = createLogger('svc') as RawPinoLogger<Bindings>;";
+        expect(castEvadesSharedLogger(stripCommentsAndStrings(src))).toBe(true);
+        expect(fileConstructsRawPino(src)).toBe(true);
+    });
+
     test('`createLogger(...) as unknown as <hand-rolled pino logger>` IS flagged (final segment wins)', () => {
         const src = "const logger = createLogger('svc') as unknown as RawPinoLogger;";
+        // The chain resolves to its final segment `RawPinoLogger` (not the
+        // allow-listed `unknown`), so the evasion is caught.
+        expect(castEvadesSharedLogger(stripCommentsAndStrings(src))).toBe(true);
         expect(fileConstructsRawPino(src)).toBe(true);
     });
 

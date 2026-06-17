@@ -80,10 +80,15 @@
  *                                      //    -service index.ts) — TS escape hatch,
  *                                      //    NOT a hand-rolled logger
  *       For a chained `x as A as B` cast, TS resolves the type to the LAST
- *       segment (`B`), so we test the final segment (after stripping a leading
- *       `pino.` namespace qualifier) against the allow-list. `as Logger`,
- *       `as unknown as Logger`, `as any`, `as unknown` stay clean; a cast onto
- *       any OTHER named type — the hand-rolled-logger evasion — is flagged.
+ *       segment (`B`), so we test the final segment against the allow-list.
+ *       After isolating the final segment and stripping a leading `pino.`
+ *       namespace qualifier, a trailing generic suffix `<…>` is also stripped so
+ *       a generic cast `as Logger<Bindings>` resolves to the bare type NAME
+ *       `Logger` for the allow-list lookup; only the type NAME is allow-listed,
+ *       so `as RawPinoLogger<Bindings>` is still flagged. `as Logger`,
+ *       `as Logger<Bindings>`, `as pino.Logger<Bindings>`, `as unknown as Logger`,
+ *       `as any`, `as unknown` stay clean; a cast onto any OTHER named type — the
+ *       hand-rolled-logger evasion — is flagged.
  *
  * Dependency-free on purpose (only Node's built-in `fs` + `path`): runs in any
  * CI environment, reads ONLY local files (no network), writes nothing, and is
@@ -341,6 +346,12 @@ function castEvadesSharedLogger(code) {
         let finalTarget = segments[segments.length - 1];
         // Strip a `pino.`-style namespace qualifier so `pino.Logger` → `Logger`.
         finalTarget = finalTarget.replace(/^[A-Za-z_$][\w$]*\./, '');
+        // Strip a trailing generic suffix `<…>` so a generic cast
+        // `as Logger<Bindings>` reduces to the bare type NAME `Logger` for the
+        // allow-list lookup. Runs AFTER the namespace strip, so `pino.Logger<X>`
+        // → `Logger`; a non-logger generic `RawPinoLogger<X>` → `RawPinoLogger`
+        // (still not allow-listed → still flagged).
+        finalTarget = finalTarget.replace(/<.*$/, '').trim();
         if (!ALLOWED_CAST_TARGETS.has(finalTarget)) {
             return true; // cast onto a non-allow-listed type → evasion
         }

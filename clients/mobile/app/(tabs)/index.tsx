@@ -9,6 +9,7 @@ import {
     TouchableOpacity, Dimensions, ImageBackground
 } from 'react-native';
 import { Image } from 'expo-image';
+import { StatusBar } from 'expo-status-bar';
 import { SafeBlurView } from '@/components/SafeBlurView';
 import { useTheme, colors as palette, typography, spacing, borderRadius } from '@/theme';
 import { Skeleton, EmptyState } from '@/components/ui';
@@ -26,12 +27,26 @@ import { WeeklyRecap } from '@/components/WeeklyRecap';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { searchLibrary } from '@/api/exercises';
 import ShiftTransitionCard from '@/components/home/ShiftTransitionCard';
+import LightPlanCard from '@/components/home/LightPlanCard';
 import { CaffeineTimerTile } from '@/components/home/CaffeineTimerTile';
+import { TAB_BAR_H } from './_layout';
 
 const { width } = Dimensions.get('window');
 const H_PAD = 20;
 const CARD_GAP = 12;
 const MINI_W = (width - H_PAD * 2 - CARD_GAP) / 2;
+
+// Bottom inset that clears BOTH the floating tab bar AND the purple Ria FAB
+// (FAB sits at bottom: TAB_BAR_H + 14, height 56 → top edge ≈ TAB_BAR_H + 70).
+// Spec asks for >= TAB_BAR_H + 48; we reserve TAB_BAR_H + 72 so the last card
+// never tucks under the Ria sparkles FAB on either platform.
+const BOTTOM_CLEARANCE = TAB_BAR_H + 72;
+
+// Caps Dynamic-Type scaling on the giant hero numeral and the micro NOW/badge
+// text so a large accessibility text size can't clip them out of their pills /
+// the single-line hero. Body + caption text elsewhere scales freely.
+const STAT_MAX_SCALE = 1.4;
+const MICRO_MAX_SCALE = 1.3;
 
 // Bundled Aurora dark-glass art (no external host → works offline, no 404 /
 // rate-limit / privacy leak). '@/*' resolves to ./src, so assets are required
@@ -47,6 +62,14 @@ const CAT_CARDIO_IMG = require('../../assets/images/cat-cardio.png');
 const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
 const MUSCLE_SHOULDERS_IMG = require('../../assets/images/muscle-shoulders.png');
 const MUSCLE_ARMS_IMG = require('../../assets/images/muscle-arms.png');
+
+// Screen-local CTA gradient. The shared `gradients.coral` (#FF7A45→#FF4D8D)
+// is owned by another engineer (theme tokens are off-limits in this restyle),
+// so we keep a local copy that STARTS darker (coralDark #E55A25) to lift the
+// white-label contrast on the primary "Log Meal" fill toward AA. NOTE for the
+// loop: if this proves generally useful, promote it to a shared `gradients`
+// token instead of duplicating per screen.
+const CTA_GRADIENT = [palette.accent.coralDark, palette.accent.pink] as const;
 
 // ─── Static data ─────────────────────────────────────────────────────────────
 
@@ -267,12 +290,16 @@ export default function DashboardScreen() {
             style={[s.root, { backgroundColor: colors.background.primary }]}
             imageStyle={{ opacity: 0.4 }}
         >
+            {/* Translucent light status bar so the hero glow bleeds under the
+                notch. Mirrors the global root StatusBar (idempotent) and makes
+                the intent explicit at the screen level. */}
+            <StatusBar style="light" translucent backgroundColor="transparent" />
             <LinearGradient
                 colors={['rgba(10,10,13,0.7)', colors.background.primary]}
                 style={StyleSheet.absoluteFillObject}
             />
             <ScrollView
-                contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16 }]}
+                contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16, paddingBottom: BOTTOM_CLEARANCE }]}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.coral} />}
                 showsVerticalScrollIndicator={false}
             >
@@ -345,9 +372,19 @@ export default function DashboardScreen() {
                                 {countdown ? 'Your shift ends in' : 'No active shift'}
                             </Text>
                             <Text
-                                style={[countdown ? typography.statLarge : typography.h1, s.heroVal, { color: countdown ? colors.text.primary : heroColor }]}
+                                style={[
+                                    countdown ? typography.statLarge : typography.h1,
+                                    s.heroVal,
+                                    { color: countdown ? colors.text.primary : heroColor },
+                                    // White-on-coral runs ~2.84:1; a soft dark
+                                    // text shadow lifts legibility on the filled
+                                    // hero. Rest-mode (cyan-on-glass) already
+                                    // passes AA so it skips the shadow.
+                                    countdown ? s.heroValShadow : null,
+                                ]}
                                 numberOfLines={1}
                                 adjustsFontSizeToFit
+                                maxFontSizeMultiplier={STAT_MAX_SCALE}
                             >
                                 {countdown ?? 'Rest Mode'}
                             </Text>
@@ -415,7 +452,7 @@ export default function DashboardScreen() {
                             </View>
                             <Text style={[typography.h2, s.mealName, { color: colors.text.primary }]}>{nextMeal.label}</Text>
                             {!!nextMeal.description && (
-                                <Text style={[typography.body, s.mealDesc, { color: colors.text.secondary }]} numberOfLines={2}>
+                                <Text style={[typography.bodySm, s.mealDesc, { color: colors.text.secondary }]} numberOfLines={2}>
                                     {nextMeal.description}
                                 </Text>
                             )}
@@ -433,13 +470,16 @@ export default function DashboardScreen() {
                                 accessibilityRole="button"
                                 accessibilityLabel="Log Meal"
                             >
+                                {/* Local CTA_GRADIENT starts at coralDark (not the
+                                    lighter shared coral stop) to raise white-label
+                                    contrast toward AA on the fill. */}
                                 <LinearGradient
-                                    colors={colors.gradients.coral}
+                                    colors={CTA_GRADIENT}
                                     style={StyleSheet.absoluteFillObject}
                                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                                 />
                                 <Ionicons name="checkmark" size={17} color="#fff" />
-                                <Text style={s.logBtnTxt}>Log Meal</Text>
+                                <Text style={s.logBtnTxt} maxFontSizeMultiplier={STAT_MAX_SCALE}>Log Meal</Text>
                             </TouchableOpacity>
                         </SafeBlurView>
                     </View>
@@ -463,6 +503,14 @@ export default function DashboardScreen() {
                     onRetry={() => shiftRefetch()}
                 />
 
+                {/* ══ LIGHT PLAN (light-exposure coaching) ════════════════════ */}
+                <LightPlanCard
+                    shift={shift ?? null}
+                    loading={shiftLoading}
+                    error={shiftError}
+                    onRetry={() => shiftRefetch()}
+                />
+
                 {/* ══ SLEEP + HYDRATION + CAFFEINE MINI CARDS ════════════════ */
                 /* Sleep + Hydration share row 1; CaffeineTimerTile wraps to row
                  * 2 as the 3rd tile (kept at MINI_W width for visual rhythm). */}
@@ -478,9 +526,7 @@ export default function DashboardScreen() {
                         <SafeBlurView
                             tint="dark"
                             intensity={40}
-                            style={[s.miniCard, {
-                                borderColor: withAlpha(colors.text.primary, 0.1),
-                            }]}
+                            style={[s.miniCard, { borderWidth: 0, width: '100%' }]}
                         >
                             <View style={[s.miniIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.14) }]}>
                                 <Ionicons name="moon" size={20} color={colors.accent.purple} />
@@ -490,7 +536,8 @@ export default function DashboardScreen() {
                                 <Text style={typography.statSmall}>8h</Text>
                                 <Text style={[typography.captionMedium, { color: colors.text.secondary }]}> target</Text>
                             </Text>
-                            <Text style={[typography.captionMedium, s.miniSub, { color: colors.accent.purple }]}>Melatonin guide →</Text>
+                            {/* purpleLight (6.27:1) not purple (#7C4DFF, 4.06 — AA-large only) for AA on this small footer text. */}
+                            <Text style={[typography.captionMedium, s.miniSub, { color: colors.accent.purpleLight }]}>Melatonin guide →</Text>
                         </SafeBlurView>
                     </TouchableOpacity>
 
@@ -744,7 +791,7 @@ export default function DashboardScreen() {
                                                 </Text>
                                                 {isNow && (
                                                     <View style={[s.nowBadge, { backgroundColor: colors.accent.coral }]}>
-                                                        <Text style={s.nowTxt}>NOW</Text>
+                                                        <Text style={s.nowTxt} maxFontSizeMultiplier={MICRO_MAX_SCALE}>NOW</Text>
                                                     </View>
                                                 )}
                                                 {isPast && (
@@ -768,7 +815,10 @@ export default function DashboardScreen() {
                 <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary, marginTop: 4 }]}>WEEKLY RECAP</Text>
                 <WeeklyRecap />
 
-                <View style={{ height: 120 }} />
+                {/* Tail breathing room; the heavy tab-bar + Ria-FAB clearance
+                    is reserved on the ScrollView's contentContainer paddingBottom
+                    (BOTTOM_CLEARANCE) so we don't double-count it here. */}
+                <View style={{ height: spacing.lg }} />
             </ScrollView>
         </ImageBackground>
     );
@@ -798,6 +848,7 @@ const s = StyleSheet.create({
     heroCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 24, borderRadius: 24, borderWidth: 1, overflow: 'hidden', marginBottom: 12 },
     heroLbl: { marginBottom: 6 },
     heroVal: {},
+    heroValShadow: { textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
     heroIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
 
     // Insight chip
@@ -815,8 +866,9 @@ const s = StyleSheet.create({
     mealName: { marginBottom: 6 },
     mealDesc: { marginBottom: 14 },
     macroRow: { flexDirection: 'row', marginBottom: 18 },
-    logBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 14 },
-    logBtnTxt: { color: '#fff', fontSize: 15, fontWeight: '800' },
+    logBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 14, minHeight: 46 },
+    // textShadow nudges the white label clear of the bright pink gradient end.
+    logBtnTxt: { color: '#fff', fontSize: 15, fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
 
     // Mini cards
     miniRow: { flexDirection: 'row', gap: CARD_GAP, marginBottom: 12 },
@@ -865,5 +917,11 @@ const s = StyleSheet.create({
     tlMeal: { fontSize: 14, fontWeight: '700', flex: 1 },
     tlDesc: { fontSize: 12, marginTop: 3 },
     nowBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
-    nowTxt: { color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+    // White-on-solid-coral is the worst contrast case (~2.5:1); a strong dark
+    // textShadow lifts the tiny "NOW" pip to a legible AA-equivalent without
+    // losing the punchy white-on-coral identity (matches the count-badge recipe).
+    nowTxt: {
+        color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.5,
+        textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2,
+    },
 });

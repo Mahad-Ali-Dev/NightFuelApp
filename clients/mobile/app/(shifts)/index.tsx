@@ -261,26 +261,36 @@ export default function ShiftCalendarScreen() {
                             ) : linkedSessions.length > 0 ? (
                                 <View style={{ gap: spacing.md }}>
                                     {linkedSessions.map(session => (
-                                        <Card key={session.id} variant="glass" padding="lg">
-                                            <View style={styles.sessionRow}>
-                                                <View style={[styles.sessionIcon, { backgroundColor: withAlpha(colors.accent.coral, 0.14), borderColor: withAlpha(colors.accent.coral, 0.28) }]}>
-                                                    <Ionicons name="barbell-outline" size={20} color={colors.accent.coral} />
-                                                </View>
-                                                <View style={styles.sessionInfo}>
-                                                    <Text style={[typography.body, { color: colors.text.primary, fontWeight: '700' }]} numberOfLines={1}>
-                                                        {session.title}
-                                                    </Text>
-                                                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
-                                                        {formatSessionWhen(session.scheduledAt)}
-                                                    </Text>
-                                                    {session.notes ? (
-                                                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]} numberOfLines={2}>
-                                                            {session.notes}
+                                        <TouchableOpacity
+                                            key={session.id}
+                                            accessibilityRole="button"
+                                            accessibilityLabel={`Open ${session.title} on your training calendar, ${formatSessionWhen(session.scheduledAt)}`}
+                                            activeOpacity={0.85}
+                                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                            onPress={() => router.push('/(performance)/calendar' as any)}
+                                        >
+                                            <Card variant="glass" padding="lg">
+                                                <View style={styles.sessionRow}>
+                                                    <View style={[styles.sessionIcon, { backgroundColor: withAlpha(colors.accent.coral, 0.14), borderColor: withAlpha(colors.accent.coral, 0.28) }]}>
+                                                        <Ionicons name="barbell-outline" size={20} color={colors.accent.coral} />
+                                                    </View>
+                                                    <View style={styles.sessionInfo}>
+                                                        <Text style={[typography.body, { color: colors.text.primary, fontWeight: '700' }]} numberOfLines={1}>
+                                                            {session.title}
                                                         </Text>
-                                                    ) : null}
+                                                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
+                                                            {formatSessionWhen(session.scheduledAt)}
+                                                        </Text>
+                                                        {session.notes ? (
+                                                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]} numberOfLines={2}>
+                                                                {session.notes}
+                                                            </Text>
+                                                        ) : null}
+                                                    </View>
+                                                    <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} style={styles.sessionChevron} />
                                                 </View>
-                                            </View>
-                                        </Card>
+                                            </Card>
+                                        </TouchableOpacity>
                                     ))}
                                 </View>
                             ) : (
@@ -402,4 +412,8 @@ const styles = StyleSheet.create({
     sessionRow: { flexDirection: 'row', alignItems: 'center' },
     sessionIcon: { width: 40, height: 40, borderRadius: borderRadius.lg, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginRight: spacing.lg },
     sessionInfo: { flex: 1 },
+    // Trailing affordance hinting the row is tappable → (performance)/calendar.
+    // `sessionInfo`'s flex:1 already pushes this to the row end; the marginLeft
+    // is just breathing room between the text block and the chevron.
+    sessionChevron: { marginLeft: spacing.md },
 });
