@@ -7,15 +7,17 @@ import {
 
 import { useTheme } from '@/theme';
 import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getActiveSession, logSessionExercise, endSession, startSession, getRoutines } from '@/api/exercises';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { BlurView } from 'expo-blur';
+import { SafeBlurView } from '@/components/SafeBlurView';
+import { StatusBar } from 'expo-status-bar';
 import ConfettiCannon from 'react-native-confetti-cannon';
-import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { typography as typo } from '@/theme/typography';
 
@@ -426,32 +428,35 @@ export default function ActiveWorkoutScreen() {
         <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
             <View>
                 <Text style={[typography.overline, { color: colors.text.secondary }]}>
-                    Active Workout
+                    ACTIVE WORKOUT
                 </Text>
-                <Text style={[styles.timer, { color: colors.accent.cyan }]}>
+                <Text
+                    style={[styles.timer, {
+                        color: colors.accent.cyan,
+                        textShadowColor: withAlpha(colors.accent.cyan, 0.35),
+                        textShadowOffset: { width: 0, height: 0 },
+                        textShadowRadius: 12,
+                    }]}
+                    maxFontSizeMultiplier={1.3}
+                >
                     {formatTime(elapsedSeconds)}
                 </Text>
             </View>
-            <TouchableOpacity
-                style={[styles.finishBtn, shadows.glow(colors.accent.coral)]}
+            <Button
+                variant="primary"
+                size="md"
+                title="FINISH"
                 onPress={handleEnd}
-                activeOpacity={0.9}
-            >
-                <LinearGradient
-                    colors={colors.gradients.coral}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.finishBtnInner}
-                >
-                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>FINISH</Text>
-                </LinearGradient>
-            </TouchableOpacity>
+                accessibilityLabel="Finish workout"
+                icon={<Ionicons name="flag" size={16} color="#FFF" />}
+            />
         </View>
     );
 
     if (!isInitialized) {
         return (
             <View style={[styles.container, { backgroundColor: colors.background.primary, justifyContent: 'center' }]}>
+                <StatusBar style="light" />
                 <ActivityIndicator size="large" color={colors.accent.coral} />
             </View>
         );
@@ -459,32 +464,58 @@ export default function ActiveWorkoutScreen() {
 
     const isStarting = startupCountdown !== null && startupCountdown > 0;
 
+    // The ring fraction is restSeconds over the rest period the timer opened with.
+    // toggleSetComplete seeds `restSeconds` from the active exercise's `restSeconds`,
+    // so we read it back from that exercise (no handler change needed). +15s can push
+    // restSeconds past the initial value; CircularProgress clamps the fraction to 1.
+    const initialRest = exerciseStates[restExerciseIdx]?.restSeconds || DEFAULT_REST_SECONDS;
+
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={[styles.container, { backgroundColor: colors.background.primary }]}
         >
+            <StatusBar style="light" />
             <View style={{ paddingTop: insets.top, flex: 1 }}>
                 {renderHeader()}
 
-                <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}>
+                <ScrollView
+                    contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}
+                    keyboardShouldPersistTaps="handled"
+                >
                     {exerciseStates.map((ex, eIdx) => {
                         const isExpanded = expandedIndex === eIdx;
                         const completedCount = ex.sets.filter(s => s.completed).length;
+                        const firstIncompleteIndex = ex.sets.findIndex(s => !s.completed);
 
                         return (
-                            <Card key={eIdx} style={[styles.exCard, { backgroundColor: colors.background.secondary, borderColor: isExpanded ? colors.accent.coral : colors.border.default, marginBottom: spacing.md }]}>
+                            <Card
+                                key={eIdx}
+                                variant="glass"
+                                noPadding
+                                style={{
+                                    marginBottom: spacing.md,
+                                    borderColor: isExpanded ? colors.accent.coral : colors.border.default,
+                                    ...(isExpanded ? shadows.glow(colors.accent.coral) : null),
+                                }}
+                            >
                                 <TouchableOpacity
                                     style={styles.exHeader}
                                     onPress={() => setExpandedIndex(isExpanded ? -1 : eIdx)}
                                     activeOpacity={0.7}
                                 >
                                     <View style={styles.exTitleRow}>
-                                        <View style={[styles.iconBox, { backgroundColor: `${colors.accent.coral}15` }]}>
-                                            <Ionicons name="fitness" size={20} color={colors.accent.coral} />
+                                        <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.coral, 0.12) }]}>
+                                            <Ionicons name="barbell" size={22} color={colors.accent.coral} />
                                         </View>
                                         <View style={{ flex: 1, marginLeft: spacing.md }}>
-                                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{ex.name}</Text>
+                                            <Text
+                                                style={[typography.subhead, { color: colors.text.primary, fontWeight: '600' }]}
+                                                numberOfLines={1}
+                                                ellipsizeMode="tail"
+                                            >
+                                                {ex.name}
+                                            </Text>
                                             <Text style={[typography.caption, { color: colors.text.secondary }]}>
                                                 {completedCount}/{ex.sets.length} Sets Done · {ex.muscleGroup}
                                             </Text>
@@ -496,53 +527,91 @@ export default function ActiveWorkoutScreen() {
                                 {isExpanded && (
                                     <View style={styles.exContent}>
                                         <View style={styles.rowLabel}>
-                                            <Text style={[styles.label, { color: colors.text.secondary, width: 40 }]}>SET</Text>
+                                            <Text style={[styles.label, { color: colors.text.secondary, width: 36 }]}>SET</Text>
                                             <Text style={[styles.label, { color: colors.text.secondary, flex: 1, textAlign: 'center' }]}>KG</Text>
                                             <Text style={[styles.label, { color: colors.text.secondary, flex: 1, textAlign: 'center' }]}>REPS</Text>
-                                            <View style={{ width: 40 }} />
+                                            <Text style={[styles.label, { color: colors.text.secondary, width: 44, textAlign: 'right' }]}>DONE</Text>
                                         </View>
 
-                                        {ex.sets.map((set, sIdx) => (
-                                            <View
-                                                key={sIdx}
-                                                style={[styles.setRow, set.completed && { opacity: 0.6 }]}
-                                            >
-                                                <View style={[styles.setNum, { backgroundColor: colors.background.tertiary }]}>
-                                                    <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: 'bold' }]}>{sIdx + 1}</Text>
+                                        {ex.sets.map((set, sIdx) => {
+                                            const numberColor = set.completed
+                                                ? colors.accent.cyan
+                                                : (firstIncompleteIndex === sIdx ? colors.accent.coral : colors.text.secondary);
+                                            const inputDisabledStyle = set.completed
+                                                ? { opacity: 0.55, color: colors.text.secondary }
+                                                : null;
+
+                                            return (
+                                                <View key={sIdx} style={styles.setRow}>
+                                                    <View style={[styles.setNum, { backgroundColor: colors.background.tertiary }]}>
+                                                        <Text
+                                                            style={[styles.setNumText, { color: numberColor }]}
+                                                            maxFontSizeMultiplier={1.2}
+                                                        >
+                                                            {sIdx + 1}
+                                                        </Text>
+                                                    </View>
+
+                                                    <TextInput
+                                                        style={[styles.setInput, { color: colors.text.primary, backgroundColor: colors.background.tertiary, borderColor: colors.border.default }, inputDisabledStyle]}
+                                                        keyboardType="numeric"
+                                                        value={set.kg.toString()}
+                                                        onChangeText={(v) => updateSet(eIdx, sIdx, 'kg', parseFloat(v) || 0)}
+                                                        editable={!set.completed}
+                                                        selectionColor={colors.accent.coral}
+                                                        maxFontSizeMultiplier={1.3}
+                                                    />
+
+                                                    <TextInput
+                                                        style={[styles.setInput, { color: colors.text.primary, backgroundColor: colors.background.tertiary, borderColor: colors.border.default }, inputDisabledStyle]}
+                                                        keyboardType="numeric"
+                                                        value={set.reps.toString()}
+                                                        onChangeText={(v) => updateSet(eIdx, sIdx, 'reps', parseInt(v) || 0)}
+                                                        editable={!set.completed}
+                                                        selectionColor={colors.accent.coral}
+                                                        maxFontSizeMultiplier={1.3}
+                                                    />
+
+                                                    <TouchableOpacity
+                                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                        accessibilityRole="button"
+                                                        accessibilityLabel={set.completed ? 'Mark set incomplete' : 'Complete set'}
+                                                        accessibilityState={{ checked: set.completed }}
+                                                        style={[
+                                                            styles.checkBtn,
+                                                            set.completed
+                                                                ? { backgroundColor: colors.accent.emerald, ...shadows.glow(colors.accent.emerald) }
+                                                                : { backgroundColor: colors.background.tertiary, borderWidth: 1, borderColor: colors.border.light },
+                                                        ]}
+                                                        onPress={() => toggleSetComplete(eIdx, sIdx)}
+                                                    >
+                                                        <Ionicons name="checkmark" size={18} color={set.completed ? '#FFF' : colors.text.tertiary} />
+                                                    </TouchableOpacity>
+
+                                                    {ex.sets.length > 1 && (
+                                                        <TouchableOpacity
+                                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                            accessibilityRole="button"
+                                                            accessibilityLabel="Remove set"
+                                                            style={styles.removeSetBtn}
+                                                            onPress={() => removeSet(eIdx, sIdx)}
+                                                        >
+                                                            <Ionicons name="close" size={16} color={colors.text.tertiary} />
+                                                        </TouchableOpacity>
+                                                    )}
                                                 </View>
-
-                                                <TextInput
-                                                    style={[styles.setInput, { color: colors.text.primary, backgroundColor: colors.background.primary, borderColor: colors.border.default }]}
-                                                    keyboardType="numeric"
-                                                    value={set.kg.toString()}
-                                                    onChangeText={(v) => updateSet(eIdx, sIdx, 'kg', parseFloat(v) || 0)}
-                                                    editable={!set.completed}
-                                                />
-
-                                                <TextInput
-                                                    style={[styles.setInput, { color: colors.text.primary, backgroundColor: colors.background.primary, borderColor: colors.border.default }]}
-                                                    keyboardType="numeric"
-                                                    value={set.reps.toString()}
-                                                    onChangeText={(v) => updateSet(eIdx, sIdx, 'reps', parseInt(v) || 0)}
-                                                    editable={!set.completed}
-                                                />
-
-                                                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Complete set"
-                                                    style={[styles.checkBtn, { backgroundColor: set.completed ? colors.accent.emerald : colors.background.tertiary }]}
-                                                    onPress={() => toggleSetComplete(eIdx, sIdx)}
-                                                >
-                                                    <Ionicons name="checkmark" size={18} color={set.completed ? '#FFF' : colors.text.tertiary} />
-                                                </TouchableOpacity>
-                                            </View>
-                                        ))}
+                                            );
+                                        })}
 
                                         <TouchableOpacity
                                             activeOpacity={0.7}
-                                            style={[styles.addSetBtn, { borderColor: colors.border.default }]}
+                                            accessibilityRole="button"
+                                            accessibilityLabel="Add set"
+                                            style={[styles.addSetBtn, { borderColor: colors.border.light }]}
                                             onPress={() => addSet(eIdx)}
                                         >
                                             <Ionicons name="add" size={16} color={colors.text.secondary} />
-                                            <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 4, fontWeight: '600' }]}>ADD SET</Text>
+                                            <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: '600' }]}>ADD SET</Text>
                                         </TouchableOpacity>
                                     </View>
                                 )}
@@ -552,7 +621,7 @@ export default function ActiveWorkoutScreen() {
 
                     {exerciseStates.length === 0 && (
                         <View style={{ alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 }}>
-                            <Ionicons name="barbell-outline" size={48} color={colors.text.tertiary} />
+                            <Ionicons name="barbell-outline" size={56} color={colors.text.tertiary} />
                             <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 16, textAlign: 'center' }]}>
                                 No exercises yet
                             </Text>
@@ -564,6 +633,8 @@ export default function ActiveWorkoutScreen() {
 
                     <TouchableOpacity
                         activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel="Browse exercises"
                         style={{
                             flexDirection: 'row',
                             alignItems: 'center',
@@ -588,47 +659,83 @@ export default function ActiveWorkoutScreen() {
             {/* Initial Startup Countdown Overlay */}
             {isStarting && (
                 <View style={[StyleSheet.absoluteFillObject, { zIndex: 1000 }]}>
-                    <BlurView intensity={80} tint="dark" style={[StyleSheet.absoluteFillObject, { justifyContent: 'center', alignItems: 'center' }]}>
-                        <Text style={[styles.countdownNum, { color: colors.accent.coral, textShadowColor: withAlpha(colors.accent.coral, 0.5), textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 24 }]}>
+                    <SafeBlurView intensity={80} tint="dark" style={[StyleSheet.absoluteFillObject, { justifyContent: 'center', alignItems: 'center' }]}>
+                        <Text
+                            style={[styles.countdownNum, {
+                                color: colors.accent.coral,
+                                textShadowColor: withAlpha(colors.accent.coral, 0.5),
+                                textShadowOffset: { width: 0, height: 0 },
+                                textShadowRadius: 24,
+                            }]}
+                            maxFontSizeMultiplier={1.15}
+                        >
                             {startupCountdown}
                         </Text>
-                        <Text style={[typography.h3, { color: colors.text.primary, marginTop: 20, letterSpacing: 2 }]}>
+                        <Text style={[typography.h3, { color: colors.text.primary, marginTop: 20, letterSpacing: 2 }]} maxFontSizeMultiplier={1.3}>
                             GET READY!
                         </Text>
-                    </BlurView>
+                    </SafeBlurView>
                 </View>
             )}
 
             {/* Rest Timer Modal */}
             <Modal transparent visible={showRestTimer && !isStarting} animationType="fade">
                 <View style={styles.modalOverlay}>
-                    <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={[styles.modalContent, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius['2xl'] }, shadows.glow(colors.accent.coral)]}>
-                        <Text style={[typography.overline, { color: colors.text.secondary }]}>Rest Timer</Text>
-                        <Text style={[styles.restNum, { color: colors.accent.coral }]}>
-                            {restSeconds}
-                        </Text>
-                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>
-                            Up next: {exerciseStates[restExerciseIdx]?.name}
+                    <SafeBlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+                    <Card
+                        variant="glass"
+                        style={{
+                            width: '100%',
+                            padding: 30,
+                            alignItems: 'center',
+                            borderRadius: borderRadius['2xl'],
+                            ...shadows.glow(colors.accent.coral),
+                            ...shadows.xl,
+                        }}
+                        accessibilityViewIsModal={true}
+                        accessibilityLabel={`Rest timer, ${restSeconds} seconds remaining. Up next: ${exerciseStates[restExerciseIdx]?.name ?? 'next exercise'}`}
+                    >
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 16 }]}>REST</Text>
+
+                        <CircularProgress
+                            size={180}
+                            strokeWidth={10}
+                            progress={initialRest > 0 ? restSeconds / initialRest : 0}
+                            color={colors.accent.coral}
+                            trackColor={withAlpha(colors.text.primary, 0.08)}
+                        >
+                            <Text
+                                style={{ fontFamily: typography.statLarge.fontFamily, fontSize: 48, lineHeight: 56, color: colors.text.primary }}
+                                maxFontSizeMultiplier={1.2}
+                            >
+                                {formatTime(restSeconds)}
+                            </Text>
+                        </CircularProgress>
+
+                        <Text style={[typography.subhead, { color: colors.text.secondary, marginTop: spacing.lg }]} numberOfLines={1}>
+                            Up next: {exerciseStates[restExerciseIdx]?.name ?? 'next exercise'}
                         </Text>
 
                         <View style={styles.modalActions}>
                             <TouchableOpacity
                                 activeOpacity={0.85}
-                                style={[styles.modalBtn, { backgroundColor: colors.background.tertiary, borderWidth: 1, borderColor: colors.border.default }]}
+                                accessibilityRole="button"
+                                accessibilityLabel="Add 15 seconds"
+                                style={[styles.restChip, { backgroundColor: colors.background.tertiary, borderWidth: 1, borderColor: colors.border.default }]}
                                 onPress={() => setRestSeconds(prev => prev + 15)}
                             >
                                 <Text style={[typography.body, { color: colors.text.primary, fontWeight: 'bold' }]}>+15s</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity
-                                activeOpacity={0.85}
-                                style={[styles.modalBtn, { backgroundColor: colors.accent.coral }]}
+                            <Button
+                                variant="primary"
+                                size="md"
+                                title="SKIP"
+                                style={{ flex: 1, height: 50 }}
+                                accessibilityLabel="Skip rest"
                                 onPress={() => setShowRestTimer(false)}
-                            >
-                                <Text style={[typography.body, { color: colors.text.primary, fontWeight: 'bold' }]}>SKIP</Text>
-                            </TouchableOpacity>
+                            />
                         </View>
-                    </View>
+                    </Card>
                 </View>
             </Modal>
 
@@ -651,24 +758,21 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
     timer: { fontFamily: typo.statMedium.fontFamily, fontSize: 32, lineHeight: 38, marginTop: 2 },
-    finishBtn: { borderRadius: 14 },
-    finishBtnInner: { borderRadius: 14, overflow: 'hidden', paddingHorizontal: 22, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
-    exCard: { borderWidth: 1, overflow: 'hidden' },
-    exHeader: { padding: 16 },
+    exHeader: { padding: 16, minHeight: 64, justifyContent: 'center' },
     exTitleRow: { flexDirection: 'row', alignItems: 'center' },
-    iconBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    iconBox: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     exContent: { paddingHorizontal: 16, paddingBottom: 16 },
-    rowLabel: { flexDirection: 'row', marginBottom: 8, paddingHorizontal: 4 },
+    rowLabel: { flexDirection: 'row', marginBottom: 8, paddingHorizontal: 4, alignItems: 'center' },
     label: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1 },
-    setRow: { flexDirection: 'row', gap: 12, alignItems: 'center', marginBottom: 10 },
-    setNum: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+    setRow: { flexDirection: 'row', gap: 10, alignItems: 'center', height: 48, marginBottom: 8 },
+    setNum: { width: 32, height: 32, borderRadius: 9999, alignItems: 'center', justifyContent: 'center' },
+    setNumText: { fontFamily: typo.statTiny.fontFamily, fontSize: 16, fontWeight: 'bold' },
     setInput: { flex: 1, height: 40, borderRadius: 10, borderWidth: 1, textAlign: 'center', fontWeight: 'bold', fontSize: 16 },
     checkBtn: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    addSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderStyle: 'dashed' as any, borderWidth: 1, borderRadius: 10, marginTop: 4 },
+    removeSetBtn: { paddingLeft: 2, alignItems: 'center', justifyContent: 'center' },
+    addSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, minHeight: 44, borderStyle: 'dashed' as any, borderWidth: 1, borderRadius: 10, marginTop: 4 },
     modalOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
-    modalContent: { width: '100%', padding: 30, alignItems: 'center', borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 10 },
-    restNum: { fontFamily: typo.statLarge.fontFamily, fontSize: 80, lineHeight: 88, marginVertical: 20 },
     countdownNum: { fontFamily: typo.statLarge.fontFamily, fontSize: 120, lineHeight: 130 },
-    modalActions: { flexDirection: 'row', gap: 16, marginTop: 20 },
-    modalBtn: { flex: 1, height: 50, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }
+    modalActions: { flexDirection: 'row', gap: 16, marginTop: 20, alignSelf: 'stretch' },
+    restChip: { flex: 1, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 });

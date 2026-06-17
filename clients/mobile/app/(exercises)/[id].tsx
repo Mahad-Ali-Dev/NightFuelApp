@@ -7,10 +7,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { getById, getAnalytics } from '@/api/exercises';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { withAlpha } from '@/theme/utils';
-import { shadows } from '@/theme/shadows';
 import { spacing } from '@/theme/spacing';
 import { Skeleton, EmptyState } from '@/components/ui';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { LineChart } from 'react-native-gifted-charts';
 import { resolveDemo, resolveDemoFrames, tipsFor } from '@/constants/exerciseDemos';
 import { getCuratedDemo, getCuratedDemoFrames, getCuratedDemoVerified } from '@/constants/curatedDemos';
@@ -151,6 +153,7 @@ export default function ExerciseDetailScreen() {
     const diffColor = DIFF_COLORS[exercise?.difficulty ?? ''] ?? colors.accent.coral;
     if (exerciseQuery.isLoading) return (
         <View style={[s.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <Skeleton width="100%" height={320} radius={0} />
             <View style={{ padding: 20, marginTop: -40 }}>
                 <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md }}>
@@ -173,6 +176,7 @@ export default function ExerciseDetailScreen() {
     );
     if (!exercise) return (
         <View style={[s.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <View style={[s.headerRow, { paddingTop: insets.top + 8 }]}>
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" style={[s.overlayBtn, { backgroundColor: 'rgba(0,0,0,0.45)' }]} onPress={() => router.back()} activeOpacity={0.85}><Ionicons name="arrow-back" size={22} color="#FFF" /></TouchableOpacity>
             </View>
@@ -189,11 +193,12 @@ export default function ExerciseDetailScreen() {
     );
     return (
         <View style={[s.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <View style={[s.headerRow, { paddingTop: insets.top + 8 }]}>
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" style={[s.overlayBtn, { backgroundColor: 'rgba(0,0,0,0.45)' }]} onPress={() => router.back()} activeOpacity={0.85}><Ionicons name="arrow-back" size={22} color="#FFF" /></TouchableOpacity>
                 {demoUrl ? (
                     <TouchableOpacity
-                        style={[s.overlayBtn, { backgroundColor: 'rgba(0,0,0,0.55)', width: 'auto', paddingHorizontal: 14, flexDirection: 'row', gap: 6 }]}
+                        style={[s.overlayBtn, { backgroundColor: 'rgba(0,0,0,0.6)', width: 'auto', paddingHorizontal: 14, flexDirection: 'row', gap: 6 }]}
                         accessibilityRole="link"
                         accessibilityLabel="Watch demo video"
                         onPress={() => Linking.openURL(demoUrl)}
@@ -224,34 +229,42 @@ export default function ExerciseDetailScreen() {
                         <View style={[s.badge, { backgroundColor: withAlpha(diffColor, 0.15), borderColor: diffColor }]}><Text style={[typography.caption, { color: diffColor, fontWeight: 'bold', fontSize: 10 }]}>{(exercise.difficulty||'N/A').toUpperCase()}</Text></View>
                         {exercise.muscleGroup && <View style={[s.badge, { backgroundColor: withAlpha(colors.accent.cyan, 0.15), borderColor: colors.accent.cyan }]}><Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: 'bold', fontSize: 10 }]}>{exercise.muscleGroup.toUpperCase()}</Text></View>}
                     </View>
-                    <Text style={[typography.display, { color: colors.text.primary, fontSize: 28, fontWeight: '900' }]}>{exercise.name}</Text>
-                    {exercise.equipment && <Text style={[typography.body, { color: colors.text.secondary, marginTop: 4 }]}>Equipment: {exercise.equipment}</Text>}
+                    <Text style={[typography.display, { color: colors.text.primary, fontSize: 28, fontWeight: '900' }]} maxFontSizeMultiplier={1.3}>{exercise.name}</Text>
+                    {exercise.equipment && <Text style={[typography.body, { color: colors.text.secondary, marginTop: 4 }]} maxFontSizeMultiplier={1.4}>Equipment: {exercise.equipment}</Text>}
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
                         {[{ icon:'body', label:'Target', value:targetLabel, color:colors.accent.coral },{ icon:'barbell', label:'Equipment', value:exercise.equipment||'None', color:colors.accent.cyan },{ icon:'bar-chart', label:'Level', value:exercise.difficulty||'N/A', color:diffColor }].map((c)=>(
-                            <View key={c.label} style={[s.infoCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
-                                <View style={{ width:40,height:40,borderRadius:20,alignItems:'center',justifyContent:'center',backgroundColor:withAlpha(c.color,0.14) }}><Ionicons name={c.icon as any} size={18} color={c.color} /></View>
-                                <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10, marginTop: 8 }]}>{c.label.toUpperCase()}</Text>
-                                <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold', marginTop: 2 }]} numberOfLines={1}>{c.value}</Text>
-                            </View>
+                            <Card key={c.label} variant="glass" noPadding style={{ flex: 1 }}>
+                                <View style={{ padding: 14, alignItems: 'center' }}>
+                                    <View style={{ width:40,height:40,borderRadius:20,alignItems:'center',justifyContent:'center',backgroundColor:withAlpha(c.color,0.14) }}><Ionicons name={c.icon as any} size={18} color={c.color} /></View>
+                                    <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10, marginTop: 8 }]} maxFontSizeMultiplier={1.2}>{c.label.toUpperCase()}</Text>
+                                    <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold', marginTop: 2 }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{c.value}</Text>
+                                </View>
+                            </Card>
                         ))}
                     </View>
                     <View style={[s.tabRow, { borderBottomColor: colors.border.default, marginTop: 28 }]}>
-                        {TABS.map((tab) => (<TouchableOpacity key={tab.key} activeOpacity={0.85} accessibilityRole="tab" accessibilityState={{ selected: activeTab===tab.key }} accessibilityLabel={tab.label} onPress={() => setActiveTab(tab.key)} style={[s.tab, activeTab===tab.key && { borderBottomColor: colors.accent.coral }]}><Text style={[typography.caption, { color: activeTab===tab.key ? colors.text.primary : colors.text.tertiary, fontWeight:'bold', fontSize:11 }]}>{tab.label.toUpperCase()}</Text></TouchableOpacity>))}
+                        {TABS.map((tab) => (<TouchableOpacity key={tab.key} activeOpacity={0.85} accessibilityRole="tab" accessibilityState={{ selected: activeTab===tab.key }} accessibilityLabel={tab.label} onPress={() => setActiveTab(tab.key)} style={[s.tab, activeTab===tab.key && { borderBottomColor: colors.accent.coral }]}><Text style={[typography.caption, { color: activeTab===tab.key ? colors.text.primary : colors.text.secondary, fontWeight:'bold', fontSize:11 }]} maxFontSizeMultiplier={1.3}>{tab.label.toUpperCase()}</Text></TouchableOpacity>))}
                     </View>
                     <View style={{ marginTop: 20 }}>
-                        {activeTab==='howto' && <View style={{ gap:20 }}>{instructions.length===0?<View style={{gap:14}}><Text style={[typography.heading,{color:colors.text.primary,fontSize:16}]}>Instructions coming soon</Text><Text style={[typography.caption,{color:colors.text.tertiary,fontSize:12,marginTop:-6}]}>Step-by-step instructions aren't available yet. In the meantime, keep these coaching cues in mind:</Text>{tips.map((tip,i)=>(<View key={i} style={{flexDirection:'row',gap:10,alignItems:'flex-start'}}><View style={{width:6,height:6,borderRadius:3,marginTop:9,backgroundColor:colors.accent.coral}} /><Text style={[typography.body,{color:colors.text.secondary,flex:1,lineHeight:22}]}>{tip}</Text></View>))}</View>:isSingleParagraph?<Text style={[typography.body,{color:colors.text.secondary,lineHeight:24}]}>{instructions[0]}</Text>:instructions.map((step:string,idx:number)=>(<View key={idx} style={{ flexDirection:'row',gap:14,alignItems:'flex-start' }}><View style={[s.stepNum,{backgroundColor:withAlpha(colors.accent.coral,0.15),borderColor:withAlpha(colors.accent.coral,0.3)}]}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold'}]}>{idx+1}</Text></View><Text style={[typography.body,{color:colors.text.secondary,flex:1,lineHeight:24}]}>{step}</Text></View>))}</View>}
-                        {activeTab==='muscles' && (()=>{ const secondaryFiltered=secondaryMuscles.filter((m,i,a)=>!primaryKeys.has(m.trim().toLowerCase())&&a.findIndex((x)=>x.trim().toLowerCase()===m.trim().toLowerCase())===i); return <View style={[s.sectionCard,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Text style={[typography.caption,{color:colors.text.secondary,fontWeight:'bold',marginBottom:8}]}>PRIMARY MUSCLES</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{primaryMuscles.map((m:string,i:number)=>(<View key={i} style={[s.chip,{backgroundColor:withAlpha(colors.accent.coral,0.15),borderColor:colors.accent.coral}]}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold'}]}>{muscleLabel(m)}</Text></View>))}</View>{secondaryFiltered.length>0 && <><Text style={[typography.caption,{color:colors.text.secondary,fontWeight:'bold',marginTop:18,marginBottom:8}]}>SECONDARY MUSCLES</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{secondaryFiltered.map((m:string,i:number)=>(<View key={i} style={[s.chip,{backgroundColor:withAlpha(colors.accent.cyan,0.15),borderColor:colors.accent.cyan}]}><Text style={[typography.caption,{color:colors.accent.cyan,fontWeight:'bold'}]}>{muscleLabel(m)}</Text></View>))}</View></>}</View>; })()}
-                        {activeTab==='tips' && <View style={[s.sectionCard,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><View style={{flexDirection:'row',alignItems:'center',marginBottom:16}}><View style={{width:36,height:36,borderRadius:18,alignItems:'center',justifyContent:'center',backgroundColor:withAlpha(colors.accent.amber,0.15)}}><Ionicons name="bulb" size={20} color={colors.accent.amber} /></View><Text style={[typography.heading,{color:colors.text.primary,marginLeft:12,fontSize:16}]}>{tipsAreGeneral?'Training Tips':"Coach's Tips"}</Text></View>{tips.map((tip,i)=>(<View key={i} style={{flexDirection:'row',gap:10,marginBottom:12}}><View style={{width:6,height:6,borderRadius:3,marginTop:8,backgroundColor:colors.accent.amber}} /><Text style={[typography.body,{color:colors.text.secondary,flex:1,lineHeight:22}]}>{tip}</Text></View>))}</View>}
-                        {activeTab==='progress' && (analyticsQuery.isLoading?<View style={[s.sectionCard,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Skeleton width={180} height={18} radius={6} style={{marginBottom:spacing.xl}} /><Skeleton width="100%" height={180} radius={borderRadius.md} /></View>:analyticsQuery.isError?<EmptyState icon="cloud-offline-outline" title="Couldn't load progress" subtitle="We hit a snag fetching your weight progression. Check your connection and try again." actionLabel="Retry" onAction={()=>analyticsQuery.refetch()} />:chartData.length>0?<View style={[s.sectionCard,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold',marginBottom:20}]}>Weight Progression (KG)</Text><LineChart data={chartData} width={width-100} height={180} color={colors.accent.cyan} thickness={3} startFillColor={colors.accent.cyan} startOpacity={0.4} endOpacity={0.1} initialSpacing={20} noOfSections={4} yAxisColor={colors.border.default} xAxisColor={colors.border.default} yAxisTextStyle={{color:colors.text.secondary,fontSize:10}} xAxisLabelTextStyle={{color:colors.text.secondary,fontSize:10}} /></View>:<EmptyState icon="stats-chart-outline" title="No progress yet" subtitle="Log a set of this exercise and your weight progression will start charting here." actionLabel="Log This Exercise" onAction={()=>router.push({pathname:'/training/workout',params:{exercise:exercise.name}})} />)}
+                        {activeTab==='howto' && <View style={{ gap:20 }}>{instructions.length===0?<View style={{gap:14}}><Text style={[typography.heading,{color:colors.text.primary,fontSize:16}]}>Instructions coming soon</Text><Text style={[typography.caption,{color:colors.text.tertiary,fontSize:12,marginTop:-6}]}>Step-by-step instructions aren't available yet. In the meantime, keep these coaching cues in mind:</Text>{tips.map((tip,i)=>(<View key={i} style={{flexDirection:'row',gap:10,alignItems:'flex-start'}}><View style={{width:6,height:6,borderRadius:3,marginTop:9,backgroundColor:colors.accent.coral}} /><Text style={[typography.body,{color:colors.text.secondary,flex:1,lineHeight:22}]} maxFontSizeMultiplier={1.5}>{tip}</Text></View>))}</View>:isSingleParagraph?<Text style={[typography.body,{color:colors.text.secondary,lineHeight:24}]} maxFontSizeMultiplier={1.5}>{instructions[0]}</Text>:instructions.map((step:string,idx:number)=>(<View key={idx} style={{ flexDirection:'row',gap:14,alignItems:'flex-start' }}><View style={[s.stepNum,{backgroundColor:withAlpha(colors.accent.coral,0.15),borderColor:withAlpha(colors.accent.coral,0.3)}]}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold'}]}>{idx+1}</Text></View><Text style={[typography.body,{color:colors.text.secondary,flex:1,lineHeight:24}]} maxFontSizeMultiplier={1.5}>{step}</Text></View>))}</View>}
+                        {activeTab==='muscles' && (()=>{ const secondaryFiltered=secondaryMuscles.filter((m,i,a)=>!primaryKeys.has(m.trim().toLowerCase())&&a.findIndex((x)=>x.trim().toLowerCase()===m.trim().toLowerCase())===i); return <Card variant="glass"><Text style={[typography.caption,{color:colors.text.secondary,fontWeight:'bold',marginBottom:8}]}>PRIMARY MUSCLES</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{primaryMuscles.map((m:string,i:number)=>(<View key={i} style={[s.chip,{backgroundColor:withAlpha(colors.accent.coral,0.15),borderColor:colors.accent.coral}]}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold'}]}>{muscleLabel(m)}</Text></View>))}</View>{secondaryFiltered.length>0 && <><Text style={[typography.caption,{color:colors.text.secondary,fontWeight:'bold',marginTop:18,marginBottom:8}]}>SECONDARY MUSCLES</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:8}}>{secondaryFiltered.map((m:string,i:number)=>(<View key={i} style={[s.chip,{backgroundColor:withAlpha(colors.accent.cyan,0.15),borderColor:colors.accent.cyan}]}><Text style={[typography.caption,{color:colors.accent.cyan,fontWeight:'bold'}]}>{muscleLabel(m)}</Text></View>))}</View></>}</Card>; })()}
+                        {activeTab==='tips' && <Card variant="glass"><View style={{flexDirection:'row',alignItems:'center',marginBottom:16}}><View style={{width:36,height:36,borderRadius:18,alignItems:'center',justifyContent:'center',backgroundColor:withAlpha(colors.accent.amber,0.15)}}><Ionicons name="bulb" size={20} color={colors.accent.amber} /></View><Text style={[typography.heading,{color:colors.text.primary,marginLeft:12,fontSize:16}]}>{tipsAreGeneral?'Training Tips':"Coach's Tips"}</Text></View>{tips.map((tip,i)=>(<View key={i} style={{flexDirection:'row',gap:10,marginBottom:12}}><View style={{width:6,height:6,borderRadius:3,marginTop:8,backgroundColor:colors.accent.amber}} /><Text style={[typography.body,{color:colors.text.secondary,flex:1,lineHeight:22}]} maxFontSizeMultiplier={1.5}>{tip}</Text></View>))}</Card>}
+                        {activeTab==='progress' && (analyticsQuery.isLoading?<Card variant="glass"><Skeleton width={180} height={18} radius={6} style={{marginBottom:spacing.xl}} /><Skeleton width="100%" height={180} radius={borderRadius.md} /></Card>:analyticsQuery.isError?<EmptyState icon="cloud-offline-outline" title="Couldn't load progress" subtitle="We hit a snag fetching your weight progression. Check your connection and try again." actionLabel="Retry" onAction={()=>analyticsQuery.refetch()} />:chartData.length>0?<Card variant="glass"><Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold',marginBottom:20}]}>Weight Progression (KG)</Text><LineChart data={chartData} width={width-100} height={180} color={colors.accent.cyan} thickness={3} startFillColor={colors.accent.cyan} startOpacity={0.4} endOpacity={0.1} initialSpacing={20} noOfSections={4} yAxisColor={colors.border.default} xAxisColor={colors.border.default} yAxisTextStyle={{color:colors.text.secondary,fontSize:10}} xAxisLabelTextStyle={{color:colors.text.secondary,fontSize:10}} /></Card>:<EmptyState icon="stats-chart-outline" title="No progress yet" subtitle="Log a set of this exercise and your weight progression will start charting here." actionLabel="Log This Exercise" onAction={()=>router.push({pathname:'/training/workout',params:{exercise:exercise.name}})} />)}
                     </View>
                 </View>
             </ScrollView>
             <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,20)}]}>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Log this exercise" style={shadows.glow(colors.accent.coral)} onPress={()=>router.push({pathname:'/training/workout',params:{exercise:exercise.name}})} activeOpacity={0.85}>
-                    <LinearGradient colors={colors.gradients.coral} start={{x:0,y:0}} end={{x:1,y:0}} style={s.ctaBtn}>
-                        <Ionicons name="add-circle" size={22} color="#FFF" /><Text style={[typography.subhead,{color:'#FFF',fontWeight:'900',marginLeft:8,fontSize:16}]}>LOG THIS EXERCISE</Text>
-                    </LinearGradient>
-                </TouchableOpacity>
+                <LinearGradient colors={['transparent', colors.background.primary]} pointerEvents="none" style={s.footerFade} />
+                <Button
+                    variant="primary"
+                    size="lg"
+                    fullWidth
+                    title="LOG THIS EXERCISE"
+                    icon={<Ionicons name="add-circle" size={22} color="#FFF" />}
+                    accessibilityRole="button"
+                    accessibilityLabel="Log this exercise"
+                    onPress={()=>router.push({pathname:'/training/workout',params:{exercise:exercise.name}})}
+                />
             </View>
         </View>
     );
@@ -260,10 +273,9 @@ const s = StyleSheet.create({
     container:{flex:1}, headerRow:{position:'absolute',top:0,left:0,right:0,zIndex:10,flexDirection:'row',justifyContent:'space-between',paddingHorizontal:20,paddingBottom:8},
     overlayBtn:{width:40,height:40,borderRadius:20,alignItems:'center',justifyContent:'center'},
     badge:{paddingHorizontal:10,paddingVertical:4,borderRadius:8,borderWidth:1},
-    infoCard:{flex:1,borderRadius:14,borderWidth:1,padding:14,alignItems:'center'},
     tabRow:{flexDirection:'row',borderBottomWidth:1}, tab:{paddingVertical:12,marginRight:20,borderBottomWidth:2,borderBottomColor:'transparent'},
     stepNum:{width:30,height:30,borderRadius:15,alignItems:'center',justifyContent:'center',borderWidth:1},
-    sectionCard:{borderRadius:14,borderWidth:1,padding:16}, chip:{paddingHorizontal:12,paddingVertical:6,borderRadius:8,borderWidth:1},
+    chip:{paddingHorizontal:12,paddingVertical:6,borderRadius:8,borderWidth:1},
     footer:{position:'absolute',bottom:0,left:0,right:0,paddingHorizontal:20},
-    ctaBtn:{height:60,flexDirection:'row',alignItems:'center',justifyContent:'center',borderRadius:30},
+    footerFade:{position:'absolute',left:0,right:0,bottom:0,height:120},
 });

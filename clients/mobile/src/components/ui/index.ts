@@ -1,5 +1,7 @@
 export { Card } from './Card';
+export { GlassCard } from './GlassCard';
 export { Button } from './Button';
+export { CtaButton } from './CtaButton';
 export { CircularProgress } from './CircularProgress';
 export { ProgressBar } from './ProgressBar';
 export { Badge } from './Badge';

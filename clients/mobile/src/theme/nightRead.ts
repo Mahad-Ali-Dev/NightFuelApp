@@ -73,6 +73,10 @@ export const nightReadColors = {
   // gradient pairs (LinearGradient consumers expect at least 2 stops).
   gradients: {
     coral: ['#8C1A1A', '#8C1A1A'] as const,
+    // Mirrors Aurora's `gradients.coralCta` (the shared coral→pink CTA fill) so
+    // shape-parity holds when the Night Read flag is ON; flattened to the same
+    // dim red as `coral` per this variant's single-wavelength convention.
+    coralCta: ['#8C1A1A', '#8C1A1A'] as const,
     cyan: ['#8C1A1A', '#8C1A1A'] as const,
     purple: ['#3A1010', '#3A1010'] as const,
     dark: ['#140404', '#0A0000'] as const,

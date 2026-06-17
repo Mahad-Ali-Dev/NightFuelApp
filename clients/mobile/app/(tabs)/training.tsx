@@ -41,11 +41,10 @@ const ROUTINE_IMGS = [
     MUSCLE_BACK_IMG,
     CAT_GYM_IMG,
 ];
-// Screen-local CTA gradient: starts at the DARKER coral (#E55A25) instead of the
-// brand gradient's light #FF7A45 so white text/icons clear AA contrast on the
-// fill. Kept screen-local (NOT a shared token) per the restyle scope. coralDark →
-// pink, mirroring the Aurora coral→pink identity.
-const CTA_GRADIENT = ['#E55A25', '#FF4D8D'] as const;
+// CTA fills use the shared `gradients.coralCta` token (read off useTheme() as
+// `colors.gradients.coralCta`): coralDark #E55A25 → pink #FF4D8D. It starts
+// darker than the brand `gradients.coral` so white text/icons clear AA on the
+// fill, and is shared so Dashboard + Training render a byte-identical CTA.
 type TTab = 'train'|'plan';
 export default function TrainingHubScreen() {
     const { colors, typography, borderRadius, spacing, shadows } = useTheme();
@@ -78,7 +77,7 @@ export default function TrainingHubScreen() {
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:TAB_BAR_H+80}}>
                     {activeSession ? (
                         <TouchableOpacity activeOpacity={0.9} accessibilityRole="button" accessibilityLabel="Session in progress, touch to resume" style={[s.activeWrap,{marginHorizontal:20,marginBottom:24},shadows.glow(colors.accent.pink)]} onPress={()=>router.push('/training/workout' as any)}>
-                            <LinearGradient colors={CTA_GRADIENT} start={{x:0,y:0}} end={{x:1,y:1}} style={s.activeCard}>
+                            <LinearGradient colors={colors.gradients.coralCta} start={{x:0,y:0}} end={{x:1,y:1}} style={s.activeCard}>
                                 <View style={s.activeRow}><View style={s.activeIcon}><Ionicons name="play" size={24} color={colors.accent.coral} /></View><View style={{flex:1,marginLeft:16}}><Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'900'},s.txtShadow]}>SESSION IN PROGRESS</Text><Text style={[typography.caption,{color:colors.text.primary},s.txtShadow]}>Touch to resume</Text></View><Ionicons name="chevron-forward" size={24} color={colors.text.primary} /></View>
                             </LinearGradient>
                         </TouchableOpacity>
@@ -89,7 +88,7 @@ export default function TrainingHubScreen() {
                                 <LinearGradient colors={['rgba(255,255,255,0.06)','rgba(255,255,255,0)']} start={{x:0,y:0}} end={{x:0,y:1}} style={s.startSheen} pointerEvents="none" />
                                 <View style={{zIndex:1}}><Text style={[typography.h2,{color:colors.text.primary}]}>Start New Session</Text><Text style={[typography.body,{color:colors.text.secondary,marginTop:4}]}>Pick a routine or go freestyle.</Text>
                                     <View style={[s.beginBadge,shadows.glow(colors.accent.pink)]}>
-                                        <LinearGradient colors={CTA_GRADIENT} start={{x:0,y:0}} end={{x:1,y:0}} style={StyleSheet.absoluteFillObject} />
+                                        <LinearGradient colors={colors.gradients.coralCta} start={{x:0,y:0}} end={{x:1,y:0}} style={StyleSheet.absoluteFillObject} />
                                         <Ionicons name="add" size={16} color={colors.text.primary} /><Text maxFontSizeMultiplier={1.3} style={[s.badgeTxt,{color:colors.text.primary},s.txtShadow]}>BEGIN</Text>
                                     </View>
                                 </View>
@@ -186,7 +185,7 @@ export default function TrainingHubScreen() {
                                 })}
                                 {(activePlan.exercises?.length??0)>6&&<Text style={[typography.caption,{color:colors.text.secondary,textAlign:'center',marginTop:8}]}>+{(activePlan.exercises?.length??0)-6} more exercises</Text>}
                                 <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Start session" style={[s.todayBtn,{marginTop:20},shadows.glow(colors.accent.pink)]} onPress={()=>router.push({pathname:'/training/onboarding',params:{routineId:activePlan.id}} as any)}>
-                                    <LinearGradient colors={CTA_GRADIENT} start={{x:0,y:0}} end={{x:1,y:0}} style={s.btnFill} />
+                                    <LinearGradient colors={colors.gradients.coralCta} start={{x:0,y:0}} end={{x:1,y:0}} style={s.btnFill} />
                                     <Ionicons name="flash" size={20} color={colors.text.primary} /><Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'900',marginLeft:8},s.txtShadow]}>START SESSION</Text>
                                 </TouchableOpacity>
                             </View>

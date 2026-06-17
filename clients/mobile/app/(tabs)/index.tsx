@@ -63,13 +63,11 @@ const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
 const MUSCLE_SHOULDERS_IMG = require('../../assets/images/muscle-shoulders.png');
 const MUSCLE_ARMS_IMG = require('../../assets/images/muscle-arms.png');
 
-// Screen-local CTA gradient. The shared `gradients.coral` (#FF7A45→#FF4D8D)
-// is owned by another engineer (theme tokens are off-limits in this restyle),
-// so we keep a local copy that STARTS darker (coralDark #E55A25) to lift the
-// white-label contrast on the primary "Log Meal" fill toward AA. NOTE for the
-// loop: if this proves generally useful, promote it to a shared `gradients`
-// token instead of duplicating per screen.
-const CTA_GRADIENT = [palette.accent.coralDark, palette.accent.pink] as const;
+// Primary "Log Meal" CTA fill now uses the shared `gradients.coralCta` token
+// (coralDark #E55A25 → pink #FF4D8D) instead of a screen-local copy — it STARTS
+// darker than the brand `gradients.coral` (#FF7A45→…) to lift white-label
+// contrast on the fill toward AA, and is now shared so this tab + Training stay
+// byte-identical from one source.
 
 // ─── Static data ─────────────────────────────────────────────────────────────
 
@@ -470,11 +468,11 @@ export default function DashboardScreen() {
                                 accessibilityRole="button"
                                 accessibilityLabel="Log Meal"
                             >
-                                {/* Local CTA_GRADIENT starts at coralDark (not the
-                                    lighter shared coral stop) to raise white-label
+                                {/* Shared coralCta token starts at coralDark (not
+                                    the lighter brand coral stop) to raise white-label
                                     contrast toward AA on the fill. */}
                                 <LinearGradient
-                                    colors={CTA_GRADIENT}
+                                    colors={palette.gradients.coralCta}
                                     style={StyleSheet.absoluteFillObject}
                                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                                 />

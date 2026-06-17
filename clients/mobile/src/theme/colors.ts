@@ -59,6 +59,12 @@ export const colors = {
   // Gradient stops
   gradients: {
     coral: ['#FF7A45', '#FF4D8D'] as const,   // premium coral→pink (brand hero)
+    // AA-lifted coral→pink CTA fill. Starts at the DARKER coral (coralDark
+    // #E55A25) — NOT the brand hero's light #FF7A45 — so white labels/icons on
+    // the fill clear AA contrast. Shared so the Dashboard "Log Meal" and the
+    // Training Start/active CTAs render a byte-identical fill from one token
+    // (retires the per-screen CTA_GRADIENT copies the two tabs duplicated).
+    coralCta: ['#E55A25', '#FF4D8D'] as const, // = [accent.coralDark, accent.pink]
     cyan: ['#00D4AA', '#4FC3F7'] as const,
     purple: ['#7C4DFF', '#B47CFF'] as const,
     dark: ['#13161F', '#0A0C12'] as const,

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    Dimensions, ImageBackground
+    ImageBackground
 } from 'react-native';
 import { SafeBlurView } from '@/components/SafeBlurView';
 import { StatusBar } from 'expo-status-bar';
@@ -22,15 +22,13 @@ import { withAlpha } from '@/theme/utils';
 import { colors as themeColors } from '@/theme/colors';
 import { TAB_BAR_H } from './_layout';
 
-const { width } = Dimensions.get('window');
-
 // Bundled Aurora dark-glass art (no external host → offline-safe, no 404 /
 // rate-limit). '@/*' resolves to ./src, so assets are required by relative path
 // — same module-scope require pattern as (tabs)/training.tsx.
 const HERO_NUTRITION = require('../../assets/images/hero-nutrition.png');
 
 export default function NutritionHubScreen() {
-    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
+    const { colors, typography, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
 
@@ -440,5 +438,4 @@ const styles = StyleSheet.create({
     fastBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
     fastBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     fastAction: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
-    fab: { position: 'absolute', width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: themeColors.accent.coral, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 },
 });

@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { logOneRepMax } from '@/api/exercises';
-import { BlurView } from 'expo-blur';
+import { SafeBlurView } from '@/components/SafeBlurView';
 import { LinearGradient } from 'expo-linear-gradient';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
@@ -98,7 +98,8 @@ export default function CalculatorScreen() {
             >
                 <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}>
                     {/* Input Card */}
-                    <View style={[styles.card, { backgroundColor: colors.background.secondary, borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}>
+                    <View style={[styles.cardOuter, { borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}>
+                      <SafeBlurView tint="dark" intensity={40} style={styles.card}>
                         <View style={styles.inputRow}>
                             <View style={styles.inputStack}>
                                 <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 8 }]}>WEIGHT (KG)</Text>
@@ -132,6 +133,7 @@ export default function CalculatorScreen() {
                             placeholder="e.g. Bench Press"
                             placeholderTextColor={colors.text.tertiary}
                         />
+                      </SafeBlurView>
                     </View>
 
                     {/* Result Circle */}
@@ -200,7 +202,8 @@ export default function CalculatorScreen() {
                     <Text style={[typography.heading, { color: colors.text.primary, marginTop: spacing['2xl'], marginBottom: spacing.md }]}>
                         Training Zones
                     </Text>
-                    <View style={[styles.zoneTable, { backgroundColor: colors.background.secondary, borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}>
+                    <View style={[styles.zoneTableOuter, { borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}>
+                      <SafeBlurView tint="dark" intensity={40} style={styles.zoneTable}>
                         {ZONES.map((zone, idx) => (
                             <View key={zone.pct} style={[styles.zoneRow, idx < ZONES.length - 1 && { borderBottomColor: colors.border.default, borderBottomWidth: 1 }]}>
                                 <View style={styles.zoneLeft}>
@@ -215,6 +218,7 @@ export default function CalculatorScreen() {
                                 </View>
                             </View>
                         ))}
+                      </SafeBlurView>
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -226,7 +230,8 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
     backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-    card: { padding: 24, borderWidth: 1 },
+    cardOuter: { borderWidth: 1, overflow: 'hidden' },
+    card: { padding: 24, backgroundColor: 'transparent' },
     inputRow: { flexDirection: 'row', gap: 16 },
     inputStack: { flex: 1 },
     input: { height: 56, paddingHorizontal: 16, fontSize: 20, fontWeight: 'bold', textAlign: 'center' },
@@ -238,7 +243,8 @@ const styles = StyleSheet.create({
     formulaText: { fontSize: 10, fontWeight: 'bold', marginBottom: 2 },
     formulaVal: { fontSize: 14, fontWeight: '800' },
     saveBtn: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-    zoneTable: { borderWidth: 1, overflow: 'hidden' },
+    zoneTableOuter: { borderWidth: 1, overflow: 'hidden' },
+    zoneTable: { backgroundColor: 'transparent' },
     zoneRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
     zoneLeft: { flex: 1 },
     zoneRight: { alignItems: 'flex-end' },
