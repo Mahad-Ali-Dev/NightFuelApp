@@ -19,6 +19,16 @@
  * false-positives on a type-only `import { Logger } from 'pino'` — these
  * assertions go red BEFORE the change reaches CI.
  *
+ * It also locks the two ROBUSTNESS hardenings:
+ *   (1) a `pino(` inside a `// …` / `/* … *​/` comment or a string/template
+ *       literal is NOT flagged (comment/string-stripping), while a real-code
+ *       `pino(` still IS; and
+ *   (2) a `createLogger(...) as <hand-rolled pino logger>` cast IS flagged,
+ *       while the legitimate dep-nesting reconciliation casts —
+ *       `as unknown as Logger` (the live subscription-service/src/index.ts:62
+ *       shape), `as Logger`, `as any`, `as unknown` — are NOT. This keeps the
+ *       HARD gate green on the current tree while closing the cast-evasion hole.
+ *
  * Plain JS (not TS) on purpose: the script under test is plain JS too, so the
  * test stays close to the production surface and runs without the babel/ts-jest
  * transform stack — it runs under the gate's harness-self-test jest pass
@@ -38,6 +48,8 @@ const {
     PINO_DEFAULT_IMPORT_RE,
     BARE_PINO_CALL_RE,
     fileConstructsRawPino,
+    stripCommentsAndStrings,
+    castEvadesSharedLogger,
 } = __test;
 
 describe('check-shared-logger — fileConstructsRawPino: raw-pino offenders (true positives)', () => {
@@ -139,5 +151,182 @@ describe('check-shared-logger — regex shapes', () => {
         expect(PINO_DEFAULT_IMPORT_RE.test("import type Logger from 'pino';")).toBe(false);
         // A different module named *-pino must not be mistaken for `pino`.
         expect(PINO_DEFAULT_IMPORT_RE.test("import x from 'pino-http';")).toBe(false);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROBUSTNESS (1): a `pino(` inside a comment or a string/template literal must
+// NOT be flagged, while a real-code `pino(` still IS. Locks the
+// stripCommentsAndStrings tolerant-tokenizer pass.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('check-shared-logger — fileConstructsRawPino: comment/string false-match immunity', () => {
+    test('a `pino(` inside a // line comment is NOT flagged', () => {
+        const src = [
+            "import { createLogger } from '@nightfuel/config';",
+            '// legacy: const rootLogger = pino({ level: LOG_LEVEL });',
+            "const logger = createLogger('svc');",
+        ].join('\n');
+        expect(fileConstructsRawPino(src)).toBe(false);
+    });
+
+    test('a `pino(` inside a /* block comment */ is NOT flagged', () => {
+        const src = [
+            "import { createLogger } from '@nightfuel/config';",
+            '/*',
+            ' * Historically this service did `const log = pino({ ... })`.',
+            ' * It now uses the shared factory below.',
+            ' */',
+            "const logger = createLogger('svc');",
+        ].join('\n');
+        expect(fileConstructsRawPino(src)).toBe(false);
+    });
+
+    test('a `pino(` inside a string literal is NOT flagged', () => {
+        const src = [
+            "import { createLogger } from '@nightfuel/config';",
+            "const help = 'do not call pino({ level }) directly — use createLogger';",
+            "const logger = createLogger('svc');",
+        ].join('\n');
+        expect(fileConstructsRawPino(src)).toBe(false);
+    });
+
+    test('a `pino(` inside a template literal (no interpolation) is NOT flagged', () => {
+        const src = [
+            "import { createLogger } from '@nightfuel/config';",
+            'const doc = `example: pino({ level: "info" })`;',
+            "const logger = createLogger('svc');",
+        ].join('\n');
+        expect(fileConstructsRawPino(src)).toBe(false);
+    });
+
+    test('a real-code `pino(` sitting alongside a comment-mentioned pino( IS still flagged', () => {
+        // The comment `pino(` is stripped; the real one on the next line is not.
+        const src = [
+            "import pino from 'pino';",
+            '// note: pino({ ... }) is forbidden',
+            'const rootLogger = pino({ level: LOG_LEVEL });',
+        ].join('\n');
+        expect(fileConstructsRawPino(src)).toBe(true);
+    });
+
+    test('a real-code `pino(` inside a template `${…}` expression IS flagged (real code, not string body)', () => {
+        // The `${...}` body is real code, so a constructor call there is caught.
+        const src = [
+            "import pino from 'pino';",
+            'const x = `${pino({ level: "info" })}`;',
+        ].join('\n');
+        expect(fileConstructsRawPino(src)).toBe(true);
+    });
+});
+
+describe('check-shared-logger — stripCommentsAndStrings: structure-preserving blanking', () => {
+    test('preserves length and newline positions exactly', () => {
+        const src = [
+            "const a = 1; // pino( comment",
+            "const b = 'pino(string)';",
+            'const c = 2;',
+        ].join('\n');
+        const out = stripCommentsAndStrings(src);
+        expect(out.length).toBe(src.length);
+        // Same number of lines (newlines preserved 1:1).
+        expect(out.split('\n').length).toBe(src.split('\n').length);
+        // Real code outside comments/strings is untouched.
+        expect(out).toContain('const a = 1;');
+        expect(out).toContain('const c = 2;');
+        // The `pino(` text inside the comment and the string is gone.
+        expect(out.includes('pino(')).toBe(false);
+    });
+
+    test('keeps real-code tokens but blanks comment/string contents', () => {
+        const src = "const logger = pino(); // build it";
+        const out = stripCommentsAndStrings(src);
+        // The real `pino()` call survives…
+        expect(out).toContain('pino()');
+        // …but the comment text does not.
+        expect(out.includes('build it')).toBe(false);
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROBUSTNESS (2): the `createLogger(...) as <X>` cast-evasion detector. The
+// documented dep-nesting reconciliation casts stay clean; a cast that
+// re-introduces/hides a hand-rolled pino logger is flagged.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('check-shared-logger — castEvadesSharedLogger: legitimate casts (true negatives)', () => {
+    test('the live subscription-service/src/index.ts:62 `as unknown as Logger` shape is NOT flagged', () => {
+        const src = [
+            "import type { Logger } from 'pino';",
+            "import { createLogger } from '@nightfuel/config';",
+            "const rootLogger = createLogger('subscription-service') as unknown as Logger;",
+        ].join('\n');
+        expect(castEvadesSharedLogger(stripCommentsAndStrings(src))).toBe(false);
+        // …and the whole-file detector agrees (gate-safety on the real shape).
+        expect(fileConstructsRawPino(src)).toBe(false);
+    });
+
+    test('`createLogger(...) as Logger` (pino Logger type, single cast) is NOT flagged', () => {
+        const src = [
+            "import type { Logger } from 'pino';",
+            "import { createLogger } from '@nightfuel/config';",
+            "const logger = createLogger('svc') as Logger;",
+        ].join('\n');
+        expect(fileConstructsRawPino(src)).toBe(false);
+    });
+
+    test('`createLogger(...) as pino.Logger` (namespace-qualified Logger type) is NOT flagged', () => {
+        const src = [
+            "import * as pino from 'pino';",
+            "import { createLogger } from '@nightfuel/config';",
+            "const logger = createLogger('svc') as pino.Logger;",
+        ].join('\n');
+        expect(fileConstructsRawPino(src)).toBe(false);
+    });
+
+    test('the live `as any` reconciliation casts (plan-service / notification-service) are NOT flagged', () => {
+        // plan-service/src/worker.ts:4 and notification-service/src/index.ts:34.
+        const planWorker = [
+            "import { createLogger } from '@nightfuel/config';",
+            "const logger = createLogger('plan-service:worker') as any;",
+        ].join('\n');
+        const notif = [
+            "import { createLogger } from '@nightfuel/config';",
+            "const logger = createLogger('notification-service') as any;",
+        ].join('\n');
+        expect(fileConstructsRawPino(planWorker)).toBe(false);
+        expect(fileConstructsRawPino(notif)).toBe(false);
+    });
+
+    test('`createLogger(...) as unknown` (single unknown cast) is NOT flagged', () => {
+        const src = "const logger = createLogger('svc') as unknown;";
+        expect(castEvadesSharedLogger(stripCommentsAndStrings(src))).toBe(false);
+    });
+
+    test('a bare `createLogger(...)` with no cast at all is NOT flagged', () => {
+        const src = "const logger = createLogger('svc');";
+        expect(fileConstructsRawPino(src)).toBe(false);
+    });
+});
+
+describe('check-shared-logger — castEvadesSharedLogger: cast evasions (true positives)', () => {
+    test('`createLogger(...) as <hand-rolled pino logger>` IS flagged', () => {
+        const src = [
+            "import { createLogger } from '@nightfuel/config';",
+            '// SomethingHidingRawPino is a locally-declared pino-shaped logger type',
+            "const logger = createLogger('svc') as SomethingHidingRawPino;",
+        ].join('\n');
+        expect(castEvadesSharedLogger(stripCommentsAndStrings(src))).toBe(true);
+        expect(fileConstructsRawPino(src)).toBe(true);
+    });
+
+    test('`createLogger(...) as unknown as <hand-rolled pino logger>` IS flagged (final segment wins)', () => {
+        const src = "const logger = createLogger('svc') as unknown as RawPinoLogger;";
+        expect(fileConstructsRawPino(src)).toBe(true);
+    });
+
+    test('a `createLogger(...) as <evasion>` written INSIDE a string is NOT flagged (stripped first)', () => {
+        // Defensive: the cast detector also runs over the stripped text, so a
+        // cast mentioned in a string/comment cannot itself trip the guard.
+        const src = "const doc = \"const l = createLogger('x') as RawPinoLogger;\";";
+        expect(fileConstructsRawPino(src)).toBe(false);
     });
 });

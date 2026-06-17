@@ -326,6 +326,93 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Standing Calf Raise': 'Standing_Calf_Raises',
   'Side Plank': 'Side_Bridge',
   'Bicycle Crunch': 'Air_Bike',
+
+  // ── Widened FEDB-backed tranche #2 (data-only, zero new fetch) ───────────────
+  // More distinct catalogue movements whose names map to a slug dir that ALREADY
+  // exists in FEDB_SLUGS (exerciseDemos.ts) — each resolves to a 2-frame
+  // [0.jpg,1.jpg] HTTPS pair with NO new HTTP call. All keys are NEW (absent from
+  // GRANDFATHERED / the FEDB block above / YOUTUBE_PENDING / GIF_PENDING), so
+  // buildCuratedDemos() admits every one. kind:'fedb_frames', verified:false.
+  // Each slug below was machine-verified to be present in FEDB_SLUGS.
+
+  // Barbell / Smith — press & overhead
+  'Smith Machine Bench Press': 'Smith_Machine_Bench_Press',
+  'Smith Machine Incline Bench Press': 'Smith_Machine_Incline_Bench_Press',
+  'Standing Barbell Press Behind Neck': 'Standing_Barbell_Press_Behind_Neck',
+  'Bradford Press': 'Standing_Bradford_Press',
+  // Barbell — squat & single-leg
+  'Front Squat (Clean Grip)': 'Front_Squat_Clean_Grip',
+  'Jefferson Squat': 'Jefferson_Squats',
+  'Barbell Side Split Squat': 'Barbell_Side_Split_Squat',
+  'Barbell Step Ups': 'Barbell_Step_Ups',
+  'Narrow Stance Squats': 'Narrow_Stance_Squats',
+  'Speed Squats': 'Speed_Squats',
+  // Deadlift / posterior chain
+  'Leverage Deadlift': 'Leverage_Deadlift',
+  'Romanian Deadlift from Deficit': 'Romanian_Deadlift_from_Deficit',
+  'Stiff Leg Barbell Good Morning': 'Stiff_Leg_Barbell_Good_Morning',
+  'Glute Ham Raise': 'Glute_Ham_Raise',
+  'Reverse Hyperextension': 'Reverse_Hyperextension',
+  'Pull Through': 'Pull_Through',
+  // Rows / vertical pulls
+  'Smith Machine Bent Over Row': 'Smith_Machine_Bent_Over_Row',
+  'Lying T-Bar Row': 'Lying_T-Bar_Row',
+  'Straight-Arm Pulldown': 'Straight-Arm_Pulldown',
+  'V-Bar Pulldown': 'V-Bar_Pulldown',
+  'Underhand Cable Pulldowns': 'Underhand_Cable_Pulldowns',
+  'One Arm Lat Pulldown': 'One_Arm_Lat_Pulldown',
+  'Wide-Grip Rear Pull-Up': 'Wide-Grip_Rear_Pull-Up',
+  'Scapular Pull-Up': 'Scapular_Pull-Up',
+  'Gironda Sternum Chins': 'Gironda_Sternum_Chins',
+  // Shoulders / delts
+  'Standing Low-Pulley Deltoid Raise': 'Standing_Low-Pulley_Deltoid_Raise',
+  'Cable Seated Lateral Raise': 'Cable_Seated_Lateral_Raise',
+  'Seated Side Lateral Raise': 'Seated_Side_Lateral_Raise',
+  'Front Cable Raise': 'Front_Cable_Raise',
+  'Front Plate Raise': 'Front_Plate_Raise',
+  'Reverse Machine Flyes': 'Reverse_Machine_Flyes',
+  'Cable Rear Delt Fly': 'Cable_Rear_Delt_Fly',
+  // Biceps
+  'High Cable Curls': 'High_Cable_Curls',
+  'Lying Cable Curl': 'Lying_Cable_Curl',
+  'Standing One-Arm Cable Curl': 'Standing_One-Arm_Cable_Curl',
+  'Incline Hammer Curls': 'Incline_Hammer_Curls',
+  'Cable Preacher Curl': 'Cable_Preacher_Curl',
+  'Machine Preacher Curls': 'Machine_Preacher_Curls',
+  // Triceps
+  'Cable Rope Overhead Triceps Extension': 'Cable_Rope_Overhead_Triceps_Extension',
+  'Lying Triceps Press': 'Lying_Triceps_Press',
+  'Seated Triceps Press': 'Seated_Triceps_Press',
+  'Reverse Grip Triceps Pushdown': 'Reverse_Grip_Triceps_Pushdown',
+  'JM Press': 'JM_Press',
+  'Tate Press': 'Tate_Press',
+  'Weighted Bench Dip': 'Weighted_Bench_Dip',
+  // Chest — cable / machine / bodyweight variants
+  'Low Cable Crossover': 'Low_Cable_Crossover',
+  'Flat Bench Cable Flyes': 'Flat_Bench_Cable_Flyes',
+  'Leverage Incline Chest Press': 'Leverage_Incline_Chest_Press',
+  'Decline Push-Up': 'Decline_Push-Up',
+  'Plyo Push-Up': 'Plyo_Push-up',
+  'Push-Up to Side Plank': 'Push_Up_to_Side_Plank',
+  // Core / abs
+  'Cable Russian Twists': 'Cable_Russian_Twists',
+  'Weighted Crunches': 'Weighted_Crunches',
+  'Cross-Body Crunch': 'Cross-Body_Crunch',
+  'Oblique Crunches': 'Oblique_Crunches',
+  'Flutter Kicks': 'Flutter_Kicks',
+  'Dead Bug': 'Dead_Bug',
+  'Jackknife Sit-Up': 'Jackknife_Sit-Up',
+  'Pallof Press With Rotation': 'Pallof_Press_With_Rotation',
+  // Calves
+  'Calf Press On The Leg Press Machine': 'Calf_Press_On_The_Leg_Press_Machine',
+  'Smith Machine Calf Raise': 'Smith_Machine_Calf_Raise',
+  'Rocking Standing Calf Raise': 'Rocking_Standing_Calf_Raise',
+  // Kettlebell / conditioning
+  'Kettlebell Windmill': 'Kettlebell_Windmill',
+  'Two-Arm Kettlebell Row': 'Two-Arm_Kettlebell_Row',
+  'Kettlebell Sumo High Pull': 'Kettlebell_Sumo_High_Pull',
+  'Sledgehammer Swings': 'Sledgehammer_Swings',
+  'Battling Ropes': 'Battling_Ropes',
 };
 
 /**

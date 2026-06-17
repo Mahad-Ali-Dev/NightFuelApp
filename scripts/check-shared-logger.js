@@ -48,6 +48,43 @@
  * with no accompanying `pino(` / `<defaultId>(` call is clean. So `Logger` used
  * purely as a type never trips the guard.
  *
+ * ROBUSTNESS — two hardenings, both Node-built-ins only:
+ *
+ *   (1) COMMENT / STRING FALSE-MATCH IMMUNITY ──────────────────────────────
+ *       The `pino(` / renamed-default-call detection runs over a TOLERANT
+ *       tokenizer pass (`stripCommentsAndStrings`) that blanks the CONTENTS of
+ *       line comments (`// …`), block comments (`/* … *​/`), and string /
+ *       template literals (`'…'`, `"…"`, `` `…` ``) — replacing each char with a
+ *       space while PRESERVING newlines so line/column positions are intact.
+ *       This way a `pino(` sitting inside a comment or a string literal does NOT
+ *       match, while a real-code `pino(` still does. Import lines are read from
+ *       the ORIGINAL source (imports never live inside a comment/string, and the
+ *       default-import regex needs the literal `'pino'` module specifier, which
+ *       stripping would blank). Template `${…}` expressions return to code state
+ *       so a `pino(` interpolated as real code is still caught.
+ *
+ *   (2) `createLogger(...) as <X>` CAST-EVASION DETECTOR ────────────────────
+ *       A band-aid can re-introduce a hand-rolled pino logger while still
+ *       *calling* the shared factory, by casting the factory result through a
+ *       hand-rolled pino-logger type:
+ *           const log = createLogger('x') as SomethingHidingRawPino;
+ *       We flag a `createLogger(...) as <X>` cast when its EFFECTIVE (final)
+ *       cast target is NOT one of the documented, legitimate dep-nesting
+ *       reconciliation shapes. The allow-list is exactly:
+ *           as Logger                  // pino's Logger type (named/namespaced)
+ *           as pino.Logger
+ *           as unknown as Logger       // the subscription-service/src/index.ts:62
+ *           as unknown as pino.Logger  //   documented two-step reconciliation
+ *           as any  /  as unknown      // looser reconciliation casts in use today
+ *                                      //   (plan-service worker.ts, notification
+ *                                      //    -service index.ts) — TS escape hatch,
+ *                                      //    NOT a hand-rolled logger
+ *       For a chained `x as A as B` cast, TS resolves the type to the LAST
+ *       segment (`B`), so we test the final segment (after stripping a leading
+ *       `pino.` namespace qualifier) against the allow-list. `as Logger`,
+ *       `as unknown as Logger`, `as any`, `as unknown` stay clean; a cast onto
+ *       any OTHER named type — the hand-rolled-logger evasion — is flagged.
+ *
  * Dependency-free on purpose (only Node's built-in `fs` + `path`): runs in any
  * CI environment, reads ONLY local files (no network), writes nothing, and is
  * safe to chain into the root gate. Mirrors check-error-handler-registered.js in
@@ -93,7 +130,30 @@ const PINO_DEFAULT_IMPORT_RE =
 // A bare `pino(` constructor call. `\b` so `pino-pretty` (a transport target
 // string) and `pino.stdTimeFunctions` (a `.` member, not a call) never match —
 // only `pino` immediately followed by optional whitespace and `(`.
+//
+// NOTE: this is run over the COMMENT/STRING-STRIPPED text (see
+// stripCommentsAndStrings), so a `pino(` inside a `// …` comment or a `'…'`
+// string literal can never match — only a real-code `pino(` does.
 const BARE_PINO_CALL_RE = /\bpino\s*\(/;
+
+// A `createLogger(...) as <cast>` cast. We capture the WHOLE cast expression
+// after `as ` (up to the statement-ish terminator: `;`, `,`, `)`, or end of
+// line) so a chained `as unknown as Logger` is captured in full and we can
+// resolve its EFFECTIVE (final) target type. The `createLogger\s*\([^)]*\)`
+// head is single-line on purpose — every createLogger cast in the tree is on
+// one line, and a `)` inside the arg list would be unusual for a logger label.
+const CREATE_LOGGER_CAST_RE = /\bcreateLogger\s*\([^)]*\)\s+as\s+([^;,)\n]+)/g;
+
+// Cast targets that are LEGITIMATE dep-nesting reconciliation shapes and must
+// NEVER be flagged. We compare the EFFECTIVE (final) target of the cast chain,
+// after stripping a leading `pino.` namespace qualifier:
+//   • `Logger`           — pino's Logger type (the documented `as ... Logger`)
+//   • `any` / `unknown`  — the TS escape-hatch reconciliation casts in live use
+//                          (plan-service/src/worker.ts, notification-service/
+//                          src/index.ts). These widen the type, they do NOT
+//                          re-bind a hand-rolled pino logger.
+// Any OTHER named target (`as SomethingHidingRawPino`) is the evasion we flag.
+const ALLOWED_CAST_TARGETS = new Set(['Logger', 'any', 'unknown']);
 
 /**
  * Recursively collect all *.ts files under `dir`, skipping SKIP_DIRS so the
@@ -133,33 +193,213 @@ function escapeRe(s) {
 }
 
 /**
- * True when `src` constructs a raw pino logger. Pure + side-effect-free so the
- * unit test can drive both branches directly.
+ * Tolerant tokenizer pass: return a copy of `src` with the CONTENTS of comments
+ * and string/template literals blanked to spaces, while PRESERVING newlines (and
+ * therefore every line/column position). After this pass a `pino(` that lived
+ * inside a `// …` comment or a `'…'`/`"…"`/`` `…` `` literal is gone, so the
+ * `pino(` / renamed-default-call detectors see only real code.
  *
- *   (a) a bare `pino(` constructor call appears, OR
+ * Single forward scan over a small state machine — Node built-ins only, no AST:
+ *   • line comment   `// … <EOL>`      — blanked to EOL (newline kept)
+ *   • block comment  `/* … *​/`         — blanked across lines (newlines kept)
+ *   • '…' / "…"      single/double str  — blanked, honouring `\` escapes; a
+ *                                         newline ends it defensively (avoids
+ *                                         runaway on a malformed unterminated str)
+ *   • `…`            template literal   — blanked, BUT a `${ … }` expression
+ *                                         returns to CODE state (its contents are
+ *                                         real code and stay verbatim), with `{}`
+ *                                         nesting tracked so an inner object `}`
+ *                                         doesn't close the expression early.
+ * The transformation never changes the string LENGTH, only blanks chars, so
+ * offsets reported by any downstream regex map straight back onto `src`.
+ */
+function stripCommentsAndStrings(src) {
+    const out = new Array(src.length);
+    // Active state: 'code' | 'line' | 'block' | 'sq' | 'dq' | 'tmpl'.
+    let state = 'code';
+    // Stack of `{}` depths for nested template `${…}` expressions, so leaving a
+    // `${…}` returns to the correct enclosing template (handles `` `${`${x}`}` ``).
+    const tmplExprDepth = [];
+    let i = 0;
+    const blank = (idx) => {
+        // Guard the 2-char lookahead advances (`//`, `/*`, `*​/`, `\x`, `${`) so a
+        // pattern starting at the very last char never writes out[src.length]
+        // and lengthens the joined result.
+        if (idx >= src.length) return;
+        out[idx] = src[idx] === '\n' ? '\n' : ' ';
+    };
+    while (i < src.length) {
+        const c = src[i];
+        const next = src[i + 1];
+        if (state === 'code') {
+            if (c === '/' && next === '/') {
+                state = 'line';
+                blank(i); blank(i + 1);
+                i += 2;
+                continue;
+            }
+            if (c === '/' && next === '*') {
+                state = 'block';
+                blank(i); blank(i + 1);
+                i += 2;
+                continue;
+            }
+            if (c === "'") { state = 'sq'; blank(i); i++; continue; }
+            if (c === '"') { state = 'dq'; blank(i); i++; continue; }
+            if (c === '`') { state = 'tmpl'; blank(i); i++; continue; }
+            // Inside a template `${…}` expression (code state), a `}` that
+            // unwinds the current expression depth to 0 closes it and returns to
+            // the enclosing template literal.
+            if (tmplExprDepth.length > 0) {
+                if (c === '{') {
+                    tmplExprDepth[tmplExprDepth.length - 1]++;
+                } else if (c === '}') {
+                    tmplExprDepth[tmplExprDepth.length - 1]--;
+                    if (tmplExprDepth[tmplExprDepth.length - 1] === 0) {
+                        tmplExprDepth.pop();
+                        state = 'tmpl';
+                        blank(i); // the closing `}` belongs to the template, blank it
+                        i++;
+                        continue;
+                    }
+                }
+            }
+            out[i] = c; // real code — keep verbatim
+            i++;
+            continue;
+        }
+        if (state === 'line') {
+            if (c === '\n') { state = 'code'; out[i] = '\n'; i++; continue; }
+            blank(i); i++;
+            continue;
+        }
+        if (state === 'block') {
+            if (c === '*' && next === '/') {
+                state = 'code';
+                blank(i); blank(i + 1);
+                i += 2;
+                continue;
+            }
+            blank(i); i++;
+            continue;
+        }
+        if (state === 'sq' || state === 'dq') {
+            const closer = state === 'sq' ? "'" : '"';
+            if (c === '\\') { blank(i); blank(i + 1); i += 2; continue; }
+            if (c === closer) { state = 'code'; blank(i); i++; continue; }
+            // A bare newline defensively closes a malformed unterminated string
+            // (real single/double-quoted strings never span a raw newline).
+            if (c === '\n') { state = 'code'; out[i] = '\n'; i++; continue; }
+            blank(i); i++;
+            continue;
+        }
+        if (state === 'tmpl') {
+            if (c === '\\') { blank(i); blank(i + 1); i += 2; continue; }
+            if (c === '`') { state = 'code'; blank(i); i++; continue; }
+            if (c === '$' && next === '{') {
+                // Enter a `${…}` expression: real code, tracked at depth 1.
+                tmplExprDepth.push(1);
+                state = 'code';
+                blank(i); blank(i + 1); // blank the `${` punctuation itself
+                i += 2;
+                continue;
+            }
+            blank(i); i++;
+            continue;
+        }
+        // Unreachable, but keep the scan total.
+        out[i] = c;
+        i++;
+    }
+    return out.join('');
+}
+
+/**
+ * True when `code` (already comment/string-stripped) contains a
+ * `createLogger(...) as <X>` cast whose EFFECTIVE target type is the
+ * hand-rolled-logger evasion — i.e. NOT one of the allow-listed dep-nesting
+ * reconciliation shapes (`Logger` / `pino.Logger` / `any` / `unknown`, in any
+ * `as A as B` chain that resolves to one of those). Pure + side-effect-free so
+ * the unit test can drive it directly.
+ *
+ * For a chain `createLogger(...) as A as B as …`, TypeScript resolves the value
+ * to the type of the LAST `as` segment, so we take the final segment, strip a
+ * leading `pino.` namespace qualifier, and compare it against the allow-list.
+ */
+function castEvadesSharedLogger(code) {
+    CREATE_LOGGER_CAST_RE.lastIndex = 0;
+    let m;
+    while ((m = CREATE_LOGGER_CAST_RE.exec(code)) !== null) {
+        const castExpr = m[1];
+        // Split the chain on the `as` keyword (`unknown as Logger` → final
+        // `Logger`); the effective TS type is the last segment.
+        const segments = castExpr
+            .split(/\bas\b/)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+        if (segments.length === 0) continue;
+        let finalTarget = segments[segments.length - 1];
+        // Strip a `pino.`-style namespace qualifier so `pino.Logger` → `Logger`.
+        finalTarget = finalTarget.replace(/^[A-Za-z_$][\w$]*\./, '');
+        if (!ALLOWED_CAST_TARGETS.has(finalTarget)) {
+            return true; // cast onto a non-allow-listed type → evasion
+        }
+    }
+    return false;
+}
+
+/**
+ * True when `src` constructs (or smuggles in) a raw pino logger. Pure +
+ * side-effect-free so the unit test can drive every branch directly.
+ *
+ *   (a) a bare `pino(` constructor call appears in REAL CODE, OR
  *   (b) a default `import <id> from 'pino'` is present AND `<id>` is later
- *       CALLED as `<id>(`.
+ *       CALLED as `<id>(` in REAL CODE, OR
+ *   (c) a `createLogger(...) as <X>` cast re-introduces a hand-rolled pino
+ *       logger via a non-allow-listed cast target (see castEvadesSharedLogger).
+ *
+ * Robustness: the `pino(` / renamed-call detection in (a)/(b) and the cast
+ * detection in (c) run over the COMMENT/STRING-STRIPPED text, so a `pino(`
+ * (or a `createLogger(...) as …`) inside a `// …` comment or a string/template
+ * literal does NOT match — only real code does. Import lines for (b) are read
+ * from the ORIGINAL `src`: an `import … from 'pino'` is never inside a comment
+ * or string, and the regex needs the literal `'pino'` specifier that stripping
+ * would blank.
  *
  * A NAMED/type import alone (`import { Logger } from 'pino'`, `import type
  * { Logger } from 'pino'`) constructs nothing — there is no default binding and
  * no `pino(` call — so it returns false. `Logger` used as a type never trips it.
  */
 function fileConstructsRawPino(src) {
-    // (a) Bare `pino(` call — the literal subscription-service/src/index.ts
-    // offender (`const rootLogger = pino({ ... })`). This also covers the common
-    // `import pino from 'pino'` case, whose default binding is named `pino`.
-    if (BARE_PINO_CALL_RE.test(src)) {
+    // Blank out comments + string/template literals once; all shape detection
+    // below runs over this so a `pino(` / cast inside a comment or string can't
+    // false-positive. (b)'s import id is still read from the original `src`.
+    const code = stripCommentsAndStrings(src);
+
+    // (a) Bare `pino(` call in real code — the literal subscription-service/
+    // src/index.ts offender (`const rootLogger = pino({ ... })`). This also
+    // covers the common `import pino from 'pino'` case (default binding `pino`).
+    if (BARE_PINO_CALL_RE.test(code)) {
         return true;
     }
 
     // (b) Renamed default import used as a constructor: capture the local
-    // default-import identifier, then look for a call of it.
+    // default-import identifier from the ORIGINAL source, then look for a call
+    // of it in real code.
     const m = PINO_DEFAULT_IMPORT_RE.exec(src);
     if (m) {
         const id = m[1];
-        if (callRe(id).test(src)) {
+        if (callRe(id).test(code)) {
             return true;
         }
+    }
+
+    // (c) `createLogger(...) as <hand-rolled pino logger>` cast evasion. The
+    // legitimate dep-nesting reconciliation casts (`as Logger`,
+    // `as unknown as Logger`, `as any`, `as unknown`) are allow-listed and stay
+    // clean; any other cast target is flagged.
+    if (castEvadesSharedLogger(code)) {
+        return true;
     }
 
     return false;
@@ -235,6 +475,10 @@ if (require.main === module) {
 module.exports.__test = {
     PINO_DEFAULT_IMPORT_RE,
     BARE_PINO_CALL_RE,
+    CREATE_LOGGER_CAST_RE,
+    ALLOWED_CAST_TARGETS,
     collectTsFiles,
+    stripCommentsAndStrings,
+    castEvadesSharedLogger,
     fileConstructsRawPino,
 };

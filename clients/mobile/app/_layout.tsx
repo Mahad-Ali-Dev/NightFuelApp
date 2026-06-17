@@ -9,7 +9,7 @@ import { Alert, useColorScheme } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ThemeContext, getThemeColors, typography, spacing, borderRadius, shadows, ColorScheme } from '@/theme';
+import { ThemeContext, getThemeColors, getNightReadColors, typography, spacing, borderRadius, shadows, ColorScheme } from '@/theme';
 import { colors } from '@/theme/colors';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
@@ -46,9 +46,14 @@ const queryClient = new QueryClient({
 
 function RootLayout() {
   const systemScheme = useColorScheme();
-  const { isDarkTheme } = useThemeStore();
+  const { isDarkTheme, nightRead } = useThemeStore();
   const scheme = (isDarkTheme(systemScheme) ? 'dark' : 'light') as ColorScheme;
-  const themeColors = React.useMemo(() => getThemeColors(scheme), [scheme]);
+  // Night Read (when ON) swaps in the deep-red, melatonin-safe palette so every
+  // `useTheme()` consumer re-themes; when OFF this is exactly getThemeColors(scheme).
+  const themeColors = React.useMemo(
+    () => (nightRead ? getNightReadColors() : getThemeColors(scheme)),
+    [scheme, nightRead],
+  );
 
   // Memoized so the ThemeContext value is referentially stable across the root's
   // frequent re-renders (auth / notification / connectivity churn during startup).
@@ -62,7 +67,7 @@ function RootLayout() {
     spacing,
     borderRadius,
     shadows,
-  }), [scheme, themeColors]);
+  }), [scheme, nightRead, themeColors]);
 
   const { loadSession, user } = useAuthStore();
   const router = useRouter();

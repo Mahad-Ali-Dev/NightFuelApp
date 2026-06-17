@@ -18,6 +18,15 @@ export interface ScheduledSession {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * OPTIONAL uuid of the shift this session is linked to, or `null`/absent when
+   * unlinked. The CREATE side ((performance)/calendar.tsx) attaches it via the
+   * optional `shiftId` payload field; the field is kept optional here so both
+   * existing consumers AND the `200 []` body returned while the user-gated
+   * scheduled_sessions migration (notably its `shiftId` COLUMN) is un-run still
+   * type-check. Drives {@link getScheduledSessionsForShift}.
+   */
+  shiftId?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,4 +81,36 @@ export async function createScheduledSession(
     payload,
   );
   return data;
+}
+
+/**
+ * Fetch only the caller's scheduled sessions linked to a given `shiftId`.
+ *
+ * This is the inverse of the CREATE-side shift link (a session is attached to a
+ * shift via the optional `shiftId` payload field in {@link createScheduledSession});
+ * it is the data dependency for the shift-detail screen's "sessions on this
+ * shift" section. There is NO dedicated shift-scoped endpoint — this reuses the
+ * SAME `GET /v1/training/scheduled-sessions` read as {@link getScheduledSessions}
+ * and filters client-side, so it inherits that endpoint's contract:
+ *
+ *   - While the user-gated scheduled_sessions migration is un-run on the VPS,
+ *     the backend answers `200 []` (a missing table OR a missing `shiftId`
+ *     column degrades to an empty list server-side — see
+ *     services/shift-service/src/training.routes.ts). This read therefore
+ *     degrades to an honest empty list: it MUST NOT special-case a missing
+ *     endpoint and MUST NOT throw on `[]`.
+ *   - A non-array body is treated defensively as "no sessions" (returns `[]`)
+ *     rather than throwing, so a transiently malformed payload can't crash the
+ *     shift-detail screen.
+ *
+ * Real HTTP failures (network error, 4xx/5xx) are NOT swallowed — they
+ * propagate from {@link getScheduledSessions} so the screen's error branch can
+ * surface a retry. Only the `[]`/non-array body degrades silently.
+ */
+export async function getScheduledSessionsForShift(
+  shiftId: string,
+): Promise<ScheduledSession[]> {
+  const data = await getScheduledSessions();
+  if (!Array.isArray(data)) return [];
+  return data.filter((s) => s.shiftId === shiftId);
 }

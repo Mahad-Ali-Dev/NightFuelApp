@@ -13,10 +13,37 @@ const NUTRITION_GEN_STEPS = [
     'Balancing energy windows…',
     'Finalizing your plan…',
 ];
+
+/**
+ * Human-readable label for a linked session's `scheduledAt` ISO timestamp,
+ * rendered in the device's LOCAL timezone (e.g. "Sat, Jun 20 · 6:00 PM").
+ *
+ * Deliberately RE-IMPLEMENTED here (rather than imported) so this read-only
+ * shift-detail section has NO dependency on (performance)/calendar.tsx, which
+ * owns create/link. The format intentionally mirrors that screen's
+ * `formatSessionWhen` (toLocaleDateString + ' · ' + toLocaleTimeString) so the
+ * two surfaces read identically. Falls back to the raw string when the value
+ * is unparseable so a row never renders "Invalid Date".
+ */
+const formatSessionWhen = (iso: string): string => {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const date = d.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+    });
+    const time = d.toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+    });
+    return `${date} · ${time}`;
+};
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getCurrent } from '@/api/shifts';
+import { getScheduledSessionsForShift, type ScheduledSession } from '@/api/training';
 import { generatePlan } from '@/api/plans';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -30,6 +57,21 @@ export default function ShiftCalendarScreen() {
         queryKey: ['current-shift'],
         queryFn: getCurrent,
     });
+
+    // Read-only inverse of the calendar's create/link flow: the sessions the
+    // user has linked to THIS shift. Reuses getScheduledSessionsForShift (a
+    // client-side filter over GET /v1/training/scheduled-sessions), so it
+    // inherits that endpoint's honest contract — the backend answers `200 []`
+    // while the user-gated scheduled_sessions migration is un-run, which simply
+    // renders the zero-data state below (NOT an error). `enabled` gates the
+    // query on a present shift so it never fires (or references a missing id)
+    // before the current-shift query resolves.
+    const linkedSessionsQuery = useQuery({
+        queryKey: ['shift-linked-sessions', currentShift?.id],
+        queryFn: () => getScheduledSessionsForShift(currentShift!.id),
+        enabled: !!currentShift,
+    });
+    const linkedSessions: ScheduledSession[] = linkedSessionsQuery.data ?? [];
 
     const generateMutation = useMutation({
         mutationFn: (payload: any) => generatePlan(payload),
@@ -193,6 +235,61 @@ export default function ShiftCalendarScreen() {
                                     )}
                                 </LinearGradient>
                             </TouchableOpacity>
+
+                            {/* Training around this shift — READ-ONLY inverse of
+                                the calendar's create/link flow. Honest states
+                                mirror the rest of the app: loading → skeletons,
+                                error → retryable EmptyState, zero-data →
+                                EmptyState (also the normal state while the
+                                user-gated scheduled_sessions migration returns
+                                []). Create/link lives on (performance)/calendar
+                                — there is intentionally NO add affordance here. */}
+                            <Text style={[typography.h3, { color: colors.text.primary, marginTop: spacing['3xl'], marginBottom: spacing.md }]}>Training around this shift</Text>
+                            {linkedSessionsQuery.isLoading ? (
+                                <View style={{ gap: spacing.md }}>
+                                    <Skeleton width="100%" height={76} radius={borderRadius.xl} />
+                                    <Skeleton width="100%" height={76} radius={borderRadius.xl} />
+                                </View>
+                            ) : linkedSessionsQuery.isError ? (
+                                <EmptyState
+                                    icon="cloud-offline-outline"
+                                    title="Couldn't load sessions"
+                                    subtitle="We couldn't reach the sessions linked to this shift. Check your connection and try again."
+                                    actionLabel="Retry"
+                                    onAction={() => linkedSessionsQuery.refetch()}
+                                />
+                            ) : linkedSessions.length > 0 ? (
+                                <View style={{ gap: spacing.md }}>
+                                    {linkedSessions.map(session => (
+                                        <Card key={session.id} variant="glass" padding="lg">
+                                            <View style={styles.sessionRow}>
+                                                <View style={[styles.sessionIcon, { backgroundColor: withAlpha(colors.accent.coral, 0.14), borderColor: withAlpha(colors.accent.coral, 0.28) }]}>
+                                                    <Ionicons name="barbell-outline" size={20} color={colors.accent.coral} />
+                                                </View>
+                                                <View style={styles.sessionInfo}>
+                                                    <Text style={[typography.body, { color: colors.text.primary, fontWeight: '700' }]} numberOfLines={1}>
+                                                        {session.title}
+                                                    </Text>
+                                                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
+                                                        {formatSessionWhen(session.scheduledAt)}
+                                                    </Text>
+                                                    {session.notes ? (
+                                                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]} numberOfLines={2}>
+                                                            {session.notes}
+                                                        </Text>
+                                                    ) : null}
+                                                </View>
+                                            </View>
+                                        </Card>
+                                    ))}
+                                </View>
+                            ) : (
+                                <EmptyState
+                                    icon="calendar-outline"
+                                    title="No sessions linked to this shift yet"
+                                    subtitle="Sessions you link to this shift on your training calendar will appear here."
+                                />
+                            )}
                         </>
                     ) : (
                         <EmptyState
@@ -299,4 +396,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    // Linked-session row visual language, re-implemented locally (NOT imported
+    // from (performance)/calendar) to match its session-row look: a small accent
+    // icon box beside a title + formatted local "when" + optional notes.
+    sessionRow: { flexDirection: 'row', alignItems: 'center' },
+    sessionIcon: { width: 40, height: 40, borderRadius: borderRadius.lg, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginRight: spacing.lg },
+    sessionInfo: { flex: 1 },
 });

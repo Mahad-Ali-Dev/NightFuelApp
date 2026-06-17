@@ -23,7 +23,7 @@ export default function SettingsIndexScreen() {
     const router = useRouter();
 
     const { user } = useAuthStore();
-    const { theme, setTheme, isDarkTheme } = useThemeStore();
+    const { theme, setTheme, isDarkTheme, nightRead, setNightRead } = useThemeStore();
 
     const { data: profile } = useQuery({
         queryKey: ['user-profile'],
@@ -46,6 +46,7 @@ export default function SettingsIndexScreen() {
         url?: string;
         value?: string | boolean;
         isSwitch?: boolean;
+        subtitle?: string;
     };
 
     const SETTINGS_SECTIONS: { title: string; items: SettingItemType[] }[] = useMemo(() => [
@@ -64,6 +65,12 @@ export default function SettingsIndexScreen() {
                 { label: 'Notification Settings', icon: 'options-outline', route: '/(settings)/notification-preferences' },
                 { label: 'Connected Devices', icon: 'watch-outline', route: '/(settings)/devices' }, // Mock route for now
                 { label: 'Dark Mode', icon: 'moon-outline', isSwitch: true, value: true },
+                {
+                    label: 'Night Read',
+                    icon: 'eye-outline',
+                    isSwitch: true,
+                    subtitle: 'Deep-red palette that preserves your dark-adapted night vision on late shifts.',
+                },
             ]
         },
         {
@@ -137,21 +144,37 @@ export default function SettingsIndexScreen() {
                                 >
                                     <View style={styles.itemLeft}>
                                         <Ionicons name={item.icon as any} size={22} color={colors.text.primary} />
-                                        <Text style={[typography.body, { color: colors.text.primary, marginLeft: 12, fontWeight: '500' }]}>{item.label}</Text>
+                                        <View style={{ marginLeft: 12, flexShrink: 1 }}>
+                                            <Text style={[typography.body, { color: colors.text.primary, fontWeight: '500' }]}>{item.label}</Text>
+                                            {item.subtitle && (
+                                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>{item.subtitle}</Text>
+                                            )}
+                                        </View>
                                     </View>
 
-                                    {item.isSwitch ? (
-                                        <Switch
-                                            accessibilityRole="switch"
-                                            accessibilityLabel={item.label}
-                                            accessibilityState={{ checked: item.label === 'Dark Mode' ? theme === 'dark' : item.value as boolean }}
-                                            value={item.label === 'Dark Mode' ? theme === 'dark' : item.value as boolean}
-                                            onValueChange={(val) => {
-                                                if (item.label === 'Dark Mode') setTheme(val ? 'dark' : 'light');
-                                            }}
-                                            trackColor={{ false: colors.border.default, true: colors.accent.coral }}
-                                        />
-                                    ) : (
+                                    {item.isSwitch ? (() => {
+                                        // Single source of truth for the switch's on/off state so the
+                                        // visible `value` and the announced `accessibilityState.checked`
+                                        // can never diverge. Dark Mode keeps its placeholder `value:true`
+                                        // semantics; Night Read reflects the persisted flag.
+                                        const checked =
+                                            item.label === 'Dark Mode' ? theme === 'dark'
+                                            : item.label === 'Night Read' ? nightRead
+                                            : item.value as boolean;
+                                        return (
+                                            <Switch
+                                                accessibilityRole="switch"
+                                                accessibilityLabel={item.label}
+                                                accessibilityState={{ checked }}
+                                                value={checked}
+                                                onValueChange={(val) => {
+                                                    if (item.label === 'Dark Mode') setTheme(val ? 'dark' : 'light');
+                                                    else if (item.label === 'Night Read') setNightRead(val);
+                                                }}
+                                                trackColor={{ false: colors.border.default, true: colors.accent.coral }}
+                                            />
+                                        );
+                                    })() : (
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                             {item.value && <Text style={[typography.subhead, { color: colors.text.secondary, marginRight: 8 }]}>{item.value}</Text>}
                                             <Ionicons name="chevron-forward" size={20} color={colors.text.tertiary} />

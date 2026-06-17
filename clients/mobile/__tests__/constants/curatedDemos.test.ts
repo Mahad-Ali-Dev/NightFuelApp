@@ -274,3 +274,102 @@ describe('CURATED_DEMOS — GIF_PENDING tranche', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// (f) The widened FEDB-backed tranche (kind:'fedb_frames', verified:false)
+// ---------------------------------------------------------------------------
+//
+// A representative slice of the names added on top of the original FEDB-backed
+// block. Every one maps to a slug directory that already exists in FEDB_SLUGS
+// (exerciseDemos.ts), so it resolves to a 2-frame [0.jpg, 1.jpg] HTTPS pair with
+// NO new network fetch and ships verified:false (human GIF/video review is
+// user-gated). These live OUTSIDE the GRANDFATHERED block, so the cross-package
+// sync guard and pendingHumanReviewIds.json (YouTube ids only) both ignore them.
+describe('CURATED_DEMOS — widened FEDB-backed tranche', () => {
+  // Representative new keys spanning the added categories (press, squat,
+  // deadlift, rows, delts, biceps, triceps, chest, core, calves, kettlebell).
+  const NEW_FEDB_NAMES = [
+    'Smith Machine Bench Press',
+    'Front Squat (Clean Grip)',
+    'Glute Ham Raise',
+    'Lying T-Bar Row',
+    'Cable Rear Delt Fly',
+    'High Cable Curls',
+    'JM Press',
+    'Low Cable Crossover',
+    'Dead Bug',
+    'Smith Machine Calf Raise',
+    'Kettlebell Windmill',
+    'Battling Ropes',
+  ] as const;
+
+  // Per-frame shape: each frame is an HTTPS raw.githubusercontent FEDB JPG. The
+  // capture group is the slug dir so we can assert BOTH frames share one slug.
+  const FEDB_SINGLE_FRAME_RE =
+    /^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\/main\/exercises\/([^/]+)\/([01])\.jpg$/;
+
+  test.each(NEW_FEDB_NAMES)('getCuratedDemo(%j) is a verified:false kind:"fedb_frames" entry', (name) => {
+    const demo = getCuratedDemo(name);
+    expect(demo).not.toBeNull();
+    expect(demo!.kind).toBe('fedb_frames');
+    expect(demo!.verified).toBe(false);
+    // Stored shape is the pipe-joined 0.jpg|1.jpg pair (same contract the suite
+    // asserts globally), and every segment is HTTPS (ATS-safe).
+    expect(demo!.url).toMatch(FEDB_FRAME_PAIR_RE);
+    for (const part of demo!.url.split('|')) {
+      expect(part.startsWith('https://')).toBe(true);
+    }
+  });
+
+  test.each(NEW_FEDB_NAMES)(
+    'getCuratedDemoFrames(%j) yields an ordered 2-element HTTPS [0.jpg, 1.jpg] pair',
+    (name) => {
+      const frames = getCuratedDemoFrames(name);
+      expect(frames).not.toBeNull();
+      // Exactly two frames: start (0.jpg) then end (1.jpg).
+      expect(frames!.length).toBe(2);
+
+      const m0 = FEDB_SINGLE_FRAME_RE.exec(frames![0]!);
+      const m1 = FEDB_SINGLE_FRAME_RE.exec(frames![1]!);
+      expect(m0).not.toBeNull();
+      expect(m1).not.toBeNull();
+      // Both HTTPS.
+      expect(frames![0]!.startsWith('https://')).toBe(true);
+      expect(frames![1]!.startsWith('https://')).toBe(true);
+      // Ordered 0 → 1.
+      expect(m0![2]).toBe('0');
+      expect(m1![2]).toBe('1');
+      // Same slug directory for both frames (a real start/end pair, not two
+      // different exercises).
+      expect(m0![1]).toBe(m1![1]);
+      expect(m0![1]!.length).toBeGreaterThan(0);
+    },
+  );
+
+  test.each(NEW_FEDB_NAMES)('getCuratedDemoVerified(%j) === false (renders the "Unreviewed" chip)', (name) => {
+    expect(getCuratedDemoVerified(name)).toBe(false);
+  });
+
+  test('resolution is case-insensitive / whitespace-trimmed for the new tranche', () => {
+    expect(getCuratedDemo('  smith MACHINE bench press ')).toEqual(getCuratedDemo('Smith Machine Bench Press'));
+  });
+
+  test('none of the new FEDB names collide with a grandfathered (verified:true) entry', () => {
+    // The precedence rule in buildCuratedDemos() keeps a grandfathered entry over
+    // a same-named FEDB one; assert the representative slice did NOT land on a
+    // verified YouTube key (which would silently drop the fedb_frames mapping).
+    for (const name of NEW_FEDB_NAMES) {
+      const demo = getCuratedDemo(name);
+      expect(demo).not.toBeNull();
+      expect(demo!.kind).toBe('fedb_frames');
+    }
+  });
+
+  test('the FEDB-backed tranche is large (the widening actually took effect)', () => {
+    const fedbEntries = CURATED_ENTRIES.filter(([, d]) => d.kind === 'fedb_frames');
+    // Original block was ~152; the widening adds dozens more. Assert a healthy
+    // floor so a future refactor that drops the new tranche fails loudly,
+    // without pinning an exact count that legitimate edits would churn.
+    expect(fedbEntries.length).toBeGreaterThanOrEqual(200);
+  });
+});
