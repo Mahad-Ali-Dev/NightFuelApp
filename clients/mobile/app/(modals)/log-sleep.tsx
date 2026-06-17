@@ -463,6 +463,7 @@ export default function LogSleepModal() {
                             {/* Notes */}
                             <Text style={[styles.fieldLabel, typography.caption, { color: colors.text.secondary, marginTop: 16 }]}>RECOVERY NOTES</Text>
                             <TextInput
+                                accessibilityLabel="Recovery notes"
                                 style={[styles.notesInput, {
                                     backgroundColor: colors.background.primary,
                                     borderColor: fieldErrors.notes ? colors.accent.red : colors.border.default,

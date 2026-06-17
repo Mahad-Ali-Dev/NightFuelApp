@@ -108,8 +108,12 @@ export function registerFastifyErrorHandler(fastify: FastifyLike, logger: Logger
         const statusCode: number = error.statusCode ?? 500;
         // Information-disclosure hardening: never echo raw error text (DB/Prisma
         // internals, stack hints) in a 5xx body. The real error is already logged
-        // above. For 4xx we keep the specific message so validation/auth UX copy
-        // is preserved.
+        // above. For 4xx we keep the specific message ONLY for genuine validation
+        // errors (Fastify sets `error.validation`), whose messages are safe,
+        // user-facing schema copy. A non-validation 4xx (e.g. a thrown
+        // 'connect ECONNREFUSED 127.0.0.1:5432' or a Prisma 'not found' surfaced
+        // with statusCode 400) would otherwise leak internals verbatim, so it
+        // gets the same generic redaction treatment.
         if (statusCode >= 500) {
             reply.code(statusCode).send({
                 error: 'InternalServerError',
@@ -118,9 +122,17 @@ export function registerFastifyErrorHandler(fastify: FastifyLike, logger: Logger
             });
             return;
         }
+        if (error.validation) {
+            reply.code(statusCode).send({
+                error: error.name ?? 'InternalServerError',
+                message: error.message ?? 'An unexpected error occurred',
+                statusCode,
+            });
+            return;
+        }
         reply.code(statusCode).send({
-            error: error.name ?? 'InternalServerError',
-            message: error.message ?? 'An unexpected error occurred',
+            error: error.name ?? 'BadRequest',
+            message: 'Bad request',
             statusCode,
         });
     });

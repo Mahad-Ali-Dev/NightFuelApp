@@ -308,6 +308,9 @@ export default function LogShiftModal() {
                         <Switch
                             value={isDayOff}
                             onValueChange={setIsDayOff}
+                            accessibilityRole="switch"
+                            accessibilityLabel="Rest day (day off)"
+                            accessibilityState={{ checked: isDayOff }}
                             trackColor={{ false: colors.border.default, true: colors.accent.cyan }}
                             thumbColor={colors.text.primary}
                         />
@@ -326,6 +329,7 @@ export default function LogShiftModal() {
                     >
                         <Ionicons name="car-outline" size={20} color={colors.text.secondary} />
                         <TextInput
+                            accessibilityLabel="Commute time in minutes"
                             style={[styles.textInput, { color: colors.text.primary }]}
                             value={commuteMinutes}
                             onChangeText={(v) => {

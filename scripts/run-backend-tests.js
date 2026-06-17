@@ -150,6 +150,41 @@ function runServiceTests(svc) {
     return { exitCode, combined, summary };
 }
 
+/**
+ * Run an idempotent `npx prisma generate` for a Prisma-backed service whose
+ * generated client (src/generated/prisma) is absent. `prisma generate` is
+ * safe to re-run — it only (re)writes the generated client from the committed
+ * schema, never touches the database — so calling it here closes the
+ * fail-OPEN hole where a clean checkout would silently no-op the service's
+ * suite. We invoke `npx prisma` with cwd=svc.dir so the per-service schema's
+ * `output = "../src/generated/prisma"` resolves to exactly the path the caller
+ * re-checks, and npx resolves either the workspace-hoisted prisma or a
+ * service-local one via node_modules/.bin.
+ *
+ * Output is captured (not inherited) so a successful generate stays quiet —
+ * consistent with the rest of the gate, which swallows per-service logs on
+ * success — and the captured buffer is returned so the caller can dump it when
+ * generation fails. Returns { exitCode, combined }.
+ */
+function generatePrismaClient(svc) {
+    const args = ['--no-install', 'prisma', 'generate'];
+    const result = spawnSync('npx', args, {
+        cwd: svc.dir,
+        encoding: 'utf8',
+        // shell:true so the `npx`/`npx.cmd` shim resolves on Windows and POSIX
+        // alike — same rationale as runServiceTests. Every arg is controlled.
+        shell: true,
+        stdio: 'pipe',
+        // prisma generate downloads/uses the query engine and writes the client;
+        // bound it well under the per-service test timeout.
+        timeout: 5 * 60 * 1000,
+    });
+
+    const combined = `${result.stdout || ''}\n${result.stderr || ''}`;
+    const exitCode = typeof result.status === 'number' ? result.status : 1;
+    return { exitCode, combined };
+}
+
 function main() {
     const services = discoverServices();
 
@@ -174,23 +209,36 @@ function main() {
 
         // A jest suite that touches the service's Prisma layer cannot even be
         // collected if `prisma generate` has never run for that service (the
-        // generated client under src/generated/prisma is .gitignored). Rather
-        // than letting that surface as an opaque module-not-found FAIL, detect
-        // the missing client up front and emit an explicit, named SKIP line so
-        // the gate output makes the cause obvious. This is NOT counted as a
-        // failure — a fresh checkout that hasn't generated clients yet should
-        // not break the gate on that basis alone. In CI (and locally after
-        // `npm run build`) the client is present and the service runs normally.
+        // generated client under src/generated/prisma is .gitignored). The old
+        // behaviour here logged SKIP and `continue`d — a fail-OPEN hole that
+        // silently no-opped every schema-bearing service's suite on a clean
+        // checkout, masking real failures. We now fail CLOSED: when a service
+        // ships a schema but is missing its generated client, regenerate it
+        // idempotently and re-check, and if it still cannot be produced we
+        // record a FAIL (never a silent SKIP-as-pass).
         //
         // Guard narrowly: only Prisma-backed services (those that ship a
         // prisma/schema.prisma) can have an "absent generated client" problem.
         // A stateless service with no schema (e.g. decision-engine) has nothing
-        // to generate and must still run — so we never skip it on this basis.
+        // to generate and must still run — so this branch never touches it and
+        // such services always fall through to runServiceTests below.
         const hasPrismaSchema = fs.existsSync(path.join(svc.dir, 'prisma', 'schema.prisma'));
-        const hasGeneratedClient = fs.existsSync(path.join(svc.dir, 'src', 'generated', 'prisma'));
-        if (hasPrismaSchema && !hasGeneratedClient) {
-            console.log(`SKIP ${svc.name}: generated prisma client absent`);
-            continue;
+        const generatedClientPath = path.join(svc.dir, 'src', 'generated', 'prisma');
+        if (hasPrismaSchema && !fs.existsSync(generatedClientPath)) {
+            console.log(`run-backend-tests: ${svc.name} missing generated prisma client — running prisma generate`);
+            const gen = generatePrismaClient(svc);
+
+            // Re-check on disk rather than trusting the exit code alone: the
+            // contract is "the client the test suite imports now exists".
+            if (!fs.existsSync(generatedClientPath)) {
+                anyFailed = true;
+                console.error(
+                    `FAIL ${svc.name}: prisma client still absent after prisma generate (exit ${gen.exitCode})`,
+                );
+                failureLogs.push({ name: `${svc.name} (prisma generate)`, combined: gen.combined });
+                continue;
+            }
+            // Client present now — fall through and run the suite normally.
         }
 
         const { exitCode, combined, summary } = runServiceTests(svc);
@@ -241,4 +289,5 @@ if (require.main === module) {
 module.exports.__test = {
     discoverServices,
     parseSuiteSummary,
+    generatePrismaClient,
 };

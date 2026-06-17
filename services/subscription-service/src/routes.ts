@@ -377,10 +377,17 @@ export async function subscriptionRoutes(
           subscription,
         });
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to cancel subscription';
+        // Branch on the cause, but NEVER reflect err.message on the wire — the
+        // service throws `No subscription found for user ${userId}`, which would
+        // leak the internal userId. Log the real cause server-side, ship a fixed
+        // human-readable literal to the client.
+        const causeMessage = err instanceof Error ? err.message : '';
 
-        if (message.includes('No subscription found')) {
-          return reply.status(404).send({ statusCode: 404, error: 'Not Found', message });
+        if (causeMessage.includes('No subscription found')) {
+          log.error({ userId, err }, 'routes: POST /cancel – no active subscription');
+          return reply
+            .status(404)
+            .send({ statusCode: 404, error: 'Not Found', message: 'No active subscription found' });
         }
 
         log.error({ userId, err }, 'routes: POST /cancel – unexpected error');

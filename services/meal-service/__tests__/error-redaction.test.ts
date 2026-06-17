@@ -159,27 +159,57 @@ describe('meal-service shared error handler — 500 leak redaction (registerFast
             });
         });
 
-        // TODO(security-hardening): the shared registerFastifyErrorHandler
-        // currently reflects `error.message` on EVERY <500 branch, even when
-        // `error.validation` is falsy (see packages/config/src/server.ts
-        // ~line 122). The inline notification-service / user-service /
-        // subscription-service handlers tightened this so non-validation 4xx
-        // errors emit a generic 'Bad request' (or similar) instead — which is
-        // the correct behaviour for the shared handler too. When that
-        // tightening lands in `@nightfuel/config`, flip the expectation
-        // below to assert the generic copy + add the ECONNREFUSED / 127.0.0.1
-        // / 5432 negative-match assertions. Until then we lock in the
-        // CURRENT (leaky) behaviour so nobody breaks the contract
-        // accidentally.
-        it('Non-validation 4xx: message IS reflected today (known shared-handler divergence — see TODO above)', async () => {
+        // Non-validation 4xx (no `error.validation`) is now redacted by the
+        // shared registerFastifyErrorHandler (packages/config/src/server.ts):
+        // the status code and `error.name` are preserved, but `error.message`
+        // is replaced with a fixed generic 'Bad request' so a thrown
+        // 'connect ECONNREFUSED 127.0.0.1:5432' (or a Prisma 'not found'
+        // surfaced as a 400) can no longer leak internals verbatim. The real
+        // error is still logged server-side via logger.error({ err }).
+        it('Non-validation 4xx: message is redacted to a generic body (positive match)', async () => {
             const res = await app.inject({ method: 'GET', url: '/bad-internal' });
 
             expect(res.statusCode).toBe(400);
             expect(res.json()).toEqual({
                 error: 'InternalError',
-                message: 'connect ECONNREFUSED 127.0.0.1:5432',
+                message: 'Bad request',
                 statusCode: 400,
             });
+        });
+
+        it('Non-validation 4xx body does NOT contain the thrown err.message (negative #1)', async () => {
+            const res = await app.inject({ method: 'GET', url: '/bad-internal' });
+            expect(res.body).not.toContain('connect ECONNREFUSED 127.0.0.1:5432');
+        });
+
+        it('Non-validation 4xx body does NOT contain "ECONNREFUSED" (negative #2)', async () => {
+            const res = await app.inject({ method: 'GET', url: '/bad-internal' });
+            expect(res.body).not.toContain('ECONNREFUSED');
+        });
+
+        it('Non-validation 4xx body does NOT contain "127.0.0.1" (negative #3)', async () => {
+            const res = await app.inject({ method: 'GET', url: '/bad-internal' });
+            expect(res.body).not.toContain('127.0.0.1');
+        });
+
+        it('Non-validation 4xx body does NOT contain "5432" (negative #4 — DB port hint)', async () => {
+            const res = await app.inject({ method: 'GET', url: '/bad-internal' });
+            expect(res.body).not.toContain('5432');
+        });
+
+        it('Non-validation 4xx body does NOT contain "Prisma" (negative #5)', async () => {
+            const res = await app.inject({ method: 'GET', url: '/bad-internal' });
+            expect(res.body).not.toContain('Prisma');
+        });
+
+        it('Non-validation 4xx body does NOT contain "stack" (negative #6)', async () => {
+            const res = await app.inject({ method: 'GET', url: '/bad-internal' });
+            expect(res.body).not.toContain('stack');
+        });
+
+        it('Non-validation 4xx body does NOT contain "at /" (negative #7 — strips stack-frame paths)', async () => {
+            const res = await app.inject({ method: 'GET', url: '/bad-internal' });
+            expect(res.body).not.toContain('at /');
         });
     });
 });

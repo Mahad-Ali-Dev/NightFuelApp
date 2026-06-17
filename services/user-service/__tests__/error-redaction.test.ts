@@ -24,6 +24,8 @@
  * comment in src/index.ts pointing reviewers here.
  */
 import Fastify, { FastifyInstance } from 'fastify';
+import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import { userRoutes } from '../src/routes';
 
 // Same leaky string the previous handler used to reflect — every substring
 // here is an attack signal the redactor MUST strip.
@@ -169,5 +171,115 @@ describe('user-service global error handler — 500 leak redaction', () => {
             expect(res.body).not.toContain('127.0.0.1');
             expect(res.body).not.toContain('5432');
         });
+    });
+});
+
+/**
+ * In-route 4xx redaction — the per-route 404 catch branches (src/routes.ts).
+ *
+ * The global handler above only fires for errors that bubble OUT of a handler.
+ * Several user routes instead CATCH the service error and pick a 404 status from
+ * `err.message === 'Profile not found'` / `err.message.includes('not found')`,
+ * then previously sent `error: err.message` straight back. UserService throws
+ * generic strings today, but echoing err.message verbatim is the leak vector the
+ * brief flags: any future change to the thrown text (or a Prisma error matching
+ * the loose `.includes('not found')` guard on the preferences route) would reach
+ * the client. The fix decouples the status decision from the body — each 404 now
+ * sends a FIXED literal.
+ *
+ * This block mounts the REAL `userRoutes` plugin against a mocked service that
+ * throws a leaky message, and asserts the 404 body is exactly the fixed literal
+ * with none of the raw fragments. It would FAIL against the old
+ * `error: err.message` code and PASS after the fix. UserService is fully mocked,
+ * so no DB/Redis is touched.
+ */
+describe('user-service in-route 404 branches — message redaction', () => {
+    // The PUT /me/preferences guard is the loose `.includes('not found')` one, so
+    // a Prisma-shaped "...not found..." string would have matched and leaked.
+    const LEAKY_PREFS_MESSAGE =
+        'Record to update not found — Prisma at /srv/app localhost:5432';
+
+    function buildMockService() {
+        return {
+            getProfileWithPreferences: jest.fn(),
+            getStatus: jest.fn(),
+            updateProfile: jest.fn(),
+            getPreferences: jest.fn(),
+            updatePreferences: jest.fn(),
+            updateOnboarding: jest.fn(),
+            getStudents: jest.fn(),
+            assignProtocol: jest.fn(),
+            getAdminStats: jest.fn(),
+            getAdminUsers: jest.fn(),
+            toggleBanUser: jest.fn(),
+            getAllUsersInternal: jest.fn(),
+        };
+    }
+
+    let app: FastifyInstance;
+    let svc: ReturnType<typeof buildMockService>;
+
+    beforeEach(async () => {
+        svc = buildMockService();
+        app = Fastify({ logger: false });
+        app.setValidatorCompiler(validatorCompiler);
+        app.setSerializerCompiler(serializerCompiler);
+        // Stand-in for the real `authenticate` decorator: attach a user so the
+        // shared extractUserId() succeeds and the handler proceeds to the service.
+        app.decorate('authenticate', async (request: any) => {
+            request.user = { userId: '33333333-3333-3333-3333-333333333333', role: 'USER' };
+        });
+        await app.register(
+            async (instance) => {
+                await userRoutes(instance, { userService: svc as any });
+            },
+            { prefix: '/v1/users' }
+        );
+        await app.ready();
+    });
+
+    afterEach(async () => {
+        await app.close();
+    });
+
+    it('PUT /me 404: body is the fixed "Profile not found" literal, not err.message', async () => {
+        // updateProfile throws the exact-match 'Profile not found' string; the
+        // route must reply with the fixed literal (here it happens to equal the
+        // thrown text, but the route no longer ECHOES err.message — proven below
+        // by the preferences route where the thrown text differs).
+        svc.updateProfile.mockRejectedValueOnce(new Error('Profile not found'));
+
+        const res = await app.inject({
+            method: 'PUT',
+            url: '/v1/users/me',
+            payload: { displayName: 'Updated Name' },
+        });
+
+        expect(res.statusCode).toBe(404);
+        expect(res.json()).toEqual({ error: 'Profile not found' });
+    });
+
+    it('PUT /me/preferences 404: leaky "...not found..." is replaced by the fixed literal', async () => {
+        // This is the strongest assertion: the loose `.includes('not found')`
+        // guard still selects 404, but the body must be the FIXED literal —
+        // NOT the raw Prisma-shaped thrown message. Fails against `error: err.message`.
+        svc.updatePreferences.mockRejectedValueOnce(new Error(LEAKY_PREFS_MESSAGE));
+
+        const res = await app.inject({
+            method: 'PUT',
+            url: '/v1/users/me/preferences',
+            payload: { primaryGoal: 'GENERAL_HEALTH' },
+        });
+
+        expect(res.statusCode).toBe(404);
+        expect(res.json()).toEqual({ error: 'Preferences not found' });
+        // Hard guard: none of the raw fragments may reach the wire.
+        expect(res.body).not.toContain(LEAKY_PREFS_MESSAGE);
+        expect(res.body).not.toContain('Prisma');
+        expect(res.body).not.toContain('stack');
+        expect(res.body).not.toContain('localhost');
+        expect(res.body).not.toContain('5432');
+        expect(res.body).not.toContain('at /');
+        expect(res.body).not.toContain('Record to update');
     });
 });

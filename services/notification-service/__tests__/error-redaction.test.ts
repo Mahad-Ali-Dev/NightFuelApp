@@ -24,6 +24,8 @@
  * comment in src/index.ts pointing reviewers here.
  */
 import Fastify, { FastifyInstance } from 'fastify';
+import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import { notificationRoutes } from '../src/routes';
 
 // Same leaky string the previous handler used to reflect — every substring
 // here is an attack signal the redactor MUST strip.
@@ -182,5 +184,123 @@ describe('notification-service global error handler — 500 leak redaction', () 
             expect(res.body).not.toContain('127.0.0.1');
             expect(res.body).not.toContain('5432');
         });
+    });
+});
+
+/**
+ * In-route 4xx redaction — the mark-as-read 404 catch (src/routes.ts).
+ *
+ * The global handler above only fires for errors that bubble OUT of a handler;
+ * the PUT /:id/read route instead CATCHES the service error itself and chooses a
+ * 404 vs 500 status from `err.message?.includes('not found' | 'does not belong')`.
+ * The previous code then sent `error: err.message` — which leaks the raw service
+ * string. NotificationService throws "Notification <uuid> not found" /
+ * "Notification <uuid> does not belong to this user", so the verbatim echo would
+ * leak the notification UUID (and, if the service text ever changed, anything in
+ * it). The fix decouples the status decision from the body: the 404 body is now a
+ * FIXED literal 'Notification not found'.
+ *
+ * This block mounts the REAL `notificationRoutes` plugin against a mocked service
+ * that throws the leaky string, and asserts the 404 body is exactly the fixed
+ * literal with none of the raw fragments. It would FAIL against the old
+ * `error: err.message` code and PASS after the fix.
+ */
+describe('notification-service mark-as-read 404 — in-route message redaction', () => {
+    // A deliberately leaky thrown message in the SAME shape the service emits,
+    // padded with attack-signal fragments that must never reach the wire.
+    const LEAKY_404_MESSAGE =
+        'Notification 11111111-1111-1111-1111-111111111111 not found — Prisma at /srv localhost:5432';
+    const FIXED_404_BODY = { error: 'Notification not found' };
+    // A valid UUID so the route's params zod schema passes and the handler runs.
+    const VALID_ID = '22222222-2222-2222-2222-222222222222';
+
+    function buildMockService() {
+        return {
+            listNotifications: jest.fn(),
+            markAsRead: jest.fn(),
+            markAllAsRead: jest.fn(),
+            getOrCreatePreferences: jest.fn(),
+            updatePreferences: jest.fn(),
+        };
+    }
+
+    let app: FastifyInstance;
+    let svc: ReturnType<typeof buildMockService>;
+
+    beforeEach(async () => {
+        svc = buildMockService();
+        app = Fastify({ logger: false });
+        app.setValidatorCompiler(validatorCompiler);
+        app.setSerializerCompiler(serializerCompiler);
+        // Stand-in for the real `authenticate` decorator: attach a user so the
+        // handler's userId extraction succeeds, then proceed.
+        app.decorate('authenticate', async (request: any) => {
+            request.user = { id: '33333333-3333-3333-3333-333333333333' };
+        });
+        // pushService is referenced by the plugin but not exercised on this route.
+        await app.register(
+            async (instance) => {
+                await notificationRoutes(instance, {
+                    notificationService: svc as any,
+                    pushService: { getVapidPublicKey: () => null } as any,
+                });
+            },
+            { prefix: '/v1/notifications' }
+        );
+        await app.ready();
+    });
+
+    afterEach(async () => {
+        await app.close();
+    });
+
+    it('PUT /:id/read 404: body equals the fixed literal, not err.message', async () => {
+        svc.markAsRead.mockRejectedValueOnce(new Error(LEAKY_404_MESSAGE));
+
+        const res = await app.inject({
+            method: 'PUT',
+            url: `/v1/notifications/${VALID_ID}/read`,
+        });
+
+        // Status decision is still driven by the 'not found' guard...
+        expect(res.statusCode).toBe(404);
+        // ...but the body is the FIXED generic, byte-for-byte.
+        expect(res.json()).toEqual(FIXED_404_BODY);
+        expect(svc.markAsRead).toHaveBeenCalledTimes(1);
+    });
+
+    it('PUT /:id/read 404: raw message / Prisma / stack / conn-string never leak', async () => {
+        svc.markAsRead.mockRejectedValueOnce(new Error(LEAKY_404_MESSAGE));
+
+        const res = await app.inject({
+            method: 'PUT',
+            url: `/v1/notifications/${VALID_ID}/read`,
+        });
+
+        expect(res.body).not.toContain(LEAKY_404_MESSAGE);
+        // The notification UUID embedded in the service message must not surface.
+        expect(res.body).not.toContain('11111111-1111-1111-1111-111111111111');
+        expect(res.body).not.toContain('Prisma');
+        expect(res.body).not.toContain('stack');
+        expect(res.body).not.toContain('localhost');
+        expect(res.body).not.toContain('5432');
+        expect(res.body).not.toContain('at /');
+    });
+
+    it('PUT /:id/read "does not belong" 404 also redacts to the fixed literal', async () => {
+        // The second guarded branch — ownership mismatch — must redact identically.
+        svc.markAsRead.mockRejectedValueOnce(
+            new Error('Notification 11111111-1111-1111-1111-111111111111 does not belong to this user')
+        );
+
+        const res = await app.inject({
+            method: 'PUT',
+            url: `/v1/notifications/${VALID_ID}/read`,
+        });
+
+        expect(res.statusCode).toBe(404);
+        expect(res.json()).toEqual(FIXED_404_BODY);
+        expect(res.body).not.toContain('does not belong');
+        expect(res.body).not.toContain('11111111-1111-1111-1111-111111111111');
     });
 });

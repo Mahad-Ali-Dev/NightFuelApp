@@ -298,9 +298,55 @@ export const getHeatmap = async () => {
   return data;
 };
 
-export const getAnalytics = async (exerciseName: string) => {
-  const { data } = await apiClient.get(`/v1/exercises/analytics/${encodeURIComponent(exerciseName)}`);
+/**
+ * A single per-set analytics row as returned by
+ * `GET /v1/exercises/analytics/:exerciseName`
+ * (exercise-service `getExerciseAnalytics`). Rows are ordered by the parent
+ * workout's `completedAt` ASCENDING, so the LAST element is the most recent
+ * logged set across ALL prior sessions. Fields mirror the server shape; numeric
+ * fields can be 0 and `date` may be a Date or ISO string depending on transport.
+ */
+export interface ExerciseAnalyticsRow {
+  id: string;
+  date: string | null;
+  /** Heaviest weight (kg) logged for that set; server maps `weightKg || 0`. */
+  maxWeight: number;
+  volume: number;
+  reps: number;
+  sets: number;
+}
+
+export const getAnalytics = async (exerciseName: string): Promise<ExerciseAnalyticsRow[]> => {
+  const { data } = await apiClient.get<ExerciseAnalyticsRow[]>(
+    `/v1/exercises/analytics/${encodeURIComponent(exerciseName)}`,
+  );
   return data;
+};
+
+/** The most-recent cross-session set for an exercise, normalised for the UI. */
+export interface LastSet {
+  weightKg: number;
+  reps: number;
+}
+
+/**
+ * Resolve the most-recent cross-session set for an exercise from the existing
+ * analytics endpoint. Because {@link getAnalytics} returns rows ordered by
+ * `completedAt` ASC, the LAST row is the most recent. Maps the server's
+ * `maxWeight` → `weightKg` and passes `reps` through.
+ *
+ * Returns `null` when the user has no logged history for this exercise (empty
+ * array) or the name is blank — callers should render '-' in that case and must
+ * NEVER fabricate a placeholder number.
+ */
+export const getLastSet = async (exerciseName: string): Promise<LastSet | null> => {
+  const name = exerciseName?.trim();
+  if (!name) return null;
+  const rows = await getAnalytics(name);
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const latest = rows[rows.length - 1];
+  if (!latest) return null;
+  return { weightKg: latest.maxWeight ?? 0, reps: latest.reps ?? 0 };
 };
 
 /** Fetch a single logged workout (with its exercises) for the report screen.

@@ -48,23 +48,36 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
 });
 
 // ── Shared schemas ─────────────────────────────────────────────────────────────
+// All write bodies are bounded: additive upper bounds + positivity only, so
+// valid app payloads stay valid while absurd/abusive values (a 9999-quality
+// score, a million disturbances, a megabyte of notes, or a free-text `source`
+// blob spread blind into Prisma) are rejected with a clean 400 instead of
+// reaching the DB. `quality` 1-10 and the preference numeric ranges were
+// already bounded; this closes `disturbances` (no max before) and `source`
+// (unbounded free text before).
+
+// A night can have at most this many recorded disturbances. Generous upper
+// bound — far beyond any real night — that still blocks integer-overflow abuse.
+const MAX_DISTURBANCES = 1000;
+// `source` is a short device/integration tag (e.g. 'MANUAL', 'APPLE_HEALTH').
+const MAX_SOURCE_LEN = 60;
 
 const createSessionSchema = z.object({
     startTime: z.string().datetime(),
     endTime: z.string().datetime().optional().nullable(),
     quality: z.number().int().min(1).max(10).optional().nullable(),
-    disturbances: z.number().int().min(0).optional(),
-    source: z.string().optional(),
+    disturbances: z.number().int().min(0).max(MAX_DISTURBANCES).optional(),
+    source: z.string().max(MAX_SOURCE_LEN).optional(),
     circadianSleepStart: z.string().datetime().optional().nullable(),
     circadianSleepEnd: z.string().datetime().optional().nullable(),
-    notes: z.string().max(1000).optional().nullable(),
+    notes: z.string().max(2000).optional().nullable(),
 });
 
 const updateSessionSchema = z.object({
     endTime: z.string().datetime().optional(),
     quality: z.number().int().min(1).max(10).optional(),
-    disturbances: z.number().int().min(0).optional(),
-    notes: z.string().max(1000).optional(),
+    disturbances: z.number().int().min(0).max(MAX_DISTURBANCES).optional(),
+    notes: z.string().max(2000).optional(),
 });
 
 const preferencesSchema = z.object({
@@ -164,8 +177,13 @@ fastify.withTypeProvider<ZodTypeProvider>().patch('/v1/sleep/:id', {
         return reply.send(session);
     } catch (err: any) {
         logger.error(err);
-        if (err.message.includes('not found')) {
-            return reply.code(404).send({ error: err.message });
+        // Undefined-guard: a non-Error throw has no `.message`, so calling
+        // `.includes` on it would itself throw and turn this 404 into an
+        // unhandled 500. Only branch when the message is a real string, and
+        // ALWAYS reply with the fixed copy — never echo err.message back to the
+        // client (the raw message can carry Prisma/internal detail).
+        if (typeof err?.message === 'string' && err.message.includes('not found')) {
+            return reply.code(404).send({ error: 'Sleep session not found' });
         }
         return reply.code(500).send({ error: 'An unexpected error occurred' });
     }

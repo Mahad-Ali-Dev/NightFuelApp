@@ -126,7 +126,8 @@ export const userRoutes = async (
                 request.log.error(err);
 
                 if (err.message === 'Profile not found') {
-                    return reply.code(404).send({ error: err.message });
+                    // Fixed literal — never echo err.message verbatim. Real error logged above.
+                    return reply.code(404).send({ error: 'Profile not found' });
                 }
 
                 return reply.code(500).send({ error: 'Internal server error' });
@@ -178,8 +179,9 @@ export const userRoutes = async (
                 return reply.code(200).send(prefs);
             } catch (err: any) {
                 request.log.error(err);
-                if (err.message.includes('not found')) {
-                    return reply.code(404).send({ error: err.message });
+                if (err.message?.includes('not found')) {
+                    // Fixed literal — never echo err.message verbatim. Real error logged above.
+                    return reply.code(404).send({ error: 'Preferences not found' });
                 }
                 return reply.code(500).send({ error: 'Internal server error' });
             }
@@ -206,7 +208,8 @@ export const userRoutes = async (
             } catch (err: any) {
                 request.log.error(err);
                 if (err.message === 'Profile not found') {
-                    return reply.code(404).send({ error: err.message });
+                    // Fixed literal — never echo err.message verbatim. Real error logged above.
+                    return reply.code(404).send({ error: 'Profile not found' });
                 }
                 return reply.code(500).send({ error: 'Internal server error' });
             }
@@ -356,7 +359,8 @@ export const userRoutes = async (
             } catch (err: any) {
                 request.log.error(err);
                 if (err.message === 'User not found') {
-                    return reply.code(404).send({ error: err.message });
+                    // Fixed literal — never echo err.message verbatim. Real error logged above.
+                    return reply.code(404).send({ error: 'User not found' });
                 }
                 return reply.code(500).send({ error: 'Internal server error' });
             }

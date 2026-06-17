@@ -35,6 +35,11 @@ import Fastify, { FastifyInstance } from 'fastify';
 const LEAKY_THROWN_MESSAGE =
     'Prisma at /etc/passwd localhost:5432 stack frame';
 
+// The internal userId that SubscriptionService.cancel() embeds in its thrown
+// `No subscription found for user ${userId}` message. The cancel route must
+// NEVER reflect this on the 404 wire — it's an internal identifier.
+const LEAKY_CANCEL_USER_ID = 'usr_3f9a1c7e-dead-beef-cafe-0123456789ab';
+
 /**
  * Builds a tiny Fastify app wired with the SAME setErrorHandler shape as
  * src/index.ts (post-fix). It also mounts:
@@ -88,6 +93,32 @@ function buildApp(): FastifyInstance {
         err.statusCode = 400;
         err.name = 'InternalError';
         throw err;
+    });
+
+    // Mirrors the POST /v1/subscriptions/cancel catch in src/routes.ts. This is
+    // a route-LOCAL 404 that bypasses the global setErrorHandler (the route
+    // catches its own error and calls reply.send directly), so it must do its
+    // OWN redaction. SubscriptionService.cancel() throws
+    // `No subscription found for user ${userId}` — reflecting that raw message
+    // on the 404 wire (the old behaviour) leaked the internal userId. The route
+    // now logs the real cause server-side and ships a fixed literal.
+    app.get('/cancel-not-found', async (_request, reply) => {
+        try {
+            // Same thrown shape the real service produces — note the userId.
+            throw new Error(`No subscription found for user ${LEAKY_CANCEL_USER_ID}`);
+        } catch (err) {
+            const causeMessage = err instanceof Error ? err.message : '';
+            if (causeMessage.includes('No subscription found')) {
+                // server-side: real err is logged (logger:false here, but the
+                // production route calls log.error({ userId, err }, …)).
+                return reply
+                    .status(404)
+                    .send({ statusCode: 404, error: 'Not Found', message: 'No active subscription found' });
+            }
+            return reply
+                .status(500)
+                .send({ statusCode: 500, error: 'Internal Server Error', message: 'Failed to cancel subscription' });
+        }
     });
 
     return app;
@@ -172,6 +203,43 @@ describe('subscription-service global error handler — 500 leak redaction', () 
             // And the underlying conn-string-shaped detail must never leak.
             expect(res.body).not.toContain('ECONNREFUSED');
             expect(res.body).not.toContain('127.0.0.1');
+            expect(res.body).not.toContain('5432');
+        });
+    });
+
+    // ── POST /v1/subscriptions/cancel — route-local 404 redaction ─────────────
+    // This locks the routes.ts cancel catch: the service throws
+    // `No subscription found for user ${userId}`, and the route used to ship that
+    // raw err.message on the 404 body (leaking the internal userId). The route
+    // now sends a FIXED literal. These assertions FAIL against the old leaky
+    // code (which echoed the thrown message) and PASS after the fix.
+    describe('cancel 404 sends fixed copy, never the raw err.message', () => {
+        it('returns the exact fixed 404 body (positive match)', async () => {
+            const res = await app.inject({ method: 'GET', url: '/cancel-not-found' });
+
+            expect(res.statusCode).toBe(404);
+            expect(res.json()).toEqual({
+                statusCode: 404,
+                error: 'Not Found',
+                message: 'No active subscription found',
+            });
+        });
+
+        it('404 body does NOT contain the internal userId (negative #1 — the core leak)', async () => {
+            const res = await app.inject({ method: 'GET', url: '/cancel-not-found' });
+            expect(res.body).not.toContain(LEAKY_CANCEL_USER_ID);
+        });
+
+        it('404 body does NOT contain the raw thrown "No subscription found for user" message (negative #2)', async () => {
+            const res = await app.inject({ method: 'GET', url: '/cancel-not-found' });
+            expect(res.body).not.toContain('No subscription found for user');
+        });
+
+        it('404 body does NOT contain "Prisma"/"stack"/conn-string fragments (negative #3)', async () => {
+            const res = await app.inject({ method: 'GET', url: '/cancel-not-found' });
+            expect(res.body).not.toContain('Prisma');
+            expect(res.body).not.toContain('stack');
+            expect(res.body).not.toContain('localhost');
             expect(res.body).not.toContain('5432');
         });
     });

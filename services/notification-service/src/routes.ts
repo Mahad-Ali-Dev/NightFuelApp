@@ -82,7 +82,12 @@ export const notificationRoutes = async (
                     err.message?.includes('not found') ||
                     err.message?.includes('does not belong')
                 ) {
-                    reply.code(404).send({ error: err.message });
+                    // The service embeds the notification UUID in the thrown
+                    // message ("Notification <id> not found"). Use the guard only
+                    // to pick the 404 status, then reply with a FIXED generic
+                    // literal so the raw message (and any future internal detail)
+                    // can never reach the client. The real error stays logged above.
+                    reply.code(404).send({ error: 'Notification not found' });
                 } else {
                     reply.code(500).send({ error: 'Failed to mark notification as read' });
                 }

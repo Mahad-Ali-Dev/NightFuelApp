@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     Dimensions,
@@ -17,6 +17,23 @@ const { width } = Dimensions.get('window');
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** Zero-pad a 1- or 2-digit number for ISO date assembly. */
+const pad2 = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+
+/**
+ * Build a `YYYY-MM-DD` string from LOCAL date parts. We deliberately avoid
+ * `Date.toISOString()` (which converts to UTC) so a cell's date matches the
+ * user's local calendar day rather than silently shifting across the date
+ * line. `month` is 0-indexed (JS convention).
+ */
+const toLocalISODate = (year: number, month: number, day: number) =>
+    `${year}-${pad2(month + 1)}-${pad2(day)}`;
+
 export default function TrainingCalendarScreen() {
     const { colors, typography, spacing, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
@@ -24,12 +41,48 @@ export default function TrainingCalendarScreen() {
 
     const [viewMode, setViewMode] = useState('Month');
 
+    // Displayed month/year. Seeded to the current month so the calendar opens
+    // on "today" rather than a hardcoded literal. `month` is 0-indexed.
+    const [cursor, setCursor] = useState(() => {
+        const now = new Date();
+        return { year: now.getFullYear(), month: now.getMonth() };
+    });
+
+    const goToPrevMonth = () =>
+        setCursor(({ year, month }) =>
+            month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 },
+        );
+
+    const goToNextMonth = () =>
+        setCursor(({ year, month }) =>
+            month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 },
+        );
+
     const historyQuery = useQuery({
         queryKey: ['activity-history'],
         queryFn: () => getHistory(30),
     });
 
     const history = historyQuery.data ?? [];
+
+    // Today's LOCAL ISO date for the highlight; recomputed only when the day
+    // boundary could plausibly matter (cursor change re-renders anyway).
+    const todayISO = useMemo(() => {
+        const now = new Date();
+        return toLocalISODate(now.getFullYear(), now.getMonth(), now.getDate());
+    }, []);
+
+    const monthLabel = `${MONTH_NAMES[cursor.month]} ${cursor.year}`;
+
+    // Real geometry for the displayed month: how many days it has, and how many
+    // leading blanks a Monday-first grid needs (JS getDay(): Sun=0..Sat=6 →
+    // Mon-first offset where Mon=0..Sun=6).
+    const { daysInMonth, leadingBlanks } = useMemo(() => {
+        const days = new Date(cursor.year, cursor.month + 1, 0).getDate();
+        const firstWeekday = new Date(cursor.year, cursor.month, 1).getDay();
+        const blanks = (firstWeekday + 6) % 7;
+        return { daysInMonth: days, leadingBlanks: blanks };
+    }, [cursor.year, cursor.month]);
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
@@ -68,14 +121,30 @@ export default function TrainingCalendarScreen() {
                     ))}
                 </View>
 
-                {/* Calendar Grid (Simulated) */}
+                {/* Calendar Grid */}
                 <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.xl }}>
                     <Card variant="glass" style={styles.calendarBox} padding="xl">
                         <View style={styles.calHeader}>
-                            <Text style={[typography.h3, { color: colors.text.primary }]}>March 2026</Text>
+                            <Text style={[typography.h3, { color: colors.text.primary }]}>{monthLabel}</Text>
                             <View style={{ flexDirection: 'row', gap: 16 }}>
-                                <Ionicons name="chevron-back" size={20} color={colors.text.secondary} />
-                                <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
+                                <TouchableOpacity
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Previous month"
+                                    activeOpacity={0.7}
+                                    onPress={goToPrevMonth}
+                                >
+                                    <Ionicons name="chevron-back" size={20} color={colors.text.secondary} />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Next month"
+                                    activeOpacity={0.7}
+                                    onPress={goToNextMonth}
+                                >
+                                    <Ionicons name="chevron-forward" size={20} color={colors.text.secondary} />
+                                </TouchableOpacity>
                             </View>
                         </View>
 
@@ -99,19 +168,25 @@ export default function TrainingCalendarScreen() {
                             />
                         ) : (
                             <View style={styles.grid}>
-                                {Array.from({ length: 31 }).map((_, i) => {
+                                {/* Leading blanks so day 1 lands under its real weekday. */}
+                                {Array.from({ length: leadingBlanks }).map((_, i) => (
+                                    <View key={`blank-${i}`} style={styles.dayCell} accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />
+                                ))}
+                                {Array.from({ length: daysInMonth }).map((_, i) => {
                                     const day = i + 1;
-                                    const hasActivity = history.some(h => new Date(h.date).getDate() === day);
+                                    const cellISO = toLocalISODate(cursor.year, cursor.month, day);
+                                    const hasActivity = history.some(h => h.date.slice(0, 10) === cellISO);
+                                    const isToday = cellISO === todayISO;
                                     return (
                                         <TouchableOpacity
-                                            key={i}
+                                            key={cellISO}
                                             activeOpacity={0.7}
                                             accessibilityRole="button"
                                             accessibilityLabel={`Day ${day}${hasActivity ? ', has activity' : ''}`}
-                                            accessibilityState={{ selected: isToday(day) }}
-                                            style={[styles.dayCell, isToday(day) && { backgroundColor: withAlpha(colors.accent.coral, 0.18), borderRadius: 12, borderWidth: 1, borderColor: withAlpha(colors.accent.coral, 0.35) }]}
+                                            accessibilityState={{ selected: isToday }}
+                                            style={[styles.dayCell, isToday && { backgroundColor: withAlpha(colors.accent.coral, 0.18), borderRadius: 12, borderWidth: 1, borderColor: withAlpha(colors.accent.coral, 0.35) }]}
                                         >
-                                            <Text style={[typography.body, { color: isToday(day) ? colors.accent.coral : colors.text.primary, fontWeight: isToday(day) ? '700' : '400' }]}>{day}</Text>
+                                            <Text style={[typography.body, { color: isToday ? colors.accent.coral : colors.text.primary, fontWeight: isToday ? '700' : '400' }]}>{day}</Text>
                                             {hasActivity && <View style={[styles.activityDot, { backgroundColor: colors.success }]} />}
                                         </TouchableOpacity>
                                     );
@@ -121,29 +196,23 @@ export default function TrainingCalendarScreen() {
                     </Card>
                 </View>
 
-                {/* Upcoming sessions */}
+                {/* Upcoming sessions — honest empty state.
+                    There is no planned-sessions read path in the mobile API layer
+                    (no getPlannedSessions / scheduledSessions endpoint exists), so
+                    we surface a truthful zero-data state rather than fabricating
+                    sessions. See risks: backend scheduled-sessions endpoint. */}
                 <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing['2xl'] }}>
                     <Text style={[typography.h3, { color: colors.text.primary, marginBottom: spacing.md }]}>Scheduled Sessions</Text>
-                    {[
-                        { title: 'Push Day - Hypertrophy', time: 'Tomorrow, 08:30', color: colors.accent.coral },
-                        { title: 'Full Body Power', time: 'Friday, 17:00', color: colors.accent.cyan },
-                    ].map((item, i) => (
-                        <View key={i} style={[styles.eventCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl }]}>
-                            <View style={[styles.eventAccent, { backgroundColor: item.color }]} />
-                            <View style={{ padding: 16, flex: 1 }}>
-                                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>{item.title}</Text>
-                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>{item.time}</Text>
-                            </View>
-                            <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} style={{ marginRight: 16 }} />
-                        </View>
-                    ))}
+                    <EmptyState
+                        icon="calendar-outline"
+                        title="No sessions scheduled"
+                        subtitle="Upcoming training sessions will appear here once scheduling is available."
+                    />
                 </View>
             </ScrollView>
         </View>
     );
 }
-
-const isToday = (day: number) => day === new Date().getDate();
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
@@ -158,6 +227,4 @@ const styles = StyleSheet.create({
     grid: { flexDirection: 'row', flexWrap: 'wrap' },
     dayCell: { width: (width - 80) / 7, height: 45, alignItems: 'center', justifyContent: 'center' },
     activityDot: { width: 4, height: 4, borderRadius: 2, position: 'absolute', bottom: 8 },
-    eventCard: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, borderWidth: 1, overflow: 'hidden' },
-    eventAccent: { width: 4, height: '100%' },
 });

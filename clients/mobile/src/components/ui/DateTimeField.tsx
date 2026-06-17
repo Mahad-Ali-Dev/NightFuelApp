@@ -108,6 +108,10 @@ export function DateTimeField({
       ? `Select date${value ? `, currently ${value}` : ''}`
       : `Select time${value ? `, currently ${value}` : ''}`);
 
+  // Hint announced after the label so a screen-reader user knows the trigger
+  // opens a picker (rather than, say, toggling a value in place).
+  const triggerA11yHint = mode === 'date' ? 'Opens a date picker' : 'Opens a time picker';
+
   const nowA11yLabel = mode === 'date' ? 'Use current date' : 'Use current time';
 
   const handlePickerChange = (event: DateTimePickerEvent, date?: Date) => {
@@ -135,6 +139,7 @@ export function DateTimeField({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={triggerA11yLabel}
+          accessibilityHint={triggerA11yHint}
           onPress={() => setOpen(true)}
           style={({ pressed }) => [
             styles.inputBox,

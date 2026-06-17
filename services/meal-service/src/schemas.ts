@@ -21,16 +21,24 @@ export const mealSearchResponseSchema = z.array(z.object({
     cuisineTags: z.array(z.string())
 }));
 
+// Server-side upper bounds on a single logged food item. Without these, absurd
+// values (e.g. quantity: 1e9, calories: 1e9) flow straight into the per-meal
+// totals aggregation and the DB. The caps are generous enough for any real
+// food entry while keeping a single item's contribution sane.
+const MAX_QUANTITY = 10000;   // servings/grams for one item
+const MAX_CALORIES = 20000;   // kcal for one item
+const MAX_MACRO_GRAMS = 2000; // grams of protein / carbs / fat for one item
+
 export const logMealBodySchema = z.object({
     mealType: z.enum(['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK']),
     foodItems: z.array(z.object({
         foodId: z.string().optional(), // Could be custom food without ID
         name: z.string(),
-        quantity: z.number().min(0.01),
-        calories: z.number().min(0),
-        protein: z.number().min(0),
-        carbs: z.number().min(0),
-        fat: z.number().min(0)
+        quantity: z.number().min(0.01).max(MAX_QUANTITY),
+        calories: z.number().min(0).max(MAX_CALORIES),
+        protein: z.number().min(0).max(MAX_MACRO_GRAMS),
+        carbs: z.number().min(0).max(MAX_MACRO_GRAMS),
+        fat: z.number().min(0).max(MAX_MACRO_GRAMS)
     })).min(1, "Must include at least one food item")
 });
 

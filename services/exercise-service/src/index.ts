@@ -268,12 +268,16 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines', {
 
 // ── AI Routine Generator ──────────────────────────────────────────────────────
 
+// goal/level/daysPerWeek are already bounded by enum/range. The two free-text
+// inputs (focusAreas[], equipment) flow into the AI prompt and createRoutine, so
+// bound their length too — short tags, capped array — to keep the prompt small
+// and reject abusive payloads with a clean 400.
 const generateRoutineSchema = z.object({
     goal:       z.enum(['strength', 'hypertrophy', 'endurance', 'fat_loss', 'general']).default('general'),
     level:      z.enum(['beginner', 'intermediate', 'advanced']).default('intermediate'),
     daysPerWeek: z.number().int().min(1).max(7).default(3),
-    focusAreas: z.array(z.string()).optional(),
-    equipment:  z.string().optional(),
+    focusAreas: z.array(z.string().max(60)).max(20).optional(),
+    equipment:  z.string().max(200).optional(),
 });
 
 // Deterministic routine used when the AI pipeline is unavailable, so the
@@ -358,10 +362,12 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generat
 
 // ── 1RM Logs ──────────────────────────────────────────────────────────────────
 
+// weightKg / estimated1RMKg are positive and capped at 1000 kg (mirrors the
+// weightKg bound elsewhere — no human lift exceeds it, so it only blocks abuse).
 const logOneRepMaxSchema = z.object({
-    exerciseName: z.string().min(1),
-    weightKg: z.number().positive(),
-    estimated1RMKg: z.number().positive()
+    exerciseName: z.string().min(1).max(120),
+    weightKg: z.number().positive().max(1000),
+    estimated1RMKg: z.number().positive().max(1000)
 });
 
 fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/1rm', {
@@ -391,8 +397,12 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/1rm', {
 
 // ── Workout Sessions ──────────────────────────────────────────────────────────
 
+// routineId is an optional FK to a routine row. Bound its length (a UUID is 36
+// chars; 64 leaves slack for any legacy id format) so an unbounded blob can't be
+// spread into the create. Left as a free string rather than .uuid() to keep any
+// loosely-formed client id passing — an unknown id still fails at the FK.
 const startSessionSchema = z.object({
-    routineId: z.string().optional()
+    routineId: z.string().max(64).optional()
 });
 
 fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/session/start', {
@@ -422,12 +432,16 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/session/active', 
     }
 });
 
+// Upper bounds mirror exerciseItemSchema (sets ≤100, reps ≤1000, weightKg ≤1000,
+// durationSecs ≤86400 = 24h) so a logged set can't carry absurd/abusive numbers
+// into the session-exercise row. min(0)+default(0) keep every valid client
+// payload (including omitted fields) passing.
 const logSessionExerciseSchema = z.object({
-    exerciseName: z.string().min(1),
-    sets: z.number().int().min(0).default(0),
-    reps: z.number().int().min(0).default(0),
-    weightKg: z.number().min(0).default(0),
-    durationSecs: z.number().int().min(0).default(0)
+    exerciseName: z.string().min(1).max(120),
+    sets: z.number().int().min(0).max(100).default(0),
+    reps: z.number().int().min(0).max(1000).default(0),
+    weightKg: z.number().min(0).max(1000).default(0),
+    durationSecs: z.number().int().min(0).max(86400).default(0)
 });
 
 fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/session/:id/exercise/log', {

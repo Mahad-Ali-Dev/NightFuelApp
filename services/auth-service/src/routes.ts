@@ -154,7 +154,11 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
                 reply.code(204).send();
             } catch (err: any) {
                 request.log.error(err);
-                reply.code(400).send({ error: err.message });
+                // Route through the allowlist helper: only a known user-facing
+                // string (e.g. 'Invalid refresh token') may surface verbatim; any
+                // other error (DB/Prisma/network) is replaced by the fixed
+                // fallback so internal detail never leaks. Real error logged above.
+                reply.code(400).send({ error: safeMsg(err, 'Unable to complete request') });
             }
         }
     );

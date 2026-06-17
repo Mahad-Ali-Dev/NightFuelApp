@@ -12,7 +12,7 @@ import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { typography as themeTypography } from '@/theme/typography';
 import { useQuery } from '@tanstack/react-query';
-import { getActiveSession, SessionExercise } from '@/api/exercises';
+import { getActiveSession, getLastSet, LastSet, SessionExercise } from '@/api/exercises';
 
 type LocalSet = { weight: string; reps: string; done: boolean };
 type LocalExercise = { id: string; name: string; sets: number; targetReps: string; loggedSets: LocalSet[] };
@@ -51,6 +51,35 @@ export default function ActiveWorkoutScreen() {
             setExercises(session.logs.map(sessionToLocal));
         }
     }, [session]);
+
+    // Cross-session "previous set" history. The active-session payload only
+    // carries the *plan* for this workout — it has no record of what was lifted
+    // last time. So we batch-fetch the most-recent set for every exercise in the
+    // session from the existing analytics endpoint and key it by name. Each
+    // entry is the real last weight x reps, or null when there's no history
+    // (callers fall back to the in-session value, then '-'; never a fabrication).
+    const exerciseNames = exercises.map(ex => ex.name).filter(Boolean);
+    const { data: lastSets } = useQuery({
+        // Sorted + joined so the key is stable regardless of seed order.
+        queryKey: ['exercise-last-sets', [...exerciseNames].sort()],
+        queryFn: async (): Promise<Record<string, LastSet | null>> => {
+            const unique = Array.from(new Set(exerciseNames));
+            const entries = await Promise.all(
+                unique.map(async (name): Promise<[string, LastSet | null]> => {
+                    try {
+                        return [name, await getLastSet(name)];
+                    } catch {
+                        // A single exercise's history failing must not blank out
+                        // the others — treat it as "no history" for that name.
+                        return [name, null];
+                    }
+                }),
+            );
+            return Object.fromEntries(entries);
+        },
+        enabled: exerciseNames.length > 0,
+        staleTime: 5 * 60 * 1000,
+    });
 
     // Global elapsed timer
     useEffect(() => {
@@ -179,17 +208,25 @@ export default function ActiveWorkoutScreen() {
                         </View>
 
                         {ex.loggedSets.map((s, sIndex) => {
-                            // Previous logged set within THIS session (no cross-session
-                            // history is exposed here). Only show real values — never a
-                            // fabricated number. Falls back to '-' for set 1 or when the
-                            // prior set hasn't been filled in yet.
-                            const prev = sIndex === 0 ? undefined : ex.loggedSets[sIndex - 1];
-                            const prevSet = prev && prev.weight && prev.reps ? `${prev.weight}x${prev.reps}` : '-';
+                            // Previous-set hint. For the FIRST set we show a REAL
+                            // cross-session value sourced from the analytics endpoint
+                            // (lastSets[ex.name], most-recent completed set). For later
+                            // sets we keep the in-session prior set. Only ever show real
+                            // values — never a fabricated number — and fall back to '-'
+                            // when there is genuinely no history and no in-session value.
+                            let prevSet = '-';
+                            if (sIndex === 0) {
+                                const last = lastSets?.[ex.name];
+                                if (last) prevSet = `last time: ${last.weightKg}x${last.reps}`;
+                            } else {
+                                const prev = ex.loggedSets[sIndex - 1];
+                                if (prev && prev.weight && prev.reps) prevSet = `${prev.weight}x${prev.reps}`;
+                            }
                             return (
                                 <View key={sIndex} style={[styles.setRow, s.done && { backgroundColor: withAlpha(colors.accent.cyan, 0.1) }]}>
                                     <View style={{ width: 32 }}>
                                         <Text style={[typography.subhead, { color: colors.text.secondary }]}>{sIndex + 1}</Text>
-                                        <Text style={[typography.overline, { color: colors.text.tertiary, fontSize: 9 }]}>{prevSet}</Text>
+                                        <Text numberOfLines={1} style={[typography.overline, { color: colors.text.tertiary, fontSize: 9 }]}>{prevSet}</Text>
                                     </View>
 
                                     <View style={styles.inputBox}>
