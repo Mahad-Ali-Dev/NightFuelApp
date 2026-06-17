@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/components/ui/Button';
-import { LinearGradient } from 'expo-linear-gradient';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { CtaButton } from '@/components/ui/CtaButton';
 import { withAlpha } from '@/theme/utils';
-import { shadows } from '@/theme/shadows';
 import { upgrade } from '@/api/subscriptions';
 
 type Plan = 'annual' | 'monthly';
@@ -21,7 +21,7 @@ const FEATURES = [
 ] as const;
 
 export default function PremiumScreen() {
-    const { colors, typography, spacing } = useTheme();
+    const { colors, typography, spacing, shadows } = useTheme();
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const qc = useQueryClient();
@@ -54,6 +54,8 @@ export default function PremiumScreen() {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
+
             <View style={styles.header}>
                 <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Ionicons name="close" size={28} color={colors.text.primary} />
@@ -73,95 +75,108 @@ export default function PremiumScreen() {
                 </View>
 
                 {/* Feature list */}
-                <LinearGradient
-                    colors={[colors.background.secondary, withAlpha(colors.accent.cyan, 0.1)]}
-                    style={[styles.featureBox, { borderColor: colors.border.default }]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                >
-                    {FEATURES.map((feat, i) => (
-                        <View key={i} style={styles.featureRow}>
-                            <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.cyan, 0.14) }]}>
-                                <Ionicons name={feat.icon as any} size={20} color={colors.accent.cyan} />
+                <GlassCard radius={24} style={styles.featureCard}>
+                    <View style={styles.featureCardInner}>
+                        {FEATURES.map((feat, i) => (
+                            <View
+                                key={i}
+                                style={[styles.featureRow, i === FEATURES.length - 1 && styles.featureRowLast]}
+                            >
+                                <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.cyan, 0.14) }]}>
+                                    <Ionicons name={feat.icon as any} size={20} color={colors.accent.cyan} />
+                                </View>
+                                <View style={styles.featureText}>
+                                    <Text style={[typography.subhead, { color: colors.text.primary }]}>{feat.title}</Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>{feat.desc}</Text>
+                                </View>
                             </View>
-                            <View style={styles.featureText}>
-                                <Text style={[typography.subhead, { color: colors.text.primary }]}>{feat.title}</Text>
-                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>{feat.desc}</Text>
-                            </View>
-                        </View>
-                    ))}
-                </LinearGradient>
+                        ))}
+                    </View>
+                </GlassCard>
 
                 {/* Plan selector */}
                 <View style={styles.pricingRow}>
-                    {/* Annual */}
-                    <TouchableOpacity
-                        onPress={() => setSelectedPlan('annual')}
-                        activeOpacity={0.8}
-                        accessibilityRole="button"
-                        accessibilityLabel="Annual plan, $89.99 per year, save 20%"
-                        accessibilityState={{ selected: annualSelected }}
-                        style={[
-                            styles.priceCard,
-                            {
-                                borderColor:     annualSelected ? colors.accent.cyan : colors.border.default,
-                                borderWidth:     annualSelected ? 2 : 1,
-                                backgroundColor: colors.background.secondary,
-                            },
-                            annualSelected && shadows.glow(colors.accent.cyan),
-                        ]}
-                    >
-                        <View style={[styles.saveBadge, { backgroundColor: colors.accent.cyan }]}>
-                            <Text style={[typography.caption, { color: colors.text.inverse, fontWeight: 'bold', fontSize: 10 }]}>
-                                SAVE 20%
-                            </Text>
-                        </View>
-                        <Text style={[typography.heading, { color: colors.text.primary }]}>Annually</Text>
-                        <Text style={[typography.statSmall, { color: colors.accent.cyan, marginTop: 4 }]}>$89.99</Text>
-                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>$7.50 / month</Text>
-                        {annualSelected && (
-                            <View style={[styles.checkIcon, { backgroundColor: colors.accent.cyan }]}>
-                                <Ionicons name="checkmark" size={12} color={colors.text.inverse} />
+                    {/* Annual — outer relative wrapper so the floating SAVE badge is not clipped by GlassCard overflow:hidden */}
+                    <View style={styles.planWrapper}>
+                        <Pressable
+                            onPress={() => setSelectedPlan('annual')}
+                            accessibilityRole="button"
+                            accessibilityLabel="Annual plan, $89.99 per year, save 20%"
+                            accessibilityState={{ selected: annualSelected }}
+                        >
+                            <GlassCard
+                                radius={24}
+                                style={[
+                                    styles.planCard,
+                                    { borderWidth: 2, borderColor: annualSelected ? colors.accent.cyan : 'transparent' },
+                                    annualSelected && shadows.glow(colors.accent.cyan),
+                                ]}
+                            >
+                                <View style={styles.planCardInner}>
+                                    <Text style={[typography.heading, { color: colors.text.primary }]}>Annually</Text>
+                                    <Text style={[typography.statSmall, { color: colors.accent.cyan, marginTop: 4 }]} maxFontSizeMultiplier={1.3}>
+                                        $89.99
+                                    </Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>$7.50 / month</Text>
+                                    {annualSelected && (
+                                        <View style={[styles.checkIcon, { backgroundColor: colors.accent.cyan }]}>
+                                            <Ionicons name="checkmark" size={12} color={colors.text.inverse} />
+                                        </View>
+                                    )}
+                                </View>
+                            </GlassCard>
+                        </Pressable>
+                        {/* SAVE badge — sibling overlay on the outer relative wrapper */}
+                        <View style={styles.saveBadgeOverlay} pointerEvents="none">
+                            <View style={[styles.saveBadge, { backgroundColor: colors.accent.cyan }]}>
+                                <Text style={[typography.caption, { color: colors.text.inverse, fontWeight: 'bold', fontSize: 10 }]}>
+                                    SAVE 20%
+                                </Text>
                             </View>
-                        )}
-                    </TouchableOpacity>
+                        </View>
+                    </View>
 
                     {/* Monthly */}
-                    <TouchableOpacity
-                        onPress={() => setSelectedPlan('monthly')}
-                        activeOpacity={0.8}
-                        accessibilityRole="button"
-                        accessibilityLabel="Monthly plan, $9.99 billed monthly"
-                        accessibilityState={{ selected: monthlySelected }}
-                        style={[
-                            styles.priceCard,
-                            {
-                                borderColor:     monthlySelected ? colors.accent.purple : colors.border.default,
-                                borderWidth:     monthlySelected ? 2 : 1,
-                                backgroundColor: colors.background.secondary,
-                            },
-                            monthlySelected && shadows.glow(colors.accent.purple),
-                        ]}
-                    >
-                        <Text style={[typography.heading, { color: colors.text.primary }]}>Monthly</Text>
-                        <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: 4 }]}>$9.99</Text>
-                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>Billed monthly</Text>
-                        {monthlySelected && (
-                            <View style={[styles.checkIcon, { backgroundColor: colors.accent.purple }]}>
-                                <Ionicons name="checkmark" size={12} color={colors.text.inverse} />
-                            </View>
-                        )}
-                    </TouchableOpacity>
+                    <View style={styles.planWrapper}>
+                        <Pressable
+                            onPress={() => setSelectedPlan('monthly')}
+                            accessibilityRole="button"
+                            accessibilityLabel="Monthly plan, $9.99 billed monthly"
+                            accessibilityState={{ selected: monthlySelected }}
+                        >
+                            <GlassCard
+                                radius={24}
+                                style={[
+                                    styles.planCard,
+                                    { borderWidth: 2, borderColor: monthlySelected ? colors.accent.purple : 'transparent' },
+                                    monthlySelected && shadows.glow(colors.accent.purple),
+                                ]}
+                            >
+                                <View style={styles.planCardInner}>
+                                    <Text style={[typography.heading, { color: colors.text.primary }]}>Monthly</Text>
+                                    <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: 4 }]} maxFontSizeMultiplier={1.3}>
+                                        $9.99
+                                    </Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>Billed monthly</Text>
+                                    {monthlySelected && (
+                                        <View style={[styles.checkIcon, { backgroundColor: colors.accent.purple }]}>
+                                            <Ionicons name="checkmark" size={12} color={colors.text.inverse} />
+                                        </View>
+                                    )}
+                                </View>
+                            </GlassCard>
+                        </Pressable>
+                    </View>
                 </View>
             </ScrollView>
 
             {/* Sticky CTA footer */}
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: Math.max(insets.bottom, 16), borderTopColor: colors.border.default, backgroundColor: colors.background.primary }]}>
-                <Button
-                    title={upgradeMutation.isPending ? 'Processing…' : 'Start 7-Day Free Trial'}
+                <CtaButton
+                    label={upgradeMutation.isPending ? 'Processing…' : 'Start 7-Day Free Trial'}
+                    loading={upgradeMutation.isPending}
                     onPress={() => upgradeMutation.mutate()}
-                    fullWidth
-                    disabled={upgradeMutation.isPending}
+                    style={styles.ctaLg}
                 />
                 <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginTop: 16 }]}>
                     Cancel anytime. Subscription auto-renews.
@@ -183,16 +198,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 32,
     },
-    featureBox: {
-        borderRadius: 16,
-        padding: 20,
-        borderWidth: 1,
+    featureCard: {
         marginBottom: 32,
+    },
+    featureCardInner: {
+        padding: 20,
     },
     featureRow: {
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 20,
+    },
+    featureRowLast: {
+        marginBottom: 0,
     },
     iconBox: {
         width: 40,
@@ -206,17 +224,31 @@ const styles = StyleSheet.create({
     pricingRow: {
         flexDirection: 'row',
         gap: 16,
+        alignItems: 'stretch',
     },
-    priceCard: {
+    planWrapper: {
         flex: 1,
-        borderRadius: 16,
-        padding: 16,
-        alignItems: 'center',
         position: 'relative',
     },
-    saveBadge: {
+    planCard: {
+        borderRadius: 24,
+        padding: 0,
+    },
+    planCardInner: {
+        padding: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: 132,
+    },
+    saveBadgeOverlay: {
         position: 'absolute',
         top: -10,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        zIndex: 2,
+    },
+    saveBadge: {
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: 12,
@@ -234,5 +266,10 @@ const styles = StyleSheet.create({
     footer: {
         borderTopWidth: 1,
         paddingTop: 16,
+    },
+    // CtaButton "lg" sizing achieved via style override (cannot edit the shared primitive this sprint).
+    ctaLg: {
+        paddingVertical: 16,
+        minHeight: 52,
     },
 });

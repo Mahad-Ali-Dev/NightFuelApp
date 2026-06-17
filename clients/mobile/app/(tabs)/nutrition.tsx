@@ -3,7 +3,6 @@ import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     ImageBackground
 } from 'react-native';
-import { SafeBlurView } from '@/components/SafeBlurView';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -16,7 +15,7 @@ import { getToday as getTodayProgress } from '@/api/progress';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Card } from '@/components/ui/Card';
-import { Skeleton, EmptyState } from '@/components/ui';
+import { Skeleton, EmptyState, GlassCard } from '@/components/ui';
 import { format } from 'date-fns';
 import { withAlpha } from '@/theme/utils';
 import { colors as themeColors } from '@/theme/colors';
@@ -266,23 +265,23 @@ export default function NutritionHubScreen() {
                             activeOpacity={0.85}
                             accessibilityRole="button"
                             accessibilityLabel="No plan generated for today. Generate plan."
-                            style={{ borderRadius: borderRadius.xl, overflow: 'hidden', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border.default }}
                             onPress={() => router.push('/(meals)/planner' as any)}
                         >
-                            <SafeBlurView
-                                tint="dark"
-                                intensity={40}
-                                style={[styles.emptyPlan, { backgroundColor: 'transparent' }]}
+                            <GlassCard
+                                radius={borderRadius.xl}
+                                style={{ borderStyle: 'dashed', borderColor: colors.border.default }}
                             >
-                                <View style={[styles.emptyPlanIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.12), borderColor: withAlpha(colors.accent.purple, 0.24) }, shadows.glow(colors.accent.purple)]}>
-                                    <Ionicons name="sparkles" size={26} color={colors.accent.purple} />
+                                <View style={styles.emptyPlan}>
+                                    <View style={[styles.emptyPlanIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.12), borderColor: withAlpha(colors.accent.purple, 0.24) }, shadows.glow(colors.accent.purple)]}>
+                                        <Ionicons name="sparkles" size={26} color={colors.accent.purple} />
+                                    </View>
+                                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 14 }]}>No plan generated for today</Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginTop: 6, maxWidth: 240, lineHeight: 18 }]}>Tap to let Ria build your protocol-compliant meals.</Text>
+                                    <View style={[styles.emptyPlanCta, { backgroundColor: withAlpha(colors.accent.purple, 0.14) }]}>
+                                        <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', letterSpacing: 0.5 }]}>GENERATE PLAN</Text>
+                                    </View>
                                 </View>
-                                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 14 }]}>No plan generated for today</Text>
-                                <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginTop: 6, maxWidth: 240, lineHeight: 18 }]}>Tap to let Ria build your protocol-compliant meals.</Text>
-                                <View style={[styles.emptyPlanCta, { backgroundColor: withAlpha(colors.accent.purple, 0.14) }]}>
-                                    <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', letterSpacing: 0.5 }]}>GENERATE PLAN</Text>
-                                </View>
-                            </SafeBlurView>
+                            </GlassCard>
                         </TouchableOpacity>
                     ) : (
                         <View style={styles.planList}>
@@ -292,23 +291,20 @@ export default function NutritionHubScreen() {
                                     activeOpacity={0.85}
                                     accessibilityRole="button"
                                     accessibilityLabel={`Log ${m.label || m.name}${m.time ? `, ${m.time}` : ''}`}
-                                    style={{ borderRadius: borderRadius.xl, overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}
                                     onPress={() => router.push({ pathname: '/(meals)/log-meal', params: { preset: m.label } })}
                                 >
-                                    <SafeBlurView
-                                        tint="dark"
-                                        intensity={40}
-                                        style={styles.mealCard}
-                                    >
-                                        <View style={[styles.mealTime, { backgroundColor: withAlpha(colors.background.tertiary, 0.4) }]}>
-                                            <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold' }]}>{m.time}</Text>
+                                    <GlassCard radius={borderRadius.xl}>
+                                        <View style={styles.mealCard}>
+                                            <View style={[styles.mealTime, { backgroundColor: withAlpha(colors.background.tertiary, 0.4) }]}>
+                                                <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold' }]}>{m.time}</Text>
+                                            </View>
+                                            <View style={{ flex: 1, marginLeft: 16 }}>
+                                                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{m.label || m.name}</Text>
+                                                <Text style={[typography.caption, { color: colors.text.secondary }]} numberOfLines={1}>{m.description}</Text>
+                                            </View>
+                                            <Ionicons name="add-circle" size={24} color={colors.accent.emerald} />
                                         </View>
-                                        <View style={{ flex: 1, marginLeft: 16 }}>
-                                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{m.label || m.name}</Text>
-                                            <Text style={[typography.caption, { color: colors.text.secondary }]} numberOfLines={1}>{m.description}</Text>
-                                        </View>
-                                        <Ionicons name="add-circle" size={24} color={colors.accent.emerald} />
-                                    </SafeBlurView>
+                                    </GlassCard>
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -317,12 +313,11 @@ export default function NutritionHubScreen() {
 
                 {/* Fasting Card */}
                 <View style={styles.section}>
-                    <View style={[{ borderRadius: borderRadius['2xl'], overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.accent.cyan, 0.4) }, shadows.glow(colors.accent.cyan)]}>
-                        <SafeBlurView
-                            tint="dark"
-                            intensity={40}
-                            style={styles.fastCard}
-                        >
+                    <GlassCard
+                        glow={colors.accent.cyan}
+                        style={{ borderColor: withAlpha(colors.accent.cyan, 0.4) }}
+                    >
+                        <View style={styles.fastCard}>
                             <LinearGradient colors={[withAlpha(colors.accent.cyan, 0.12), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
                             <View style={styles.fastHeader}>
                                 <View style={styles.fastTitle}>
@@ -351,8 +346,8 @@ export default function NutritionHubScreen() {
                                     </Text>
                                 </TouchableOpacity>
                             </View>
-                        </SafeBlurView>
-                    </View>
+                        </View>
+                    </GlassCard>
                 </View>
             </ScrollView>
 
@@ -391,20 +386,18 @@ const ToolCard = React.memo(function ToolCard({ icon, title, color, onPress }: a
         <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel={title}
-            style={[{ flex: 1, borderRadius: borderRadius.xl, overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }]}
+            style={{ flex: 1 }}
             onPress={onPress}
             activeOpacity={0.85}
         >
-            <SafeBlurView
-                tint="dark"
-                intensity={40}
-                style={styles.toolCard}
-            >
-                <View style={[styles.toolIcon, { backgroundColor: `${color}15` }]}>
-                    <Ionicons name={icon} size={22} color={color} />
+            <GlassCard radius={borderRadius.xl}>
+                <View style={styles.toolCard}>
+                    <View style={[styles.toolIcon, { backgroundColor: `${color}15` }]}>
+                        <Ionicons name={icon} size={22} color={color} />
+                    </View>
+                    <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold', marginTop: 8 }]}>{title}</Text>
                 </View>
-                <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold', marginTop: 8 }]}>{title}</Text>
-            </SafeBlurView>
+            </GlassCard>
         </TouchableOpacity>
     );
 });

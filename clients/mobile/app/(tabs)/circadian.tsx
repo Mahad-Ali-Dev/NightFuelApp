@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Alert } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/utils';
-import { Card } from '@/components/ui/Card';
-import { Skeleton, EmptyState, GeneratingSteps } from '@/components/ui';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { Skeleton, EmptyState, GeneratingSteps, CtaButton } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,7 +15,6 @@ import { getCurrent as getCurrentShift } from '@/api/shifts';
 import { generatePlan } from '@/api/ai';
 import { getModel } from '@/api/circadian';
 import { useAuthStore } from '@/store/authStore';
-import { Button } from '@/components/ui/Button';
 import { getErrorMessage } from '@/utils/validation';
 
 // Staged status lines shown while the AI protocol is generated (10–30s).
@@ -27,7 +27,7 @@ const PROTOCOL_GEN_STEPS = [
 ];
 
 export default function CircadianScreen() {
-    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
+    const { colors, typography, spacing, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const { user } = useAuthStore();
     const router = useRouter();
@@ -124,6 +124,7 @@ export default function CircadianScreen() {
     if (isLoadingShift) {
         return (
             <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+                <StatusBar style="light" />
                 <View style={[styles.header, { paddingHorizontal: spacing['2xl'], marginTop: spacing.lg }]}>
                     <Skeleton width={130} height={13} radius={borderRadius.sm} />
                     <Skeleton width="100%" height={120} radius={borderRadius['2xl']} style={{ marginTop: spacing.md }} />
@@ -136,7 +137,7 @@ export default function CircadianScreen() {
                     <Skeleton width={150} height={12} radius={borderRadius.sm} style={{ marginBottom: spacing.lg }} />
                     <View style={styles.grid}>
                         {[0, 1, 2, 3].map((i) => (
-                            <Skeleton key={i} width="48%" height={132} radius={borderRadius.xl} />
+                            <Skeleton key={i} width="48%" height={132} radius={borderRadius['2xl']} />
                         ))}
                     </View>
                     <Skeleton width="100%" height={180} radius={borderRadius['2xl']} style={{ marginTop: spacing['2xl'] }} />
@@ -147,18 +148,17 @@ export default function CircadianScreen() {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             {/* ══ HERO ════════════════════════════════════════════════════ */}
             <View style={[styles.header, { paddingHorizontal: spacing['2xl'], marginTop: spacing.lg }]}>
                 <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.sm }]}>
                     Chronobiology
                 </Text>
-                <Card
-                    variant="glass"
-                    noPadding
+                <GlassCard
+                    glow={colors.accent.coral}
                     style={[
                         styles.heroCard,
                         { borderColor: withAlpha(colors.accent.coral, 0.28), borderRadius: borderRadius['2xl'] },
-                        shadows.glow(colors.accent.coral),
                     ]}
                 >
                     <LinearGradient
@@ -215,7 +215,7 @@ export default function CircadianScreen() {
                             <Ionicons name="pulse" size={28} color={colors.accent.coral} />
                         </View>
                     </View>
-                </Card>
+                </GlassCard>
             </View>
 
             {/* ══ TAB SELECTOR ════════════════════════════════════════════ */}
@@ -248,13 +248,22 @@ export default function CircadianScreen() {
                 {selectedTab === 'profile' && (
                     <View>
                         {!currentShift ? (
-                            <EmptyState
-                                icon="moon-outline"
-                                title="No shift to sync to"
-                                subtitle="Log your current shift and we'll map your melatonin, caffeine and insulin windows to keep your body clock aligned."
-                                actionLabel="Schedule a shift"
-                                onAction={() => router.push('/(tabs)/schedule' as any)}
-                            />
+                            <>
+                                <EmptyState
+                                    icon="moon-outline"
+                                    title="No shift to sync to"
+                                    subtitle="Log your current shift and we'll map your melatonin, caffeine and insulin windows to keep your body clock aligned."
+                                />
+                                {/* Reserved PRIMARY coralCta fill (#E55A25→#FF4D8D) — the EmptyState
+                                    CTA rendered as a CtaButton so the brand fill matches spec. */}
+                                <View style={styles.emptyCta}>
+                                    <CtaButton
+                                        label="Schedule a shift"
+                                        icon="calendar-outline"
+                                        onPress={() => router.push('/(tabs)/schedule' as any)}
+                                    />
+                                </View>
+                            </>
                         ) : (
                             <>
                                 <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.lg }]}>
@@ -262,9 +271,8 @@ export default function CircadianScreen() {
                                 </Text>
                                 <View style={styles.grid}>
                                     {metricTiles.map((tile) => (
-                                        <Card
+                                        <GlassCard
                                             key={tile.key}
-                                            variant="glass"
                                             style={[styles.metricCard, { borderColor: withAlpha(tile.accent, 0.25) }]}
                                         >
                                             <View style={[styles.metricIcon, { backgroundColor: withAlpha(tile.accent, 0.14) }]}>
@@ -273,20 +281,22 @@ export default function CircadianScreen() {
                                             <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.md + 2 }]}>
                                                 {tile.label}
                                             </Text>
-                                            <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: spacing.xs }]}>
+                                            <Text
+                                                style={[typography.statSmall, { color: colors.text.primary, marginTop: spacing.xs }]}
+                                                maxFontSizeMultiplier={1.3}
+                                            >
                                                 {tile.value}
                                             </Text>
-                                        </Card>
+                                        </GlassCard>
                                     ))}
                                 </View>
 
                                 {/* Entrainment Score */}
-                                <Card
-                                    variant="glass"
+                                <GlassCard
+                                    glow={colors.accent.cyan}
                                     style={[
                                         styles.scoreCard,
                                         { borderColor: withAlpha(colors.accent.cyan, 0.3), borderRadius: borderRadius['2xl'], marginTop: spacing['2xl'] },
-                                        shadows.glow(colors.accent.cyan),
                                     ]}
                                 >
                                     <LinearGradient
@@ -299,7 +309,10 @@ export default function CircadianScreen() {
                                     <Text style={[typography.overline, { color: colors.text.secondary, textAlign: 'center' }]}>
                                         Entrainment Score
                                     </Text>
-                                    <Text style={[typography.statLarge, { color: colors.accent.cyan, textAlign: 'center', marginVertical: spacing.sm }]}>
+                                    <Text
+                                        style={[typography.statLarge, { color: colors.accent.cyan, textAlign: 'center', marginVertical: spacing.sm }]}
+                                        maxFontSizeMultiplier={1.3}
+                                    >
                                         {entrainmentScore ?? '--'}
                                         <Text style={[typography.statSmall, { color: colors.text.secondary }]}>/100</Text>
                                     </Text>
@@ -310,7 +323,7 @@ export default function CircadianScreen() {
                                                 ? 'Room for improvement. Focus on consistent sleep/wake times.'
                                                 : 'Log more shifts to calculate your score.'}
                                     </Text>
-                                </Card>
+                                </GlassCard>
                             </>
                         )}
                     </View>
@@ -320,20 +333,28 @@ export default function CircadianScreen() {
                     <View>
                         <View style={[styles.planHeader, { marginBottom: spacing.xl }]}>
                             <Text style={[typography.overline, { color: colors.text.secondary }]}>Today's Protocol</Text>
-                            <Button
-                                title="Regenerate"
-                                size="sm"
-                                variant="outline"
-                                icon={<Ionicons name="sparkles" size={14} color={colors.accent.coral} />}
-                                onPress={() => generateAIPlan()}
+                            <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Regenerate protocol"
+                                accessibilityState={{ disabled: isLoadingPlan }}
                                 disabled={isLoadingPlan}
-                            />
+                                hitSlop={8}
+                                onPress={() => generateAIPlan()}
+                                style={({ pressed }) => [
+                                    styles.regenerateBtn,
+                                    { borderColor: withAlpha(colors.accent.coral, 0.4) },
+                                    pressed && !isLoadingPlan ? { backgroundColor: withAlpha(colors.accent.coral, 0.08) } : null,
+                                    isLoadingPlan ? { opacity: 0.6 } : null,
+                                ]}
+                            >
+                                <Ionicons name="sparkles" size={14} color={colors.accent.coral} />
+                                <Text style={[typography.captionMedium, { color: colors.accent.coral }]}>Regenerate</Text>
+                            </Pressable>
                         </View>
 
                         {isLoadingPlan ? (
                             <View>
-                                <Card
-                                    variant="glass"
+                                <GlassCard
                                     style={[
                                         styles.genCard,
                                         { borderColor: withAlpha(colors.accent.coral, 0.25), marginBottom: spacing.xl },
@@ -345,7 +366,7 @@ export default function CircadianScreen() {
                                         color={colors.accent.coral}
                                         layout="column"
                                     />
-                                </Card>
+                                </GlassCard>
                                 {[0, 1, 2, 3].map((i) => (
                                     <View key={i} style={[styles.timelineItem, { marginBottom: spacing.lg }]}>
                                         <View style={styles.timeColumn}>
@@ -366,12 +387,17 @@ export default function CircadianScreen() {
                                     return (
                                         <View key={idx} style={[styles.timelineItem, { marginBottom: spacing.lg }]}>
                                             <View style={styles.timeColumn}>
-                                                <Text style={[typography.statTiny, { color: colors.text.primary, fontSize: 13 }]}>{item.time}</Text>
+                                                <Text
+                                                    style={[typography.statTiny, { color: colors.text.primary, fontSize: 13 }]}
+                                                    maxFontSizeMultiplier={1.3}
+                                                >
+                                                    {item.time}
+                                                </Text>
                                                 {idx !== protocol.length - 1 && (
                                                     <View style={[styles.timelineLine, { backgroundColor: colors.border.light }]} />
                                                 )}
                                             </View>
-                                            <Card variant="glass" style={[styles.protocolCard, { borderColor: withAlpha(accent, 0.2) }]}>
+                                            <GlassCard style={[styles.protocolCard, { borderColor: withAlpha(accent, 0.2) }]}>
                                                 <View style={styles.protocolRow}>
                                                     <View style={[styles.protocolIcon, { backgroundColor: withAlpha(accent, 0.14) }]}>
                                                         <Ionicons
@@ -391,6 +417,7 @@ export default function CircadianScreen() {
                                                             activeOpacity={0.85}
                                                             accessibilityRole="button"
                                                             accessibilityLabel={`Swap ${item.title}`}
+                                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                                             style={[styles.swapBtn, { backgroundColor: withAlpha(colors.text.primary, 0.06) }]}
                                                             onPress={() => router.push('/(modals)/build-plate' as any)}
                                                         >
@@ -399,7 +426,7 @@ export default function CircadianScreen() {
                                                         </TouchableOpacity>
                                                     )}
                                                 </View>
-                                            </Card>
+                                            </GlassCard>
                                         </View>
                                     );
                                 })}
@@ -472,6 +499,25 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
     },
+    regenerateBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        minHeight: 40,
+        borderRadius: 14,
+        borderWidth: 1,
+        backgroundColor: 'transparent',
+    },
+    // EmptyState owns generous paddingVertical (40); tuck the coralCta CTA up
+    // under the subtitle and keep it from going full-bleed.
+    emptyCta: {
+        alignItems: 'center',
+        paddingHorizontal: 24,
+        marginTop: -16,
+    },
     genCard: {
         paddingVertical: 24,
         paddingHorizontal: 20,
@@ -510,7 +556,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 10,
-        paddingVertical: 6,
+        paddingVertical: 8,
         borderRadius: 10,
     }
 });

@@ -3,14 +3,18 @@
  *
  * Because this is now a visible tab (not a pushed screen) the back
  * button is removed and replaced with a Settings shortcut.
- * A "More features" grid at the bottom exposes everything not in
- * the main tab bar.
+ *
+ * Aurora dark-glass reskin: glass surfaces use the shared GlassCard
+ * primitive (SafeBlurView), the primary CTA uses CtaButton (coralCta
+ * gradient), and a light StatusBar keeps glyphs legible over the coral
+ * cover wash. All data hooks / role flags / nav / a11y labels preserved.
  */
 import React from 'react';
 import {
     View, Text, StyleSheet, ScrollView,
-    TouchableOpacity, Dimensions,
+    TouchableOpacity, Pressable, Dimensions,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,7 +27,7 @@ import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { colors as C } from '@/theme/colors';
 import { withAlpha } from '@/theme/utils';
-import { Skeleton } from '@/components/ui';
+import { Skeleton, GlassCard, CtaButton } from '@/components/ui';
 import { TAB_BAR_H } from './_layout';
 
 const { width } = Dimensions.get('window');
@@ -57,8 +61,11 @@ export default function ProfileScreen() {
         return <ProfileSkeleton />;
     }
 
+    const displayName = (profile as any)?.displayName ?? user?.name;
+
     return (
         <View style={[s.root, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <ScrollView
                 contentContainerStyle={{ paddingBottom: TAB_BAR_H + 40 }}
                 bounces={false}
@@ -98,20 +105,30 @@ export default function ProfileScreen() {
                 <View style={[s.avatarWrap, shadows.glow(colors.accent.coral)]}>
                     <View style={[s.avatarRing, { backgroundColor: colors.background.primary, borderColor: colors.accent.coral }]}>
                         {(profile as any)?.avatarUrl ? (
-                            <Image source={{ uri: (profile as any).avatarUrl }} style={s.avatar} cachePolicy="memory-disk" transition={200} />
+                            <Image
+                                source={{ uri: (profile as any).avatarUrl }}
+                                style={s.avatar}
+                                cachePolicy="memory-disk"
+                                transition={200}
+                                accessibilityLabel={`${displayName ?? user?.name} profile photo`}
+                            />
                         ) : (
-                            <View style={[s.avatar, { backgroundColor: colors.background.tertiary, alignItems: 'center', justifyContent: 'center' }]}>
+                            <View style={[s.avatar, { backgroundColor: colors.background.tertiary, alignItems: 'center', justifyContent: 'center' }]} accessibilityLabel="No profile photo">
                                 <Ionicons name="person" size={56} color={colors.text.tertiary} />
                             </View>
                         )}
                     </View>
-                    <View style={[s.onlineDot, { borderColor: colors.background.primary, backgroundColor: colors.success }]} />
+                    <View
+                        style={[s.onlineDot, { borderColor: colors.background.primary, backgroundColor: colors.success }]}
+                        accessibilityElementsHidden
+                        importantForAccessibility="no"
+                    />
                 </View>
 
                 <View style={s.details}>
                     {/* Name + title */}
                     <Text style={[typography.h1, { color: colors.text.primary, textAlign: 'center' }]}>
-                        {(profile as any)?.displayName ?? user?.name}
+                        {displayName}
                     </Text>
                     <Text style={[typography.body, { color: colors.text.secondary, marginTop: 4, textAlign: 'center' }]}>
                         {(profile as any)?.occupation ?? 'Member'} · Level {Math.floor(((stats?.daysLogged ?? 0)) / 7) + 1}
@@ -124,32 +141,24 @@ export default function ProfileScreen() {
 
                     {/* Action buttons */}
                     <View style={s.actionRow}>
-                        <TouchableOpacity
-                            accessibilityRole="button"
+                        <CtaButton
+                            label="Edit Profile"
+                            icon="create-outline"
                             accessibilityLabel="Edit Profile"
-                            style={[s.btnPrimaryWrap, { borderRadius: borderRadius.xl }, shadows.glow(colors.accent.coral)]}
                             onPress={() => router.push('/(tabs)/profile/edit' as any)}
-                            activeOpacity={0.9}
-                        >
-                            <LinearGradient
-                                colors={colors.gradients.coral}
-                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                                style={[s.btnPrimary, { borderRadius: borderRadius.xl }]}
+                            style={s.editCta}
+                        />
+                        <GlassCard radius={borderRadius.xl} style={s.prefWrap}>
+                            <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Preferences"
+                                style={({ pressed }) => [s.prefBtn, pressed ? { opacity: 0.85 } : null]}
+                                onPress={() => router.push('/(tabs)/profile/preferences' as any)}
                             >
-                                <Ionicons name="create-outline" size={17} color={colors.text.primary} />
-                                <Text style={[s.btnTxt, { color: colors.text.primary }]}>Edit Profile</Text>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            accessibilityRole="button"
-                            accessibilityLabel="Preferences"
-                            style={[s.btnSecondary, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl }]}
-                            onPress={() => router.push('/(tabs)/profile/preferences' as any)}
-                            activeOpacity={0.85}
-                        >
-                            <Ionicons name="options-outline" size={17} color={colors.text.primary} />
-                            <Text style={[s.btnTxt, { color: colors.text.primary }]}>Preferences</Text>
-                        </TouchableOpacity>
+                                <Ionicons name="options-outline" size={17} color={colors.text.primary} />
+                                <Text style={[s.btnTxt, { color: colors.text.primary }]}>Preferences</Text>
+                            </Pressable>
+                        </GlassCard>
                     </View>
 
                     {isAdmin && (
@@ -167,45 +176,58 @@ export default function ProfileScreen() {
 
                     {/* Stats */}
                     <View style={s.statsRow}>
-                        <StatPill label="FATIGUE" value={`${(status as any)?.fatigueScore ?? 0}%`} color={C.warning} colors={colors} />
-                        <StatPill label="STREAK" value={`${streak?.current ?? 0}d`} color={C.accent.cyan} colors={colors} />
-                        <StatPill label="ADHERENCE" value={`${(status as any)?.adherenceScore ?? 0}%`} color={C.success} colors={colors} />
+                        <StatPill label="FATIGUE" value={`${(status as any)?.fatigueScore ?? 0}%`} color={C.warning} />
+                        <StatPill label="STREAK" value={`${streak?.current ?? 0}d`} color={C.accent.cyan} />
+                        <StatPill label="ADHERENCE" value={`${(status as any)?.adherenceScore ?? 0}%`} color={C.success} />
                     </View>
 
                     {/* Circadian phase card */}
-                    <View style={[s.circCard, { backgroundColor: colors.background.secondary, borderColor: withAlpha(colors.text.primary, 0.07) }]}>
-                        <View style={s.circHeader}>
-                            <Ionicons name="sunny-outline" size={18} color={C.accent.amber} />
-                            <Text style={[s.circLabel, { color: colors.text.secondary }]}>CIRCADIAN PHASE</Text>
+                    <GlassCard glow={withAlpha(C.accent.amber, 0.18)} radius={borderRadius['2xl']} style={s.circCard}>
+                        <View style={s.circInner}>
+                            <View style={s.circHeader}>
+                                <Ionicons name="sunny-outline" size={18} color={C.accent.amber} />
+                                <Text style={[s.circLabel, { color: colors.text.secondary }]}>CIRCADIAN PHASE</Text>
+                            </View>
+                            <Text style={[typography.h3, { color: colors.text.primary, marginTop: 10 }]}>
+                                {(status as any)?.circadianPhase ?? '—'}
+                            </Text>
+                            <Text style={[typography.body, { color: colors.text.secondary, marginTop: 4 }]}>
+                                Your metabolic window is currently optimised for activity.
+                            </Text>
+                            <TouchableOpacity
+                                accessibilityRole="button"
+                                accessibilityLabel="View full schedule"
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                style={[s.circBtn, { backgroundColor: withAlpha(C.accent.amber, 0.12), borderColor: withAlpha(C.accent.amber, 0.25) }]}
+                                onPress={() => router.push('/(tabs)/circadian' as any)}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={[s.circBtnTxt, { color: C.accent.amber }]}>View Full Schedule →</Text>
+                            </TouchableOpacity>
                         </View>
-                        <Text style={[typography.h3, { color: colors.text.primary, marginTop: 10 }]}>
-                            {(status as any)?.circadianPhase ?? '—'}
-                        </Text>
-                        <Text style={[typography.body, { color: colors.text.secondary, marginTop: 4 }]}>
-                            Your metabolic window is currently optimised for activity.
-                        </Text>
-                        <TouchableOpacity
-                            accessibilityRole="button"
-                            accessibilityLabel="View full schedule"
-                            style={[s.circBtn, { backgroundColor: withAlpha(C.accent.amber, 0.12), borderColor: withAlpha(C.accent.amber, 0.25) }]}
-                            onPress={() => router.push('/(tabs)/circadian' as any)}
-                            activeOpacity={0.85}
-                        >
-                            <Text style={[s.circBtnTxt, { color: C.accent.amber }]}>View Full Schedule →</Text>
-                        </TouchableOpacity>
-                    </View>
+                    </GlassCard>
 
                     {/* Achievements */}
                     <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>ACHIEVEMENTS</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
                         {ACHIEVEMENTS.map((ach, i) => (
-                            <View key={i} style={[s.achCard, { backgroundColor: colors.background.secondary, borderColor: withAlpha(colors.text.primary, 0.06) }]}>
-                                <View style={[s.achIcon, { backgroundColor: withAlpha(ach.color, 0.13) }]}>
-                                    <Ionicons name={ach.icon as any} size={24} color={ach.color} />
+                            <GlassCard
+                                key={i}
+                                radius={borderRadius.xl}
+                                style={s.achCard}
+                            >
+                                <View
+                                    style={s.achInner}
+                                    accessible
+                                    accessibilityLabel={`${ach.title}, ${ach.desc}`}
+                                >
+                                    <View style={[s.achIcon, { backgroundColor: withAlpha(ach.color, 0.13) }]}>
+                                        <Ionicons name={ach.icon as any} size={24} color={ach.color} />
+                                    </View>
+                                    <Text style={[s.achTitle, { color: colors.text.primary }]}>{ach.title}</Text>
+                                    <Text style={[s.achDesc, { color: colors.text.secondary }]}>{ach.desc}</Text>
                                 </View>
-                                <Text style={[s.achTitle, { color: colors.text.primary }]}>{ach.title}</Text>
-                                <Text style={[s.achDesc, { color: colors.text.secondary }]}>{ach.desc}</Text>
-                            </View>
+                            </GlassCard>
                         ))}
                     </ScrollView>
 
@@ -233,13 +255,18 @@ export default function ProfileScreen() {
 
 // ─── StatPill sub-component ───────────────────────────────────────────────────
 
-function StatPill({ label, value, color, colors }: { label: string; value: string; color: string; colors: any }) {
-    const { typography } = useTheme();
+function StatPill({ label, value, color }: { label: string; value: string; color: string }) {
+    const { typography, borderRadius, colors } = useTheme();
     return (
-        <View style={[s.statPill, { backgroundColor: colors.background.secondary, borderColor: withAlpha(colors.text.primary, 0.06) }]}>
-            <Text style={[typography.statSmall, s.statValue, { color }]}>{value}</Text>
-            <Text style={[s.statLabel, { color: colors.text.secondary }]}>{label}</Text>
-        </View>
+        <GlassCard
+            radius={borderRadius.xl}
+            style={s.statPill}
+        >
+            <View style={s.statInner} accessible accessibilityLabel={`${label} ${value}`}>
+                <Text style={[typography.statSmall, s.statValue, { color }]} maxFontSizeMultiplier={1.3}>{value}</Text>
+                <Text style={[s.statLabel, { color: colors.text.secondary }]}>{label}</Text>
+            </View>
+        </GlassCard>
     );
 }
 
@@ -250,6 +277,7 @@ function ProfileSkeleton() {
     const insets = useSafeAreaInsets();
     return (
         <View style={[s.root, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             {/* Cover gradient wash */}
             <View style={[s.cover, { paddingTop: insets.top }]}>
                 <LinearGradient
@@ -323,30 +351,33 @@ const s = StyleSheet.create({
     // Details
     details: { paddingHorizontal: H_PAD, alignItems: 'center' },
     actionRow: { flexDirection: 'row', width: '100%', gap: CARD_GAP, marginTop: 24, marginBottom: 24 },
-    btnPrimaryWrap: { flex: 1, overflow: 'hidden' },
-    btnPrimary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14 },
-    btnSecondary: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderWidth: 1 },
+    editCta: { flex: 1 },
+    prefWrap: { flex: 1 },
+    prefBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, minHeight: 48 },
     btnTxt: { fontSize: 14, fontWeight: '700' },
     adminBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', paddingVertical: 13, marginBottom: 24 },
 
     // Stats
     statsRow: { flexDirection: 'row', width: '100%', gap: CARD_GAP, marginBottom: 24 },
-    statPill: { flex: 1, paddingVertical: 16, alignItems: 'center', borderRadius: 20, borderWidth: 1 },
+    statPill: { flex: 1 },
+    statInner: { paddingVertical: 16, alignItems: 'center' },
     statValue: {},
     statLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginTop: 4 },
 
     // Circadian
-    circCard: { width: '100%', padding: 22, borderRadius: 24, borderWidth: 1, marginBottom: 28 },
+    circCard: { width: '100%', marginBottom: 28 },
+    circInner: { padding: 22 },
     circHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     circLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 1.2 },
-    circBtn: { marginTop: 16, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1, alignSelf: 'flex-start' },
+    circBtn: { marginTop: 16, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1, alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
     circBtnTxt: { fontSize: 13, fontWeight: '700' },
 
     // Section label
     sectionLbl: { alignSelf: 'flex-start', marginBottom: 14 },
 
     // Achievements
-    achCard: { width: 124, padding: 16, borderRadius: 20, borderWidth: 1, alignItems: 'center' },
+    achCard: { width: 124 },
+    achInner: { padding: 16, alignItems: 'center' },
     achIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
     achTitle: { fontSize: 12, fontWeight: '700', textAlign: 'center' },
     achDesc: { fontSize: 11, textAlign: 'center', marginTop: 2 },

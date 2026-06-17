@@ -10,9 +10,8 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
-import { SafeBlurView } from '@/components/SafeBlurView';
 import { useTheme, colors as palette, typography, spacing, borderRadius } from '@/theme';
-import { Skeleton, EmptyState } from '@/components/ui';
+import { Skeleton, EmptyState, GlassCard, CtaButton } from '@/components/ui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
@@ -63,11 +62,10 @@ const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
 const MUSCLE_SHOULDERS_IMG = require('../../assets/images/muscle-shoulders.png');
 const MUSCLE_ARMS_IMG = require('../../assets/images/muscle-arms.png');
 
-// Primary "Log Meal" CTA fill now uses the shared `gradients.coralCta` token
-// (coralDark #E55A25 → pink #FF4D8D) instead of a screen-local copy — it STARTS
-// darker than the brand `gradients.coral` (#FF7A45→…) to lift white-label
-// contrast on the fill toward AA, and is now shared so this tab + Training stay
-// byte-identical from one source.
+// Primary "Log Meal" CTA is the shared <CtaButton> (Aurora coral→pink fill via
+// the `gradients.coralCta` token, coral glow, AA-lifted white label) — the
+// screen-local LinearGradient copy was retired so this tab + Training render the
+// same button from one source. Glass surfaces below use the shared <GlassCard>.
 
 // ─── Static data ─────────────────────────────────────────────────────────────
 
@@ -350,51 +348,51 @@ export default function DashboardScreen() {
                     activeOpacity={0.88}
                     accessibilityRole="button"
                     accessibilityLabel={countdown ? `Your shift ends in ${countdown}` : 'No active shift, rest mode'}
-                    style={[
-                        { borderRadius: 24, overflow: 'hidden', marginBottom: 12, borderWidth: 1, borderColor: withAlpha(heroColor, 0.25) },
-                        shadows.glow(heroColor),
-                    ]}
+                    style={s.heroPress}
                 >
-                    <SafeBlurView
-                        tint="dark"
+                    <GlassCard
                         intensity={40}
-                        style={[s.heroCard, { borderWidth: 0 }]}
+                        radius={24}
+                        glow={heroColor}
+                        style={{ borderColor: withAlpha(heroColor, 0.25) }}
                     >
                         <LinearGradient
                             colors={countdown ? colors.gradients.coral : [withAlpha(heroColor, 0.18), withAlpha(heroColor, 0.02)]}
                             style={StyleSheet.absoluteFillObject}
                             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                         />
-                        <View style={{ flex: 1 }}>
-                            <Text style={[typography.overline, s.heroLbl, { color: countdown ? withAlpha('#FFFFFF', 0.92) : colors.text.secondary }]}>
-                                {countdown ? 'Your shift ends in' : 'No active shift'}
-                            </Text>
-                            <Text
-                                style={[
-                                    countdown ? typography.statLarge : typography.h1,
-                                    s.heroVal,
-                                    { color: countdown ? colors.text.primary : heroColor },
-                                    // White-on-coral runs ~2.84:1; a soft dark
-                                    // text shadow lifts legibility on the filled
-                                    // hero. Rest-mode (cyan-on-glass) already
-                                    // passes AA so it skips the shadow.
-                                    countdown ? s.heroValShadow : null,
-                                ]}
-                                numberOfLines={1}
-                                adjustsFontSizeToFit
-                                maxFontSizeMultiplier={STAT_MAX_SCALE}
-                            >
-                                {countdown ?? 'Rest Mode'}
-                            </Text>
+                        <View style={s.heroInner}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[typography.overline, s.heroLbl, { color: countdown ? withAlpha('#FFFFFF', 0.92) : colors.text.secondary }]}>
+                                    {countdown ? 'Your shift ends in' : 'No active shift'}
+                                </Text>
+                                <Text
+                                    style={[
+                                        countdown ? typography.statLarge : typography.h1,
+                                        s.heroVal,
+                                        { color: countdown ? colors.text.primary : heroColor },
+                                        // White-on-coral runs ~2.84:1; a soft dark
+                                        // text shadow lifts legibility on the filled
+                                        // hero. Rest-mode (cyan-on-glass) already
+                                        // passes AA so it skips the shadow.
+                                        countdown ? s.heroValShadow : null,
+                                    ]}
+                                    numberOfLines={1}
+                                    adjustsFontSizeToFit
+                                    maxFontSizeMultiplier={STAT_MAX_SCALE}
+                                >
+                                    {countdown ?? 'Rest Mode'}
+                                </Text>
+                            </View>
+                            <View style={[s.heroIcon, { backgroundColor: countdown ? withAlpha('#FFFFFF', 0.18) : withAlpha(heroColor, 0.12) }]}>
+                                <Ionicons
+                                    name={countdown ? 'time-outline' : 'moon-outline'}
+                                    size={34}
+                                    color={countdown ? colors.text.primary : heroColor}
+                                />
+                            </View>
                         </View>
-                        <View style={[s.heroIcon, { backgroundColor: countdown ? withAlpha('#FFFFFF', 0.18) : withAlpha(heroColor, 0.12) }]}>
-                            <Ionicons
-                                name={countdown ? 'time-outline' : 'moon-outline'}
-                                size={34}
-                                color={countdown ? colors.text.primary : heroColor}
-                            />
-                        </View>
-                    </SafeBlurView>
+                    </GlassCard>
                 </TouchableOpacity>
 
                 {/* ══ CIRCADIAN INSIGHT CHIP ══════════════════════════════════ */}
@@ -428,17 +426,13 @@ export default function DashboardScreen() {
                         <Skeleton width="100%" height={46} radius={borderRadius.lg} style={{ marginTop: spacing.xl }} />
                     </View>
                 ) : nextMeal ? (
-                    <View style={{ borderRadius: 24, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}>
-                        <SafeBlurView
-                            tint="dark"
-                            intensity={40}
-                            style={[s.upNextCard, { borderWidth: 0 }]}
-                        >
-                            <LinearGradient
-                                colors={[withAlpha(colors.accent.coral, 0.08), 'transparent']}
-                                style={StyleSheet.absoluteFillObject}
-                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                            />
+                    <GlassCard intensity={40} radius={24} style={{ marginBottom: 16 }}>
+                        <LinearGradient
+                            colors={[withAlpha(colors.accent.coral, 0.08), 'transparent']}
+                            style={StyleSheet.absoluteFillObject}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                        />
+                        <View style={s.upNextInner}>
                             <View style={s.upNextTop}>
                                 <View style={[s.upNextBadge, { backgroundColor: withAlpha(colors.accent.coral, 0.12) }]}>
                                     <Text style={[typography.overline, s.upNextLbl, { color: colors.accent.coral }]}>UP NEXT</Text>
@@ -461,26 +455,14 @@ export default function DashboardScreen() {
                                     <MacroPill label="Fat" value={nextMeal.macros.fat + 'g'} color={colors.accent.amber} />
                                 </View>
                             )}
-                            <TouchableOpacity
-                                style={[s.logBtn, { overflow: 'hidden' }, shadows.glow(colors.accent.pink)]}
+                            <CtaButton
+                                size="md"
+                                icon="checkmark"
+                                label="Log Meal"
                                 onPress={() => router.push('/(tabs)/nutrition' as any)}
-                                activeOpacity={0.85}
-                                accessibilityRole="button"
-                                accessibilityLabel="Log Meal"
-                            >
-                                {/* Shared coralCta token starts at coralDark (not
-                                    the lighter brand coral stop) to raise white-label
-                                    contrast toward AA on the fill. */}
-                                <LinearGradient
-                                    colors={palette.gradients.coralCta}
-                                    style={StyleSheet.absoluteFillObject}
-                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                                />
-                                <Ionicons name="checkmark" size={17} color="#fff" />
-                                <Text style={s.logBtnTxt} maxFontSizeMultiplier={STAT_MAX_SCALE}>Log Meal</Text>
-                            </TouchableOpacity>
-                        </SafeBlurView>
-                    </View>
+                            />
+                        </View>
+                    </GlassCard>
                 ) : (
                     <View style={s.emptyCard}>
                         <EmptyState
@@ -515,28 +497,26 @@ export default function DashboardScreen() {
                 <View style={s.miniRow}>
                     {/* Sleep Window */}
                     <TouchableOpacity
-                        style={{ width: MINI_W, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}
+                        style={{ width: MINI_W }}
                         onPress={() => router.push('/(shifts)/sleep-optimizer' as any)}
                         activeOpacity={0.8}
                         accessibilityRole="button"
                         accessibilityLabel="Sleep Window, 8 hour target, melatonin guide"
                     >
-                        <SafeBlurView
-                            tint="dark"
-                            intensity={40}
-                            style={[s.miniCard, { borderWidth: 0, width: '100%' }]}
-                        >
-                            <View style={[s.miniIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.14) }]}>
-                                <Ionicons name="moon" size={20} color={colors.accent.purple} />
+                        <GlassCard intensity={40} radius={20} style={{ width: '100%' }}>
+                            <View style={s.miniInner}>
+                                <View style={[s.miniIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.14) }]}>
+                                    <Ionicons name="moon" size={20} color={colors.accent.purple} />
+                                </View>
+                                <Text style={[typography.overline, s.miniLbl, { color: colors.text.secondary }]}>Sleep Window</Text>
+                                <Text style={[s.miniVal, { color: colors.text.primary }]}>
+                                    <Text style={typography.statSmall}>8h</Text>
+                                    <Text style={[typography.captionMedium, { color: colors.text.secondary }]}> target</Text>
+                                </Text>
+                                {/* purpleLight (6.27:1) not purple (#7C4DFF, 4.06 — AA-large only) for AA on this small footer text. */}
+                                <Text style={[typography.captionMedium, s.miniSub, { color: colors.accent.purpleLight }]}>Melatonin guide →</Text>
                             </View>
-                            <Text style={[typography.overline, s.miniLbl, { color: colors.text.secondary }]}>Sleep Window</Text>
-                            <Text style={[s.miniVal, { color: colors.text.primary }]}>
-                                <Text style={typography.statSmall}>8h</Text>
-                                <Text style={[typography.captionMedium, { color: colors.text.secondary }]}> target</Text>
-                            </Text>
-                            {/* purpleLight (6.27:1) not purple (#7C4DFF, 4.06 — AA-large only) for AA on this small footer text. */}
-                            <Text style={[typography.captionMedium, s.miniSub, { color: colors.accent.purpleLight }]}>Melatonin guide →</Text>
-                        </SafeBlurView>
+                        </GlassCard>
                     </TouchableOpacity>
 
                     {/* Hydration (with uniform error EmptyState on failure) */}
@@ -551,12 +531,8 @@ export default function DashboardScreen() {
                             />
                         </View>
                     ) : (
-                        <View style={{ width: MINI_W, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}>
-                            <SafeBlurView
-                                tint="dark"
-                                intensity={40}
-                                style={[s.miniCard, { borderWidth: 0, width: '100%' }]}
-                            >
+                        <GlassCard intensity={40} radius={20} style={{ width: MINI_W }}>
+                            <View style={s.miniInner}>
                                 <View style={[s.miniIcon, { backgroundColor: withAlpha(colors.accent.blue, 0.14) }]}>
                                     <Ionicons name="water" size={20} color={colors.accent.blue} />
                                 </View>
@@ -584,8 +560,8 @@ export default function DashboardScreen() {
                                 >
                                     <Text style={[typography.captionMedium, s.addWaterTxt, { color: colors.accent.blue }]}>+ Add 250ml</Text>
                                 </TouchableOpacity>
-                            </SafeBlurView>
-                        </View>
+                            </View>
+                        </GlassCard>
                     )}
                 </View>
 
@@ -748,15 +724,8 @@ export default function DashboardScreen() {
                         />
                     </View>
                 ) : (
-                    <>
-                        <SafeBlurView
-                            tint="dark"
-                            intensity={40}
-                            style={[s.timeline, {
-                                borderColor: withAlpha(colors.text.primary, 0.1),
-                                overflow: 'hidden',
-                            }]}
-                        >
+                    <GlassCard intensity={40} radius={20} style={s.timelineWrap}>
+                        <View style={s.timelineInner}>
                             {sortedMeals.map((meal, idx) => {
                                 const mMin = toMinutes(meal.time);
                                 const isPast = mMin < nowMin;
@@ -805,8 +774,8 @@ export default function DashboardScreen() {
                                     </View>
                                 );
                             })}
-                        </SafeBlurView>
-                    </>
+                        </View>
+                    </GlassCard>
                 )}
 
                 {/* ══ WEEKLY RECAP ════════════════════════════════════════════ */}
@@ -844,6 +813,10 @@ const s = StyleSheet.create({
 
     // Hero
     heroCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 24, borderRadius: 24, borderWidth: 1, overflow: 'hidden', marginBottom: 12 },
+    // Press wrapper owns only the outer spacing now; the GlassCard owns the
+    // radius/hairline/glow and the heroInner View owns the row layout + padding.
+    heroPress: { marginBottom: 12 },
+    heroInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 24 },
     heroLbl: { marginBottom: 6 },
     heroVal: {},
     heroValShadow: { textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
@@ -855,6 +828,8 @@ const s = StyleSheet.create({
 
     // UP NEXT card
     upNextCard: { padding: 22, borderRadius: 24, borderWidth: 1, overflow: 'hidden', marginBottom: 16 },
+    // Inner content padding for the GlassCard-wrapped UP NEXT card.
+    upNextInner: { padding: 22 },
     upNextSkeleton: { padding: 22, borderRadius: 24, borderWidth: 1, borderColor: palette.border.default, backgroundColor: withAlpha(palette.background.secondary, 0.5), marginBottom: 16 },
     upNextTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
     upNextBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
@@ -864,14 +839,13 @@ const s = StyleSheet.create({
     mealName: { marginBottom: 6 },
     mealDesc: { marginBottom: 14 },
     macroRow: { flexDirection: 'row', marginBottom: 18 },
-    logBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 13, borderRadius: 14, minHeight: 46 },
-    // textShadow nudges the white label clear of the bright pink gradient end.
-    logBtnTxt: { color: '#fff', fontSize: 15, fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
 
     // Mini cards
     miniRow: { flexDirection: 'row', gap: CARD_GAP, marginBottom: 12 },
     caffeineRow: { marginBottom: 28 },
     miniCard: { width: MINI_W, padding: 16, borderRadius: 20, borderWidth: 1 },
+    // Inner content padding for the GlassCard-wrapped mini cards (sleep/hydration).
+    miniInner: { padding: 16 },
     miniIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
     miniLbl: { marginBottom: 4 },
     miniVal: { marginBottom: 4 },
@@ -904,7 +878,12 @@ const s = StyleSheet.create({
     viewAll: {},
 
     // Timeline
+    // `timeline` is still used by the loading-skeleton View (plain bordered box).
+    // The populated timeline is now a GlassCard: `timelineWrap` carries its outer
+    // margin and `timelineInner` the row padding the old SafeBlurView held.
     timeline: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 28 },
+    timelineWrap: { marginBottom: 28 },
+    timelineInner: { paddingHorizontal: 16, paddingVertical: 12 },
     tlRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10 },
     tlTime: { width: 44, fontSize: 12, fontWeight: '700', paddingTop: 2 },
     tlConnector: { alignItems: 'center', width: 24, marginHorizontal: 4 },

@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, ImageBackground } from 'react-native';
 import { Image } from 'expo-image';
-import { SafeBlurView } from '@/components/SafeBlurView';
 import { TAB_BAR_H } from './_layout';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
@@ -11,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { getRoutines, getActiveSession, Routine } from '@/api/exercises';
-import { Skeleton, EmptyState } from '@/components/ui';
+import { Skeleton, EmptyState, GlassCard, CtaButton } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 const { width } = Dimensions.get('window');
 // Bundled Aurora dark-glass art (no external host → offline-safe, no 404 /
@@ -82,18 +81,20 @@ export default function TrainingHubScreen() {
                             </LinearGradient>
                         </TouchableOpacity>
                     ) : (
-                        <TouchableOpacity activeOpacity={0.9} accessibilityRole="button" accessibilityLabel="Start new session" style={[s.startWrap,{borderColor:colors.border.default,marginHorizontal:20,marginBottom:24}]} onPress={()=>router.push('/training/onboarding' as any)}>
-                            <SafeBlurView tint="dark" intensity={40} style={s.startCard}>
-                                <LinearGradient colors={[withAlpha(colors.accent.coral,0.22),withAlpha(colors.accent.pink,0.10),'transparent']} start={{x:0,y:0}} end={{x:1,y:1}} style={StyleSheet.absoluteFillObject} />
-                                <LinearGradient colors={['rgba(255,255,255,0.06)','rgba(255,255,255,0)']} start={{x:0,y:0}} end={{x:0,y:1}} style={s.startSheen} pointerEvents="none" />
-                                <View style={{zIndex:1}}><Text style={[typography.h2,{color:colors.text.primary}]}>Start New Session</Text><Text style={[typography.body,{color:colors.text.secondary,marginTop:4}]}>Pick a routine or go freestyle.</Text>
-                                    <View style={[s.beginBadge,shadows.glow(colors.accent.pink)]}>
-                                        <LinearGradient colors={colors.gradients.coralCta} start={{x:0,y:0}} end={{x:1,y:0}} style={StyleSheet.absoluteFillObject} />
-                                        <Ionicons name="add" size={16} color={colors.text.primary} /><Text maxFontSizeMultiplier={1.3} style={[s.badgeTxt,{color:colors.text.primary},s.txtShadow]}>BEGIN</Text>
+                        <TouchableOpacity activeOpacity={0.9} accessibilityRole="button" accessibilityLabel="Start new session" style={{marginHorizontal:20,marginBottom:24}} onPress={()=>router.push('/training/onboarding' as any)}>
+                            <GlassCard style={{borderColor:colors.border.default}}>
+                                <View style={s.startCard}>
+                                    <LinearGradient colors={[withAlpha(colors.accent.coral,0.22),withAlpha(colors.accent.pink,0.10),'transparent']} start={{x:0,y:0}} end={{x:1,y:1}} style={StyleSheet.absoluteFillObject} />
+                                    <LinearGradient colors={['rgba(255,255,255,0.06)','rgba(255,255,255,0)']} start={{x:0,y:0}} end={{x:0,y:1}} style={s.startSheen} pointerEvents="none" />
+                                    <View style={{zIndex:1}}><Text style={[typography.h2,{color:colors.text.primary}]}>Start New Session</Text><Text style={[typography.body,{color:colors.text.secondary,marginTop:4}]}>Pick a routine or go freestyle.</Text>
+                                        <View style={[s.beginBadge,shadows.glow(colors.accent.pink)]}>
+                                            <LinearGradient colors={colors.gradients.coralCta} start={{x:0,y:0}} end={{x:1,y:0}} style={StyleSheet.absoluteFillObject} />
+                                            <Ionicons name="add" size={16} color={colors.text.primary} /><Text maxFontSizeMultiplier={1.3} style={[s.badgeTxt,{color:colors.text.primary},s.txtShadow]}>BEGIN</Text>
+                                        </View>
                                     </View>
+                                    <Ionicons name="flash" size={80} color={withAlpha(colors.accent.coral,0.12)} style={s.bgIco} />
                                 </View>
-                                <Ionicons name="flash" size={80} color={withAlpha(colors.accent.coral,0.12)} style={s.bgIco} />
-                            </SafeBlurView>
+                            </GlassCard>
                         </TouchableOpacity>
                     )}
                     <View style={s.secHd}><Text style={[typography.overline,{color:colors.text.secondary}]}>Explore Workouts</Text></View>
@@ -184,10 +185,14 @@ export default function TrainingHubScreen() {
                                     );
                                 })}
                                 {(activePlan.exercises?.length??0)>6&&<Text style={[typography.caption,{color:colors.text.secondary,textAlign:'center',marginTop:8}]}>+{(activePlan.exercises?.length??0)-6} more exercises</Text>}
-                                <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Start session" style={[s.todayBtn,{marginTop:20},shadows.glow(colors.accent.pink)]} onPress={()=>router.push({pathname:'/training/onboarding',params:{routineId:activePlan.id}} as any)}>
-                                    <LinearGradient colors={colors.gradients.coralCta} start={{x:0,y:0}} end={{x:1,y:0}} style={s.btnFill} />
-                                    <Ionicons name="flash" size={20} color={colors.text.primary} /><Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'900',marginLeft:8},s.txtShadow]}>START SESSION</Text>
-                                </TouchableOpacity>
+                                <CtaButton
+                                    size="lg"
+                                    icon="flash"
+                                    label="START SESSION"
+                                    accessibilityLabel="Start session"
+                                    style={{marginTop:20,height:56,borderRadius:28}}
+                                    onPress={()=>router.push({pathname:'/training/onboarding',params:{routineId:activePlan.id}} as any)}
+                                />
                             </View>
                         ) : (
                             <EmptyState
@@ -211,7 +216,7 @@ const s = StyleSheet.create({
     switcher:{flexDirection:'row',borderRadius:14,padding:4}, swBtn:{flex:1,paddingVertical:10,borderRadius:10,alignItems:'center'},
     activeWrap:{borderRadius:24,overflow:'hidden'}, activeCard:{padding:20}, activeRow:{flexDirection:'row',alignItems:'center'},
     activeIcon:{width:40,height:40,borderRadius:20,backgroundColor:'#FFF',alignItems:'center',justifyContent:'center'},
-    startWrap:{borderRadius:24,overflow:'hidden',borderWidth:1}, startCard:{padding:28,height:160,justifyContent:'center',overflow:'hidden'},
+    startCard:{padding:28,height:160,justifyContent:'center',overflow:'hidden'},
     startSheen:{position:'absolute',top:0,left:0,right:0,height:64},
     beginBadge:{alignSelf:'flex-start',flexDirection:'row',alignItems:'center',paddingHorizontal:14,paddingVertical:7,borderRadius:9999,marginTop:18,overflow:'hidden'},
     badgeTxt:{color:'#FFF',fontSize:10,fontWeight:'900',marginLeft:4,letterSpacing:0.5}, bgIco:{position:'absolute',right:-10,bottom:-10},
@@ -228,6 +233,4 @@ const s = StyleSheet.create({
     planBadge:{alignSelf:'flex-start',paddingHorizontal:8,paddingVertical:3,borderRadius:6,borderWidth:1},
     exRow:{flexDirection:'row',alignItems:'center',padding:14,marginBottom:10,borderRadius:14,borderWidth:1},
     exDot:{width:8,height:8,borderRadius:4},
-    todayBtn:{height:56,borderRadius:28,flexDirection:'row',alignItems:'center',justifyContent:'center',overflow:'hidden'},
-    btnFill:{...StyleSheet.absoluteFillObject},
 });
