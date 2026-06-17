@@ -1,6 +1,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { sendUnauthorizedPayload } from '@nightfuel/config';
 import {
     updateProfileSchema,
     updatePreferencesSchema,
@@ -12,15 +13,16 @@ import { UserService } from './user.service';
 // ── Shared userId extractor ───────────────────────────────────────────────────
 // auth-service signs JWTs with { userId, role }. @fastify/jwt attaches the
 // decoded payload as request.user, so we read .userId (primary) or .id (legacy).
+// On failure we delegate to the canonical sendUnauthorizedPayload helper
+// (packages/config/src/auth-errors.ts) — that keeps the wire body identical to
+// every other service. Returning `null` is the signal callers use to short-
+// circuit before doing any DB work (see `if (!userId) return;` at every call
+// site below).
 function extractUserId(request: FastifyRequest, reply: FastifyReply): string | null {
     const user = request.user as any;
     const userId: string | undefined = user?.userId ?? user?.id;
     if (!userId || typeof userId !== 'string') {
-        reply.code(401).send({
-            statusCode: 401,
-            error: 'Unauthorized',
-            message: 'Token payload is missing userId.',
-        });
+        sendUnauthorizedPayload(reply, request);
         return null;
     }
     return userId;

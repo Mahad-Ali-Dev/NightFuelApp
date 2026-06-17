@@ -5,6 +5,7 @@ import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandle
 import { z } from 'zod';
 import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
+import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyWebsocket from '@fastify/websocket';
 import { ChatService } from './chat.service';
 import routes from './routes';
@@ -28,6 +29,18 @@ fastify.withTypeProvider<ZodTypeProvider>();
 
 fastify.register(fastifyHelmet);
 fastify.register(fastifyCors, { origin: true });
+
+// Global IP-cap on every request — including the GET that initiates the
+// /v1/chat/ws upgrade — so a hostile client can't churn through expensive
+// JWT verifies / DB writes from a single IP. Stays generous enough for a
+// normal phone client (a few polls + the upgrade) and is layered on top of
+// the per-socket token bucket inside the WS handler.
+fastify.register(fastifyRateLimit, {
+    max: 10,
+    timeWindow: '1 minute',
+    keyGenerator: (req) => req.ip,
+});
+
 // @fastify/websocket types conflict with ZodTypeProvider — cast to any
 fastify.register(fastifyWebsocket as any);
 

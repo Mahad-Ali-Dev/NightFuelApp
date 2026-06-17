@@ -15,6 +15,10 @@ import { shadows } from '@/theme/shadows';
 import { typography as themeTypography } from '@/theme/typography';
 import { format, parseISO, differenceInMinutes } from 'date-fns';
 import { getErrorMessage } from '@/utils/validation';
+import {
+    validateLogSleepForm,
+    fieldErrorsFromAxiosError,
+} from '@/lib/logFormSchemas';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -58,6 +62,10 @@ export default function LogSleepModal() {
     const [disturbances, setDisturbances] = useState(0);
     const [notes, setNotes] = useState('');
     const [showForm, setShowForm] = useState(false);
+    // Inline field-level error copy — same shape and lifecycle as the
+    // log-shift modal. Populated by the client-side validator before we POST
+    // and by the server-error adapter on a Zod 400 from the API.
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
     // ── Fetch saved sessions ───────────────────────────────────────────────────
     const { data: sessions = [], isLoading: sessionsLoading, isError: sessionsError, refetch } = useQuery({
@@ -97,15 +105,52 @@ export default function LogSleepModal() {
             setQuality(7);
             setDisturbances(0);
             setNotes('');
+            setFieldErrors({});
             setShowForm(false);
             Alert.alert('Saved ✓', 'Sleep recovery data logged successfully.');
         },
         onError: (err) => {
+            // Prefer inline field-level errors over an opaque Alert when the
+            // server returned a Zod ValidationError (400). 5xx and network
+            // errors still fall through to the Alert.
+            const fromServer = fieldErrorsFromAxiosError(err);
+            if (fromServer) {
+                setFieldErrors(fromServer);
+                return;
+            }
             Alert.alert('Error', getErrorMessage(err));
         },
     });
 
-    const handleSave = () => mutation.mutate();
+    const handleSave = () => {
+        const result = validateLogSleepForm({
+            startDay,
+            startTime,
+            endDay,
+            endTime,
+            quality,
+            disturbances,
+            notes,
+        });
+        if (!result.ok) {
+            setFieldErrors(result.fieldErrors);
+            return;
+        }
+        setFieldErrors({});
+        mutation.mutate();
+    };
+
+    const hasErrors = Object.keys(fieldErrors).length > 0;
+
+    // Helper to drop a single field error as the user edits it — keeps the
+    // red helper text from lingering once the user has obviously moved on.
+    const clearFieldError = (key: string) => {
+        setFieldErrors((prev) => {
+            if (!prev[key]) return prev;
+            const { [key]: _omit, ...rest } = prev;
+            return rest;
+        });
+    };
 
     // ── Render helpers ─────────────────────────────────────────────────────────
 
@@ -249,52 +294,118 @@ export default function LogSleepModal() {
                             {/* Sleep Started */}
                             <Text style={[styles.fieldLabel, typography.caption, { color: colors.text.secondary }]}>SLEEP STARTED</Text>
                             <View style={styles.row}>
-                                <View style={[styles.inputBox, { backgroundColor: colors.background.primary, borderColor: colors.border.default }]}>
+                                <View
+                                    style={[
+                                        styles.inputBox,
+                                        {
+                                            backgroundColor: colors.background.primary,
+                                            borderColor: fieldErrors.startDay ? colors.accent.red : colors.border.default,
+                                        },
+                                    ]}
+                                >
                                     <Ionicons name="calendar-outline" size={18} color={colors.text.tertiary} />
                                     <TextInput
                                         style={[styles.textInput, { color: colors.text.primary }]}
                                         value={startDay}
-                                        onChangeText={setStartDay}
+                                        onChangeText={(v) => {
+                                            setStartDay(v);
+                                            clearFieldError('startDay');
+                                        }}
                                         placeholder="YYYY-MM-DD"
                                         placeholderTextColor={colors.text.tertiary}
                                     />
                                 </View>
-                                <View style={[styles.inputBox, { backgroundColor: colors.background.primary, borderColor: colors.border.default, marginLeft: 10 }]}>
+                                <View
+                                    style={[
+                                        styles.inputBox,
+                                        {
+                                            backgroundColor: colors.background.primary,
+                                            borderColor: fieldErrors.startTime ? colors.accent.red : colors.border.default,
+                                            marginLeft: 10,
+                                        },
+                                    ]}
+                                >
                                     <Ionicons name="time-outline" size={18} color={colors.text.tertiary} />
                                     <TextInput
                                         style={[styles.textInput, { color: colors.text.primary }]}
                                         value={startTime}
-                                        onChangeText={setStartTime}
+                                        onChangeText={(v) => {
+                                            setStartTime(v);
+                                            clearFieldError('startTime');
+                                        }}
                                         placeholder="HH:MM"
                                         placeholderTextColor={colors.text.tertiary}
                                     />
                                 </View>
                             </View>
+                            {fieldErrors.startDay ? (
+                                <Text accessibilityRole="alert" style={{ color: colors.accent.red, marginTop: 4, fontSize: 12 }}>
+                                    {fieldErrors.startDay}
+                                </Text>
+                            ) : null}
+                            {fieldErrors.startTime ? (
+                                <Text accessibilityRole="alert" style={{ color: colors.accent.red, marginTop: 4, fontSize: 12 }}>
+                                    {fieldErrors.startTime}
+                                </Text>
+                            ) : null}
 
                             {/* Sleep Ended */}
                             <Text style={[styles.fieldLabel, typography.caption, { color: colors.text.secondary, marginTop: 16 }]}>SLEEP ENDED</Text>
                             <View style={styles.row}>
-                                <View style={[styles.inputBox, { backgroundColor: colors.background.primary, borderColor: colors.border.default }]}>
+                                <View
+                                    style={[
+                                        styles.inputBox,
+                                        {
+                                            backgroundColor: colors.background.primary,
+                                            borderColor: fieldErrors.endDay ? colors.accent.red : colors.border.default,
+                                        },
+                                    ]}
+                                >
                                     <Ionicons name="calendar-outline" size={18} color={colors.text.tertiary} />
                                     <TextInput
                                         style={[styles.textInput, { color: colors.text.primary }]}
                                         value={endDay}
-                                        onChangeText={setEndDay}
+                                        onChangeText={(v) => {
+                                            setEndDay(v);
+                                            clearFieldError('endDay');
+                                        }}
                                         placeholder="YYYY-MM-DD"
                                         placeholderTextColor={colors.text.tertiary}
                                     />
                                 </View>
-                                <View style={[styles.inputBox, { backgroundColor: colors.background.primary, borderColor: colors.border.default, marginLeft: 10 }]}>
+                                <View
+                                    style={[
+                                        styles.inputBox,
+                                        {
+                                            backgroundColor: colors.background.primary,
+                                            borderColor: fieldErrors.endTime ? colors.accent.red : colors.border.default,
+                                            marginLeft: 10,
+                                        },
+                                    ]}
+                                >
                                     <Ionicons name="time-outline" size={18} color={colors.text.tertiary} />
                                     <TextInput
                                         style={[styles.textInput, { color: colors.text.primary }]}
                                         value={endTime}
-                                        onChangeText={setEndTime}
+                                        onChangeText={(v) => {
+                                            setEndTime(v);
+                                            clearFieldError('endTime');
+                                        }}
                                         placeholder="HH:MM"
                                         placeholderTextColor={colors.text.tertiary}
                                     />
                                 </View>
                             </View>
+                            {fieldErrors.endDay ? (
+                                <Text accessibilityRole="alert" style={{ color: colors.accent.red, marginTop: 4, fontSize: 12 }}>
+                                    {fieldErrors.endDay}
+                                </Text>
+                            ) : null}
+                            {fieldErrors.endTime ? (
+                                <Text accessibilityRole="alert" style={{ color: colors.accent.red, marginTop: 4, fontSize: 12 }}>
+                                    {fieldErrors.endTime}
+                                </Text>
+                            ) : null}
 
                             {/* Quality */}
                             <Text style={[styles.fieldLabel, typography.caption, { color: colors.text.secondary, marginTop: 16 }]}>
@@ -312,7 +423,10 @@ export default function LogSleepModal() {
                                             styles.qualityBtn,
                                             { backgroundColor: quality >= num ? qualityColor(quality, colors) : colors.background.primary },
                                         ]}
-                                        onPress={() => setQuality(num)}
+                                        onPress={() => {
+                                            setQuality(num);
+                                            clearFieldError('quality');
+                                        }}
                                     />
                                 ))}
                             </View>
@@ -320,13 +434,21 @@ export default function LogSleepModal() {
                                 <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>Poor</Text>
                                 <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>Deep</Text>
                             </View>
+                            {fieldErrors.quality ? (
+                                <Text accessibilityRole="alert" style={{ color: colors.accent.red, marginTop: 4, fontSize: 12 }}>
+                                    {fieldErrors.quality}
+                                </Text>
+                            ) : null}
 
                             {/* Disturbances */}
                             <Text style={[styles.fieldLabel, typography.caption, { color: colors.text.secondary, marginTop: 16 }]}>NIGHT WAKE-UPS</Text>
                             <View style={styles.disturbanceRow}>
                                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Decrease"
                                     style={[styles.stepperBtn, { backgroundColor: colors.background.primary, borderColor: colors.border.default }]}
-                                    onPress={() => setDisturbances(Math.max(0, disturbances - 1))}
+                                    onPress={() => {
+                                        setDisturbances(Math.max(0, disturbances - 1));
+                                        clearFieldError('disturbances');
+                                    }}
                                 >
                                     <Ionicons name="remove" size={20} color={colors.accent.coral} />
                                 </TouchableOpacity>
@@ -338,27 +460,43 @@ export default function LogSleepModal() {
                                 </View>
                                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Add"
                                     style={[styles.stepperBtn, { backgroundColor: colors.background.primary, borderColor: colors.border.default }]}
-                                    onPress={() => setDisturbances(disturbances + 1)}
+                                    onPress={() => {
+                                        setDisturbances(disturbances + 1);
+                                        clearFieldError('disturbances');
+                                    }}
                                 >
                                     <Ionicons name="add" size={20} color={colors.accent.cyan} />
                                 </TouchableOpacity>
                             </View>
+                            {fieldErrors.disturbances ? (
+                                <Text accessibilityRole="alert" style={{ color: colors.accent.red, marginTop: 4, fontSize: 12 }}>
+                                    {fieldErrors.disturbances}
+                                </Text>
+                            ) : null}
 
                             {/* Notes */}
                             <Text style={[styles.fieldLabel, typography.caption, { color: colors.text.secondary, marginTop: 16 }]}>RECOVERY NOTES</Text>
                             <TextInput
                                 style={[styles.notesInput, {
                                     backgroundColor: colors.background.primary,
-                                    borderColor: colors.border.default,
+                                    borderColor: fieldErrors.notes ? colors.accent.red : colors.border.default,
                                     color: colors.text.primary,
                                 }]}
                                 value={notes}
-                                onChangeText={setNotes}
+                                onChangeText={(v) => {
+                                    setNotes(v);
+                                    clearFieldError('notes');
+                                }}
                                 placeholder="e.g. Woke up to bright light, felt groggy, used blackout curtains"
                                 placeholderTextColor={colors.text.tertiary}
                                 multiline
                                 textAlignVertical="top"
                             />
+                            {fieldErrors.notes ? (
+                                <Text accessibilityRole="alert" style={{ color: colors.accent.red, marginTop: 4, fontSize: 12 }}>
+                                    {fieldErrors.notes}
+                                </Text>
+                            ) : null}
 
                             {/* Save button */}
                             <Button
@@ -366,6 +504,7 @@ export default function LogSleepModal() {
                                 onPress={handleSave}
                                 variant="primary"
                                 loading={mutation.isPending}
+                                disabled={hasErrors}
                                 style={{ marginTop: 20 }}
                             />
                         </View>

@@ -55,6 +55,12 @@ const DEMO_URLS: Record<string, string> = {
     'Basic Kegel Squeeze': 'https://www.youtube.com/watch?v=PMHc5W2YO9o',
     'Quick-Flick Kegels': 'https://www.youtube.com/watch?v=lFKYltA2tA8',
     'Elevator Kegel': 'https://www.youtube.com/watch?v=jWj4iBxQ0Xc',
+    // Keep in sync with prisma/demo-urls.ts — the demo-maps sync guard enforces parity.
+    'Hammer Curls': 'https://www.youtube.com/watch?v=tjyraFISkbg',
+    'Hanging Leg Raise': 'https://www.youtube.com/watch?v=Pr1ieGZ5atk',
+    'Face Pull': 'https://www.youtube.com/watch?v=rep-qVOkqgk',
+    'Goblet Squat': 'https://www.youtube.com/watch?v=MeIiIdhvXT4',
+    'Barbell Hip Thrust': 'https://www.youtube.com/watch?v=LM8XHLYJoYs',
 };
 
 const DEMO_URLS_LC: Record<string, string> = Object.fromEntries(

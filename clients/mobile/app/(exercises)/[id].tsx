@@ -13,6 +13,7 @@ import { spacing } from '@/theme/spacing';
 import { Skeleton, EmptyState } from '@/components/ui';
 import { LineChart } from 'react-native-gifted-charts';
 import { resolveDemo, resolveDemoFrames, tipsFor } from '@/constants/exerciseDemos';
+import { getCuratedDemo, getCuratedDemoFrames, getCuratedDemoVerified } from '@/constants/curatedDemos';
 import { ExerciseDemo } from '@/components/exercise/ExerciseDemo';
 const { width } = Dimensions.get('window');
 // Bundled neutral placeholder shown when an exercise has no image (no network hit).
@@ -34,6 +35,14 @@ const muscleLabel = (raw?: string | null): string => {
 };
 type DetailTab = 'howto' | 'muscles' | 'tips' | 'progress';
 const TABS: { key: DetailTab; label: string }[] = [{ key: 'howto', label: 'How To' },{ key: 'muscles', label: 'Muscles' },{ key: 'tips', label: 'Pro Tips' },{ key: 'progress', label: 'Progress' }];
+// The set of demo-source inputs we hand to <ExerciseDemo/> for the active
+// exercise. Each slot is independently null so the precedence walk below can
+// fall through cleanly when no source resolves.
+type DemoInputs = {
+    demoFrames: readonly string[] | null;
+    demoUrl: string | null;
+    demoGifUrl: string | null;
+};
 export default function ExerciseDetailScreen() {
     const { colors, typography, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
@@ -56,11 +65,40 @@ export default function ExerciseDetailScreen() {
     }, [exercise?.instructions]);
     // A single chunk reads better as a flowing paragraph than a lone "1." bullet.
     const isSingleParagraph = instructions.length === 1;
-    // In-app looping demo frames (start↔end of the rep) from the curated client
-    // map; null when uncovered so <ExerciseDemo/> falls back to the still image.
-    const demoFrames = useMemo(() => resolveDemoFrames(exercise), [exercise]);
-    // Secondary "full tutorial" link: prefer backend demoUrl, else curated YouTube map.
-    const demoUrl = useMemo(() => resolveDemo(exercise), [exercise]);
+    // Demo-source precedence, preserving the existing resolveDemoFrames/resolveDemo
+    // result as the default. The curated map (sibling module) is only consulted
+    // when BOTH existing resolvers return null — strictly additive coverage for
+    // the >=100 exercise names CURATED_DEMOS adds on top of the original 35.
+    // Returned as a single record (typed at {@link DemoInputs} above) so the
+    // four <ExerciseDemo/> input slots stay co-derived from the same walk.
+    const { demoFrames, demoUrl, demoGifUrl } = useMemo<DemoInputs>(() => {
+        const existingFrames = resolveDemoFrames(exercise);
+        const existingUrl = resolveDemo(exercise);
+        // Skip the curated lookup entirely when either default resolver already
+        // produced a result — we never override an existing demo.
+        if (existingFrames || existingUrl) {
+            return { demoFrames: existingFrames, demoUrl: existingUrl, demoGifUrl: null };
+        }
+        const name = exercise?.name ?? '';
+        const curated = getCuratedDemo(name);
+        if (!curated) {
+            return { demoFrames: null, demoUrl: null, demoGifUrl: null };
+        }
+        // Translate the curated entry's kind into the matching <ExerciseDemo/>
+        // input slot. fedb_frames feeds the animated loop, youtube feeds the
+        // "Full tutorial" link, gif feeds the single-still gifUrl input.
+        if (curated.kind === 'fedb_frames') {
+            return { demoFrames: getCuratedDemoFrames(name), demoUrl: null, demoGifUrl: null };
+        }
+        if (curated.kind === 'youtube') {
+            return { demoFrames: null, demoUrl: curated.url, demoGifUrl: null };
+        }
+        // curated.kind === 'gif'
+        return { demoFrames: null, demoUrl: null, demoGifUrl: curated.url };
+    }, [exercise]);
+    // Curated `verified` flag for the current exercise name. Null when no
+    // curated entry exists; false renders the "Unreviewed" chip below.
+    const curatedVerified = useMemo(() => getCuratedDemoVerified(exercise?.name ?? ''), [exercise?.name]);
     // Body-part-specific coaching cues (distinct per muscle group); generic fallback.
     const { tips, isGeneral: tipsAreGeneral } = useMemo(() => tipsFor(exercise?.bodyPart), [exercise?.bodyPart]);
     // Secondary muscles — guarded: the API may not surface this field yet.
@@ -147,11 +185,20 @@ export default function ExerciseDetailScreen() {
             <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
                 <ExerciseDemo
                     frames={demoFrames}
+                    gifUrl={demoGifUrl ?? null}
                     imageUrl={exercise.imageUrl ?? null}
                     fallback={FALLBACK_IMAGE}
                     tutorialUrl={demoUrl}
                 />
                 <View style={{ padding: 20, marginTop: -40 }}>
+                    {curatedVerified === false ? (
+                        <View
+                            accessibilityLabel="Demo not yet human-reviewed"
+                            style={[s.badge, { alignSelf: 'flex-start', marginBottom: 10, backgroundColor: 'transparent', borderColor: colors.text.tertiary }]}
+                        >
+                            <Text style={[typography.caption, { color: colors.text.tertiary, fontWeight: 'bold', fontSize: 10 }]}>Unreviewed</Text>
+                        </View>
+                    ) : null}
                     <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
                         <View style={[s.badge, { backgroundColor: withAlpha(diffColor, 0.15), borderColor: diffColor }]}><Text style={[typography.caption, { color: diffColor, fontWeight: 'bold', fontSize: 10 }]}>{(exercise.difficulty||'N/A').toUpperCase()}</Text></View>
                         {exercise.muscleGroup && <View style={[s.badge, { backgroundColor: withAlpha(colors.accent.cyan, 0.15), borderColor: colors.accent.cyan }]}><Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: 'bold', fontSize: 10 }]}>{exercise.muscleGroup.toUpperCase()}</Text></View>}

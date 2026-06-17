@@ -334,3 +334,45 @@ export function getCuratedDemo(name: string): CuratedDemo | null {
   if (!name) return null;
   return CURATED_DEMOS_LC[name.trim().toLowerCase()] ?? null;
 }
+
+/**
+ * Typed `string[]` accessor for the `fedb_frames` curated shape.
+ *
+ * The on-disk storage shape for FEDB-backed entries is a single
+ * `https://.../0.jpg|https://.../1.jpg` pipe-joined URL — convenient for the
+ * pre-existing `DEMO_GIF` map, but brittle for downstream callers who must
+ * remember to `.split('|')`. This accessor encapsulates that split so the
+ * pipe-join contract stays a file-internal storage detail; callers receive a
+ * ready-to-use ordered `readonly [string, string]` frame pair.
+ *
+ * Returns:
+ *   - the 2-element start/end frame pair when {@link getCuratedDemo} hits and
+ *     `demo.kind === 'fedb_frames'`;
+ *   - `null` for every other kind (`'youtube'`, `'gif'`) and for unknown names.
+ *
+ * Pure lookup — never throws, no network, no side effects. Safe on render.
+ */
+export function getCuratedDemoFrames(name: string): readonly string[] | null {
+  const demo = getCuratedDemo(name);
+  if (!demo || demo.kind !== 'fedb_frames') return null;
+  // Storage shape is `0.jpg|1.jpg` — split into the ordered start→end pair.
+  const parts = demo.url.split('|');
+  return parts as readonly string[];
+}
+
+/**
+ * Typed `verified` accessor for a curated demo entry.
+ *
+ * Returns the entry's `verified` flag (true for the 35 grandfathered
+ * DEMO_FALLBACK YouTube videos, false for every new tranche awaiting human
+ * review), or `null` when no entry exists. Lets the UI render an "Unreviewed"
+ * chip for `verified: false` without forcing the caller to also import
+ * {@link getCuratedDemo} and inspect the shape.
+ *
+ * Pure lookup — never throws, no network, no side effects. Safe on render.
+ */
+export function getCuratedDemoVerified(name: string): boolean | null {
+  const demo = getCuratedDemo(name);
+  if (!demo) return null;
+  return demo.verified;
+}

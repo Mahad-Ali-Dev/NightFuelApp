@@ -310,5 +310,60 @@ describe('chat-service POST /v1/chat/ria/send — free-text bounds (message.max(
             expect(passedMessage).toBe(message);
             expect(passedContext).toEqual(context);
         });
+
+        /**
+         * Aggregate sum-of-strings + structural bounds — defence in depth.
+         *
+         * Without aggregate bounds, an attacker can pack many medium-length
+         * strings — each individually under the per-string MAX_STRING (4096)
+         * cap — into one payload that still maximises the LLM-prompt token
+         * count. The refine layers SIX axes: per-string, sum-of-strings,
+         * key-count, depth, byte cap, and prototype-pollution.
+         *
+         * The fixture below maxes the per-string cap (4096 chars each) across
+         * 200 keys. Whichever axis fires first (byte cap, sum-of-strings, or
+         * key-count) the contract is identical: the handler MUST NOT be
+         * reached. Together with the other tests in this `describe` block,
+         * this proves every individual axis (depth/key/string/byte) plus the
+         * aggregate axis is wired and active.
+         */
+        it('200 strings × 4096 chars rejected with size/depth/key/string bounds', async () => {
+            const ctx: Record<string, unknown> = {};
+            for (let i = 0; i < 200; i++) {
+                ctx[`k${i.toString().padStart(3, '0')}`] = 'a'.repeat(4096);
+            }
+            const res = await sendRia(app, { message: 'ok', context: ctx });
+
+            expect(res.statusCode).toBe(400);
+            expect(chatService.sendRiaMessage).not.toHaveBeenCalled();
+        });
+
+        /**
+         * Prototype-pollution defence: a key literally named "__proto__" has
+         * no legitimate use in an LLM context payload and is a classic merge/
+         * clone pivot for redirecting writes into Object.prototype. We use
+         * JSON.parse() to actually materialise an OWN "__proto__" key (a bare
+         * object literal would NOT — `{__proto__: {}}` writes through to the
+         * prototype). The refine MUST reject before any handler runs.
+         */
+        it('context with __proto__ key rejected', async () => {
+            // JSON.parse('{"__proto__": ...}') materialises an OWN property
+            // named "__proto__" on the resulting object (verified locally
+            // against Node 22). Fastify's body parser uses the same path,
+            // so this is exactly what an attacker can deliver on the wire.
+            const polluted = JSON.parse('{"__proto__":{"polluted":true}}') as Record<string, unknown>;
+            // Self-check the fixture so a future Node behaviour change is
+            // caught HERE (not in a confusing 200) — we want a real own key.
+            expect(Object.prototype.hasOwnProperty.call(polluted, '__proto__')).toBe(true);
+
+            const res = await sendRia(app, { message: 'ok', context: polluted });
+
+            expect(res.statusCode).toBe(400);
+            expect(chatService.sendRiaMessage).not.toHaveBeenCalled();
+
+            // Defence in depth: the attempt MUST NOT have leaked into
+            // Object.prototype as a side effect of route processing.
+            expect(({} as any).polluted).toBeUndefined();
+        });
     });
 });

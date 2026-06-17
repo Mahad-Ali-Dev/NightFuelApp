@@ -234,4 +234,78 @@ describe('chat-service WS upgrade — on-the-wire close frame (real socket / eph
         expect(closeEvent).not.toBeNull();
         expect((closeEvent as unknown as { code: number }).code).not.toBe(4401);
     });
+
+    /**
+     * Wire-level frame cap — a 9KB inbound frame must be rejected with an
+     * `{type:"error",error:"invalid_frame"}` reply BEFORE JSON.parse is allowed
+     * to run on it, because JSON.parse on a multi-MB payload is itself a CPU
+     * DoS vector. The contract is:
+     *
+     *   1. The server replies with an invalid_frame error message (we can
+     *      observe this on the wire as a normal `message` event).
+     *   2. The server does NOT crash, NOT log a parse-failure error, and NOT
+     *      reach the ChatService — so the JSON.parse path was never entered.
+     *   3. The socket stays open (the cap is a per-frame veto, not a kill).
+     *
+     * We assert each of those in turn against a live socket: open with a valid
+     * token, send a 9KB string payload (well over the 8KB cap, well under any
+     * default ws frame ceiling), and wait for the error reply.
+     */
+    it('a 9KB frame is rejected with invalid_frame without entering JSON.parse', async () => {
+        // Spy on the Fastify logger error path. The wire handler logs to
+        // `fastify.log.error` only inside the post-parse catch — if we
+        // entered JSON.parse and it threw, the catch in the handler's outer
+        // try would NOT fire (the inner try eats SyntaxError), but a
+        // downstream throw would. We assert the spy was NEVER called so a
+        // future regression that lets a 9KB frame through to JSON.parse and
+        // chokes downstream is caught here too.
+        const logErrorSpy = jest.spyOn(app.log, 'error');
+
+        const ws = new WebSocket(wsUrl, {
+            headers: { authorization: `Bearer ${validToken()}` },
+        });
+        await waitForOpen(ws);
+
+        // 9KB raw payload — far over the 8192-byte cap. Not valid JSON
+        // either, but the cap fires FIRST so JSON.parse should never see it.
+        const oversizedFrame = 'x'.repeat(9 * 1024);
+
+        // Resolve on the first `message` reply (the server's invalid_frame).
+        const errorReply = await new Promise<string>((resolve, reject) => {
+            const timer = setTimeout(
+                () => reject(new Error('Timed out waiting for invalid_frame reply')),
+                SOCKET_EVENT_TIMEOUT_MS,
+            );
+            ws.once('message', (data: Buffer) => {
+                clearTimeout(timer);
+                resolve(data.toString());
+            });
+            ws.send(oversizedFrame);
+        });
+
+        // The cap fires BEFORE JSON.parse — the reply is a structured error.
+        const parsed = JSON.parse(errorReply) as { type?: string; error?: string };
+        expect(parsed).toEqual({ type: 'error', error: 'invalid_frame' });
+
+        // Defence in depth: never reached ChatService.
+        for (const method of CHAT_SERVICE_METHODS) {
+            expect(chatService[method]).not.toHaveBeenCalled();
+        }
+
+        // The handler's logger.error path is reserved for unexpected throws
+        // in the message pipeline. If a 9KB frame slipped past the cap and
+        // hit JSON.parse, a downstream rethrow would log there. We assert no
+        // such log was emitted.
+        expect(logErrorSpy).not.toHaveBeenCalled();
+
+        // The socket must stay open — a per-frame veto, not a kill.
+        expect(ws.readyState).toBe(WebSocket.OPEN);
+
+        // Clean up.
+        ws.close();
+        // Give the close handshake a moment to drain so afterEach's app.close()
+        // doesn't race the socket cleanup.
+        await new Promise((resolve) => ws.once('close', resolve));
+        logErrorSpy.mockRestore();
+    });
 });

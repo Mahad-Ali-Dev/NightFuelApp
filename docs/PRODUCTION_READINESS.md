@@ -514,3 +514,35 @@ If you say go, I'll start with A1 (Sentry) in your repo right now. I'll need fro
 2. Pick analytics provider — PostHog (recommended for self-host option) or Firebase (recommended if you're already in Google Cloud)
 
 Or if you'd rather start with a different milestone item, name it and I'll pick that up instead.
+
+---
+
+## Backend security tests — error-redaction coverage
+
+The contract every backend service's 500 error-response body MUST honour is owned by [`packages/config/src/server.ts`](../packages/config/src/server.ts) (`registerFastifyErrorHandler`). The 5xx branch returns a fixed `{ error: 'InternalServerError', message: 'An unexpected error occurred', statusCode: 500 }` body and never reflects `error.message`, `error.stack`, or any internal frame — so a thrown Prisma/Redis/fs error cannot leak query fragments, connection strings, table names, or stack-frame paths to an external caller. The inline `setErrorHandler` in `notification-service` enforces the same shape (with a tighter <500 branch that replaces the message when `error.validation` is falsy).
+
+### Per-service error-redaction tests
+
+Every backend service that mounts an HTTP surface has a sibling `__tests__/error-redaction.test.ts` suite that locks the contract in per-service. Each suite injects three throwing routes (`/boom` for the 5xx branch, `/bad-validation` and `/bad-internal` for the <500 branches) through that service's wired error handler and asserts the response body does NOT contain any of the high-risk substrings: `Prisma`, `stack`, `at /`, `localhost`, `:5432`, `/etc/passwd`, or the literal thrown message. If anyone widens the surface again — re-adding `message: error.message` on the 500 branch, reflecting `err.stack`, etc. — these suites go red.
+
+| Service | Handler shape | Test path |
+|---------|---------------|-----------|
+| auth-service | shared (`registerFastifyErrorHandler`) | [`services/auth-service/__tests__/error-redaction.test.ts`](../services/auth-service/__tests__/error-redaction.test.ts) |
+| chat-service | shared (`registerFastifyErrorHandler`) | [`services/chat-service/__tests__/error-redaction.test.ts`](../services/chat-service/__tests__/error-redaction.test.ts) |
+| community-service | shared (`registerFastifyErrorHandler`) | [`services/community-service/__tests__/error-redaction.test.ts`](../services/community-service/__tests__/error-redaction.test.ts) |
+| exercise-service | shared (`registerFastifyErrorHandler`) | [`services/exercise-service/__tests__/error-redaction.test.ts`](../services/exercise-service/__tests__/error-redaction.test.ts) |
+| plan-service | shared (`registerFastifyErrorHandler`) | [`services/plan-service/__tests__/error-redaction.test.ts`](../services/plan-service/__tests__/error-redaction.test.ts) |
+| progress-service | shared (`registerFastifyErrorHandler`) | [`services/progress-service/__tests__/error-redaction.test.ts`](../services/progress-service/__tests__/error-redaction.test.ts) |
+| subscription-service | inline `setErrorHandler` (mirrors shared 5xx) | [`services/subscription-service/__tests__/error-redaction.test.ts`](../services/subscription-service/__tests__/error-redaction.test.ts) |
+| user-service | inline `setErrorHandler` (mirrors shared 5xx) | [`services/user-service/__tests__/error-redaction.test.ts`](../services/user-service/__tests__/error-redaction.test.ts) |
+| notification-service | inline `setErrorHandler` (tightened <500 branch) | [`services/notification-service/__tests__/error-redaction.test.ts`](../services/notification-service/__tests__/error-redaction.test.ts) |
+| meal-service | shared (`registerFastifyErrorHandler`) | [`services/meal-service/__tests__/error-redaction.test.ts`](../services/meal-service/__tests__/error-redaction.test.ts) |
+| shift-service | shared (`registerFastifyErrorHandler`) | [`services/shift-service/__tests__/error-redaction.test.ts`](../services/shift-service/__tests__/error-redaction.test.ts) |
+| sleep-service | shared (`registerFastifyErrorHandler`) | [`services/sleep-service/__tests__/error-redaction.test.ts`](../services/sleep-service/__tests__/error-redaction.test.ts) |
+| state-service | shared (`registerFastifyErrorHandler`) | [`services/state-service/__tests__/error-redaction.test.ts`](../services/state-service/__tests__/error-redaction.test.ts) |
+| decision-engine | shared (`registerFastifyErrorHandler`) | [`services/decision-engine/__tests__/error-redaction.test.ts`](../services/decision-engine/__tests__/error-redaction.test.ts) |
+
+The shared-handler suites import `registerFastifyErrorHandler` directly from `@nightfuel/config` so they double as a build-time check that each service resolves to the redaction-hardened build of the package, not a stale local shim. The three inline-handler suites (`notification-service`, `subscription-service`, `user-service`) duplicate the production `setErrorHandler` shape in-test because each of those services' `src/index.ts` opens real Prisma/Redis/socket.io connections at import time and cannot be loaded in a unit test — the duplication is enforced by contract comments in each `src/index.ts` pointing reviewers back to the corresponding test file.
+
+**Known divergence — to flip when the shared handler tightens.** The shared `registerFastifyErrorHandler` currently reflects `error.message` on every <500 branch (even when `error.validation` is falsy), while the three inline handlers replace it with a generic `'Bad request'` copy. Every shared-handler suite has a `TODO(security-hardening)` comment above the `/bad-internal` assertion; when the shared handler is tightened in `packages/config/src/server.ts`, flip those expectations to the generic copy and add the ECONNREFUSED/`127.0.0.1`/`5432` negative-match assertions — all in one pass.
+

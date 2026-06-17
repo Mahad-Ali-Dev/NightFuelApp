@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { SubscriptionService } from './subscription.service';
 import type { EventBus } from './events';
 import { publishTierUpdated } from './events';
+import { sendUnauthorizedPayload } from '@nightfuel/config';
 import {
   TIER_CATALOGUE,
   UpgradeBodySchema,
@@ -146,7 +147,7 @@ export async function subscriptionRoutes(
         userId = extractUserId(request);
       } catch (err) {
         log.warn({ err }, 'routes: failed to extract userId from JWT');
-        return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid token payload' });
+        return sendUnauthorizedPayload(reply, request, err);
       }
 
       try {
@@ -211,7 +212,7 @@ export async function subscriptionRoutes(
         userId = extractUserId(request);
       } catch (err) {
         log.warn({ err }, 'routes: failed to extract userId from JWT');
-        return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid token payload' });
+        return sendUnauthorizedPayload(reply, request, err);
       }
 
       try {
@@ -278,7 +279,7 @@ export async function subscriptionRoutes(
         userId = extractUserId(request);
       } catch (err) {
         log.warn({ err }, 'routes: failed to extract userId from JWT');
-        return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid token payload' });
+        return sendUnauthorizedPayload(reply, request, err);
       }
 
       // Validate body with Zod manually (fastify-type-provider-zod is registered
@@ -365,7 +366,7 @@ export async function subscriptionRoutes(
         userId = extractUserId(request);
       } catch (err) {
         log.warn({ err }, 'routes: failed to extract userId from JWT');
-        return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid token payload' });
+        return sendUnauthorizedPayload(reply, request, err);
       }
 
       try {
@@ -432,7 +433,7 @@ export async function subscriptionRoutes(
         userId = extractUserId(request);
       } catch (err) {
         log.warn({ err }, 'routes: failed to extract userId from JWT');
-        return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid token payload' });
+        return sendUnauthorizedPayload(reply, request, err);
       }
 
       const { platform, receipt, productId } = request.body as {

@@ -14,6 +14,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import Stripe from 'stripe';
 import type { SubscriptionService } from './subscription.service';
 import type { Logger } from 'pino';
+import { sendUnauthorizedPayload } from '@nightfuel/config';
 
 // ─── Price IDs — set these env vars in Railway / docker-compose ──────────────
 const PRICE_IDS: Record<string, string | undefined> = {
@@ -82,7 +83,7 @@ export function registerStripeRoutes(
       const user = (request as any).user as { id?: string; userId?: string };
       const userId = user?.id ?? user?.userId;
       if (!userId) {
-        return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid token' });
+        return sendUnauthorizedPayload(reply, request);
       }
 
       const body = request.body as { tier?: string; successUrl?: string; cancelUrl?: string };

@@ -12,6 +12,11 @@ import { shadows } from '@/theme/shadows';
 import { typography as themeTypography } from '@/theme/typography';
 import { format } from 'date-fns';
 import { getErrorMessage } from '@/utils/validation';
+import {
+    validateLogShiftForm,
+    isOvernightShift,
+    fieldErrorsFromAxiosError,
+} from '@/lib/logFormSchemas';
 
 const SHIFT_TYPES = [
     { value: 'FIXED_NIGHT', label: 'Fixed Night' },
@@ -34,17 +39,23 @@ export default function LogShiftModal() {
     const [shiftType, setShiftType] = useState('FIXED_NIGHT');
     const [isDayOff, setIsDayOff] = useState(false);
     const [commuteMinutes, setCommuteMinutes] = useState('30');
+    // Inline field-level error copy, e.g. { commuteMinutes: 'Commute must be 0-180 minutes' }.
+    // Populated by the client-side validator before we hit the network and by
+    // the server-error adapter when the API returns a Zod ValidationError 400.
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
     const mutation = useMutation({
         mutationFn: async () => {
-            const startStr = `${shiftDate}T${startTime}:00.000`;
-            // Handle overnight shift logical end date
+            // Handle overnight shift logical end date — kept identical to the
+            // previous inline computation, but now via the shared helper so
+            // unit tests can exercise it without rendering the screen.
             let endDate = shiftDate;
-            if (startTime > endTime) {
+            if (isOvernightShift(startTime, endTime)) {
                 const nextDay = new Date(shiftDate);
                 nextDay.setDate(nextDay.getDate() + 1);
                 endDate = format(nextDay, 'yyyy-MM-dd');
             }
+            const startStr = `${shiftDate}T${startTime}:00.000`;
             const endStr = `${endDate}T${endTime}:00.000`;
 
             const payload: any = {
@@ -64,11 +75,37 @@ export default function LogShiftModal() {
             router.back();
         },
         onError: (err) => {
+            // Prefer inline field-level errors over an opaque Alert when the
+            // server returned a Zod ValidationError (400). 5xx and network
+            // errors still fall through to the Alert.
+            const fromServer = fieldErrorsFromAxiosError(err);
+            if (fromServer) {
+                setFieldErrors(fromServer);
+                return;
+            }
             Alert.alert('Error', getErrorMessage(err));
         }
     });
 
-    const handleSave = () => mutation.mutate();
+    const handleSave = () => {
+        const result = validateLogShiftForm({
+            shiftDate,
+            startTime,
+            endTime,
+            shiftType,
+            isDayOff,
+            commuteMinutes,
+        });
+        if (!result.ok) {
+            setFieldErrors(result.fieldErrors);
+            return;
+        }
+        // Clear any stale errors from a previous failed attempt before firing.
+        setFieldErrors({});
+        mutation.mutate();
+    };
+
+    const hasErrors = Object.keys(fieldErrors).length > 0;
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
@@ -78,11 +115,28 @@ export default function LogShiftModal() {
                     <Ionicons name="close" size={28} color={colors.text.primary} />
                 </TouchableOpacity>
                 <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Log Shift</Text>
-                <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Save shift" accessibilityState={{ disabled: mutation.isPending }} onPress={handleSave} disabled={mutation.isPending}>
+                <TouchableOpacity
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel="Save shift"
+                    accessibilityState={{ disabled: mutation.isPending || hasErrors }}
+                    onPress={handleSave}
+                    disabled={mutation.isPending || hasErrors}
+                >
                     {mutation.isPending ? (
                         <ActivityIndicator size="small" color={colors.accent.cyan} />
                     ) : (
-                        <Text style={[typography.heading, { color: colors.accent.cyan, fontSize: 16 }]}>Save</Text>
+                        <Text
+                            style={[
+                                typography.heading,
+                                {
+                                    color: hasErrors ? colors.text.tertiary : colors.accent.cyan,
+                                    fontSize: 16,
+                                },
+                            ]}
+                        >
+                            Save
+                        </Text>
                     )}
                 </TouchableOpacity>
             </View>
@@ -95,44 +149,117 @@ export default function LogShiftModal() {
 
                     {/* Date Section */}
                     <Text style={[typography.heading, { color: colors.text.primary, marginBottom: 12, fontSize: 16 }]}>Shift Date</Text>
-                    <View style={[styles.inputBox, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, marginBottom: 20 }]}>
+                    <View
+                        style={[
+                            styles.inputBox,
+                            {
+                                backgroundColor: colors.background.secondary,
+                                borderColor: fieldErrors.shiftDate ? colors.accent.red : colors.border.default,
+                                marginBottom: fieldErrors.shiftDate ? 4 : 20,
+                            },
+                        ]}
+                    >
                         <Ionicons name="calendar-outline" size={20} color={colors.text.secondary} />
                         <TextInput
                             style={[styles.textInput, { color: colors.text.primary }]}
                             value={shiftDate}
-                            onChangeText={setShiftDate}
+                            onChangeText={(v) => {
+                                setShiftDate(v);
+                                if (fieldErrors.shiftDate) {
+                                    setFieldErrors((p) => {
+                                        const { shiftDate: _omit, ...rest } = p;
+                                        return rest;
+                                    });
+                                }
+                            }}
                             placeholder="YYYY-MM-DD"
                             placeholderTextColor={colors.text.tertiary}
                         />
                     </View>
+                    {fieldErrors.shiftDate ? (
+                        <Text
+                            accessibilityRole="alert"
+                            style={{ color: colors.accent.red, marginTop: 4, marginBottom: 16, fontSize: 12 }}
+                        >
+                            {fieldErrors.shiftDate}
+                        </Text>
+                    ) : null}
 
                     {/* Times Section */}
                     <View style={styles.row}>
                         <View style={{ flex: 1 }}>
                             <Text style={[typography.heading, { color: colors.text.primary, marginBottom: 12, fontSize: 16 }]}>Start Time</Text>
-                            <View style={[styles.inputBox, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                            <View
+                                style={[
+                                    styles.inputBox,
+                                    {
+                                        backgroundColor: colors.background.secondary,
+                                        borderColor: fieldErrors.startTime ? colors.accent.red : colors.border.default,
+                                    },
+                                ]}
+                            >
                                 <Ionicons name="time-outline" size={20} color={colors.text.secondary} />
                                 <TextInput
                                     style={[styles.textInput, { color: colors.text.primary }]}
                                     value={startTime}
-                                    onChangeText={setStartTime}
+                                    onChangeText={(v) => {
+                                        setStartTime(v);
+                                        if (fieldErrors.startTime) {
+                                            setFieldErrors((p) => {
+                                                const { startTime: _omit, ...rest } = p;
+                                                return rest;
+                                            });
+                                        }
+                                    }}
                                     placeholder="HH:MM"
                                     placeholderTextColor={colors.text.tertiary}
                                 />
                             </View>
+                            {fieldErrors.startTime ? (
+                                <Text
+                                    accessibilityRole="alert"
+                                    style={{ color: colors.accent.red, marginTop: 4, fontSize: 12 }}
+                                >
+                                    {fieldErrors.startTime}
+                                </Text>
+                            ) : null}
                         </View>
                         <View style={{ flex: 1, marginLeft: 12 }}>
                             <Text style={[typography.heading, { color: colors.text.primary, marginBottom: 12, fontSize: 16 }]}>End Time</Text>
-                            <View style={[styles.inputBox, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                            <View
+                                style={[
+                                    styles.inputBox,
+                                    {
+                                        backgroundColor: colors.background.secondary,
+                                        borderColor: fieldErrors.endTime ? colors.accent.red : colors.border.default,
+                                    },
+                                ]}
+                            >
                                 <Ionicons name="time-outline" size={20} color={colors.text.secondary} />
                                 <TextInput
                                     style={[styles.textInput, { color: colors.text.primary }]}
                                     value={endTime}
-                                    onChangeText={setEndTime}
+                                    onChangeText={(v) => {
+                                        setEndTime(v);
+                                        if (fieldErrors.endTime) {
+                                            setFieldErrors((p) => {
+                                                const { endTime: _omit, ...rest } = p;
+                                                return rest;
+                                            });
+                                        }
+                                    }}
                                     placeholder="HH:MM"
                                     placeholderTextColor={colors.text.tertiary}
                                 />
                             </View>
+                            {fieldErrors.endTime ? (
+                                <Text
+                                    accessibilityRole="alert"
+                                    style={{ color: colors.accent.red, marginTop: 4, fontSize: 12 }}
+                                >
+                                    {fieldErrors.endTime}
+                                </Text>
+                            ) : null}
                         </View>
                     </View>
 
@@ -156,7 +283,15 @@ export default function LogShiftModal() {
                                         },
                                         selected && shadows.glow(colors.accent.cyan),
                                     ]}
-                                    onPress={() => setShiftType(type.value)}
+                                    onPress={() => {
+                                        setShiftType(type.value);
+                                        if (fieldErrors.shiftType) {
+                                            setFieldErrors((p) => {
+                                                const { shiftType: _omit, ...rest } = p;
+                                                return rest;
+                                            });
+                                        }
+                                    }}
                                 >
                                     <Text style={[
                                         typography.caption,
@@ -166,6 +301,14 @@ export default function LogShiftModal() {
                             );
                         })}
                     </View>
+                    {fieldErrors.shiftType ? (
+                        <Text
+                            accessibilityRole="alert"
+                            style={{ color: colors.accent.red, marginTop: 6, fontSize: 12 }}
+                        >
+                            {fieldErrors.shiftType}
+                        </Text>
+                    ) : null}
 
                     {/* Day Off Switch */}
                     <View style={[styles.row, { justifyContent: 'space-between', alignItems: 'center', marginTop: 28, marginBottom: 20 }]}>
@@ -180,23 +323,48 @@ export default function LogShiftModal() {
 
                     {/* Commute */}
                     <Text style={[typography.heading, { color: colors.text.primary, marginBottom: 12, fontSize: 16 }]}>Commute Time (Minutes)</Text>
-                    <View style={[styles.inputBox, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    <View
+                        style={[
+                            styles.inputBox,
+                            {
+                                backgroundColor: colors.background.secondary,
+                                borderColor: fieldErrors.commuteMinutes ? colors.accent.red : colors.border.default,
+                            },
+                        ]}
+                    >
                         <Ionicons name="car-outline" size={20} color={colors.text.secondary} />
                         <TextInput
                             style={[styles.textInput, { color: colors.text.primary }]}
                             value={commuteMinutes}
-                            onChangeText={setCommuteMinutes}
+                            onChangeText={(v) => {
+                                setCommuteMinutes(v);
+                                if (fieldErrors.commuteMinutes) {
+                                    setFieldErrors((p) => {
+                                        const { commuteMinutes: _omit, ...rest } = p;
+                                        return rest;
+                                    });
+                                }
+                            }}
                             keyboardType="number-pad"
                             placeholder="30"
                             placeholderTextColor={colors.text.tertiary}
                         />
                     </View>
+                    {fieldErrors.commuteMinutes ? (
+                        <Text
+                            accessibilityRole="alert"
+                            style={{ color: colors.accent.red, marginTop: 4, fontSize: 12 }}
+                        >
+                            {fieldErrors.commuteMinutes}
+                        </Text>
+                    ) : null}
 
                     <Button
                         title="Save Shift"
                         onPress={handleSave}
                         variant="primary"
                         loading={mutation.isPending}
+                        disabled={hasErrors}
                         style={{ marginTop: 40 }}
                     />
                 </ScrollView>
