@@ -15,11 +15,12 @@
  *                              from free-exercise-db (MIT, already-shipped).
  *                              Zero network cost: it reuses data the existing
  *                              FEDB slug index already ships.
- *   - `kind: 'gif'`          — a static animated demo URL (wger / similar free
- *                              CDN). Reserved for future use; the current map
- *                              does not emit this shape, but the type and
- *                              regex are in place so callers can rely on the
- *                              contract.
+ *   - `kind: 'gif'`          — a static animated demo URL (Wikimedia Commons /
+ *                              similar free CDN, https only). A small
+ *                              `GIF_PENDING` tranche emits this shape for a few
+ *                              high-frequency movements; expo-image animates the
+ *                              .gif natively from its `{ uri }` source, so
+ *                              <ExerciseDemo/> treats it as a PLAYING demo.
  *
  * `verified` is true for the 35 grandfathered entries (their YouTube URLs were
  * curated in DEMO_FALLBACK and are already shown to users). Every NEW key
@@ -347,6 +348,37 @@ const YOUTUBE_PENDING: Readonly<Record<string, string>> = {
   'Couch Stretch': 'https://www.youtube.com/watch?v=Az47gG1lr3o',
 };
 
+/**
+ * A small tranche of high-frequency movements mapped to FREE, static animated
+ * GIF demos hosted on Wikimedia Commons (`upload.wikimedia.org`, https only —
+ * no paid API, no build-time/runtime fetch). expo-image plays an animated GIF
+ * natively from its `{ uri }` source, so <ExerciseDemo/> renders these as a
+ * PLAYING demo (with the bottom-left "Demo" pill), not a static still.
+ *
+ * Keyed on alias names that the GRANDFATHERED (verified:true) and
+ * FEDB_BACKED_SLUGS maps DELIBERATELY do not already cover — the precedence
+ * rule in buildCuratedDemos() skips any name that is already present, so these
+ * must be distinct keys to take effect rather than being silently dropped.
+ *
+ * Every URL was resolved + HTTP-checked (200, content-type image/gif) against
+ * the live Commons file at authoring time, but each entry SHIPS verified:false:
+ * a human reviewer should still eyeball that the clip shows the correct
+ * movement before any future flip to verified:true. These entries live OUTSIDE
+ * the GRANDFATHERED block, so the kind:'youtube'-only sync guard
+ * (scripts/check-demo-maps-in-sync.js) and pendingHumanReviewIds.json (YouTube
+ * ids only) both correctly ignore them.
+ */
+const GIF_PENDING: Readonly<Record<string, string>> = {
+  // Bodyweight staples. Names are common aliases NOT already in the curated map
+  // (e.g. 'Push-Up'/'Bodyweight Squat'/'Burpee' are grandfathered YouTube
+  // entries; these singular/plural/CrossFit variants are the gaps).
+  'Pushup': 'https://upload.wikimedia.org/wikipedia/commons/8/8f/Pushups.gif',
+  'Air Squat': 'https://upload.wikimedia.org/wikipedia/commons/e/e6/Squats.gif',
+  'Burpees': 'https://upload.wikimedia.org/wikipedia/commons/d/df/Burpee.gif',
+  'High Knee': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/High_knees.gif',
+  'Situp': 'https://upload.wikimedia.org/wikipedia/commons/a/a1/Sit-up_on_the_bench_draw_%28animated%29.gif',
+};
+
 // ---------------------------------------------------------------------------
 // Build the final map
 // ---------------------------------------------------------------------------
@@ -368,6 +400,15 @@ function buildCuratedDemos(): Record<string, CuratedDemo> {
   for (const [name, url] of Object.entries(YOUTUBE_PENDING)) {
     if (out[name]) continue;
     out[name] = { kind: 'youtube', url, verified: false };
+  }
+
+  // Pending GIF entries (kind:'gif', verified:false). Folded in LAST, with the
+  // same precedence rule: never overwrite a grandfathered/verified entry (nor a
+  // FEDB/YouTube one that already claimed the name). expo-image animates these
+  // natively, so <ExerciseDemo/> shows them as a playing demo.
+  for (const [name, url] of Object.entries(GIF_PENDING)) {
+    if (out[name]) continue;
+    out[name] = { kind: 'gif', url, verified: false };
   }
 
   return out;

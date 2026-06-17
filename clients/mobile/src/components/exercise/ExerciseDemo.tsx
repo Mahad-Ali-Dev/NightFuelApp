@@ -12,6 +12,12 @@ const HEIGHT = 320;
 const FRAME_MS = 900;
 const FADE_MS = 320;
 
+// A `.gif` source (optionally with a `?query`) is an already-animated clip.
+// expo-image plays it natively from a `{ uri }` source, so the single source is
+// itself a PLAYING demo — not a still that needs our in-app cross-fade loop.
+const isAnimatedGif = (u?: string | null): boolean =>
+  typeof u === 'string' && /\.gif(\?|$)/i.test(u.trim());
+
 export interface ExerciseDemoProps {
   /**
    * Ordered HTTPS frame URLs (start → end of the rep). 2+ frames animate as an
@@ -65,6 +71,12 @@ export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }
 
   const hasDemo = liveFrames.length > 0;
   const animated = liveFrames.length > 1;
+  // A single already-animated `.gif` source (no explicit frame pair, and it
+  // hasn't 404'd). expo-image plays it natively, so it's a PLAYING demo even
+  // though it isn't part of our multi-frame cross-fade loop. Gated on `hasDemo`
+  // so a gif that failed to load drops to the "coming soon" branch instead of
+  // showing a "Demo" pill over a broken image.
+  const gifIsAnimated = hasDemo && !frames?.length && isAnimatedGif(gifUrl);
 
   const [frameIdx, setFrameIdx] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -243,10 +255,14 @@ export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }
         </View>
       ) : null}
 
-      {/* Bottom-left "Demo" status tag so the inline loop reads as intentional.
-          The full-tutorial link lives on the screen's header button while a demo
-          plays (it is surfaced in-player only in the no-demo fallback above). */}
-      {animated ? (
+      {/* Bottom-left "Demo" status tag so an inline loop reads as intentional.
+          Shown for the multi-frame cross-fade loop AND for a natively-animated
+          .gif source (expo-image plays it), so both read as a PLAYING demo
+          rather than a static image. A single non-gif still has no pill — it
+          stays a labelled "Exercise demo". The full-tutorial link lives on the
+          screen's header button while a demo plays (it is surfaced in-player
+          only in the no-demo fallback above). */}
+      {animated || gifIsAnimated ? (
         <View style={styles.comingSoonRow} pointerEvents="none">
           <View style={[styles.pill, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
             <Ionicons name={paused ? 'pause' : 'sync'} size={13} color={colors.accent.cyan} />

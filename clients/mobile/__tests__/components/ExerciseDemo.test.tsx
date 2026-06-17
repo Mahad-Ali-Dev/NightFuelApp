@@ -251,6 +251,80 @@ describe('ExerciseDemo', () => {
     expect(UNSAFE_getAllByType(View).length).toBeGreaterThanOrEqual(1);
   });
 
+  // ── Animated-GIF source recognised as a PLAYING demo ────────────────────────
+  // A single `gifUrl` ending in `.gif` (no frame pair) is already an animated
+  // clip — expo-image plays it natively. The component must therefore label it
+  // as a PLAYING demo (the bottom-left "Demo" pill), NOT treat it as a plain
+  // static still. A non-gif single image (a .jpg/.png gifUrl) and the no-source
+  // case must keep behaving exactly as before (no "Demo" pill).
+  const GIF_URL = 'https://upload.wikimedia.org/wikipedia/commons/8/8f/Pushups.gif';
+  const GIF_URL_WITH_QUERY = 'https://cdn.example.com/demo.gif?v=2';
+  const JPG_URL = 'https://cdn.example.com/single-still.jpg';
+
+  describe('animated .gif source (single gifUrl, no frames)', () => {
+    test('renders the "Demo" pill — recognised as a playing demo', () => {
+      renderWithTheme(<ExerciseDemo frames={null} gifUrl={GIF_URL} imageUrl={IMAGE_URL} fallback={FALLBACK} />);
+
+      // The playing-demo affordance is present…
+      expect(screen.getByText('Demo')).toBeTruthy();
+      // …and the no-demo "coming soon" copy is NOT (we have a real demo).
+      expect(screen.queryByText('Video demo coming soon')).toBeNull();
+
+      // The gif is wired as an <Image> source uri (expo-image animates it).
+      const showsGif = screen
+        .getAllByTestId('exercise-demo-image')
+        .some((img) => img.props.source && img.props.source.uri === GIF_URL);
+      expect(showsGif).toBe(true);
+    });
+
+    test('a `.gif?query` source is still recognised as animated', () => {
+      renderWithTheme(<ExerciseDemo frames={null} gifUrl={GIF_URL_WITH_QUERY} imageUrl={IMAGE_URL} fallback={FALLBACK} />);
+      expect(screen.getByText('Demo')).toBeTruthy();
+      expect(screen.queryByText('Video demo coming soon')).toBeNull();
+    });
+
+    test('a gif is NOT a play/pause button — it stays a labelled "Exercise demo" (we do not control GIF playback)', () => {
+      renderWithTheme(<ExerciseDemo frames={null} gifUrl={GIF_URL} imageUrl={IMAGE_URL} fallback={FALLBACK} />);
+      expect(screen.queryByLabelText('Pause demo')).toBeNull();
+      expect(screen.queryByLabelText('Resume demo')).toBeNull();
+      const still = screen.getByLabelText('Exercise demo');
+      expect(still.props.accessibilityRole).toBe('image');
+    });
+
+    test('a 404 on the gif drops to the "coming soon" branch (markFailed)', () => {
+      renderWithTheme(<ExerciseDemo frames={null} gifUrl={GIF_URL} imageUrl={IMAGE_URL} fallback={FALLBACK} />);
+
+      // Initially a playing demo.
+      expect(screen.getByText('Demo')).toBeTruthy();
+      // The gif <Image> 404s.
+      act(() => {
+        screen.getAllByTestId('exercise-demo-image').forEach((img) => fireEvent(img, 'error'));
+      });
+      // Now it falls back to the still + honest "coming soon" note, pill gone.
+      expect(screen.getByText('Video demo coming soon')).toBeTruthy();
+      expect(screen.queryByText('Demo')).toBeNull();
+    });
+  });
+
+  describe('single non-gif still (gifUrl is a .jpg/.png) — unchanged behaviour', () => {
+    test('a single .jpg gifUrl renders as a labelled still, NOT a "Demo" loop', () => {
+      renderWithTheme(<ExerciseDemo frames={null} gifUrl={JPG_URL} imageUrl={IMAGE_URL} fallback={FALLBACK} />);
+
+      // No playing-demo pill for a plain still…
+      expect(screen.queryByText('Demo')).toBeNull();
+      // …it is not a button, and it has no "coming soon" note (it IS a demo still).
+      expect(screen.queryByText('Video demo coming soon')).toBeNull();
+      const still = screen.getByLabelText('Exercise demo');
+      expect(still.props.accessibilityRole).toBe('image');
+
+      // The still source is the .jpg gifUrl.
+      const showsJpg = screen
+        .getAllByTestId('exercise-demo-image')
+        .some((img) => img.props.source && img.props.source.uri === JPG_URL);
+      expect(showsJpg).toBe(true);
+    });
+  });
+
   // ── Play/pause control accessibility (the toggle Pressable) ─────────────────
   // With 2+ frames the wrapping Pressable IS the play/pause control. It must
   // expose a `button` role and a label that flips between "Pause demo" (while

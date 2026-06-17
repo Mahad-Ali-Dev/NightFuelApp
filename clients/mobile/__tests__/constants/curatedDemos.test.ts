@@ -20,7 +20,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import { CURATED_DEMOS, getCuratedDemo, type CuratedDemo } from '@/constants/curatedDemos';
+import {
+  CURATED_DEMOS,
+  getCuratedDemo,
+  getCuratedDemoFrames,
+  getCuratedDemoVerified,
+  type CuratedDemo,
+} from '@/constants/curatedDemos';
 import { DEMO_FALLBACK, getCuratedDemo as getCuratedDemoReExport } from '@/constants/exerciseDemos';
 
 /**
@@ -219,5 +225,52 @@ describe('CURATED_DEMOS — grandfathered DEMO_FALLBACK names stay verified', ()
     // At LEAST the 35 — strictly equal is too brittle if a future curated YT
     // is promoted to verified, but we want to guarantee we never DROP below 35.
     expect(grandfathered.length).toBeGreaterThanOrEqual(35);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (e) The new GIF_PENDING tranche (kind:'gif', verified:false)
+// ---------------------------------------------------------------------------
+//
+// These are FREE static animated-GIF demos (Wikimedia Commons) for a few
+// high-frequency movements. <ExerciseDemo/> renders kind:'gif' as a PLAYING
+// demo (expo-image animates the .gif natively), and verified:false makes the
+// "Unreviewed" chip render until a human eyeballs each clip. They live OUTSIDE
+// the GRANDFATHERED block, so they are NOT mirrored by the cross-package sync
+// guard and are NOT in pendingHumanReviewIds.json (which tracks YouTube ids).
+describe('CURATED_DEMOS — GIF_PENDING tranche', () => {
+  // Authoring-time aliases that the grandfathered/FEDB maps deliberately do not
+  // cover (so the precedence rule does not drop them).
+  const GIF_NAMES = ['Pushup', 'Air Squat', 'Burpees', 'High Knee', 'Situp'] as const;
+
+  test.each(GIF_NAMES)('getCuratedDemo(%j) returns a verified:false kind:"gif" entry', (name) => {
+    const demo = getCuratedDemo(name);
+    expect(demo).not.toBeNull();
+    expect(demo!.kind).toBe('gif');
+    expect(demo!.verified).toBe(false);
+    // The URL is an HTTPS .gif (possibly URL-encoded) — matches the gif contract.
+    expect(demo!.url).toMatch(/^https:\/\/[^\s]+\.gif$/);
+  });
+
+  test.each(GIF_NAMES)('getCuratedDemoFrames(%j) is null — a gif is not a frame pair', (name) => {
+    expect(getCuratedDemoFrames(name)).toBeNull();
+  });
+
+  test.each(GIF_NAMES)('getCuratedDemoVerified(%j) === false (renders the "Unreviewed" chip)', (name) => {
+    expect(getCuratedDemoVerified(name)).toBe(false);
+  });
+
+  test('resolution is case-insensitive / whitespace-trimmed, like every other kind', () => {
+    expect(getCuratedDemo('  PUSHUP ')).toEqual(getCuratedDemo('Pushup'));
+  });
+
+  test('every gif entry ships verified:false (no gif is auto-promoted to verified)', () => {
+    const gifEntries = CURATED_ENTRIES.filter(([, d]) => d.kind === 'gif');
+    // Sanity: the tranche is actually present (guards against a refactor that
+    // drops every gif via the precedence rule and silently passes the above).
+    expect(gifEntries.length).toBeGreaterThanOrEqual(GIF_NAMES.length);
+    for (const [, demo] of gifEntries) {
+      expect(demo.verified).toBe(false);
+    }
   });
 });

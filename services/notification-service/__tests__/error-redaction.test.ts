@@ -1,30 +1,34 @@
 /**
- * Regression suite — notification-service GLOBAL ERROR HANDLER no-leak contract
- * (src/index.ts setErrorHandler, ~lines 211-237).
+ * Regression suite — notification-service GLOBAL ERROR HANDLER no-leak contract.
  *
  * Background: the previous handler shipped `message: error.message ?? 'An
  * unexpected error occurred'` straight to the client, so a Prisma exception
  * leaked query fragments, table names, and conn-string hostnames to any caller
- * that could trigger a 500. The fix matches the user-service / subscription-
- * service contract: the 500 body is a fixed generic, and the <500 body only
- * reflects `error.message` when `error.validation` is truthy (i.e. a Fastify-
- * generated user-facing message).
+ * that could trigger a 500. notification-service now converges onto the SAME
+ * shared redactor every other service uses — `registerFastifyErrorHandler`
+ * (backed by the pure `buildErrorResponse`) from @nightfuel/config: the 5xx
+ * body is a fixed generic, and the <500 body only reflects `error.message`
+ * when `error.validation` is truthy (i.e. a Fastify-generated user-facing
+ * message).
  *
  * This suite locks the redaction contract in permanently. It boots a tiny
- * Fastify app that mounts the SAME setErrorHandler shape as src/index.ts, then
+ * Fastify app wired with the REAL shared handler (no hand-written mirror), then
  * exercises a deliberately leaky thrown error and asserts the response body
  * does NOT contain any of the high-risk substrings ('Prisma', 'stack', 'at /',
- * or 'localhost') and DOES contain the generic 'Internal server error' copy.
- * If anyone widens the surface again (e.g. re-adds `message: error.message`
- * on the 500 branch, or reflects err.stack), this file goes red.
+ * or 'localhost') and DOES contain the generic 'An unexpected error occurred'
+ * copy the shared redactor emits. If anyone widens the surface again (e.g.
+ * re-adds `message: error.message` on the 5xx branch, or reflects err.stack),
+ * this file goes red.
  *
- * The handler is duplicated here rather than imported from src/index.ts because
- * that module starts a real Prisma client + Redis bus + socket.io bootstrap at
- * import time. Keeping the shapes byte-identical is enforced by the contract
- * comment in src/index.ts pointing reviewers here.
+ * We exercise the shared helper directly rather than importing src/index.ts
+ * because that module starts a real Prisma client + Redis bus + socket.io
+ * bootstrap at import time and cannot be loaded in a unit test. The expected
+ * positive bodies are derived from `buildErrorResponse` so the test tracks the
+ * single source of truth instead of a duplicated literal.
  */
 import Fastify, { FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
+import { registerFastifyErrorHandler, buildErrorResponse } from '@nightfuel/config';
 import { notificationRoutes } from '../src/routes';
 
 // Same leaky string the previous handler used to reflect — every substring
@@ -33,9 +37,10 @@ const LEAKY_THROWN_MESSAGE =
     'Prisma raw stack frame at /etc/passwd localhost:5432';
 
 /**
- * Builds a tiny Fastify app wired with the SAME setErrorHandler shape as
- * src/index.ts (post-fix). It also mounts:
- *   - GET /boom → throws LEAKY_THROWN_MESSAGE (drives the 500 branch)
+ * Builds a tiny Fastify app wired with the REAL shared error handler
+ * (`registerFastifyErrorHandler` from @nightfuel/config) — the exact same
+ * code path src/index.ts now installs. It also mounts:
+ *   - GET /boom → throws LEAKY_THROWN_MESSAGE (drives the 5xx branch)
  *   - GET /bad-validation → throws an err with statusCode<500 and
  *     `validation` truthy (drives the safe <500 branch)
  *   - GET /bad-internal → throws an err with statusCode<500 and NO
@@ -47,23 +52,18 @@ const LEAKY_THROWN_MESSAGE =
 function buildApp(): FastifyInstance {
     const app = Fastify({ logger: false });
 
-    // Mirror src/index.ts setErrorHandler — keep this byte-for-byte identical
-    // to the production handler so any future regression on either side is
-    // caught here.
-    app.setErrorHandler((error: any, _request, reply) => {
-        if (error.statusCode && error.statusCode < 500) {
-            return reply.code(error.statusCode).send({
-                statusCode: error.statusCode,
-                error: error.name ?? 'Bad Request',
-                message: error.validation ? error.message : 'Bad request',
-            });
-        }
-        return reply.code(500).send({
-            statusCode: 500,
-            error: 'Internal Server Error',
-            message: 'Internal server error',
-        });
-    });
+    // Install the SHARED handler (not a hand-written mirror) so this suite
+    // exercises the single source of truth. A no-op logger stub satisfies the
+    // helper's pino Logger param without emitting noise — the production code
+    // still logs the full error server-side via its real logger.
+    registerFastifyErrorHandler(app, {
+        error: () => {},
+        info: () => {},
+        warn: () => {},
+        fatal: () => {},
+        debug: () => {},
+        trace: () => {},
+    } as any);
 
     app.get('/boom', async () => {
         throw new Error(LEAKY_THROWN_MESSAGE);
@@ -107,11 +107,16 @@ describe('notification-service global error handler — 500 leak redaction', () 
             const res = await app.inject({ method: 'GET', url: '/boom' });
 
             expect(res.statusCode).toBe(500);
+            // The wire body equals exactly what the shared pure redactor emits
+            // for a thrown (non-statusCode) error — fixed generic, no leak.
             expect(res.json()).toEqual({
+                error: 'InternalServerError',
+                message: 'An unexpected error occurred',
                 statusCode: 500,
-                error: 'Internal Server Error',
-                message: 'Internal server error',
             });
+            expect(res.json()).toEqual(
+                buildErrorResponse(new Error(LEAKY_THROWN_MESSAGE)).body,
+            );
         });
 
         it('500 body does NOT contain "Prisma" (negative #1)', async () => {
@@ -149,12 +154,14 @@ describe('notification-service global error handler — 500 leak redaction', () 
             expect(res.body).not.toContain('/etc/passwd');
         });
 
-        it('500 body does NOT contain the old "An unexpected error occurred" leak-shim copy (negative #7)', async () => {
-            // The pre-fix handler set message to either `error.message` OR
-            // 'An unexpected error occurred' — neither is acceptable on the
-            // wire any more; the fixed copy is 'Internal server error'.
+        it('500 body DOES contain the shared generic "An unexpected error occurred" copy (positive #7)', async () => {
+            // Converged onto the shared redactor: the fixed 5xx copy is now
+            // 'An unexpected error occurred' (buildErrorResponse). This is the
+            // ONLY message text allowed to surface on a 500 — it carries no
+            // internal detail, so asserting its presence is safe and locks the
+            // generic-copy contract.
             const res = await app.inject({ method: 'GET', url: '/boom' });
-            expect(res.body).not.toContain('An unexpected error occurred');
+            expect(res.body).toContain('An unexpected error occurred');
         });
     });
 
@@ -163,10 +170,12 @@ describe('notification-service global error handler — 500 leak redaction', () 
             const res = await app.inject({ method: 'GET', url: '/bad-validation' });
 
             expect(res.statusCode).toBe(400);
+            // buildErrorResponse reflects the validation message and adds a
+            // statusCode field to the body.
             expect(res.json()).toEqual({
-                statusCode: 400,
                 error: 'FastifyError',
                 message: "body should have required property 'token'",
+                statusCode: 400,
             });
         });
 
@@ -174,15 +183,154 @@ describe('notification-service global error handler — 500 leak redaction', () 
             const res = await app.inject({ method: 'GET', url: '/bad-internal' });
 
             expect(res.statusCode).toBe(400);
+            // Non-validation 4xx → generic 'Bad request' body, plus the
+            // statusCode field buildErrorResponse appends.
             expect(res.json()).toEqual({
-                statusCode: 400,
                 error: 'InternalError',
                 message: 'Bad request',
+                statusCode: 400,
             });
             // And the underlying conn-string-shaped detail must never leak.
             expect(res.body).not.toContain('ECONNREFUSED');
             expect(res.body).not.toContain('127.0.0.1');
             expect(res.body).not.toContain('5432');
+        });
+    });
+});
+
+/**
+ * Pin the REAL shared redaction contract — `buildErrorResponse`
+ * (packages/config/src/server.ts), imported via @nightfuel/config.
+ *
+ * The describe above proves the SHARED handler is wired into this service and
+ * redacts correctly over the wire. THIS block goes one level deeper: it pins
+ * the pure decision function directly, so a drift in `buildErrorResponse`
+ * itself — e.g. someone flips the 5xx branch back to `message: error.message`,
+ * or stops redacting non-validation 4xx — turns notification-service's suite
+ * red too, exactly like the 13 other shared-family redaction suites. Because we
+ * import and exercise the genuine helper (not a hand-mirrored copy), there is
+ * no local shape that could silently diverge from production.
+ *
+ * The structured `logger.error(...)` inside `registerFastifyErrorHandler` still
+ * captures the full error (stack, Prisma text, conn-string fragments)
+ * server-side; only the WIRE body is redacted. These assertions deliberately do
+ * NOT weaken that — they pin the redacted public body, never the logged cause.
+ */
+describe('notification-service redaction — drives the real @nightfuel/config shared handler', () => {
+    describe('buildErrorResponse pure contract (the single source of truth)', () => {
+        it('5xx: returns the fixed generic body, never err.message / err.stack', () => {
+            // A 5xx carrying a (would-be-leaky) message AND a stack hint: both
+            // must be dropped in favour of the fixed generic copy.
+            const res = buildErrorResponse({
+                statusCode: 500,
+                message: 'x',
+                stack: 'y',
+            });
+            expect(res.body).toEqual({
+                error: 'InternalServerError',
+                message: 'An unexpected error occurred',
+                statusCode: 500,
+            });
+            // Neither the raw message nor the stack hint may appear anywhere in
+            // the redacted body.
+            expect(JSON.stringify(res.body)).not.toContain('"x"');
+            expect(JSON.stringify(res.body)).not.toContain('y');
+        });
+
+        it('validation 4xx: reflects the (safe, user-facing) error.message', () => {
+            // Fastify validation errors carry user-facing schema copy that is
+            // safe to surface — the redactor reflects it verbatim.
+            const res = buildErrorResponse({
+                statusCode: 400,
+                validation: [{}],
+                name: 'FastifyError',
+                message: "body should have required property 'token'",
+            });
+            expect(res.body.message).toBe("body should have required property 'token'");
+            // Full body for completeness — error.name preserved, statusCode echoed.
+            expect(res.body).toEqual({
+                error: 'FastifyError',
+                message: "body should have required property 'token'",
+                statusCode: 400,
+            });
+        });
+
+        it('non-validation 4xx: redacts err.message to the generic "Bad request"', () => {
+            // A non-validation 4xx whose message is a conn-string-shaped leak:
+            // the redactor must replace it with the fixed generic.
+            const res = buildErrorResponse({
+                statusCode: 400,
+                name: 'InternalError',
+                message: 'connect ECONNREFUSED 127.0.0.1:5432',
+            });
+            expect(res.body.message).toBe('Bad request');
+            expect(res.body).toEqual({
+                error: 'InternalError',
+                message: 'Bad request',
+                statusCode: 400,
+            });
+            // The conn-string fragments in the input must not survive redaction.
+            expect(JSON.stringify(res.body)).not.toContain('ECONNREFUSED');
+            expect(JSON.stringify(res.body)).not.toContain('127.0.0.1');
+            expect(JSON.stringify(res.body)).not.toContain('5432');
+        });
+    });
+
+    describe('re-asserted through the registered app (shared handler on the wire)', () => {
+        let app: FastifyInstance;
+
+        beforeAll(async () => {
+            app = buildApp();
+            await app.ready();
+        });
+
+        afterAll(async () => {
+            await app.close();
+        });
+
+        it('500 → "An unexpected error occurred" / "InternalServerError"', async () => {
+            const res = await app.inject({ method: 'GET', url: '/boom' });
+            expect(res.statusCode).toBe(500);
+            expect(res.json()).toEqual({
+                error: 'InternalServerError',
+                message: 'An unexpected error occurred',
+                statusCode: 500,
+            });
+        });
+
+        it('validation 4xx → reflects error.message', async () => {
+            const res = await app.inject({ method: 'GET', url: '/bad-validation' });
+            expect(res.statusCode).toBe(400);
+            expect(res.json()).toEqual({
+                error: 'FastifyError',
+                message: "body should have required property 'token'",
+                statusCode: 400,
+            });
+        });
+
+        it('non-validation 4xx → "Bad request"', async () => {
+            const res = await app.inject({ method: 'GET', url: '/bad-internal' });
+            expect(res.statusCode).toBe(400);
+            expect(res.json()).toEqual({
+                error: 'InternalError',
+                message: 'Bad request',
+                statusCode: 400,
+            });
+        });
+
+        it('raw err.message / .stack / "Prisma" / "5432" never appear in any body', async () => {
+            // Sweep every redactor branch (5xx, validation 4xx, non-validation
+            // 4xx) and assert none of the high-risk fragments leak on the wire.
+            for (const url of ['/boom', '/bad-validation', '/bad-internal']) {
+                const res = await app.inject({ method: 'GET', url });
+                expect(res.body).not.toContain(LEAKY_THROWN_MESSAGE);
+                expect(res.body).not.toContain('connect ECONNREFUSED 127.0.0.1:5432');
+                expect(res.body).not.toContain('Prisma');
+                expect(res.body).not.toContain('stack');
+                expect(res.body).not.toContain('5432');
+                expect(res.body).not.toContain('localhost');
+                expect(res.body).not.toContain('at /');
+            }
         });
     });
 });

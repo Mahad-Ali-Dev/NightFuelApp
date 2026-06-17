@@ -14,6 +14,10 @@ const createScheduledSessionSchema = z.object({
     title: z.string().min(1).max(200),
     scheduledAt: z.string().datetime(),
     notes: z.string().max(2000).optional(),
+    // OPTIONAL link to one of the caller's OWN shifts. A malformed (non-uuid)
+    // value is rejected by Zod as a 4xx before any DB work; a well-formed uuid
+    // is still ownership-checked in the handler before it is persisted.
+    shiftId: z.string().uuid().optional(),
 });
 
 // Optional ISO-datetime window. When both are present a from<=to invariant is
@@ -132,12 +136,28 @@ export const trainingRoutes = async (
                 const userId = request.user.userId;
                 const body = request.body as z.infer<typeof createScheduledSessionSchema>;
 
+                // Optional shift link: only a shift the CALLER owns may be
+                // linked. We look it up scoped to the verified JWT userId; a
+                // null result means the id is unknown OR belongs to another
+                // user, and in both cases we refuse with a generic 4xx (no raw
+                // detail — the redaction contract holds) rather than silently
+                // dropping or, worse, linking a foreign shift.
+                if (body.shiftId) {
+                    const shift = await prisma.shift.findFirst({
+                        where: { id: body.shiftId, userId },
+                    });
+                    if (!shift) {
+                        return reply.code(400).send({ error: 'Invalid shift' });
+                    }
+                }
+
                 const session = await prisma.scheduledSession.create({
                     data: {
                         userId,
                         title: body.title,
                         scheduledAt: new Date(body.scheduledAt),
                         notes: body.notes,
+                        ...(body.shiftId ? { shiftId: body.shiftId } : {}),
                     },
                 });
 

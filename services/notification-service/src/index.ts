@@ -8,7 +8,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, sendUnauthorized } from '@nightfuel/config';
+import { createLogger, loadConfig, sendUnauthorized, registerFastifyErrorHandler } from '@nightfuel/config';
 import { NotificationService } from './notification.service';
 import { PushService } from './push.service';
 import { notificationRoutes } from './routes';
@@ -199,40 +199,14 @@ fastify.register(
 // ---------------------------------------------------------------------------
 // Global error handler
 // ---------------------------------------------------------------------------
-// Redaction contract (mirrors user-service/src/index.ts setErrorHandler — see
-// __tests__/error-redaction.test.ts for the locked-in shape):
-//   • The structured `logger.error` line below STILL captures the full error
-//     object server-side (stack, Prisma details, conn-string fragments).
-//   • On the wire we NEVER reflect `error.message` or `error.stack` on the 500
-//     branch — it just returns the fixed generic 'Internal server error'.
-//   • On the <500 branch we reflect `error.message` only when `error.validation`
-//     is truthy (i.e. a Fastify-generated user-facing schema error); every other
-//     4xx gets the generic 'Bad request' so internal error.message can't leak.
-fastify.setErrorHandler((error, request, reply) => {
-    logger.error(
-        {
-            err: error,
-            url: request.url,
-            method: request.method,
-            statusCode: error.statusCode,
-        },
-        'Unhandled request error',
-    );
-
-    if (error.statusCode && error.statusCode < 500) {
-        return reply.code(error.statusCode).send({
-            statusCode: error.statusCode,
-            error: error.name ?? 'Bad Request',
-            message: error.validation ? error.message : 'Bad request',
-        });
-    }
-
-    return reply.code(500).send({
-        statusCode: 500,
-        error: 'Internal Server Error',
-        message: 'Internal server error',
-    });
-});
+// Converged onto the shared pure redactor in @nightfuel/config
+// (buildErrorResponse). The structured `logger.error` inside the helper STILL
+// captures the full error object server-side (stack, Prisma details,
+// conn-string fragments); on the wire a 5xx returns a fixed generic body and a
+// non-validation 4xx is redacted to 'Bad request' — only Fastify validation
+// messages are reflected. See __tests__/error-redaction.test.ts for the
+// locked-in shape.
+registerFastifyErrorHandler(fastify, logger);
 
 // ---------------------------------------------------------------------------
 // Startup

@@ -43,14 +43,27 @@ const SESSION_ROW = {
     title: 'Lower body — squats',
     scheduledAt: new Date('2026-06-20T18:00:00.000Z'),
     notes: 'Deload week',
+    shiftId: null,
     createdAt: new Date('2026-06-17T10:00:00.000Z'),
     updatedAt: new Date('2026-06-17T10:00:00.000Z'),
+};
+
+// A well-formed shift id used by the optional-link POST cases. When
+// shift.findFirst resolves a row whose user_id matches the caller, linking is
+// allowed; when it resolves null (foreign / unknown), the handler returns 400.
+const SHIFT_ID = '33333333-3333-3333-3333-333333333333';
+const OWNED_SHIFT_ROW = {
+    id: SHIFT_ID,
+    userId: USER_ID,
 };
 
 type MockPrisma = {
     scheduledSession: {
         findMany: ReturnType<typeof jest.fn>;
         create: ReturnType<typeof jest.fn>;
+    };
+    shift: {
+        findFirst: ReturnType<typeof jest.fn>;
     };
 };
 
@@ -59,6 +72,13 @@ function makeMockPrisma(): MockPrisma {
         scheduledSession: {
             findMany: jest.fn(() => Promise.resolve([SESSION_ROW] as unknown)),
             create: jest.fn(() => Promise.resolve(SESSION_ROW as unknown)),
+        },
+        // Backs the OPTIONAL shift-link ownership check in the POST handler.
+        // Default: resolves null (no shift) so cases that don't send a shiftId
+        // never accidentally "own" one; cases that exercise the link override
+        // this per-test with mockResolvedValueOnce.
+        shift: {
+            findFirst: jest.fn(() => Promise.resolve(null as unknown)),
         },
     };
 }
@@ -210,6 +230,84 @@ describe('shift-service /v1/training/scheduled-sessions', () => {
             const createArg = prisma.scheduledSession.create.mock.calls[0][0] as any;
             expect(createArg.data.userId).toBe(USER_ID);
             expect(createArg.data.title).toBe('Lower body — squats');
+        });
+
+        // ── Optional shift link ─────────────────────────────────────────────
+        // (a) A shiftId the JWT user OWNS: the ownership lookup is scoped to the
+        // verified userId, resolves a matching row, and the create persists the
+        // link (data.shiftId set) → 201.
+        it('links a shift owned by the JWT user (201) — ownership checked against the JWT userId and shiftId persisted', async () => {
+            prisma.shift.findFirst.mockResolvedValueOnce(OWNED_SHIFT_ROW as never);
+
+            const res = await app.inject({
+                method: 'POST',
+                url: '/v1/training/scheduled-sessions',
+                headers: { authorization: `Bearer ${validToken()}` },
+                payload: {
+                    title: 'Lower body — squats',
+                    scheduledAt: '2026-06-20T18:00:00.000Z',
+                    shiftId: SHIFT_ID,
+                },
+            });
+
+            expect(res.statusCode).toBe(201);
+
+            // Ownership was verified scoped to the verified JWT identity, never a
+            // client-supplied user id.
+            expect(prisma.shift.findFirst).toHaveBeenCalledTimes(1);
+            const findArg = prisma.shift.findFirst.mock.calls[0][0] as any;
+            expect(findArg.where.id).toBe(SHIFT_ID);
+            expect(findArg.where.userId).toBe(USER_ID);
+
+            // The link is persisted on the created row.
+            expect(prisma.scheduledSession.create).toHaveBeenCalledTimes(1);
+            const createArg = prisma.scheduledSession.create.mock.calls[0][0] as any;
+            expect(createArg.data.shiftId).toBe(SHIFT_ID);
+            expect(createArg.data.userId).toBe(USER_ID);
+        });
+
+        // (b) A well-formed shiftId owned by a DIFFERENT user: the scoped lookup
+        // resolves null, so the handler refuses the cross-user link with a 400
+        // and NEVER writes. The generic body keeps the redaction contract.
+        it('refuses (400) to link a shift owned by a different user and never writes', async () => {
+            prisma.shift.findFirst.mockResolvedValueOnce(null as never);
+
+            const res = await app.inject({
+                method: 'POST',
+                url: '/v1/training/scheduled-sessions',
+                headers: { authorization: `Bearer ${validToken()}` },
+                payload: {
+                    title: 'Lower body — squats',
+                    scheduledAt: '2026-06-20T18:00:00.000Z',
+                    shiftId: SHIFT_ID,
+                },
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(res.json()).toEqual({ error: 'Invalid shift' });
+            expect(prisma.shift.findFirst).toHaveBeenCalledTimes(1);
+            // The cross-user link must never reach the create.
+            expect(prisma.scheduledSession.create).not.toHaveBeenCalled();
+        });
+
+        // (c) A malformed (non-uuid) shiftId is rejected by Zod as a 4xx BEFORE
+        // any DB work — neither the ownership lookup nor the create runs.
+        it('rejects a non-uuid shiftId with a 4xx (Zod body validation) and never queries or writes', async () => {
+            const res = await app.inject({
+                method: 'POST',
+                url: '/v1/training/scheduled-sessions',
+                headers: { authorization: `Bearer ${validToken()}` },
+                payload: {
+                    title: 'Lower body — squats',
+                    scheduledAt: '2026-06-20T18:00:00.000Z',
+                    shiftId: 'not-a-uuid',
+                },
+            });
+
+            expect(res.statusCode).toBeGreaterThanOrEqual(400);
+            expect(res.statusCode).toBeLessThan(500);
+            expect(prisma.shift.findFirst).not.toHaveBeenCalled();
+            expect(prisma.scheduledSession.create).not.toHaveBeenCalled();
         });
 
         it('rejects a missing title with a 4xx (Zod body validation) and never writes', async () => {

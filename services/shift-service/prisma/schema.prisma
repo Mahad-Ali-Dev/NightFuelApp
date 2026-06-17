@@ -55,6 +55,13 @@ model ScheduledSession {
   title       String
   scheduledAt DateTime @map("scheduled_at") @db.Timestamptz()
   notes       String?
+  // OPTIONAL link to one of the user's own Shift rows so the calendar can later
+  // contextualize training around a known shift. Scalar-only by design (no
+  // Prisma relation / back-relation on Shift) to keep this strictly additive —
+  // a single nullable column. Ownership (same userId) is enforced in the POST
+  // handler, NOT by a DB FK constraint, so the un-run base table needs no
+  // ordering against this column.
+  shiftId     String?  @map("shift_id")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
