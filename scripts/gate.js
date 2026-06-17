@@ -21,24 +21,29 @@
  *      missing or throws, the gate fails. This guard asserts every Fastify
  *      service registers the centralized error handler and leaks no raw error
  *      body)
- *   4. harness-self-tests                         (runs scripts/__tests__/*.test.js
+ *   4. node scripts/check-shared-logger.js        (lint-tier guard — HARD /
+ *      unconditional, same as #2/#3. No fs.existsSync guard. This guard asserts
+ *      no services/<svc>/src file constructs a raw pino logger — every service
+ *      must use the shared createLogger from @nightfuel/config — so the logger
+ *      contract can't drift back into per-service copies)
+ *   5. harness-self-tests                         (runs scripts/__tests__/*.test.js
  *      via the already-installed jest — these lock the gate's own helpers:
  *      parseSuiteSummary's fail-closed contract and the inline-401 detectors.
  *      No new dependency: we invoke the repo-hoisted jest CLI directly as a
  *      NODE step. A regression that made parseSuiteSummary fail-OPEN, or that
  *      narrowed the 401 regexes, turns this step RED before it reaches CI)
- *   5. npm run check-types --silent              (root turbo typecheck — all
+ *   6. npm run check-types --silent              (root turbo typecheck — all
  *      packages and services)
- *   6. @nightfuel/config build                    (force-emit packages/config
+ *   7. @nightfuel/config build                    (force-emit packages/config
  *      via `tsc -b packages/config --force`; see the long note on the step for
  *      WHY --force is mandatory — a stale tsconfig.tsbuildinfo makes a plain
  *      `tsc`/`tsc -b` report 'up to date' and emit NOTHING even when dist/ is
  *      missing, which would let the backend redaction suites import a stale or
  *      absent @nightfuel/config. Runs BEFORE test:backend so the 11
  *      shared-family redaction suites resolve packages/config/dist/index.js)
- *   7. node scripts/run-backend-tests.js         (per-service jest/vitest
+ *   8. node scripts/run-backend-tests.js         (per-service jest/vitest
  *      runs with one PASS/FAIL line per service)
- *   8. npm test --workspace=@nightfuel/mobile -- --ci --silent
+ *   9. npm test --workspace=@nightfuel/mobile -- --ci --silent
  *      (mobile jest run; --ci so it doesn't wait for an interactive watcher
  *      and disables snapshot updates)
  *
@@ -163,6 +168,18 @@ function buildSteps() {
             name: 'check-error-handler-registered',
             cmd: NODE,
             args: [path.join(REPO_ROOT, 'scripts', 'check-error-handler-registered.js')],
+        },
+        {
+            // HARD / unconditional — no `file` guard, same pattern as check-demo-
+            // maps-in-sync and check-error-handler-registered above. This guard
+            // asserts no services/<svc>/src file constructs a raw pino logger
+            // (every service must use the shared createLogger from
+            // @nightfuel/config); the script exists and passes, so it runs every
+            // gate. A missing or throwing script fails the gate rather than
+            // printing SKIP and continuing.
+            name: 'check-shared-logger',
+            cmd: NODE,
+            args: [path.join(REPO_ROOT, 'scripts', 'check-shared-logger.js')],
         },
         {
             // Harness self-tests: run scripts/__tests__/*.test.js, which lock

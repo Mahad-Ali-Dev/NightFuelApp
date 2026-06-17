@@ -49,7 +49,7 @@
  * when the suite runs.
  */
 import React from 'react';
-import { render, fireEvent, screen } from '@testing-library/react-native';
+import { render, fireEvent, screen, act } from '@testing-library/react-native';
 import {
   ThemeContext,
   getThemeColors,
@@ -72,6 +72,33 @@ const mockHistoryState: HistoryState = {
 };
 const mockHistoryRefetch = jest.fn();
 
+// A small shift list answered by the ['shifts'] query so the "Link to a shift"
+// picker renders real options when the form is open.
+const mockShifts = [
+  {
+    id: 'shift_1',
+    userId: 'u_1',
+    type: 'FIXED_NIGHT',
+    startTime: '2026-03-12T19:00:00.000Z',
+    endTime: '2026-03-13T07:00:00.000Z',
+    timezone: 'UTC',
+    createdAt: '2026-03-10T00:00:00.000Z',
+    updatedAt: '2026-03-10T00:00:00.000Z',
+  },
+];
+
+// ── Captured TanStack mutation wiring ────────────────────────────────────────
+// useMutation is stubbed: it records the { mutationFn, onSuccess, onError }
+// passed by the screen so tests can fire them directly, and exposes a mutate
+// spy + flags. A mutable `mockMutationState` lets a test flip isPending.
+const mockMutate = jest.fn();
+const mockMutateAsync = jest.fn();
+const mockMutationReset = jest.fn();
+const mockMutationState = { isPending: false, isError: false };
+let capturedMutationOptions: any = null;
+
+const mockInvalidateQueries = jest.fn();
+
 jest.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     const key = queryKey[0];
@@ -83,12 +110,37 @@ jest.mock('@tanstack/react-query', () => ({
         refetch: mockHistoryRefetch,
       };
     }
+    if (key === 'shifts') {
+      return { data: mockShifts, isLoading: false, isError: false, refetch: jest.fn() };
+    }
     return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
   },
+  useMutation: (options: any) => {
+    capturedMutationOptions = options;
+    return {
+      mutate: mockMutate,
+      mutateAsync: mockMutateAsync,
+      isPending: mockMutationState.isPending,
+      isError: mockMutationState.isError,
+      reset: mockMutationReset,
+    };
+  },
+  useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 
 jest.mock('@/api/progress', () => ({
   getHistory: jest.fn(),
+}));
+
+// The screen's create-session form imports these. useMutation is stubbed, so
+// neither is actually invoked — the jest.fns just satisfy the import graph.
+jest.mock('@/api/training', () => ({
+  getScheduledSessions: jest.fn(),
+  createScheduledSession: jest.fn(),
+}));
+
+jest.mock('@/api/shifts', () => ({
+  list: jest.fn(),
 }));
 
 jest.mock('expo-router', () => ({
@@ -107,6 +159,39 @@ jest.mock('@expo/vector-icons', () => {
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
 }));
+
+// Native date picker → host <View>; never opened in these tests (the
+// DateTimeField stub below stands in for date selection). Keeps the import
+// graph resolvable if the real component is ever reached.
+jest.mock('@react-native-community/datetimepicker', () => {
+  const { View } = require('react-native');
+  return { __esModule: true, default: (props: Record<string, unknown>) => <View {...props} /> };
+});
+
+// The date being "picked" by the DateTimeField stub when its trigger is pressed.
+const MOCK_PICKED_DATE = '2026-03-20';
+
+// Keep the REAL Button / EmptyState / Card primitives (the "No sessions
+// scheduled" EmptyState + the real Save button are asserted), but replace
+// DateTimeField with a controllable stub: pressing it emits a fixed
+// 'YYYY-MM-DD' via onChange so a test can satisfy the "a date is chosen" gate
+// without driving the native spinner.
+jest.mock('@/components/ui', () => {
+  const actual = jest.requireActual('@/components/ui');
+  const { Text } = require('react-native');
+  return {
+    ...actual,
+    DateTimeField: ({ value, onChange, accessibilityLabel }: any) => (
+      <Text
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel ?? 'Select date'}
+        onPress={() => onChange(MOCK_PICKED_DATE)}
+      >
+        {`date:${value ?? ''}`}
+      </Text>
+    ),
+  };
+});
 
 // Import AFTER the mocks are registered.
 import TrainingCalendarScreen from '../../app/(performance)/calendar';
@@ -133,6 +218,14 @@ describe('Training Calendar — state-driven month, ISO-date matching, honest se
     mockHistoryState.isLoading = false;
     mockHistoryState.isError = false;
     mockHistoryRefetch.mockClear();
+    // Reset the captured mutation wiring + spies between tests.
+    mockMutate.mockClear();
+    mockMutateAsync.mockClear();
+    mockMutationReset.mockClear();
+    mockInvalidateQueries.mockClear();
+    mockMutationState.isPending = false;
+    mockMutationState.isError = false;
+    capturedMutationOptions = null;
   });
 
   afterEach(() => {
@@ -253,11 +346,11 @@ describe('Training Calendar — state-driven month, ISO-date matching, honest se
     expect(screen.queryByText('Friday, 17:00')).toBeNull();
   });
 
-  test('no dead controls: the Week/Month/Year view switcher and the header "+" (Add) button are gone', () => {
+  test('no dead view-switcher: the Week/Month/Year tabs stay gone, but the header "+" is now a REAL add control', () => {
     renderScreen();
 
     // The view switcher was a no-op: `viewMode` state was never read, so Week
-    // and Year never changed the (always-monthly) grid. It must be removed —
+    // and Year never changed the (always-monthly) grid. It must stay removed —
     // no "tab"-role controls and none of its labels survive. (The working
     // prev/next chevrons are buttons, not tabs, so they are unaffected.)
     expect(screen.queryByRole('tab')).toBeNull();
@@ -270,10 +363,120 @@ describe('Training Calendar — state-driven month, ISO-date matching, honest se
     expect(screen.queryByText('Week')).toBeNull();
     expect(screen.queryByText('Year')).toBeNull();
 
-    // The header "+" had no onPress (a dead button). It is replaced by a
-    // non-interactive spacer, so neither its a11y label nor its glyph remains.
+    // The header "+" is no longer a dead button — it has a real onPress that
+    // opens the create-session form. The OLD bare "Add" label is gone; the
+    // honest, descriptive "Add scheduled session" label is present.
     expect(screen.queryByLabelText('Add')).toBeNull();
-    expect(screen.queryByText('icon:add')).toBeNull();
+    expect(screen.getByLabelText('Add scheduled session')).toBeTruthy();
+  });
+
+  test('the header "+" opens the create-session form (title field becomes visible)', () => {
+    renderScreen();
+
+    // Form is closed initially — the title field is not mounted.
+    expect(screen.queryByLabelText('Session title')).toBeNull();
+
+    fireEvent.press(screen.getByLabelText('Add scheduled session'));
+
+    // Pressing the add control opens the form: its title input is now visible.
+    expect(screen.getByLabelText('Session title')).toBeTruthy();
+    expect(screen.getByText('New Session')).toBeTruthy();
+  });
+
+  test('Save is disabled until a title AND a date are present, then fires the mutation', () => {
+    renderScreen();
+    fireEvent.press(screen.getByLabelText('Add scheduled session'));
+
+    const saveBtn = screen.getByLabelText('Save session');
+
+    // Nothing entered yet → disabled, and pressing it is a no-op.
+    expect(saveBtn.props.accessibilityState?.disabled).toBe(true);
+    fireEvent.press(saveBtn);
+    expect(mockMutate).not.toHaveBeenCalled();
+
+    // Title alone is not enough (no date yet).
+    fireEvent.changeText(screen.getByLabelText('Session title'), 'Push Day');
+    expect(screen.getByLabelText('Save session').props.accessibilityState?.disabled).toBe(true);
+
+    // Choose a date via the stubbed DateTimeField → Save enables.
+    fireEvent.press(screen.getByLabelText('Session date'));
+    const enabled = screen.getByLabelText('Save session');
+    expect(enabled.props.accessibilityState?.disabled).toBe(false);
+
+    // Pressing Save fires the captured mutation with a well-formed payload.
+    fireEvent.press(enabled);
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    const payload = mockMutate.mock.calls[0][0];
+    expect(payload.title).toBe('Push Day');
+    expect(typeof payload.scheduledAt).toBe('string');
+    // A real ISO instant assembled from the picked date + default time-of-day.
+    expect(new Date(payload.scheduledAt).toISOString()).toBe(payload.scheduledAt);
+    expect(payload.scheduledAt).toContain('2026-03-20');
+    // "None" is the default shift selection, so shiftId is omitted entirely.
+    expect('shiftId' in payload).toBe(false);
+  });
+
+  test('the captured mutationFn is createScheduledSession (the write API)', () => {
+    const trainingApi = require('@/api/training');
+    renderScreen();
+    fireEvent.press(screen.getByLabelText('Add scheduled session'));
+    expect(capturedMutationOptions).not.toBeNull();
+    expect(capturedMutationOptions.mutationFn).toBe(trainingApi.createScheduledSession);
+  });
+
+  test('firing the captured onSuccess invalidates ["scheduled-sessions"] and closes the form', () => {
+    renderScreen();
+    fireEvent.press(screen.getByLabelText('Add scheduled session'));
+    expect(screen.getByLabelText('Session title')).toBeTruthy();
+
+    // Simulate a successful POST by invoking the onSuccess the screen registered.
+    // Wrapped in act() because it drives setState (invalidate + close).
+    act(() => capturedMutationOptions.onSuccess());
+
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['scheduled-sessions'] });
+    // The form closed: the title field is unmounted again.
+    expect(screen.queryByLabelText('Session title')).toBeNull();
+  });
+
+  test('onError classifies a 503 as "not available" and a network error as a connection problem — never a throw', () => {
+    renderScreen();
+    fireEvent.press(screen.getByLabelText('Add scheduled session'));
+
+    // 503 → honest "not available yet" inline copy (no redbox / rethrow).
+    // act() flushes the setState the onError handler performs.
+    expect(() =>
+      act(() => capturedMutationOptions.onError({ response: { status: 503 } })),
+    ).not.toThrow();
+    expect(screen.getByText(/Scheduling isn't available yet/)).toBeTruthy();
+
+    // A generic/network error → the connection copy.
+    expect(() =>
+      act(() => capturedMutationOptions.onError(new Error('Network Error'))),
+    ).not.toThrow();
+    expect(screen.getByText(/check your connection and try again/)).toBeTruthy();
+  });
+
+  test('title and notes inputs cap length client-side at the backend bounds (200 / 2000)', () => {
+    renderScreen();
+    fireEvent.press(screen.getByLabelText('Add scheduled session'));
+
+    const titleInput = screen.getByLabelText('Session title');
+    expect(titleInput.props.maxLength).toBe(200);
+
+    const notesInput = screen.getByLabelText('Session notes');
+    expect(notesInput.props.maxLength).toBe(2000);
+  });
+
+  test('the optional shift picker lists the user\'s shifts plus a default "None"', () => {
+    renderScreen();
+    fireEvent.press(screen.getByLabelText('Add scheduled session'));
+
+    // "None" is always present and selected by default.
+    const none = screen.getByLabelText('No linked shift');
+    expect(none.props.accessibilityState?.selected).toBe(true);
+
+    // The single mocked shift renders as a selectable option.
+    expect(screen.getByLabelText(/Link shift FIXED_NIGHT/)).toBeTruthy();
   });
 
   test('error state still renders the activity EmptyState with a working Retry', () => {

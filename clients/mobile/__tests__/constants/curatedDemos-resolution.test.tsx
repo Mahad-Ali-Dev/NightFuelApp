@@ -11,12 +11,12 @@
  *   - the exercise-detail screen's combined precedence + "Unreviewed" chip
  *     (rendered when an exercise's curated entry is `verified: false`).
  *
- * The first five cases are pure data assertions against the real curated map
- * — no React, no network. The sixth mounts <ExerciseDetailScreen/> with a
- * minimal `useQuery` stub and asserts the chip is present for a verified:false
- * exercise. The screen-side jest.mock calls below are hoisted by jest, so they
- * apply to ALL tests in the file even though the data tests don't import the
- * mocked modules.
+ * The first cases are pure data assertions against the real curated map — no
+ * React, no network. The screen cases mount <ExerciseDetailScreen/> with a
+ * minimal `useQuery` stub and assert the "Unreviewed" chip is PRESENT for a
+ * verified:false exercise and ABSENT for a grandfathered verified:true one. The
+ * screen-side jest.mock calls below are hoisted by jest, so they apply to ALL
+ * tests in the file even though the data tests don't import the mocked modules.
  */
 
 // ── jest.mock hoisting block ─────────────────────────────────────────────────
@@ -25,23 +25,42 @@
 // any of these mocked modules, so the mocks are harmless to them.
 
 // react-query: drive the exercise-detail query to return a known curated name.
-// Front Barbell Squat is a fedb_frames entry (verified:false), so the chip
-// MUST render. The analytics query stays in a benign "no data" state since the
-// 'progress' tab isn't active by default.
+// The returned exercise is read from the mutable `mockExercise` holder below so
+// each render test can pick the name it needs (a verified:false entry → the
+// chip MUST render; a grandfathered verified:true entry → the chip MUST be
+// absent). It defaults to Front Barbell Squat, a fedb_frames verified:false
+// entry. (The `mock` name prefix is required by babel-plugin-jest-hoist so the
+// hoisted factory may close over this out-of-scope binding.) The analytics
+// query stays in a benign "no data" state since the 'progress' tab isn't active
+// by default.
+const mockExercise: {
+  id: string;
+  name: string;
+  muscleGroup: string;
+  equipment: string;
+  difficulty: string;
+  instructions: string;
+  imageUrl: string | null;
+  bodyPart: string;
+} = {
+  id: 'fbs-1',
+  name: 'Front Barbell Squat',
+  muscleGroup: 'legs',
+  equipment: 'Barbell',
+  difficulty: 'Intermediate',
+  instructions: '',
+  imageUrl: null,
+  bodyPart: 'upper legs',
+};
+
 jest.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     if (queryKey[0] === 'exercise-detail') {
+      // Read at call-time (during render), so a test that mutates `mockExercise`
+      // before render()ing sees its chosen exercise. Spread a fresh object so
+      // the screen never holds a reference to the shared holder.
       return {
-        data: {
-          id: 'fbs-1',
-          name: 'Front Barbell Squat',
-          muscleGroup: 'legs',
-          equipment: 'Barbell',
-          difficulty: 'Intermediate',
-          instructions: '',
-          imageUrl: null,
-          bodyPart: 'upper legs',
-        },
+        data: { ...mockExercise },
         isLoading: false,
         isError: false,
         refetch: jest.fn(),
@@ -302,13 +321,49 @@ function renderScreen() {
 }
 
 describe('ExerciseDetailScreen — Unreviewed chip', () => {
+  // The chip is gated on `getCuratedDemoVerified(name) === false` in
+  // app/(exercises)/[id].tsx — present for a verified:false curated entry,
+  // absent for a grandfathered verified:true one (and absent for an uncurated
+  // name, where the helper returns null). The positive/negative pair below
+  // exercises both sides of that gate through a real screen mount, so the chip
+  // can never silently appear on a reviewed demo nor silently vanish from an
+  // unreviewed one. The pure-helper assertions above lock the same boolean the
+  // screen consumes.
   test('renders the chip for a curated, verified:false exercise (Front Barbell Squat)', () => {
+    // The default mockExercise (Front Barbell Squat) is a fedb_frames entry,
+    // verified:false. Re-assert it here so the negative test below can mutate
+    // the holder without leaking into this one.
+    mockExercise.id = 'fbs-1';
+    mockExercise.name = 'Front Barbell Squat';
+    mockExercise.imageUrl = null;
+    expect(getCuratedDemoVerified(mockExercise.name)).toBe(false);
+
     renderScreen();
 
-    // Front Barbell Squat is a fedb_frames entry (verified:false) → chip MUST
-    // render with the exact "Unreviewed" copy.
+    // verified:false → chip MUST render with the exact "Unreviewed" copy.
     expect(screen.getByText('Unreviewed')).toBeTruthy();
     // The chip's accessibility label is the long-form explanation.
     expect(screen.getByLabelText('Demo not yet human-reviewed')).toBeTruthy();
+  });
+
+  test('does NOT render the chip for a grandfathered verified:true exercise (Barbell Bench Press)', () => {
+    // Barbell Bench Press is one of the 35 grandfathered DEMO_FALLBACK entries —
+    // getCuratedDemoVerified() returns true, so the screen's `curatedVerified
+    // === false` gate is NOT satisfied and the chip must be absent. (Its demo
+    // still renders via the existing frame/url resolvers — the chip's absence
+    // is independent of which demo branch lights up.)
+    mockExercise.id = 'bbp-1';
+    mockExercise.name = 'Barbell Bench Press';
+    mockExercise.imageUrl = null;
+    expect(getCuratedDemoVerified(mockExercise.name)).toBe(true);
+
+    renderScreen();
+
+    // verified:true → the chip and its a11y label are BOTH absent.
+    expect(screen.queryByText('Unreviewed')).toBeNull();
+    expect(screen.queryByLabelText('Demo not yet human-reviewed')).toBeNull();
+    // Sanity: the screen still rendered the exercise (its name is on screen),
+    // so the null chip is a real absence, not a failed/blank mount.
+    expect(screen.getByText('Barbell Bench Press')).toBeTruthy();
   });
 });

@@ -10,9 +10,13 @@
  *       unhandled throw never escapes as an empty 500 (or, worse, a default
  *       Fastify body that reflects the raw message). Two shapes satisfy this:
  *         • the shared helper — `registerFastifyErrorHandler(fastify, logger)`
- *           imported from @nightfuel/config (11 services use this today), OR
+ *           imported from @nightfuel/config (all 14 services use this today —
+ *           since the subscription-service pino migration there are no inline
+ *           holdouts left), OR
  *         • an inline `<app>.setErrorHandler(...)` call in the service's own
- *           src (notification-service / subscription-service / user-service).
+ *           src. No service currently relies on the inline form, but the guard
+ *           still accepts it so a future service may register a handler that
+ *           way without tripping the registration contract.
  *       A service whose src references NEITHER is an offender. This is the
  *       drift-proofing: a brand-new service that forgets both can't merge.
  *

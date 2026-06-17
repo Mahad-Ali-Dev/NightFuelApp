@@ -16,8 +16,8 @@ import jwt from '@fastify/jwt';
 import rateLimit from '@fastify/rate-limit';
 import { PrismaClient } from './generated/prisma';
 import Redis from 'ioredis';
-import pino from 'pino';
-import { sendUnauthorized, registerFastifyErrorHandler } from '@nightfuel/config';
+import type { Logger } from 'pino';
+import { createLogger, sendUnauthorized, registerFastifyErrorHandler } from '@nightfuel/config';
 
 import { SubscriptionService } from './subscription.service';
 import { subscriptionRoutes } from './routes';
@@ -44,16 +44,22 @@ const REDIS_URL = requireEnv('REDIS_URL');
 const LOG_LEVEL = process.env['LOG_LEVEL'] ?? 'info';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Logger (pino — used both as the root logger and passed into Fastify)
+// Logger (shared @nightfuel/config createLogger — used both as the root logger
+// and passed into Fastify). Converged onto the single shared factory so the
+// logger contract (level via LOG_LEVEL, ISO timestamp, uppercase level
+// formatter) can't drift back into a hand-rolled per-service construction.
+//
+// The cast reconciles the shared factory's pino `Logger` (compiled against
+// @nightfuel/config's own nested pino copy — the monorepo dep-nesting gotcha)
+// with this service's root-hoisted pino `Logger`, which Fastify's `logger:`
+// option and the SubscriptionService / event-subscriber / stripe params are all
+// typed against. pino's self-referential `child`/`onChild` generics make the two
+// nominally distinct across the module boundary (the nested copy's type omits
+// `msgPrefix`); the runtime object is a real pino logger and fully satisfies
+// every call site. Casting once here keeps all four downstream usages cast-free.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const rootLogger = pino({
-  level: LOG_LEVEL,
-  transport:
-    process.env['NODE_ENV'] !== 'production'
-      ? { target: 'pino-pretty', options: { colorize: true, translateTime: 'SYS:standard' } }
-      : undefined,
-});
+const rootLogger = createLogger('subscription-service') as unknown as Logger;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Redis EventBus adapter

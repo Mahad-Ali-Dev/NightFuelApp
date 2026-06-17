@@ -59,3 +59,33 @@ export async function update(
   const { data } = await apiClient.put<Shift>(`/v1/shifts/${id}`, payload);
   return data;
 }
+
+/** `YYYY-MM-DD` for a date offset from `now` by `days` (local calendar day). */
+function isoDateOffset(days: number, now: Date = new Date()): string {
+  const d = new Date(now);
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = `${d.getMonth() + 1}`.padStart(2, '0');
+  const day = `${d.getDate()}`.padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * List the signed-in user's shifts.
+ *
+ * The backend GET `/v1/shifts` (services/shift-service/src/routes.ts) requires
+ * `start`/`end` `YYYY-MM-DD` bounds (Zod-validated), so we pass a wide window
+ * — roughly a year either side of today — which is ample for a shift-link
+ * picker without an unbounded scan. `userId` is ignored by the server (it uses
+ * the JWT), so it is never sent. The kind is persisted under `shiftType`;
+ * mirror getCurrent's normalisation onto `type` so callers read one field. A
+ * non-array body degrades to `[]` rather than throwing.
+ */
+export async function list(): Promise<Shift[]> {
+  const { data } = await apiClient.get<any[]>('/v1/shifts', {
+    params: { start: isoDateOffset(-366), end: isoDateOffset(366) },
+  });
+  return Array.isArray(data)
+    ? data.map((s) => ({ ...s, type: s.type ?? s.shiftType }) as Shift)
+    : [];
+}

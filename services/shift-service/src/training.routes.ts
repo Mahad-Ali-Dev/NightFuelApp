@@ -34,29 +34,46 @@ const getScheduledSessionsQuerySchema = z
     );
 
 // ---------------------------------------------------------------------------
-// Missing-table detection
+// Missing-table / missing-column detection
 // ---------------------------------------------------------------------------
 
 /**
- * True when `err` indicates the `scheduled_sessions` table does not yet exist.
+ * True when `err` indicates the `scheduled_sessions` schema is not yet fully
+ * deployed — either the TABLE itself or the optional `shift_id` COLUMN is
+ * still missing. Both stem from USER-GATED migrations that are un-run files
+ * until a human deploys them against the VPS:
  *
- * The 20260617000000_scheduled_sessions migration is USER-GATED — it is an
- * un-run file until a human deploys it against the VPS. Until then a query
- * against the table surfaces Prisma error code `P2021` ("The table does not
- * exist in the current database."). We also match the raw Postgres
- * 'relation "scheduled_sessions" does not exist' message so the same
- * degradation path holds if the error arrives un-wrapped (e.g. via $queryRaw
- * or in a unit test that simulates the condition without a real Prisma client).
+ *   - 20260617000000_scheduled_sessions creates the base TABLE. Until it runs,
+ *     a query surfaces Prisma `P2021` ("The table does not exist in the current
+ *     database."), or — un-wrapped — the raw Postgres
+ *     'relation "scheduled_sessions" does not exist' message.
  *
- * On a match the GET degrades to 200 [] so dev keeps working pre-migration;
- * everything else is a genuine fault and must surface as the redacted 500.
+ *   - 20260618000000_scheduled_session_shift_link adds the optional `shift_id`
+ *     COLUMN *separately*. So once the base table is deployed (20260617) but
+ *     the column is not (20260618), a create that sets `data.shiftId` surfaces
+ *     Prisma `P2022` ("The column ... does not exist in the current database."),
+ *     or — un-wrapped — a raw 'column ... does not exist' message. Without
+ *     matching P2022 here that write-time error would fall through to the
+ *     generic redacted 500 instead of the honest degradation path.
+ *
+ * We match the coded forms (P2021 / P2022) AND the raw message forms so the
+ * same degradation holds whether the error arrives wrapped by Prisma or
+ * un-wrapped (e.g. via $queryRaw or a unit test that simulates the condition
+ * without a real Prisma client).
+ *
+ * On a match the GET degrades to 200 [] and the POST to a body-less 503 so dev
+ * keeps working pre-migration; everything else is a genuine fault and must
+ * surface as the redacted 500. No raw column/table name or Prisma text ever
+ * reaches the client — the 200 []/503 bodies are already redacted.
  */
 function isMissingTableError(err: any): boolean {
     if (!err) return false;
-    if (err.code === 'P2021') return true;
+    // P2021 = missing TABLE; P2022 = missing COLUMN (the un-run shift_id link).
+    if (err.code === 'P2021' || err.code === 'P2022') return true;
     const message = typeof err.message === 'string' ? err.message : '';
     return /relation "scheduled_sessions" does not exist/i.test(message)
-        || /table.*scheduled_sessions.*does not exist/i.test(message);
+        || /table.*scheduled_sessions.*does not exist/i.test(message)
+        || /column .*does not exist/i.test(message);
 }
 
 // ---------------------------------------------------------------------------
@@ -104,15 +121,16 @@ export const trainingRoutes = async (
 
                 reply.send(sessions);
             } catch (err: any) {
-                // Graceful degradation: the user-gated migration may not have
-                // run yet. A missing-table error is EXPECTED in that window, so
-                // the GET answers 200 [] (and logs at info) rather than 500 —
-                // the calendar then shows its honest empty state. Any other
-                // error is a real fault: log it server-side and return the
-                // generic redacted body (raw err.message must not reach the client).
+                // Graceful degradation: the user-gated migrations may not have
+                // run yet. A missing TABLE *or* missing COLUMN error is EXPECTED
+                // in that window, so the GET answers 200 [] (and logs at info)
+                // rather than 500 — the calendar then shows its honest empty
+                // state. Any other error is a real fault: log it server-side and
+                // return the generic redacted body (raw err.message must not
+                // reach the client).
                 if (isMissingTableError(err)) {
                     request.log.info(
-                        'scheduled_sessions table absent (migration un-run); returning []'
+                        'scheduled_sessions table/column absent (migration un-run); returning []'
                     );
                     return reply.send([]);
                 }
@@ -166,10 +184,14 @@ export const trainingRoutes = async (
                 // Same migration window as the GET, but a write cannot be
                 // satisfied with an empty list — surface a clear, body-less 503
                 // so the client knows scheduling is not yet available rather
-                // than treating it as a hard server fault.
+                // than treating it as a hard server fault. This also covers the
+                // missing shift_id COLUMN (Prisma P2022): when the base table is
+                // deployed but the un-run 20260618 link migration is not, a
+                // create that sets data.shiftId would otherwise fall through to
+                // the generic redacted 500.
                 if (isMissingTableError(err)) {
                     request.log.info(
-                        'scheduled_sessions table absent (migration un-run); POST unavailable'
+                        'scheduled_sessions table/column absent (migration un-run); POST unavailable'
                     );
                     return reply.code(503).send({ error: 'Scheduled sessions are not yet available' });
                 }

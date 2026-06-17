@@ -86,7 +86,8 @@ export default function ExerciseDetailScreen() {
         }
         // Translate the curated entry's kind into the matching <ExerciseDemo/>
         // input slot. fedb_frames feeds the animated loop, youtube feeds the
-        // "Full tutorial" link, gif feeds the single-still gifUrl input.
+        // "Full tutorial" link, gif feeds the gifUrl slot which expo-image
+        // animates as a playing demo.
         if (curated.kind === 'fedb_frames') {
             // Defensive: only feed the animated-loop slot a non-empty list of
             // real HTTPS frame URLs. A malformed entry that split to nothing
@@ -110,7 +111,9 @@ export default function ExerciseDetailScreen() {
             // fallback) underneath, never an empty box.
             return { demoFrames: null, demoUrl: curated.url, demoGifUrl: null };
         }
-        // curated.kind === 'gif' — single static still fed via the gifUrl slot.
+        // curated.kind === 'gif' — feeds the gifUrl slot, which expo-image
+        // animates as a playing demo (the "Demo" pill). A static still is only
+        // the degenerate single-frame fallback, not the normal case.
         const gifUrl = typeof curated.url === 'string' && curated.url.trim().length > 0 ? curated.url : null;
         return { demoFrames: null, demoUrl: null, demoGifUrl: gifUrl };
     }, [exercise]);

@@ -350,5 +350,66 @@ describe('shift-service /v1/training/scheduled-sessions', () => {
 
             expect(res.statusCode).toBe(503);
         });
+
+        // The shift-link write-degradation hole. The base scheduled_sessions
+        // TABLE is deployed (20260617) but the un-run 20260618 link migration
+        // has NOT yet added the optional shift_id COLUMN. A create that sets
+        // data.shiftId then surfaces Prisma P2022 ("The column ... does not
+        // exist"). That must degrade to the honest 503 — NOT fall through to the
+        // generic redacted 500 — and the response must leak neither the column
+        // name nor any raw Prisma text.
+        it('returns 503 (not 500) when the shift_id column is absent (simulated P2022) and leaks no column name', async () => {
+            prisma.shift.findFirst.mockResolvedValueOnce(OWNED_SHIFT_ROW as never);
+            const p2022: any = new Error(
+                'The column `scheduled_sessions.shift_id` does not exist in the current database.'
+            );
+            p2022.code = 'P2022';
+            prisma.scheduledSession.create.mockImplementationOnce(() => Promise.reject(p2022));
+
+            const res = await app.inject({
+                method: 'POST',
+                url: '/v1/training/scheduled-sessions',
+                headers: { authorization: `Bearer ${validToken()}` },
+                payload: {
+                    title: 'Lower body — squats',
+                    scheduledAt: '2026-06-20T18:00:00.000Z',
+                    shiftId: SHIFT_ID,
+                },
+            });
+
+            expect(res.statusCode).toBe(503);
+            expect(res.json()).toEqual({ error: 'Scheduled sessions are not yet available' });
+            // Redaction: neither the leaked column name nor raw Prisma text/code
+            // may reach the client.
+            expect(res.body).not.toContain('shift_id');
+            expect(res.body).not.toContain('column');
+            expect(res.body).not.toContain('P2022');
+        });
+
+        // Same degradation when the missing-column error arrives un-coded as the
+        // raw Postgres 'column ... does not exist' message (no P2022 code), e.g.
+        // via $queryRaw. Still a 503, still fully redacted.
+        it('returns 503 (not 500) on a raw "column does not exist" message (no P2022 code) and leaks no column name', async () => {
+            prisma.shift.findFirst.mockResolvedValueOnce(OWNED_SHIFT_ROW as never);
+            const raw: any = new Error('column "shift_id" does not exist');
+            prisma.scheduledSession.create.mockImplementationOnce(() => Promise.reject(raw));
+
+            const res = await app.inject({
+                method: 'POST',
+                url: '/v1/training/scheduled-sessions',
+                headers: { authorization: `Bearer ${validToken()}` },
+                payload: {
+                    title: 'Lower body — squats',
+                    scheduledAt: '2026-06-20T18:00:00.000Z',
+                    shiftId: SHIFT_ID,
+                },
+            });
+
+            expect(res.statusCode).toBe(503);
+            expect(res.json()).toEqual({ error: 'Scheduled sessions are not yet available' });
+            // Redaction: the raw column name / message must not reach the client.
+            expect(res.body).not.toContain('shift_id');
+            expect(res.body).not.toContain('does not exist');
+        });
     });
 });
