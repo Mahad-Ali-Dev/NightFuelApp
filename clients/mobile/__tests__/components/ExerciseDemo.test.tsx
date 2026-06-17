@@ -120,6 +120,72 @@ describe('ExerciseDemo', () => {
     });
   });
 
+  // ── Boomerang / ping-pong frame playback ────────────────────────────────────
+  // free-exercise-db ships EXACTLY two frames per slug (0.jpg = start, 1.jpg =
+  // end), so a believable rep is a sweep OUT to the end and BACK to the start.
+  // The loop must therefore step 0→1→0→1… (boomerang). A plain modulo advance
+  // ALSO yields 0→1→0→1… for two frames, so to prove the boomerang behaviour we
+  // assert the GENERAL case with three frames, where modulo (0→1→2→0…) and
+  // boomerang (0→1→2→1→0…) diverge: after the last frame the next one must step
+  // BACK to the middle frame, never wrap to the first.
+  describe('boomerang frame playback under fake timers', () => {
+    const FRAME_MS = 900; // mirrors the component's FRAME_MS frame-hold constant.
+    const FRAME_C = 'https://cdn.example.com/frame-c.png';
+
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    // The "top" (current) frame is the only <Image> rendered with a `placeholder`
+    // (the underlying previous frame is rendered without one). Reading its
+    // `source.uri` gives the frame the loop is currently showing.
+    const visibleFrameUri = (): string | undefined => {
+      const top = screen
+        .getAllByTestId('exercise-demo-image')
+        .find((img) => img.props.placeholder !== undefined && img.props.source?.uri);
+      return top?.props.source?.uri as string | undefined;
+    };
+
+    const tick = () =>
+      act(() => {
+        jest.advanceTimersByTime(FRAME_MS);
+      });
+
+    test('a 2-frame pair sweeps 0→1→0→1… (back to frame 0 after frame 1), not a one-way modulo loop', () => {
+      renderWithTheme(
+        <ExerciseDemo frames={[FRAME_A, FRAME_B]} imageUrl={IMAGE_URL} fallback={FALLBACK} />,
+      );
+
+      // Starts on frame 0 (FRAME_A).
+      expect(visibleFrameUri()).toBe(FRAME_A);
+      // → frame 1 (FRAME_B).
+      tick();
+      expect(visibleFrameUri()).toBe(FRAME_B);
+      // Boomerang: back to frame 0 (FRAME_A), NOT stuck/advancing past the end.
+      tick();
+      expect(visibleFrameUri()).toBe(FRAME_A);
+      // …and out again to frame 1, confirming a sustained 0↔1 oscillation.
+      tick();
+      expect(visibleFrameUri()).toBe(FRAME_B);
+      tick();
+      expect(visibleFrameUri()).toBe(FRAME_A);
+    });
+
+    test('3 frames boomerang 0→1→2→1→0… (steps BACK off the end) rather than modulo-wrapping 0→1→2→0…', () => {
+      renderWithTheme(
+        <ExerciseDemo frames={[FRAME_A, FRAME_B, FRAME_C]} imageUrl={IMAGE_URL} fallback={FALLBACK} />,
+      );
+
+      const seen: (string | undefined)[] = [visibleFrameUri()];
+      for (let i = 0; i < 5; i++) {
+        tick();
+        seen.push(visibleFrameUri());
+      }
+      // Out to the end, then back — the hallmark of boomerang playback. A modulo
+      // loop would instead read [A, B, C, A, B, C].
+      expect(seen).toEqual([FRAME_A, FRAME_B, FRAME_C, FRAME_B, FRAME_A, FRAME_B]);
+    });
+  });
+
   describe('with no demo media (frames=null, gifUrl=null)', () => {
     test('immediately renders the still + "coming soon" copy', () => {
       renderWithTheme(

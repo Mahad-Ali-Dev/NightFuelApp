@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, bootstrapCluster, connectWithRetry, registerGlobalProcessHandlers, sendUnauthorized } from '@nightfuel/config';
+import { createLogger, loadConfig, bootstrapCluster, connectWithRetry, registerGlobalProcessHandlers, sendUnauthorized, registerFastifyErrorHandler } from '@nightfuel/config';
 import { z } from 'zod';
 import { UserService } from './user.service';
 import { userRoutes } from './routes';
@@ -99,39 +99,12 @@ fastify.register(
 );
 
 // ── Global error handler ──────────────────────────────────────────────────────
-fastify.setErrorHandler((error, request, reply) => {
-    logger.error(
-        {
-            err: error,
-            url: request.url,
-            method: request.method,
-            body: request.body,
-            params: request.params,
-            query: request.query,
-            user: request.user,
-        },
-        'Unhandled route error'
-    );
-
-    // Fastify validation errors have a statusCode of 400. Fastify-generated
-    // validation messages are user-facing and safe to reflect; any other <500
-    // error gets a generic string so internal error.message never leaks.
-    if (error.statusCode && error.statusCode < 500) {
-        return reply.code(error.statusCode).send({
-            error: error.name,
-            message: error.validation ? error.message : 'Bad request',
-            statusCode: error.statusCode,
-        });
-    }
-
-    // 500 branch: NEVER reflect error.message or error.stack on the wire — the
-    // real cause is already in the structured `logger.error` above.
-    return reply.code(500).send({
-        statusCode: 500,
-        error: 'Internal Server Error',
-        message: 'Internal server error',
-    });
-});
+// Converged onto the shared @nightfuel/config redactor (wraps the pure
+// buildErrorResponse): the 500 branch ships a fixed generic body and never
+// reflects error.message/error.stack, while <500 keeps only Fastify-generated
+// validation messages. The real cause is logged server-side inside the helper.
+// This matches the locked __tests__/error-redaction.test.ts shape exactly.
+registerFastifyErrorHandler(fastify, logger);
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 const start = async (): Promise<void> => {

@@ -4,7 +4,6 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Skeleton, EmptyState } from '@/components/ui';
@@ -164,6 +163,7 @@ function ExerciseCard({ exercise: ex, exIndex, lastSet, onToggleSet, onUpdateSet
                             <TextInput
                                 style={[styles.numericInput, { color: colors.text.primary, borderBottomColor: colors.border.default }]}
                                 keyboardType="numeric"
+                                accessibilityLabel={`Weight (kg), set ${sIndex + 1}`}
                                 value={s.weight}
                                 onChangeText={(val) => onUpdateSet(exIndex, sIndex, 'weight', val)}
                                 placeholder={sIndex === 0 ? "135" : ex.loggedSets[sIndex - 1]?.weight || "-"}
@@ -175,6 +175,7 @@ function ExerciseCard({ exercise: ex, exIndex, lastSet, onToggleSet, onUpdateSet
                             <TextInput
                                 style={[styles.numericInput, { color: colors.text.primary, borderBottomColor: colors.border.default }]}
                                 keyboardType="numeric"
+                                accessibilityLabel={`Reps, set ${sIndex + 1}`}
                                 value={s.reps}
                                 onChangeText={(val) => onUpdateSet(exIndex, sIndex, 'reps', val)}
                                 placeholder={ex.targetReps.split('-')[0]}
@@ -416,9 +417,13 @@ const styles = StyleSheet.create({
     },
     // Compact demo band: pull the 320px-tall <ExerciseDemo/> flush to the card's
     // top/side edges and crop it to a shorter strip so the card stays scannable.
+    // Height 220 (vs. the original 168) keeps full-body lifts — squats, deadlifts,
+    // overhead presses — legible by leaving the legs/bar in frame instead of
+    // cropping them off, while still being short enough that the set-logging rows
+    // stay above the fold on a standard phone viewport.
     // overflow:'hidden' clips both the crop and the card's rounded corners.
     demoWrap: {
-        height: 168,
+        height: 220,
         marginTop: -16,
         marginHorizontal: -16,
         marginBottom: 16,

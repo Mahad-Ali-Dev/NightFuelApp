@@ -27,13 +27,12 @@
  * grep could not distinguish (a reformat or moving the label into a variable
  * defeated that grep while leaving the screen unannounced).
  *
- * KNOWN FINDING (flagged, NOT fixed here — this item must not edit screen src):
- *   active-workout.tsx's per-set WEIGHT and REPS <TextInput>s expose no
- *   `accessibilityLabel` (see the block below). They are queried by their live
- *   placeholder so this guard still mounts and observes them, but a screen
- *   reader announces them only as generic, unlabeled text fields. Adding
- *   `accessibilityLabel="Weight (kg), set N"` / `"Reps, set N"` is a separate
- *   screen change for the active-workout owner.
+ * RESOLVED FINDING (now fixed in screen src):
+ *   active-workout.tsx's per-set WEIGHT and REPS <TextInput>s now expose
+ *   set-specific `accessibilityLabel`s ("Weight (kg), set N" / "Reps, set N",
+ *   1-indexed to match the visible SET column), so a screen reader announces
+ *   each field by name. The set-row test below queries them BY LABEL (not by
+ *   placeholder), which both proves they render and locks those labels in place.
  */
 import React from 'react';
 import { fireEvent, screen } from '@testing-library/react-native';
@@ -469,24 +468,18 @@ describe('a11y guard — active-workout set rows (rendered)', () => {
   });
 
   test('each set row mounts a live weight + reps input (editable nodes)', () => {
-    // FINDING: these inputs expose NO accessibilityLabel in active-workout.tsx,
-    // so a screen reader announces them generically. We therefore query them by
-    // their live placeholders (set 1: weight "135", reps "8" from targetReps)
-    // rather than by label — this still PROVES the inputs render as real,
-    // editable nodes. Adding labels is a separate screen change (see file header).
+    // The per-set inputs now carry set-specific accessibilityLabels
+    // ("Weight (kg), set N" / "Reps, set N", 1-indexed to match the visible SET
+    // column), so we query them BY LABEL rather than by placeholder — this both
+    // proves they render as real, editable nodes AND locks the screen-reader
+    // labels in place (deleting a label turns this red).
     renderWithTheme(<ActiveWorkoutScreen />);
 
-    // Set-1 weight placeholder is the literal "135"; reps placeholder is the
-    // first token of the target-reps range ("8" here).
-    const weightInput = screen.getByPlaceholderText('135');
+    const weightInput = screen.getByLabelText('Weight (kg), set 1');
     expect(weightInput.props.editable).not.toBe(false);
 
-    const repsInputs = screen.getAllByPlaceholderText('8');
-    // At least one reps input (set 1 uses target-reps "8" as its placeholder).
-    expect(repsInputs.length).toBeGreaterThanOrEqual(1);
-    for (const node of repsInputs) {
-      expect(node.props.editable).not.toBe(false);
-    }
+    const repsInput = screen.getByLabelText('Reps, set 1');
+    expect(repsInput.props.editable).not.toBe(false);
 
     // Editing the weight input is accepted (the field is wired to updateSet).
     fireEvent.changeText(weightInput, '60');

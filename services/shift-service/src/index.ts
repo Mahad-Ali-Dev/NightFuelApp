@@ -6,6 +6,7 @@ import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandle
 import { z } from 'zod';
 import { ShiftService } from './shift.service';
 import { shiftRoutes } from './routes';
+import { trainingRoutes } from './training.routes';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCors from '@fastify/cors';
 
@@ -62,6 +63,13 @@ fastify.get('/health', async () => {
 fastify.register(async (instance) => {
     await shiftRoutes(instance, { shiftService });
 }, { prefix: '/v1/shifts' });
+
+// Scheduled-sessions routes for the mobile Training Calendar. Sibling of the
+// shifts block above — reuses the same PrismaClient. Degrades to 200 [] while
+// the user-gated scheduled_sessions migration is un-run (see training.routes.ts).
+fastify.register(async (instance) => {
+    await trainingRoutes(instance, { prisma });
+}, { prefix: '/v1/training' });
 
 const start = async () => {
     try {

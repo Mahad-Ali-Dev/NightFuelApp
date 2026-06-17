@@ -1,0 +1,11 @@
+# This directory holds the on-disk cache for scripts/check-demo-urls.js.
+#
+# check-demo-urls.js writes ONE JSON file here (demo-url-cache.json) keyed by
+# URL -> { status, checkedAt }. The cache lets repeat runs skip re-fetching any
+# URL that was checked within the TTL (7 days), so a second run is cheap and
+# mostly offline.
+#
+# This .gitkeep keeps the directory present in a fresh checkout (git does not
+# track empty directories) so the script can write the cache file without first
+# having to create the directory. The generated cache JSON itself is runtime
+# state and is intentionally NOT committed.

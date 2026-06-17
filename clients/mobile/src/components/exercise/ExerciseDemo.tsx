@@ -71,12 +71,18 @@ export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }
   // Opacity of the "top" (incoming) frame; the previous frame sits underneath.
   const fade = useRef(new Animated.Value(1)).current;
   const prevIdxRef = useRef(0);
+  // Playback direction for the boomerang/ping-pong loop: +1 advancing toward the
+  // last frame, -1 returning toward the first. Flips at each end so the sequence
+  // reads as an out-and-back movement (0→1→0… for a 2-frame pair) instead of a
+  // hard A→B→A modulo snap.
+  const dirRef = useRef(1);
 
   // Reset when the source changes (e.g. navigating between exercises that reuse
   // this mounted component).
   useEffect(() => {
     setFrameIdx(0);
     prevIdxRef.current = 0;
+    dirRef.current = 1;
     fade.setValue(1);
     setPaused(false);
     // A genuinely new source gets a clean slate — past failures shouldn't carry
@@ -85,13 +91,23 @@ export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }
   }, [demoFrames.join('|')]);
 
   // Drive the loop. Pure JS timer (no native driver needed for the index swap);
-  // the cross-fade itself uses the native driver for smoothness.
+  // the cross-fade itself uses the native driver for smoothness. Frames advance
+  // in a boomerang/ping-pong sweep (0→1→2→1→0…, i.e. 0→1→0→1… for a 2-frame
+  // FEDB pair) so the start↔end pair reads as a continuous out-and-back rep
+  // rather than a hard modulo A→B→A swap.
   useEffect(() => {
     if (!animated || paused) return;
+    const last = liveFrames.length - 1;
     const t = setInterval(() => {
       setFrameIdx((cur) => {
         prevIdxRef.current = cur;
-        return (cur + 1) % liveFrames.length;
+        // Single live frame (e.g. one survived a 404): hold on it.
+        if (last <= 0) return 0;
+        // Reverse at either end so we sweep out and back instead of wrapping.
+        if (cur >= last) dirRef.current = -1;
+        else if (cur <= 0) dirRef.current = 1;
+        // Clamp defensively in case the live list shrank under us (a 404 drop).
+        return Math.min(last, Math.max(0, cur + dirRef.current));
       });
     }, FRAME_MS);
     return () => clearInterval(t);

@@ -11,13 +11,16 @@
  * and exits 1 on the FIRST failure with the failing step's name:
  *
  *   1. node scripts/check-no-inline-401.js       (lint-tier guard)
- *   2. node scripts/check-demo-maps-in-sync.js   (lint-tier guard — OPTIONAL,
- *      only if the file exists; this script is the responsibility of a
- *      different work item and may land later — guarding with fs.existsSync
- *      means this gate does not break in the interim)
- *   3. node scripts/check-error-handler-registered.js (lint-tier guard —
- *      OPTIONAL, same fs.existsSync mechanism as #2; owned by a different
- *      work item that may not have landed yet)
+ *   2. node scripts/check-demo-maps-in-sync.js   (lint-tier guard — HARD /
+ *      unconditional. This script now lives on disk and passes; it is run on
+ *      every gate with NO fs.existsSync guard, so a missing, renamed, or broken
+ *      script makes spawnSync exit non-zero and FAILS the gate rather than
+ *      degrading to a silent SKIP)
+ *   3. node scripts/check-error-handler-registered.js (lint-tier guard — HARD /
+ *      unconditional, same as #2. No fs.existsSync guard: if the script is
+ *      missing or throws, the gate fails. This guard asserts every Fastify
+ *      service registers the centralized error handler and leaks no raw error
+ *      body)
  *   4. harness-self-tests                         (runs scripts/__tests__/*.test.js
  *      via the already-installed jest — these lock the gate's own helpers:
  *      parseSuiteSummary's fail-closed contract and the inline-401 detectors.
@@ -123,12 +126,18 @@ function runStep(step) {
     return exit;
 }
 
-function main() {
-    // Ordered list of gate steps. Order matters: cheap lint-tier checks first,
-    // then typecheck (which is faster than the test suite but slower than the
-    // lint guards), then backend tests, then mobile tests last (mobile jest is
-    // typically the slowest single step).
-    const steps = [
+/**
+ * Build the ordered list of gate steps. Order matters: cheap lint-tier checks
+ * first, then typecheck (which is faster than the test suite but slower than
+ * the lint guards), then backend tests, then mobile tests last (mobile jest is
+ * typically the slowest single step).
+ *
+ * Exposed via module.exports.__test.buildSteps so the gate-steps meta self-test
+ * can assert no present guard script has been re-wrapped in a `file:`
+ * existsSync guard (which would silently downgrade a HARD step to a SKIP).
+ */
+function buildSteps() {
+    return [
         {
             name: 'check-no-inline-401',
             file: path.join(REPO_ROOT, 'scripts', 'check-no-inline-401.js'),
@@ -136,23 +145,22 @@ function main() {
             args: [path.join(REPO_ROOT, 'scripts', 'check-no-inline-401.js')],
         },
         {
-            // Optional — owned by a different work item that may not have
-            // landed yet. The `file` guard above turns this into a no-op when
-            // the script doesn't exist.
+            // HARD / unconditional — no `file` guard. The script lives on disk
+            // and passes; running it on every gate means a missing, renamed, or
+            // broken check-demo-maps-in-sync.js makes spawnSync exit non-zero and
+            // FAILS the gate, instead of degrading to a silent SKIP that would
+            // quietly drop a real CI guarantee.
             name: 'check-demo-maps-in-sync',
-            file: path.join(REPO_ROOT, 'scripts', 'check-demo-maps-in-sync.js'),
             cmd: NODE,
             args: [path.join(REPO_ROOT, 'scripts', 'check-demo-maps-in-sync.js')],
         },
         {
-            // Optional — same fs.existsSync mechanism as check-demo-maps-in-sync
-            // above. This guard (which asserts every Fastify service registers
-            // the centralized error handler) is owned by a different work item
-            // and may not have landed yet; the `file` guard makes the gate print
-            // SKIP and continue rather than fail in the interim. Once the script
-            // exists it runs automatically — no further change to this file.
+            // HARD / unconditional — no `file` guard, same as check-demo-maps-in-
+            // sync above. This guard asserts every Fastify service registers the
+            // centralized error handler (and leaks no raw error body); the script
+            // exists and passes, so it runs every gate. A missing or throwing
+            // script fails the gate rather than printing SKIP and continuing.
             name: 'check-error-handler-registered',
-            file: path.join(REPO_ROOT, 'scripts', 'check-error-handler-registered.js'),
             cmd: NODE,
             args: [path.join(REPO_ROOT, 'scripts', 'check-error-handler-registered.js')],
         },
@@ -239,6 +247,10 @@ function main() {
             args: ['test', '--silent', '--workspace=@nightfuel/mobile', '--', '--ci', '--silent'],
         },
     ];
+}
+
+function main() {
+    const steps = buildSteps();
 
     for (const step of steps) {
         const exit = runStep(step);
@@ -258,4 +270,5 @@ if (require.main === module) {
 
 module.exports.__test = {
     runStep,
+    buildSteps,
 };

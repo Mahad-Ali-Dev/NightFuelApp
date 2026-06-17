@@ -77,3 +77,7 @@ val_err.txt
 venv/
 __pycache__/
 *.pyc
+
+# demo-url content-check cache (populated by networked runs; keep the dir, ignore the data)
+scripts/.cache/demo-urls/*
+!scripts/.cache/demo-urls/.gitkeep
