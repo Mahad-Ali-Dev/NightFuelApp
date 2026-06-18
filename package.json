@@ -12,6 +12,7 @@
     "test:all": "npm run test:backend && npm run test:mobile",
     "gate": "node scripts/gate.js",
     "check:demo-urls": "node scripts/check-demo-urls.js",
+    "report:pending-demos": "node scripts/report-pending-demos.js",
     "prepare": "husky",
     "setup": "bash scripts/setup-dev.sh",
     "security:scan": "gitleaks detect --config .gitleaks.toml --redact"

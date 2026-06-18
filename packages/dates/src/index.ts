@@ -65,3 +65,98 @@ export function toUTCDayKey(date: Date | string): string {
     }
     return d.toISOString().slice(0, 10);
 }
+
+/* ------------------------------------------------------------------------- *
+ * Inter-shift recovery window (circadian fatigue primitive)
+ * ------------------------------------------------------------------------- *
+ * Shift workers chaining back-to-back rotations get dangerously short
+ * turnarounds ("quick returns"). The gap between one shift ending and the
+ * next starting is a well-known fatigue / safety signal, so we expose a
+ * pure, bounded classifier the shift / plan services can read later.
+ *
+ * Thresholds (whole hours):
+ *  - < 8h  → 'critical'. A turnaround under ~8h leaves no room for a normal
+ *            sleep opportunity once commute + wind-down are subtracted; it is
+ *            a recognised circadian red flag for accumulating sleep debt.
+ *  - < 11h → 'tight'. 11h of daily rest is the common minimum-rest guidance
+ *            (e.g. EU Working Time Directive daily rest). Below it is workable
+ *            but leaves little recovery margin.
+ *  - else  → 'adequate'.
+ */
+
+/** Turnarounds shorter than this many whole hours are flagged 'critical'. */
+export const RECOVERY_CRITICAL_HOURS = 8;
+
+/** Turnarounds shorter than this many whole hours (but >= critical) are 'tight'. */
+export const RECOVERY_TIGHT_HOURS = 11;
+
+/**
+ * Upper sanity bound. A "recovery gap" longer than this is almost certainly a
+ * data error (swapped rows, an open-ended shift, a stale record) rather than a
+ * real inter-shift window, so we treat it as invalid instead of 'adequate'.
+ */
+const RECOVERY_MAX_HOURS = 14 * 24; // 14 days
+
+export type RecoveryClassification = 'critical' | 'tight' | 'adequate' | 'invalid';
+
+export interface ShiftRecoveryGap {
+    /** Whole-hour gap between the shifts, floored. `-1` on invalid input. */
+    hours: number;
+    /** Bounded fatigue classification of the turnaround. */
+    classification: RecoveryClassification;
+}
+
+/**
+ * Compute the recovery window between a previous shift's end and the next
+ * shift's start, returning the whole-hour gap plus a bounded fatigue
+ * classification.
+ *
+ * Fail-safe like the day-key helpers: this NEVER throws. Unparseable inputs,
+ * a reversed pair (next starts before previous ends), or an absurd multi-week
+ * gap all return the sentinel `{ hours: -1, classification: 'invalid' }` so a
+ * bad shift row can never crash a caller.
+ *
+ * Pure & deterministic: no `Date.now()`, no I/O. Inputs are parsed with
+ * `Date.parse`, accepting full ISO-8601 / RFC-3339 datetime strings (the
+ * package's UTC-parse style), so results are independent of host time zone.
+ *
+ * @param prevEndIso   ISO datetime the previous shift ended.
+ * @param nextStartIso ISO datetime the next shift starts.
+ */
+export function shiftRecoveryGap(prevEndIso: string, nextStartIso: string): ShiftRecoveryGap {
+    const invalid: ShiftRecoveryGap = { hours: -1, classification: 'invalid' };
+
+    const prevMs = Date.parse(prevEndIso);
+    const nextMs = Date.parse(nextStartIso);
+
+    // Unparseable input → safe sentinel.
+    if (Number.isNaN(prevMs) || Number.isNaN(nextMs)) {
+        return invalid;
+    }
+
+    const diffMs = nextMs - prevMs;
+
+    // Reversed pair (next shift starts before the previous one ended) is a
+    // data error, not a zero-length break.
+    if (diffMs < 0) {
+        return invalid;
+    }
+
+    const hours = Math.floor(diffMs / 3_600_000); // whole hours
+
+    // Absurdly long gap → almost certainly a bad row, not a real turnaround.
+    if (hours > RECOVERY_MAX_HOURS) {
+        return invalid;
+    }
+
+    let classification: RecoveryClassification;
+    if (hours < RECOVERY_CRITICAL_HOURS) {
+        classification = 'critical';
+    } else if (hours < RECOVERY_TIGHT_HOURS) {
+        classification = 'tight';
+    } else {
+        classification = 'adequate';
+    }
+
+    return { hours, classification };
+}

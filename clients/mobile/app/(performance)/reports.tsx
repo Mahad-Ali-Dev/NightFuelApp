@@ -10,7 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPerformanceReports, generateWeeklyAudit, PerformanceReport } from '@/api/progress';
-import { Card } from '@/components/ui/Card';
+import { GlassCard } from '@/components/ui/GlassCard';
 import { Button } from '@/components/ui/Button';
 import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -201,7 +201,7 @@ export default function AIReportsScreen() {
                             {(() => {
                                 const scoreColor = activeReport.score >= 80 ? colors.accent.emerald : activeReport.score >= 60 ? colors.accent.amber : colors.accent.red;
                                 return (
-                                    <Card variant="glass" noPadding style={[styles.scoreCard, shadows.glow(scoreColor)]}>
+                                    <GlassCard glow={scoreColor} style={styles.scoreCard}>
                                         <LinearGradient
                                             colors={[withAlpha(scoreColor, 0.18), 'transparent']}
                                             start={{ x: 0, y: 0 }}
@@ -218,7 +218,7 @@ export default function AIReportsScreen() {
                                                 </Text>
                                             </View>
                                         </LinearGradient>
-                                    </Card>
+                                    </GlassCard>
                                 );
                             })()}
 

@@ -1,5 +1,7 @@
+import * as zod from 'zod';
 import { z } from 'zod';
 import { ShiftType } from '@nightfuel/types';
+import { boundedDateRange } from '@nightfuel/config';
 
 // Server-side bound: a single commute can't reasonably exceed ~10 hours.
 // Caps the field so an absurd value (e.g. 10_000_000) can't reach the DB or
@@ -99,37 +101,21 @@ export const getShiftsQuerySchemaBounded = z
     );
 
 // Route-facing query schema for GET / (list shifts). userId is NOT a field here
-// (it's injected from the JWT in the handler), so this is built from a bare
-// start/end object and then bounded with the SAME two cross-field guards as
-// getShiftsQuerySchemaBounded. We can't reuse that export via `.omit({ userId })`
-// because it's a `.refine()`-wrapped ZodEffects (no `.omit()`), so the omit must
-// happen on the object FIRST — done here by simply not declaring userId — then
-// the refines chain on. UTC-midnight parse (`+ 'T00:00:00.000Z'`) keeps the
-// comparison and whole-day span deterministic regardless of host timezone.
-//   (a) end on or after start — rejects a reversed range.
-//   (b) span (whole days) <= MAX_QUERY_RANGE_DAYS — rejects an absurd window.
-// Both errors attach to path ['end'] for consistent client-side surfacing.
-export const getShiftsRouteQuerySchema = z
-    .object({
-        start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
-        end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
-    })
-    .refine((data) => new Date(data.end + 'T00:00:00.000Z') >= new Date(data.start + 'T00:00:00.000Z'), {
-        message: 'end must be on or after start',
-        path: ['end'],
-    })
-    .refine(
-        (data) =>
-            Math.round(
-                (Date.parse(data.end + 'T00:00:00.000Z') -
-                    Date.parse(data.start + 'T00:00:00.000Z')) /
-                    86400000
-            ) <= MAX_QUERY_RANGE_DAYS,
-        {
-            message: `date range must not exceed ${MAX_QUERY_RANGE_DAYS} days`,
-            path: ['end'],
-        }
-    );
+// (it's injected from the JWT in the handler), so this is a bare { start, end }
+// query bounded with the SAME two cross-field guards as getShiftsQuerySchemaBounded.
+// The reversed-range + 366-day span math now lives in ONE place — @nightfuel/config's
+// boundedDateRange — instead of being re-implemented inline: it defaults maxDays to
+// the shared 366 and attaches RANGE_REVERSED_MSG ('end must be on or after start')
+// and 'date range must not exceed 366 days' on path ['end'], byte-identical to the
+// literals this used to carry. (We don't reuse getShiftsQuerySchemaBounded via
+// `.omit({ userId })` because it's a `.refine()`-wrapped ZodEffects with no `.omit()`;
+// boundedDateRange builds the bare object first, so userId is simply absent here.)
+// Pass the whole `zod` module namespace (not the destructured `z`) because the
+// helper's `z: typeof import('zod')` parameter wants the module object itself; on
+// zod 3.25's dual-export typings the named `z` resolves to the v3/external
+// namespace and would not structurally match. Same runtime value, so behaviour
+// is unchanged.
+export const getShiftsRouteQuerySchema = boundedDateRange(zod);
 
 export type CreateShiftBody = z.infer<typeof createShiftSchema>;
 export type UpdateShiftBody = z.infer<typeof updateShiftSchema>;

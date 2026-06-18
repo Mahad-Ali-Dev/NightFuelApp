@@ -543,6 +543,49 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Glute Kickback': 'Glute_Kickback',
   'One Leg Barbell Squat': 'One_Leg_Barbell_Squat',
   'Weighted Sissy Squat': 'Weighted_Sissy_Squat',
+
+  // ── Widened FEDB-backed tranche #6 (data-only, zero new fetch) ───────────────
+  // A further slice of distinct catalogue movements. Every KEY below is NEW —
+  // absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries above (tranches #1-#5),
+  // YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos() admits each one as
+  // kind:'fedb_frames', verified:false (precedence: an already-set name is skipped).
+  // Every slug VALUE was machine-verified to be present in BOTH FEDB_SLUGS
+  // (exerciseDemos.ts) AND __tests__/fixtures/fedb-catalog-slugs.json (the shipped
+  // 873-slug catalogue), and each is a fresh slug dir not already referenced by an
+  // earlier tranche — so every entry resolves to an ordered 2-frame [0.jpg, 1.jpg]
+  // HTTPS pair via fedbPair() with NO new HTTP call. Strictly additive: the
+  // kind:'youtube'-only sync guard (scripts/check-demo-maps-in-sync.js) and
+  // pendingHumanReviewIds.json (YouTube ids only) are both untouched, so
+  // check-demo-maps-in-sync stays green.
+
+  // Bodyweight / dips
+  'Parallel Bar Dip': 'Parallel_Bar_Dip',
+  'Ring Dips': 'Ring_Dips',
+  'Bench Dips': 'Bench_Dips',
+  'Handstand Push-Ups': 'Handstand_Push-Ups',
+  'Incline Push-Up': 'Incline_Push-Up',
+  'Single-Arm Push-Up': 'Single-Arm_Push-Up',
+  // Chest / press variants
+  'Close-Grip Dumbbell Press': 'Close-Grip_Dumbbell_Press',
+  'Board Press': 'Board_Press',
+  'Pin Presses': 'Pin_Presses',
+  'Svend Press': 'Svend_Press',
+  'Reverse Triceps Bench Press': 'Reverse_Triceps_Bench_Press',
+  // Biceps
+  'Close-Grip EZ Bar Curl': 'Close-Grip_EZ_Bar_Curl',
+  'Standing Concentration Curl': 'Standing_Concentration_Curl',
+  'Two-Arm Dumbbell Preacher Curl': 'Two-Arm_Dumbbell_Preacher_Curl',
+  // Back / pulls
+  'Straight-Arm Dumbbell Pullover': 'Straight-Arm_Dumbbell_Pullover',
+  'Upright Cable Row': 'Upright_Cable_Row',
+  'Kneeling High Pulley Row': 'Kneeling_High_Pulley_Row',
+  'V-Bar Pullup': 'V-Bar_Pullup',
+  // Triceps
+  'Triceps Pushdown (V-Bar Attachment)': 'Triceps_Pushdown_-_V-Bar_Attachment',
+  // Legs / calves
+  'Frankenstein Squat': 'Frankenstein_Squat',
+  'Chair Squat': 'Chair_Squat',
+  'Calf Press': 'Calf_Press',
 };
 
 /**

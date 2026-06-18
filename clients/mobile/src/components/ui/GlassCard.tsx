@@ -37,6 +37,14 @@ export interface GlassCardProps {
   glow?: string;
   /** Corner radius. Default borderRadius['2xl'] (24) — the Aurora card radius. */
   radius?: number;
+  /**
+   * Optional test handle, forwarded verbatim to the outer wrapper `<View>`.
+   * Inert in production (testIDs are not rendered); defaults to `undefined`, so
+   * every existing caller stays byte-identical and the wrapper receives
+   * `testID={undefined}` exactly as before. Lets test suites grab a specific
+   * glass surface without asserting on its body copy.
+   */
+  testID?: string;
 }
 
 export function GlassCard({
@@ -46,12 +54,14 @@ export function GlassCard({
   tint = 'dark',
   glow,
   radius,
+  testID,
 }: GlassCardProps) {
   const { colors, borderRadius, shadows } = useTheme();
   const r = radius ?? borderRadius['2xl'];
 
   return (
     <View
+      testID={testID}
       style={[
         {
           borderRadius: r,

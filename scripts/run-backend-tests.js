@@ -37,6 +37,12 @@ const { spawnSync } = require('child_process');
 // Repo root is one level up from /scripts.
 const REPO_ROOT = path.resolve(__dirname, '..');
 const SERVICES_DIR = path.join(REPO_ROOT, 'services');
+// packages/* is scanned with the SAME discovery contract as services/* so the
+// shared-package test suites (e.g. packages/config/__tests__/range-bounds.test.ts,
+// the only coverage for boundedDateRange/isValidDateRange consumed by
+// shift-service and plan-service) are gate-enforced. Without this a regression in
+// a shared package's range math would ship GREEN.
+const PACKAGES_DIR = path.join(REPO_ROOT, 'packages');
 
 // On Windows the `npm` shim is `npm.cmd`; spawnSync needs the exact filename
 // when `shell` is false. We set shell:true below so npm/npm.cmd both resolve
@@ -44,24 +50,29 @@ const SERVICES_DIR = path.join(REPO_ROOT, 'services');
 const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 /**
- * Discover every services/<svc>/ that has a __tests__ folder AND a `test`
- * script in its package.json. Returns an array of { dir, name } where `name`
- * is the workspace name read from the service's package.json.
+ * Scan a single base directory (services/ OR packages/) and return every
+ * immediate child that has a __tests__ folder AND a `test` script in its
+ * package.json, as an array of { dir, name, dirName } where `name` is the
+ * workspace name read from the child's package.json.
  *
- * A service is skipped (not failed) if it has no __tests__ folder or no test
- * script — we don't want this gate to force every service to ship tests on
- * day one. The check-no-inline-401 guard and the typecheck cover the rest.
+ * A child is skipped (not failed) if it has no __tests__ folder or no test
+ * script — we don't want this gate to force every service/package to ship
+ * tests on day one. The check-no-inline-401 guard and the typecheck cover the
+ * rest. A malformed package.json is surfaced as { broken } so it gets fixed.
+ *
+ * Identical discovery contract for both base dirs, so a shared package's suite
+ * is enforced the exact same way a service's suite is.
  */
-function discoverServices() {
-    if (!fs.existsSync(SERVICES_DIR)) return [];
+function scanDir(baseDir) {
+    if (!fs.existsSync(baseDir)) return [];
 
     const out = [];
-    const entries = fs.readdirSync(SERVICES_DIR, { withFileTypes: true });
+    const entries = fs.readdirSync(baseDir, { withFileTypes: true });
     for (const ent of entries) {
         if (!ent.isDirectory()) continue;
-        const svcDir = path.join(SERVICES_DIR, ent.name);
-        const testsDir = path.join(svcDir, '__tests__');
-        const pkgPath = path.join(svcDir, 'package.json');
+        const childDir = path.join(baseDir, ent.name);
+        const testsDir = path.join(childDir, '__tests__');
+        const pkgPath = path.join(childDir, 'package.json');
         if (!fs.existsSync(testsDir)) continue;
         if (!fs.existsSync(pkgPath)) continue;
 
@@ -70,7 +81,7 @@ function discoverServices() {
             pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
         } catch (err) {
             // Malformed package.json — surface as a failure so it gets fixed.
-            out.push({ dir: svcDir, name: ent.name, broken: String(err.message) });
+            out.push({ dir: childDir, name: ent.name, broken: String(err.message) });
             continue;
         }
 
@@ -78,11 +89,28 @@ function discoverServices() {
 
         // Resolve the workspace name from the package.json `name` field. Falls
         // back to the directory name if `name` is missing (defensive — every
-        // real service in this repo has a name today).
+        // real service/package in this repo has a name today).
         const workspaceName = (pkg.name && String(pkg.name)) || ent.name;
-        out.push({ dir: svcDir, name: workspaceName, dirName: ent.name });
+        out.push({ dir: childDir, name: workspaceName, dirName: ent.name });
     }
     return out;
+}
+
+/**
+ * Discover every runnable test target across BOTH services/<svc>/ and
+ * packages/<pkg>/ (same discovery contract for each — see scanDir). Returns the
+ * concatenated array of { dir, name } entries.
+ *
+ * packages/* is included so shared-package suites — notably
+ * packages/config/__tests__/range-bounds.test.ts, the only coverage for the
+ * S16/S17-standardized boundedDateRange/isValidDateRange now consumed by
+ * shift-service and plan-service — run inside the HARD test:backend gate step.
+ * The gate force-builds @nightfuel/config (dist/) before this runs, so the
+ * suite's `@nightfuel/config` import resolves the freshly rebuilt dist and a
+ * src regression is caught.
+ */
+function discoverServices() {
+    return [...scanDir(SERVICES_DIR), ...scanDir(PACKAGES_DIR)];
 }
 
 /**
@@ -287,6 +315,7 @@ if (require.main === module) {
 
 // Exposed for any future unit test under scripts/__tests__/.
 module.exports.__test = {
+    scanDir,
     discoverServices,
     parseSuiteSummary,
     generatePrismaClient,

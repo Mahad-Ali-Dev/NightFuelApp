@@ -145,9 +145,31 @@ function fmt(d: Date): string {
   return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-/** The window range string the screen renders for a {start,end} pair. */
-function windowText(w: { start: Date; end: Date }): string {
-  return `${fmt(w.start)} – ${fmt(w.end)}`;
+/** Escape a string for safe interpolation into a RegExp source. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * A resilient matcher for a {start,end} light window. Rather than pinning the
+ * exact range STRING (which couples the test to the screen's private separator —
+ * an en-dash "–" today, trivially churned to "-"/"to"/whitespace), we assert the
+ * row's text CONTAINS both endpoint instants formatted from computeLightPlan,
+ * order-independently, via two lookaheads. This keeps the load-bearing coverage
+ * ("the window prints computeLightPlan's actual instants, timezone-portable")
+ * while shedding the copy-fragile glue. Returns a RegExp (not a predicate fn):
+ * this RTL version's text query calls `matcher.test(content)`, so string|RegExp
+ * are the supported matcher shapes.
+ */
+function windowMatcher(w: { start: Date; end: Date }): RegExp {
+  // RTL's default normalizer trims + collapses ALL whitespace (incl. the narrow
+  // no-break space ICU may emit before AM/PM) to single spaces before calling
+  // matcher.test(). Mirror that collapse on each endpoint so the escaped literal
+  // matches the normalized node text regardless of the runner's ICU spacing.
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
+  const start = escapeRegExp(norm(fmt(w.start)));
+  const end = escapeRegExp(norm(fmt(w.end)));
+  return new RegExp(`(?=[\\s\\S]*${start})(?=[\\s\\S]*${end})`);
 }
 
 function renderScreen() {
@@ -194,13 +216,20 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
 
     expect(() => renderScreen()).not.toThrow();
 
-    // The section header is always rendered in the loaded ScrollView…
+    // The section header is always rendered in the loaded ScrollView ("Light
+    // Timing" is a stable domain label, kept as a getByText)…
     expect(screen.getByText('Light Timing')).toBeTruthy();
     // …but while the shift query is in flight neither the populated window rows
-    // nor the no-shift EmptyState are in the tree yet (skeleton fallback).
+    // nor the no-shift EmptyState are in the tree yet (skeleton fallback). We
+    // assert this both via the stable Seek/Avoid domain labels AND via each
+    // branch's structural glyph (sunny / glasses-outline for the rows,
+    // sunny-outline for the empty state), so a copy tweak to any of those
+    // strings can't mask a real regression.
     expect(screen.queryByText('Seek Light')).toBeNull();
     expect(screen.queryByText('Avoid Light')).toBeNull();
-    expect(screen.queryByText('No shift to plan light around')).toBeNull();
+    expect(screen.queryByText('icon:sunny')).toBeNull();
+    expect(screen.queryByText('icon:glasses-outline')).toBeNull();
+    expect(screen.queryByText('icon:sunny-outline')).toBeNull();
   });
 
   // ── Test B: no shift → EmptyState, no windows ─────────────────────────────
@@ -210,12 +239,22 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
 
     renderScreen();
 
-    // The honest no-shift fallback copy (not the populated rows).
+    // Assert the no-shift fallback via its STABLE structural marker — the
+    // EmptyState's `sunny-outline` glyph, surfaced by the icon stub as
+    // `icon:sunny-outline` — rather than its body-copy sentence (which is the
+    // only place that glyph appears, so it uniquely pins "the no-shift
+    // EmptyState rendered"). The "No shift to plan light around" title stays as
+    // a getByText: it's a stable domain label, while the full subtitle sentence
+    // ("Log a shift to see when to seek and avoid light.") was the copy-fragile
+    // assertion and is dropped here.
     expect(screen.getByText('No shift to plan light around')).toBeTruthy();
-    expect(screen.getByText('Log a shift to see when to seek and avoid light.')).toBeTruthy();
-    // No light windows render without a shift.
+    expect(screen.getByText('icon:sunny-outline')).toBeTruthy();
+    // No light windows render without a shift — the populated rows' glyphs
+    // (sunny / glasses-outline) and their domain labels are both absent.
     expect(screen.queryByText('Seek Light')).toBeNull();
     expect(screen.queryByText('Avoid Light')).toBeNull();
+    expect(screen.queryByText('icon:sunny')).toBeNull();
+    expect(screen.queryByText('icon:glasses-outline')).toBeNull();
   });
 
   // ── Test C: populated shift → both windows with computeLightPlan instants ──
@@ -224,21 +263,29 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
     mockShiftState.isLoading = false;
 
     // Derive expectations from the REAL pure compute against the SAME shift, so
-    // the formatted strings match whatever the runner's tz is.
+    // the matched instants are correct whatever the runner's tz is.
     const plan = computeLightPlan(ACTIVE_SHIFT);
-    const seekText = windowText(plan.seekLight);
-    const avoidText = windowText(plan.avoidLight);
 
     renderScreen();
 
-    // Both window rows are present…
+    // Both window rows are present — anchored on their STABLE markers: the
+    // domain labels ("Seek Light" / "Avoid Light") plus each row's structural
+    // glyph (sunny for seek, glasses-outline for avoid, surfaced by the icon
+    // stub). These pin "both rows rendered" without depending on body copy.
     expect(screen.getByText('Seek Light')).toBeTruthy();
     expect(screen.getByText('Avoid Light')).toBeTruthy();
-    // …each printing the window range formatted from computeLightPlan's instants.
-    expect(screen.getByText(seekText)).toBeTruthy();
-    expect(screen.getByText(avoidText)).toBeTruthy();
-    // The no-shift EmptyState must NOT be present for a populated shift.
+    expect(screen.getByText('icon:sunny')).toBeTruthy();
+    expect(screen.getByText('icon:glasses-outline')).toBeTruthy();
+    // …and each row still prints the window from computeLightPlan's actual
+    // instants. We match CONTAINS-both-endpoints (windowMatcher) instead of the
+    // exact range string, so a separator/whitespace copy tweak can't regress
+    // this while a wrong/NaN instant still would.
+    expect(screen.getByText(windowMatcher(plan.seekLight))).toBeTruthy();
+    expect(screen.getByText(windowMatcher(plan.avoidLight))).toBeTruthy();
+    // The no-shift EmptyState must NOT be present for a populated shift — its
+    // structural marker (the sunny-outline glyph) is absent.
     expect(screen.queryByText('No shift to plan light around')).toBeNull();
+    expect(screen.queryByText('icon:sunny-outline')).toBeNull();
   });
 
   // ── Malformed-shift guard: computeLightPlan throws → EmptyState, no crash ──
@@ -260,10 +307,14 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
     // The screen must not crash on the thrown error…
     expect(() => renderScreen()).not.toThrow();
 
-    // …and falls back to the same EmptyState as the no-shift branch, with no
-    // (NaN) window rows.
+    // …and falls back to the same EmptyState as the no-shift branch (asserted
+    // via its stable `sunny-outline` glyph marker, not its subtitle copy), with
+    // no (NaN) window rows — neither the Seek/Avoid labels nor their glyphs.
     expect(screen.getByText('No shift to plan light around')).toBeTruthy();
+    expect(screen.getByText('icon:sunny-outline')).toBeTruthy();
     expect(screen.queryByText('Seek Light')).toBeNull();
     expect(screen.queryByText('Avoid Light')).toBeNull();
+    expect(screen.queryByText('icon:sunny')).toBeNull();
+    expect(screen.queryByText('icon:glasses-outline')).toBeNull();
   });
 });

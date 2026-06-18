@@ -1,7 +1,7 @@
 import { PrismaClient, Workout } from './generated/prisma';
 import { EventBus } from '@nightfuel/events';
 import { Channels, ExerciseLoggedPayload } from '@nightfuel/types';
-import { createLogger } from '@nightfuel/config';
+import { createLogger, MAX_QUERY_RANGE_DAYS } from '@nightfuel/config';
 import {
     searchExercisesLive,
     fetchExerciseById,
@@ -128,6 +128,28 @@ export function computeStreaks(
     }
 
     return { currentStreak, longestStreak };
+}
+
+/**
+ * True when an ISO `completedAt` timestamp falls inside the rolling
+ * `windowDays`-day window ending at `nowMs`. This is the pure, DB-free mirror of
+ * the Prisma `completedAt: { gte: cutoff }` filter applied in `getHeatmap`: it
+ * bounds the heatmap/streak scan to a trailing window instead of every workout a
+ * user has ever logged. `windowDays` defaults to the shared
+ * {@link MAX_QUERY_RANGE_DAYS} (366) so the bound matches the other list/range
+ * endpoints; 366 days fully contains any current/longest streak ending
+ * today/yesterday, so real-data results are unchanged.
+ *
+ * Exported so the bound is unit-testable without a PrismaClient (`nowMs` is
+ * injected, matching the `computeStreaks` style). The actual enforcement remains
+ * the Prisma `gte`; this helper documents/validates the same cutoff math.
+ */
+export function isWithinHeatmapWindow(
+    completedAtIso: string,
+    nowMs: number,
+    windowDays = MAX_QUERY_RANGE_DAYS,
+): boolean {
+    return Date.parse(completedAtIso) >= nowMs - windowDays * 86_400_000;
 }
 
 export interface CreateWorkoutInput {
@@ -403,8 +425,16 @@ export class ExerciseService {
     // ── Analytics & Heatmap ───────────────────────────────────────────────────
 
     async getHeatmap(userId: string) {
+        // Bound the scan server-side to a rolling MAX_QUERY_RANGE_DAYS (366-day)
+        // trailing window instead of scanning every workout the user has ever
+        // logged (the same unbounded-DB-scan class fixed for shift/plan ranges).
+        // A 366-day window fully contains any current/longest streak ending
+        // today/yesterday — see `isWithinHeatmapWindow` for the pure mirror of
+        // this cutoff — so the returned shape is unchanged for real data.
+        const cutoffMs = Date.now() - MAX_QUERY_RANGE_DAYS * 86_400_000;
+        const cutoff = new Date(cutoffMs);
         const workouts = await this.prisma.workout.findMany({
-            where: { userId },
+            where: { userId, completedAt: { gte: cutoff } },
             select: { completedAt: true, intensity: true, type: true, duration: true }
         });
 
