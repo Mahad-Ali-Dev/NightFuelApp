@@ -1,5 +1,5 @@
 /**
- * Tab Layout — NightFuel bottom navigation.
+ * Tab Layout — Zeitra bottom navigation.
  *
  * Visible tabs (5):
  *   Home · Train · [+ Log — centre coral FAB] · Insights · Profile

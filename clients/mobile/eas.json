@@ -20,7 +20,7 @@
       "android": { "buildType": "apk", "resourceClass": "medium" },
       "ios": { "resourceClass": "m-medium" },
       "env": {
-        "EXPO_PUBLIC_NF_API_BASE_URL": "https://staging.api.nightfuel.app",
+        "EXPO_PUBLIC_NF_API_BASE_URL": "https://staging.api.zeitra.app",
         "EXPO_PUBLIC_APP_ENV": "preview",
         "EXPO_PUBLIC_SENTRY_DSN": "",
         "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false"
@@ -31,16 +31,16 @@
       "channel": "production",
       "distribution": "store",
       "ios": {
-        "bundleIdentifier": "com.nightfuel.app",
+        "bundleIdentifier": "com.zeitra.app",
         "resourceClass": "m-medium"
       },
       "android": {
-        "package": "com.nightfuel.app",
+        "package": "com.zeitra.app",
         "buildType": "app-bundle",
         "resourceClass": "medium"
       },
       "env": {
-        "EXPO_PUBLIC_NF_API_BASE_URL": "https://api.nightfuel.app",
+        "EXPO_PUBLIC_NF_API_BASE_URL": "https://api.zeitra.app",
         "EXPO_PUBLIC_APP_ENV": "production",
         "EXPO_PUBLIC_SENTRY_DSN": "",
         "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false"

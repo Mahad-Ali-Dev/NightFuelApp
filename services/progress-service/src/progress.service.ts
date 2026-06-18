@@ -556,6 +556,16 @@ export class ProgressService {
         avgFatActual: number;
         totalMealsLogged: number;
     }> {
+        // Finite-ness invariant (mirrors sleep-service src/sleep.service.ts):
+        // every field below is computed by division/reduction over DB rows, so a
+        // poisoned or zero-denominator intermediate could surface NaN/Infinity
+        // into statsResponseSchema (adherencePercent is .min(0).max(100); the
+        // avgs are .nonnegative()) and fail serialization or leak a non-finite
+        // number. Collapsing any non-finite value to a safe default keeps the
+        // schema bounds intact. Behaviour-preserving: every real finite input
+        // rounds/divides exactly as before — only a non-finite result changes.
+        const finite = (x: number, fallback = 0) => (Number.isFinite(x) ? x : fallback);
+
         const clampedDays = Math.min(Math.max(days, 1), 365);
         const since = new Date();
         since.setUTCDate(since.getUTCDate() - clampedDays);
@@ -593,7 +603,7 @@ export class ProgressService {
 
         const adherencePercent =
             daysWithTarget > 0
-                ? Math.round((adherentDays / daysWithTarget) * 100 * 10) / 10
+                ? finite(Math.round((adherentDays / daysWithTarget) * 100 * 10) / 10)
                 : 0;
 
         const sum = (key: keyof typeof records[0]) =>
@@ -617,14 +627,14 @@ export class ProgressService {
             daysWithTarget,
             adherentDays,
             adherencePercent,
-            avgCaloriesActual: Math.round((totalCaloriesActual / daysTracked) * 10) / 10,
+            avgCaloriesActual: finite(Math.round((totalCaloriesActual / daysTracked) * 10) / 10),
             avgCaloriesTarget:
                 avgCaloriesTarget !== null
-                    ? Math.round(avgCaloriesTarget * 10) / 10
+                    ? finite(Math.round(avgCaloriesTarget * 10) / 10, 0)
                     : null,
-            avgProteinActual: Math.round((totalProteinActual / daysTracked) * 10) / 10,
-            avgCarbsActual: Math.round((totalCarbsActual / daysTracked) * 10) / 10,
-            avgFatActual: Math.round((totalFatActual / daysTracked) * 10) / 10,
+            avgProteinActual: finite(Math.round((totalProteinActual / daysTracked) * 10) / 10),
+            avgCarbsActual: finite(Math.round((totalCarbsActual / daysTracked) * 10) / 10),
+            avgFatActual: finite(Math.round((totalFatActual / daysTracked) * 10) / 10),
             totalMealsLogged,
         };
     }

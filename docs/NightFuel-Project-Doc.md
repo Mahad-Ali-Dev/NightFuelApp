@@ -1,4 +1,4 @@
-# NightFuel — Project Design Document
+# Zeitra — Project Design Document
 ### Version 2.0 | Last Updated: February 2026
 
 ---
@@ -28,9 +28,9 @@
 
 ## 1. Executive Summary
 
-**NightFuel** is a production-grade, enterprise-level chrono-nutrition and fitness platform designed specifically for **shift workers** — nurses, security guards, factory workers, call centre agents, truck drivers, and anyone whose work schedule disrupts normal circadian rhythms.
+**Zeitra** is a production-grade, enterprise-level chrono-nutrition and fitness platform designed specifically for **shift workers** — nurses, security guards, factory workers, call centre agents, truck drivers, and anyone whose work schedule disrupts normal circadian rhythms.
 
-While mainstream fitness apps (MyFitnessPal, Fitbit, etc.) are built for people who sleep 11 PM–7 AM and work 9 AM–5 PM, NightFuel is built for the estimated **1.8 billion shift workers worldwide** whose biology operates on completely different timing.
+While mainstream fitness apps (MyFitnessPal, Fitbit, etc.) are built for people who sleep 11 PM–7 AM and work 9 AM–5 PM, Zeitra is built for the estimated **1.8 billion shift workers worldwide** whose biology operates on completely different timing.
 
 The platform combines:
 - A **deterministic Python circadian model** that computes each user's unique biological clock from their shift schedule
@@ -53,7 +53,7 @@ Shift workers face compounded health risks compared to day workers:
 
 ### What Existing Apps Get Wrong
 
-| Problem | How Current Apps Handle It | How NightFuel Handles It |
+| Problem | How Current Apps Handle It | How Zeitra Handles It |
 |---------|---------------------------|--------------------------|
 | Meal timing | Fixed 3-meal structure (B/L/D) | Reverse-engineered from sleep window |
 | Workout scheduling | Morning/evening presets | Computed from shift type, fatigue, circadian phase |
@@ -954,5 +954,5 @@ const date = d.toISOString().split('T')[0] as string;
 
 ---
 
-*NightFuel Project Design Document v2.0 — February 2026*
+*Zeitra Project Design Document v2.0 — February 2026*
 *Built with TypeScript, Python, Next.js 15, Fastify 5, Prisma 6, Redis, and Anthropic Claude*

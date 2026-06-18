@@ -41,7 +41,7 @@ export default function GoalsScreen() {
                     What is your <Text style={{ color: colors.accent.coral }}>primary goal</Text>?
                 </Text>
                 <Text style={[typography.body, { color: colors.text.secondary, marginBottom: spacing['2xl'] }]}>
-                    Choose the objective that best describes what you want to achieve with NightFuel.
+                    Choose the objective that best describes what you want to achieve with Zeitra.
                 </Text>
 
                 <GlassCard style={[styles.optionsPanel, { padding: spacing.md, gap: spacing.md }]}>

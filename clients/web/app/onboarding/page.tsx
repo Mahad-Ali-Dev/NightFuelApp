@@ -148,7 +148,7 @@ export default function OnboardingPage() {
             // Update client-side state to prevent dashboard redirect-back
             updateUser({ onboardingCompleted: true });
 
-            toast.success('Onboarding complete!', { description: 'Welcome to NightFuel.' });
+            toast.success('Onboarding complete!', { description: 'Welcome to Zeitra.' });
             router.push('/dashboard');
         } catch (error) {
             console.error(error);

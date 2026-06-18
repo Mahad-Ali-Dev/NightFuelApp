@@ -151,7 +151,7 @@ describe('useCircadianReminders', () => {
     expect(mockScheduleNotification).not.toHaveBeenCalled();
   });
 
-  test('cancels previously-scheduled NightFuel reminders before re-scheduling', async () => {
+  test('cancels previously-scheduled Zeitra reminders before re-scheduling', async () => {
     mockGetAllScheduled.mockResolvedValue([
       { identifier: 'old-1', content: { data: { nfReminderId: 'nf-winddown' } } },
       { identifier: 'old-2', content: { data: { nfReminderId: 'nf-log-sleep' } } },

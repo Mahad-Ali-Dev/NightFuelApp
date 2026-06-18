@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidDateRange, RANGE_REVERSED_MSG } from '@nightfuel/config';
 
 // Calendar date in YYYY-MM-DD form. Enforced at the API boundary so a malformed or
 // empty date returns 400 instead of reaching `new Date(date)` → Invalid Date → a
@@ -10,6 +11,23 @@ const dateString = z
 export const getPlanParamsSchema = z.object({
     date: dateString,
 });
+
+// GET /history — OPTIONAL bounded date range. Both `start` and `end` are optional
+// so the no-params call keeps its original behaviour (server caps at take:30). When
+// BOTH are supplied the cross-field guard rejects a reversed/over-span range using
+// the SHARED helper from @nightfuel/config (the same math shift-service and
+// progress-service bound their range endpoints with) — no copy-pasted parse here.
+// The reversed-range message is attached to path ['end'] so a client surfaces it on
+// the field it would adjust, matching the shared helper's convention.
+export const getPlanHistoryQuerySchema = z
+    .object({
+        start: dateString.optional(),
+        end: dateString.optional(),
+    })
+    .refine(
+        (d) => d.start === undefined || d.end === undefined || isValidDateRange(d.start, d.end),
+        { message: RANGE_REVERSED_MSG, path: ['end'] }
+    );
 
 export const getPlanResponseSchema = z.object({
     id: z.string().uuid(),

@@ -210,10 +210,10 @@ function SubscriptionScreenContent() {
             // (e.g. Huawei device without Play Services).
             Alert.alert(
                 'Subscribe on the web',
-                'In-app purchases aren\'t available on this device. You can subscribe at nightfuel.app instead.',
+                'In-app purchases aren\'t available on this device. You can subscribe at zeitra.app instead.',
                 [
                     { text: 'Cancel', style: 'cancel' },
-                    { text: 'Open website', onPress: () => Linking.openURL('https://nightfuel.app/pricing') },
+                    { text: 'Open website', onPress: () => Linking.openURL('https://zeitra.app/pricing') },
                 ],
             );
             return;
@@ -480,10 +480,10 @@ function SubscriptionScreenContent() {
                         </Text>
 
                         <View style={{ flexDirection: 'row', gap: 16, marginTop: 16 }}>
-                            <TouchableOpacity accessibilityRole="link" accessibilityLabel="Terms of Service" onPress={() => Linking.openURL('https://nightfuel.app/terms')}>
+                            <TouchableOpacity accessibilityRole="link" accessibilityLabel="Terms of Service" onPress={() => Linking.openURL('https://zeitra.app/terms')}>
                                 <Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: '600' }]}>Terms of Service</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity accessibilityRole="link" accessibilityLabel="Privacy Policy" onPress={() => Linking.openURL('https://nightfuel.app/privacy')}>
+                            <TouchableOpacity accessibilityRole="link" accessibilityLabel="Privacy Policy" onPress={() => Linking.openURL('https://zeitra.app/privacy')}>
                                 <Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: '600' }]}>Privacy Policy</Text>
                             </TouchableOpacity>
                         </View>

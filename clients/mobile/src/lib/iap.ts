@@ -64,12 +64,12 @@ function getIap(): IapModule | null {
 // don't auto-migrate.
 
 export const SUBSCRIPTION_PRODUCT_IDS = {
-  PRO_MONTHLY: 'com.nightfuel.app.pro.monthly',
-  PRO_YEARLY: 'com.nightfuel.app.pro.yearly',
-  PREMIUM_MONTHLY: 'com.nightfuel.app.premium.monthly',
-  PREMIUM_YEARLY: 'com.nightfuel.app.premium.yearly',
-  ENTERPRISE_MONTHLY: 'com.nightfuel.app.enterprise.monthly',
-  ENTERPRISE_YEARLY: 'com.nightfuel.app.enterprise.yearly',
+  PRO_MONTHLY: 'com.zeitra.app.pro.monthly',
+  PRO_YEARLY: 'com.zeitra.app.pro.yearly',
+  PREMIUM_MONTHLY: 'com.zeitra.app.premium.monthly',
+  PREMIUM_YEARLY: 'com.zeitra.app.premium.yearly',
+  ENTERPRISE_MONTHLY: 'com.zeitra.app.enterprise.monthly',
+  ENTERPRISE_YEARLY: 'com.zeitra.app.enterprise.yearly',
 } as const;
 
 export type SubscriptionProductId =

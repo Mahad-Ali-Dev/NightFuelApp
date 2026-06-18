@@ -322,7 +322,7 @@ export default function MealLoggerPage() {
                 const items: Record<string, any>[] = Array.isArray(res.data) ? res.data : (res.data?.foods ?? []);
                 const mapped = items.map(foodItemToNutrition);
                 setSearchResults(mapped);
-                if (mapped.length === 0) setSearchError('No foods found in NightFuel Library — try a different term.');
+                if (mapped.length === 0) setSearchError('No foods found in Zeitra Library — try a different term.');
             } else {
                 // Search Open Food Facts via Next.js proxy route
                 const params = new URLSearchParams({ q: query, region: reg, limit: '20' });
@@ -331,7 +331,7 @@ export default function MealLoggerPage() {
                 const data = await res.json();
                 const foods: FoodNutrition[] = (data.foods ?? []).map((f: FoodNutrition) => ({ ...f, source: 'openfoodfacts' as const }));
                 setSearchResults(foods);
-                if (foods.length === 0) setSearchError('No foods found — try a different term or switch to NightFuel Library.');
+                if (foods.length === 0) setSearchError('No foods found — try a different term or switch to Zeitra Library.');
             }
         } catch {
             setSearchResults([]);
@@ -465,7 +465,7 @@ export default function MealLoggerPage() {
                                 <h1 className="text-xl font-bold text-white leading-none">Log Meal</h1>
                                 <p className="text-xs text-neutral-500 mt-0.5">
                                     {searchMode === 'library'
-                                        ? '🥗 NightFuel Library • 760 whole foods'
+                                        ? '🥗 Zeitra Library • 760 whole foods'
                                         : 'Open Food Facts • 3M+ foods'}
                                 </p>
                             </div>
@@ -542,7 +542,7 @@ export default function MealLoggerPage() {
                             <CardTitle className="text-base font-semibold text-white">Find Food</CardTitle>
                             <CardDescription className="text-neutral-500 text-xs">
                                 {searchMode === 'library'
-                                    ? 'NightFuel Library — whole foods with dietary tags • Tap ⓘ for details'
+                                    ? 'Zeitra Library — whole foods with dietary tags • Tap ⓘ for details'
                                     : `Search ${selectedRegion.label} database • Tap ⓘ to see micro-nutrients`}
                             </CardDescription>
                         </CardHeader>
@@ -591,7 +591,7 @@ export default function MealLoggerPage() {
                                             </div>
                                             <div>
                                                 <p className="text-sm font-medium text-neutral-400">
-                                                    {searchMode === 'library' ? 'Search the NightFuel food library' : 'Type to search foods'}
+                                                    {searchMode === 'library' ? 'Search the Zeitra food library' : 'Type to search foods'}
                                                 </p>
                                                 <p className="text-xs text-neutral-600 mt-1">
                                                     {searchMode === 'library'

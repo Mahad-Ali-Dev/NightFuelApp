@@ -1,4 +1,4 @@
-# 🌙 NightFuel
+# 🌙 Zeitra
 
 > **Chrono-Nutrition & Fitness Platform for Shift Workers**
 > Production-grade microservices monorepo — TypeScript + Python + Next.js 15
@@ -11,9 +11,9 @@
 
 ---
 
-## What is NightFuel?
+## What is Zeitra?
 
-NightFuel is a **chrono-nutrition and fitness platform** built specifically for people who work nights, rotating shifts, or irregular hours. Standard fitness apps assume a 9-to-5 lifestyle — NightFuel doesn't.
+Zeitra is a **chrono-nutrition and fitness platform** built specifically for people who work nights, rotating shifts, or irregular hours. Standard fitness apps assume a 9-to-5 lifestyle — Zeitra doesn't.
 
 It syncs meal timing, workout scheduling, caffeine guidance, and sleep optimisation to each user's **unique circadian rhythm**.
 
@@ -24,7 +24,7 @@ It syncs meal timing, workout scheduling, caffeine guidance, and sleep optimisat
 | 🕐 Reverse meal-timing | Meals scheduled around your sleep window, not the clock |
 | 🧠 Circadian-aware AI | Python deterministic engine + Claude (Sonnet/Haiku) for personalised plans |
 | 🌙 Night-shift first | Caffeine windows, fatigue tracking, sleep-cycle management |
-| 🥗 Dual food database | Open Food Facts (3M+ foods, online) + NightFuel Library (760 whole foods, offline) |
+| 🥗 Dual food database | Open Food Facts (3M+ foods, online) + Zeitra Library (760 whole foods, offline) |
 | 🏋️ Smart workouts | Intensity auto-adjusted by fatigue, shift hours, and sleep quality |
 | 🤝 Coach marketplace | Certified coaches can manage clients, create plans, and chat |
 | 🕌 Ramadan Mode | Active fasting schedule adjustments tailored for Suhoor and Iftar |
@@ -243,7 +243,7 @@ The meal logger at `/dashboard/meals` has a toggle in the top-right:
 [ 🌐 Online ]  [ 🥗 Library ]
 ```
 
-| | 🌐 Online (Open Food Facts) | 🥗 Library (NightFuel) |
+| | 🌐 Online (Open Food Facts) | 🥗 Library (Zeitra) |
 |---|---|---|
 | **Foods** | 3M+ branded & packaged foods | 760 whole/natural foods |
 | **Data** | Full micronutrients + barcode | Macros, fiber, sugar, sodium |
@@ -296,13 +296,13 @@ npx prisma migrate deploy
 
 ## Project Documentation
 
-See [`docs/NightFuel-Project-Doc.md`](docs/NightFuel-Project-Doc.md) for the full project design document including feature specs, data models, AI architecture, and deployment guide.
+See [`docs/Zeitra-Project-Doc.md`](docs/Zeitra-Project-Doc.md) for the full project design document including feature specs, data models, AI architecture, and deployment guide.
 
 ---
 
 ## Verifying the build
 
-NightFuel ships a single source of truth for "is this tree safe to merge?":
+Zeitra ships a single source of truth for "is this tree safe to merge?":
 the root `gate` script. Underneath, three smaller scripts give you finer-grained
 control when you're iterating on one slice of the stack and don't want to pay
 for the whole pipeline.
@@ -383,4 +383,4 @@ the same script — if it's green locally, it's green in CI.
 
 ## License
 
-MIT © NightFuel
+MIT © Zeitra

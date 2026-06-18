@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "NightFuel",
-    "slug": "nightfuel",
+    "name": "Zeitra",
+    "slug": "zeitra",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "nightfuel",
+    "scheme": "zeitra",
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/images/splash-icon.png",
@@ -14,15 +14,15 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nightfuel.app",
+      "bundleIdentifier": "com.zeitra.app",
       "associatedDomains": [
-        "applinks:nightfuel.app",
-        "applinks:www.nightfuel.app"
+        "applinks:zeitra.app",
+        "applinks:www.zeitra.app"
       ],
       "infoPlist": {
-        "NSCameraUsageDescription": "NightFuel needs camera access for barcode food scanning.",
-        "NSHealthShareUsageDescription": "NightFuel reads sleep and activity data to optimize your chrono-nutrition plan.",
-        "NSHealthUpdateUsageDescription": "NightFuel writes workout and nutrition data to Apple Health.",
+        "NSCameraUsageDescription": "Zeitra needs camera access for barcode food scanning.",
+        "NSHealthShareUsageDescription": "Zeitra reads sleep and activity data to optimize your chrono-nutrition plan.",
+        "NSHealthUpdateUsageDescription": "Zeitra writes workout and nutrition data to Apple Health.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false
         }
@@ -34,15 +34,15 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "package": "com.nightfuel.app",
+      "package": "com.zeitra.app",
       "usesCleartextTraffic": false,
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "nightfuel.app" },
-            { "scheme": "https", "host": "www.nightfuel.app" }
+            { "scheme": "https", "host": "zeitra.app" },
+            { "scheme": "https", "host": "www.zeitra.app" }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
         }
@@ -59,7 +59,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow NightFuel to use the camera for barcode scanning."
+          "cameraPermission": "Allow Zeitra to use the camera for barcode scanning."
         }
       ],
       [

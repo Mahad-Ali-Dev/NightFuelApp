@@ -52,7 +52,7 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
 
     if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('default', {
-            name: 'NightFuel',
+            name: 'Zeitra',
             importance: Notifications.AndroidImportance.MAX,
             vibrationPattern: [0, 250, 250, 250],
         });

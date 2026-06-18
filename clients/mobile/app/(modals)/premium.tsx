@@ -36,7 +36,7 @@ export default function PremiumScreen() {
             qc.invalidateQueries({ queryKey: ['subscription-status'] });
             qc.invalidateQueries({ queryKey: ['user-profile'] });
             Alert.alert(
-                '🎉 Welcome to NightFuel Pro!',
+                '🎉 Welcome to Zeitra Pro!',
                 'Your 7-day free trial has started. Enjoy all premium features.',
                 [{ text: "Let's Go!", onPress: () => router.back() }]
             );
@@ -67,7 +67,7 @@ export default function PremiumScreen() {
                 <View style={styles.titleArea}>
                     <Text style={[typography.display, { color: colors.text.primary, textAlign: 'center' }]}>
                         Unlock{' '}
-                        <Text style={{ color: colors.accent.cyan }}>NightFuel Pro</Text>
+                        <Text style={{ color: colors.accent.cyan }}>Zeitra Pro</Text>
                     </Text>
                     <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: 8 }]}>
                         The ultimate chrono-nutrition and fitness toolkit designed exclusively for shift workers.

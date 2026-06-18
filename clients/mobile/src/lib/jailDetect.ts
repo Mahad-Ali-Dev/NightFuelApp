@@ -6,7 +6,7 @@
  * module exists to:
  *
  *   1. Show users a soft warning that their device's security model has
- *      been bypassed and that NightFuel can't protect their account
+ *      been bypassed and that Zeitra can't protect their account
  *      tokens / payment data the way it normally would.
  *   2. Send a Sentry breadcrumb with a flag so we can see in aggregate
  *      what fraction of users run on rooted/jailbroken devices.

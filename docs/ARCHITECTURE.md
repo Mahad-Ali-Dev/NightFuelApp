@@ -1,4 +1,4 @@
-# NightFuel — Complete Architecture & Deployment Guide
+# Zeitra — Complete Architecture & Deployment Guide
 
 > **Version:** 2.0 | **Date:** 2026-02-26 | **Stack:** Node 22 · Fastify 5 · Next.js 15 · Python 3.12 · PostgreSQL 16 · Redis 7
 
@@ -27,7 +27,7 @@
 
 ## 1. Product Overview
 
-**NightFuel** is a chrono-nutrition and fitness platform purpose-built for **shift workers** (night workers, rotating schedule workers). It addresses the unique metabolic and circadian challenges of irregular sleep schedules with:
+**Zeitra** is a chrono-nutrition and fitness platform purpose-built for **shift workers** (night workers, rotating schedule workers). It addresses the unique metabolic and circadian challenges of irregular sleep schedules with:
 
 - **Circadian-aware meal timing** — meals, fasts, and macros scheduled around the user's actual sleep window, not a conventional 9-to-5.
 - **AI nutrition & workout planning** — three-layer AI (deterministic → rule-based → LLM) generates personalized, budget-conscious, acne-safe plans.
@@ -527,7 +527,7 @@ CREATE TABLE push_subscriptions (
 ```env
 VAPID_PUBLIC_KEY=   # Generate: npx web-push generate-vapid-keys
 VAPID_PRIVATE_KEY=  # Generate: npx web-push generate-vapid-keys
-VAPID_SUBJECT=mailto:admin@nightfuel.app
+VAPID_SUBJECT=mailto:admin@zeitra.app
 EXPO_ACCESS_TOKEN=  # Optional, from expo.dev
 ```
 
@@ -630,7 +630,7 @@ sleep_logs          (id, user_id, start_time, end_time, quality, source[SleepSou
 | Environment | URL |
 |-------------|-----|
 | Local Docker | `http://localhost/api` |
-| Production | `https://api.nightfuel.app` |
+| Production | `https://api.zeitra.app` |
 
 ### Auth Endpoints
 

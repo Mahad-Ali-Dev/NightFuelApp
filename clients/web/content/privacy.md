@@ -1,21 +1,21 @@
-# NightFuel Privacy Policy
+# Zeitra Privacy Policy
 
 **Last updated:** 2026-05-04
 **Version:** 1.0
 
-> **⚠️ Legal review required before launch.** This is a working draft tailored to NightFuel's actual data practices. Have an attorney review before posting publicly. The structure follows GDPR + CCPA + Apple App Store Connect privacy nutrition label requirements.
+> **⚠️ Legal review required before launch.** This is a working draft tailored to Zeitra's actual data practices. Have an attorney review before posting publicly. The structure follows GDPR + CCPA + Apple App Store Connect privacy nutrition label requirements.
 
 ---
 
 ## 1. Who we are
 
-NightFuel is operated by **Tase LLC** ("NightFuel," "we," "us," "our"). This Privacy Policy explains how we collect, use, share, and protect your personal information when you use the NightFuel mobile or web application (the "Service").
+Zeitra is operated by **Tase LLC** ("Zeitra," "we," "us," "our"). This Privacy Policy explains how we collect, use, share, and protect your personal information when you use the Zeitra mobile or web application (the "Service").
 
-If you have questions, contact: **privacy@nightfuel.app**.
+If you have questions, contact: **privacy@zeitra.app**.
 
 ## 2. What we collect
 
-We collect only what's needed to make NightFuel work for you.
+We collect only what's needed to make Zeitra work for you.
 
 ### 2.1 Account information
 
@@ -77,7 +77,7 @@ We use your information to:
 - Improve app reliability (crash reports, performance monitoring)
 - Comply with legal obligations
 
-We do **not** sell your personal information to third parties. We do not show targeted advertising in NightFuel.
+We do **not** sell your personal information to third parties. We do not show targeted advertising in Zeitra.
 
 ## 4. Who we share data with
 
@@ -108,7 +108,7 @@ Depending on where you live, you may have the right to:
 - **Withdraw consent** — at any time, where processing is based on consent
 - **Lodge a complaint** — with your local data protection authority
 
-To exercise any of these rights, email **privacy@nightfuel.app** or use the in-app **Settings → Privacy → Delete my account** flow.
+To exercise any of these rights, email **privacy@zeitra.app** or use the in-app **Settings → Privacy → Delete my account** flow.
 
 We will respond within 30 days (GDPR) or 45 days (CCPA), whichever applies to you.
 
@@ -133,7 +133,7 @@ No system is perfectly secure. If we suffer a breach affecting your data, we wil
 
 ## 8. Children
 
-NightFuel is intended for users 17 and older. We do not knowingly collect data from children under 13. If you believe a child has signed up, contact us immediately and we will delete the account.
+Zeitra is intended for users 17 and older. We do not knowingly collect data from children under 13. If you believe a child has signed up, contact us immediately and we will delete the account.
 
 ## 9. International transfers
 
@@ -145,6 +145,6 @@ We will post any updates here and notify users in the app for material changes. 
 
 ## 11. Contact
 
-- **Privacy questions:** privacy@nightfuel.app
-- **Data subject requests:** privacy@nightfuel.app
+- **Privacy questions:** privacy@zeitra.app
+- **Data subject requests:** privacy@zeitra.app
 - **Mail:** Tase LLC, [Address — fill in before publishing]

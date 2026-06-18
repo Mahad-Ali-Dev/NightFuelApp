@@ -1,4 +1,4 @@
-// NightFuel Design System — Color Palette
+// Zeitra Design System — Color Palette
 // "Aurora" — premium dark glass. Deep cool near-black surfaces, coral→pink brand
 // gradient, refined low-contrast glass borders. Keys are stable (screens depend on
 // them); only the values changed from the original GitHub-dark palette.

@@ -1,7 +1,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { createShiftSchema, getShiftsQuerySchema, updateShiftSchema } from './schemas';
+import { createShiftSchema, getShiftsRouteQuerySchema, updateShiftSchema } from './schemas';
 import { ShiftService } from './shift.service';
 import { z } from 'zod';
 
@@ -37,7 +37,7 @@ export const shiftRoutes = async (fastify: FastifyInstance, opts: { shiftService
         {
             onRequest: [(fastify as any).authenticate],
             schema: {
-                querystring: getShiftsQuerySchema.omit({ userId: true }),
+                querystring: getShiftsRouteQuerySchema,
             },
         },
         async (request, reply) => {

@@ -44,7 +44,7 @@ export default function ForgotPasswordScreen() {
       await forgotPassword(cleanEmail);
       setSent(true);
       AccessibilityInfo.announceForAccessibility(
-        'Request received. Password reset by email is not available yet. Reach us at support@nightfuel.app'
+        'Request received. Password reset by email is not available yet. Reach us at support@zeitra.app'
       );
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.message ?? 'Failed to send reset link. Please try again.');
@@ -129,7 +129,7 @@ export default function ForgotPasswordScreen() {
             >
               <Ionicons name="mail-outline" size={16} color={colors.text.tertiary} />
               <Text style={[styles.hintText, { color: colors.text.tertiary }]}>
-                Reach us at support@nightfuel.app
+                Reach us at support@zeitra.app
               </Text>
             </View>
             <Button

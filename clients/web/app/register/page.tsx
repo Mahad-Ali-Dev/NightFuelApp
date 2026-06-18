@@ -77,7 +77,7 @@ export default function RegisterPage() {
                     <div className="h-14 w-14 rounded-2xl bg-brand-500 flex items-center justify-center shadow-2xl shadow-brand-500/40 mb-4">
                         <Zap className="h-7 w-7 text-white" strokeWidth={2.5} />
                     </div>
-                    <h1 className="text-2xl font-black text-white tracking-tight">NightFuel</h1>
+                    <h1 className="text-2xl font-black text-white tracking-tight">Zeitra</h1>
                     <p className="text-neutral-500 text-sm mt-1">Fuel your night shift performance</p>
                 </div>
 

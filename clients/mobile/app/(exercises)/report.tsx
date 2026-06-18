@@ -33,7 +33,7 @@ export default function WorkoutReportScreen() {
         if (!workout) return;
         const title = workout.title || workout.type || 'Workout';
         const lines = [
-            `💪 ${title} — NightFuel`,
+            `💪 ${title} — Zeitra`,
             `⏱ ${workout.duration} min · 🏋️ ${Math.round(workout.totalVolume || 0)} kg volume · ${workout.exercises?.length || 0} exercises`,
         ];
         try {

@@ -1,4 +1,4 @@
-// NightFuel Design System — "Night Read" theme variant
+// Zeitra Design System — "Night Read" theme variant
 // Deep-red-only palette for late-night reading. Aurora's bright coral / cyan
 // accents disrupt melatonin for users checking the app at 3am, undermining the
 // circadian thesis. This variant collapses every accent to dim red on a

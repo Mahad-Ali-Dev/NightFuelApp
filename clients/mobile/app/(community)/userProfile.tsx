@@ -113,7 +113,7 @@ export default function UserProfileScreen() {
                         )}
                     </View>
 
-                    <Text style={[typography.display, { color: colors.text.primary, marginTop: 16, fontSize: 28 }]}>{(profile as any).displayName ?? ([(profile as any).firstName, (profile as any).lastName].filter(Boolean).join(' ') || 'NightFuel Member')}</Text>
+                    <Text style={[typography.display, { color: colors.text.primary, marginTop: 16, fontSize: 28 }]}>{(profile as any).displayName ?? ([(profile as any).firstName, (profile as any).lastName].filter(Boolean).join(' ') || 'Zeitra Member')}</Text>
                     {profile.bio && (
                         <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: 8, marginHorizontal: 20 }]}>
                             {profile.bio}

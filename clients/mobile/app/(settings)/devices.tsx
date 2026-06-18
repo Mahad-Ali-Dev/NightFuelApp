@@ -8,7 +8,7 @@ import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Card } from '@/components/ui';
+import { GlassCard } from '@/components/ui';
 
 /**
  * Connected Devices screen.
@@ -35,7 +35,7 @@ export default function ConnectedDevicesScreen() {
             </View>
 
             <ScrollView contentContainerStyle={{ padding: spacing['2xl'] }} showsVerticalScrollIndicator={false}>
-                <Card variant="glass" padding="3xl" style={styles.emptyCard}>
+                <GlassCard radius={br.xl} style={[styles.emptyCard, { padding: spacing['3xl'] }]}>
                     <View style={styles.empty}>
                         <View style={[styles.iconMedallion, shadows.glow(colors.accent.coral), { backgroundColor: withAlpha(colors.accent.coral, 0.12), borderColor: withAlpha(colors.accent.coral, 0.28) }]}>
                             <Ionicons name="watch-outline" size={48} color={colors.accent.coral} />
@@ -45,11 +45,11 @@ export default function ConnectedDevicesScreen() {
                         </Text>
                         <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing.md, lineHeight: 22 }]}>
                             Wearable and health-app integrations — Apple Health, Google Health Connect, and fitness trackers —
-                            are coming soon. Once connected, NightFuel will sync your sleep, heart rate, and activity to sharpen
+                            are coming soon. Once connected, Zeitra will sync your sleep, heart rate, and activity to sharpen
                             your chrono-nutrition plan.
                         </Text>
                     </View>
-                </Card>
+                </GlassCard>
             </ScrollView>
         </View>
     );

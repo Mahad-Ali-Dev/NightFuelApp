@@ -1,5 +1,5 @@
 /**
- * Dashboard — NightFuel home screen.
+ * Dashboard — Zeitra home screen.
  * Redesigned: shift countdown hero · circadian insight · UP NEXT meal ·
  *             sleep + hydration mini cards · quick actions · 24h timeline.
  */
@@ -456,6 +456,7 @@ export default function DashboardScreen() {
                                 </View>
                             )}
                             <CtaButton
+                                testID="dashboard-up-next-log-meal-cta"
                                 size="md"
                                 icon="checkmark"
                                 label="Log Meal"

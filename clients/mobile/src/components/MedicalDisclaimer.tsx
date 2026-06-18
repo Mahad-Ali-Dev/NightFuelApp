@@ -30,7 +30,7 @@ import { useTheme } from '@/theme';
 const DISCLAIMER_ACK_KEY = 'nf_medical_disclaimer_v1_ack';
 
 export const MEDICAL_DISCLAIMER_TEXT =
-    "NightFuel provides general nutrition, exercise, and sleep guidance for healthy adults. " +
+    "Zeitra provides general nutrition, exercise, and sleep guidance for healthy adults. " +
     "It is NOT a substitute for medical advice, diagnosis, or treatment. " +
     "Consult a qualified healthcare provider before starting any new diet, fasting protocol, " +
     "or exercise program — especially if you are pregnant, nursing, have a medical condition, " +
@@ -159,7 +159,7 @@ export function MedicalDisclaimerScreen({
                         <View style={styles.bulletRow}>
                             <Ionicons name="checkmark-circle" size={18} color={colors.accent.cyan} />
                             <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 8, flex: 1, lineHeight: 18 }]}>
-                                NightFuel doesn&apos;t replace professional advice
+                                Zeitra doesn&apos;t replace professional advice
                             </Text>
                         </View>
                     </View>

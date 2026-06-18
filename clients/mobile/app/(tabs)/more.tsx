@@ -122,7 +122,7 @@ export default function MoreScreen() {
                             </Text>
                             <View style={[styles.badge, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.30) }]}>
                                 <Ionicons name="moon" size={11} color={colors.accent.purple} />
-                                <Text style={[typography.captionMedium, { color: colors.accent.purple, marginLeft: 5 }]} maxFontSizeMultiplier={1.4}>NightFuel User</Text>
+                                <Text style={[typography.captionMedium, { color: colors.accent.purple, marginLeft: 5 }]} maxFontSizeMultiplier={1.4}>Zeitra User</Text>
                             </View>
                         </View>
                     </View>
@@ -201,7 +201,7 @@ export default function MoreScreen() {
                 </TouchableOpacity>
 
                 <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing['3xl'] }]}>
-                    NightFuel v{appVersion}
+                    Zeitra v{appVersion}
                 </Text>
             </ScrollView>
         </View>

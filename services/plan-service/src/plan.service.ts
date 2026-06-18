@@ -352,9 +352,17 @@ export class PlanService {
         });
     }
 
-    async getPlanHistory(userId: string) {
+    async getPlanHistory(userId: string, range?: { start?: string; end?: string }) {
+        // Always scope to the caller. When BOTH bounds are supplied (the schema
+        // has already validated start <= end), narrow to that inclusive
+        // planDate window; otherwise the where-clause and take:30 cap are
+        // byte-identical to the original no-params query.
+        const where: { userId: string; planDate?: { gte: Date; lte: Date } } = { userId };
+        if (range?.start !== undefined && range?.end !== undefined) {
+            where.planDate = { gte: new Date(range.start), lte: new Date(range.end) };
+        }
         return this.prisma.dayPlan.findMany({
-            where: { userId },
+            where,
             orderBy: { planDate: 'desc' },
             take: 30,
         });

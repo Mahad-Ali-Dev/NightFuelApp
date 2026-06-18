@@ -64,7 +64,7 @@ async def generate_chat_response_stream(
         # Stream the canned demo reply word-by-word so the UX is consistent.
         # No tokens / cost emitted because nothing was actually billed.
         demo = (
-            "Hey! I'm Ria, your NightFuel coach. I'm currently running in "
+            "Hey! I'm Ria, your Zeitra coach. I'm currently running in "
             "demo mode. Once the AI service is fully configured, I'll be "
             "able to give you personalized advice on nutrition, sleep, and "
             "training based on your shift schedule. Stay consistent!"

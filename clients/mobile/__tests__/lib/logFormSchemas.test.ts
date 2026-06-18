@@ -381,13 +381,25 @@ describe('validateLogShiftForm', () => {
     }
   });
 
-  // ── additive guard: upper duration bound (<= 24h) ──────────────────────────
+  // ── DELIBERATELY-UNREACHABLE guard: upper duration bound (<= 24h) ───────────
+  //
+  // The MAX_SHIFT_HOURS branch in validateLogShiftForm is documented (and KEPT)
+  // as deliberate future-proofing that is currently UNREACHABLE for a single-
+  // shiftDate shift: the overnight roll caps every valid HH:MM pair's span
+  // strictly below 24h (the maximal overnight, 00:01 → 00:00, is 23h59m), and
+  // the only 24h span — start === end — is rejected by the zero-length guard
+  // FIRST. So `SHIFT_TOO_LONG_MSG` can never be the surfaced error for any real
+  // single-date input. These tests assert exactly that contract: the constant is
+  // pinned, the near-24h edge is NOT over-clamped, and the only would-be "too
+  // long" input (start === end) yields the zero-length message — i.e. the
+  // too-long branch is guarded out, not reached. (Contrast the sleep bound below,
+  // which IS reachable via a wrong end day and is tested as a live guard.)
 
   test('MAX_SHIFT_HOURS is 24', () => {
     expect(MAX_SHIFT_HOURS).toBe(24);
   });
 
-  // Re-assert the work-item happy paths under a pinned now: the new bound must
+  // Re-assert the work-item happy paths under a pinned now: the bound must
   // not touch them.
   test('overnight 19:00 → 07:00 (12h) still passes under the duration bound', () => {
     const result = validateLogShiftForm(
@@ -430,6 +442,25 @@ describe('validateLogShiftForm', () => {
     );
     expect(result.ok).toBe(true);
     if (!result.ok) {
+      expect(result.fieldErrors.endTime).not.toBe(SHIFT_TOO_LONG_MSG);
+    }
+  });
+
+  // Retargeted (was an assertion implying a real "too long" shift user path):
+  // the ONLY single-date input that reaches a 24h span is start === end, and the
+  // zero-length guard claims `endTime` BEFORE the duration branch runs. So the
+  // surfaced error is the zero-length message — NOT SHIFT_TOO_LONG_MSG — proving
+  // the too-long branch is guarded-but-unreachable for a single-shiftDate shift
+  // rather than a path a user can actually trip.
+  test('the only would-be 24h shift (start === end) surfaces the zero-length message, never SHIFT_TOO_LONG_MSG (bound is guarded-unreachable)', () => {
+    const result = validateLogShiftForm(
+      shiftInput({ startTime: '09:00', endTime: '09:00' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      // Zero-length wins; the duration branch never fires for a single date.
+      expect(result.fieldErrors.endTime).toBe(SHIFT_ZERO_LENGTH_MSG);
       expect(result.fieldErrors.endTime).not.toBe(SHIFT_TOO_LONG_MSG);
     }
   });

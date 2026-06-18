@@ -1,4 +1,4 @@
-// NightFuel Design System — Spacing (4px grid)
+// Zeitra Design System — Spacing (4px grid)
 
 export const spacing = {
   xxs: 2,

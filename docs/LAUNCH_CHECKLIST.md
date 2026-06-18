@@ -1,11 +1,11 @@
-# NightFuel Launch Checklist
+# Zeitra Launch Checklist
 
 The list of interactive steps that only you can do. Each is a checkbox you'll tick once.
 
 After every box is checked, the app is genuinely launch-ready and Apple / Google should accept it on first review.
 
 > **Estimated total time on your end: ~6-8 hours of active work, plus 1-7 days of waiting for app review.**
-> Cost: ~$124 one-time (Apple Developer $99/yr + Google Play $25 one-time) + your TLS cert + nightfuel.app domain renewal.
+> Cost: ~$124 one-time (Apple Developer $99/yr + Google Play $25 one-time) + your TLS cert + zeitra.app domain renewal.
 
 ---
 
@@ -14,8 +14,8 @@ After every box is checked, the app is genuinely launch-ready and Apple / Google
 - [ ] **Apple Developer Program** — sign up at https://developer.apple.com/programs/enroll/ ($99/yr). Required for App Store submission.
 - [ ] **Google Play Console** — sign up at https://play.google.com/console/signup ($25 one-time).
 - [ ] **Expo account** — already have if you ran `eas login` — confirm at https://expo.dev/accounts/<you>.
-- [ ] **Domain `nightfuel.app`** registered + DNS pointed at your hosting (Vercel / Cloudflare / wherever the web client is deployed).
-- [ ] **MX records** on `nightfuel.app` so `support@`, `privacy@`, `billing@`, `legal@` work (Apple App Review will email these for verification).
+- [ ] **Domain `zeitra.app`** registered + DNS pointed at your hosting (Vercel / Cloudflare / wherever the web client is deployed).
+- [ ] **MX records** on `zeitra.app` so `support@`, `privacy@`, `billing@`, `legal@` work (Apple App Review will email these for verification).
 
 ---
 
@@ -24,14 +24,14 @@ After every box is checked, the app is genuinely launch-ready and Apple / Google
 The web client serves the privacy policy, terms of service, and the `.well-known` files. Apple won't approve without working URLs.
 
 - [ ] Deploy `clients/web` to production (Vercel recommended — `vercel deploy --prod`).
-- [ ] Verify https://nightfuel.app loads.
-- [ ] Verify https://nightfuel.app/privacy renders the privacy policy from `docs/PRIVACY.md` (you may need a `/privacy/page.tsx` that renders the markdown).
-- [ ] Verify https://nightfuel.app/terms renders the terms of service.
-- [ ] Verify https://nightfuel.app/support renders OR redirects to a support contact (email link is fine).
+- [ ] Verify https://zeitra.app loads.
+- [ ] Verify https://zeitra.app/privacy renders the privacy policy from `docs/PRIVACY.md` (you may need a `/privacy/page.tsx` that renders the markdown).
+- [ ] Verify https://zeitra.app/terms renders the terms of service.
+- [ ] Verify https://zeitra.app/support renders OR redirects to a support contact (email link is fine).
 - [ ] **Replace `<APPLE_TEAM_ID>` placeholders** in `clients/web/public/.well-known/apple-app-site-association`. Find your Team ID at https://developer.apple.com/account → Membership.
 - [ ] **Replace `<SHA256>` in `clients/web/public/.well-known/assetlinks.json`** — get from `eas credentials -p android` after your first Android build.
-- [ ] Verify `curl -i https://nightfuel.app/.well-known/apple-app-site-association` returns `200 OK` with `Content-Type: application/json`.
-- [ ] Verify `curl -i https://nightfuel.app/.well-known/assetlinks.json` returns `200 OK` with `Content-Type: application/json`.
+- [ ] Verify `curl -i https://zeitra.app/.well-known/apple-app-site-association` returns `200 OK` with `Content-Type: application/json`.
+- [ ] Verify `curl -i https://zeitra.app/.well-known/assetlinks.json` returns `200 OK` with `Content-Type: application/json`.
 
 ---
 
@@ -50,9 +50,9 @@ Most likely on Railway since `docker-compose.yml` mirrors that topology.
   - [ ] `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` (base64 of the JSON) — for subscription-service
   - [ ] `VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` + `VAPID_SUBJECT` — for notification-service (`npx web-push generate-vapid-keys`)
 - [ ] Rotate the **Stitch GCP key** that was scrubbed from history earlier — at https://console.cloud.google.com → APIs & Services → Credentials. The old key is still on disk somewhere; revoke it.
-- [ ] DNS: point `https://api.nightfuel.app` to your gateway (nginx in `docker-compose.yml`).
+- [ ] DNS: point `https://api.zeitra.app` to your gateway (nginx in `docker-compose.yml`).
 - [ ] TLS cert with auto-renewal (LetsEncrypt or your provider's default).
-- [ ] Health checks: `curl https://api.nightfuel.app/health` and per-service `/health` should return 200.
+- [ ] Health checks: `curl https://api.zeitra.app/health` and per-service `/health` should return 200.
 
 ---
 
@@ -70,7 +70,7 @@ Most likely on Railway since `docker-compose.yml` mirrors that topology.
 
 ### IAP products (must match `iap.ts` exactly)
 
-- [ ] App Store Connect → My Apps → NightFuel → **Features → In-App Purchases → Subscriptions** → create subscription group
+- [ ] App Store Connect → My Apps → Zeitra → **Features → In-App Purchases → Subscriptions** → create subscription group
 - [ ] Create the 6 subscriptions with IDs from `EAS_SETUP.md` step 5
 - [ ] Add at least English (US) localization for each
 - [ ] Generate **App-Specific Shared Secret** (App Information section)
@@ -80,14 +80,14 @@ Most likely on Railway since `docker-compose.yml` mirrors that topology.
 
 Use the copy from `docs/PRODUCTION_READINESS.md` → "APP STORE OPTIMIZATION" section:
 
-- [ ] **App name:** NightFuel
+- [ ] **App name:** Zeitra
 - [ ] **Subtitle:** Night Shift Meals & Workouts (28 chars)
 - [ ] **Promotional text:** the 170-char copy from PRODUCTION_READINESS.md
 - [ ] **Description:** the full 4000-char copy from PRODUCTION_READINESS.md
 - [ ] **Keywords:** the 99-char comma-separated list from PRODUCTION_READINESS.md
-- [ ] **Support URL:** https://nightfuel.app/support
-- [ ] **Marketing URL:** https://nightfuel.app
-- [ ] **Privacy Policy URL:** https://nightfuel.app/privacy
+- [ ] **Support URL:** https://zeitra.app/support
+- [ ] **Marketing URL:** https://zeitra.app
+- [ ] **Privacy Policy URL:** https://zeitra.app/privacy
 - [ ] **Category:** Primary `Health & Fitness`, Secondary `Lifestyle`
 - [ ] **Age Rating:** 17+ — Frequent/Intense Medical/Treatment Information
 
@@ -103,14 +103,14 @@ Tools: capture inside iOS simulators with `xcrun simctl io booted recordVideo`. 
 
 ### Privacy nutrition label
 
-App Store Connect → My Apps → NightFuel → **App Privacy** → fill exactly per the table in `PRODUCTION_READINESS.md` → "Privacy Nutrition Label."
+App Store Connect → My Apps → Zeitra → **App Privacy** → fill exactly per the table in `PRODUCTION_READINESS.md` → "Privacy Nutrition Label."
 
 - [ ] All "Used for tracking" answers = NO (you don't sell to advertisers)
 - [ ] All "Linked to user" entries linked to the User ID
 
 ### App Review prep
 
-- [ ] **Demo account** — create `reviewer@nightfuel.app` with a known password. Pre-seed it with sample meals, workouts, sleep entries, AI history. Add the credentials to App Review Information.
+- [ ] **Demo account** — create `reviewer@zeitra.app` with a known password. Pre-seed it with sample meals, workouts, sleep entries, AI history. Add the credentials to App Review Information.
 - [ ] Notes for reviewer: explain that the app is for shift workers; mention that the AI features may take a few seconds to load. If subscription is gated behind anything, explain how the reviewer can access it for free during review.
 
 ---
@@ -125,13 +125,13 @@ App Store Connect → My Apps → NightFuel → **App Privacy** → fill exactly
 
 ### Listing
 
-- [ ] App name: NightFuel
+- [ ] App name: Zeitra
 - [ ] Short description (80 chars): "Chrono-nutrition for shift workers. Meals, workouts & sleep on YOUR schedule."
 - [ ] Full description: from `PRODUCTION_READINESS.md`
 - [ ] Hi-res icon: 512x512 PNG
 - [ ] Feature graphic: 1024x500 PNG
 - [ ] Screenshots: phone (4-8) + 7-inch tablet + 10-inch tablet (because `supportsTablet: true`)
-- [ ] Privacy Policy URL: https://nightfuel.app/privacy
+- [ ] Privacy Policy URL: https://zeitra.app/privacy
 - [ ] Data Safety form: complete based on what `PRIVACY.md` discloses
 - [ ] Content Rating: complete IARC questionnaire (will land at Teen because of community feed)
 - [ ] App Category: Health & Fitness
@@ -182,7 +182,7 @@ eas submit --profile production --platform android
 | 2 | Replace `[brackets]` in PRIVACY/TERMS (legal entity name, mailing address, governing law jurisdiction) | You | Legal info I don't have |
 | 3 | Apple App Store Connect / Play Console account creation | You | Interactive auth |
 | 4 | TLS cert generation + SPKI hash for cert pinning | You | Production secret |
-| 5 | Domain DNS for nightfuel.app + .well-known hosting | You | DNS ownership |
+| 5 | Domain DNS for zeitra.app + .well-known hosting | You | DNS ownership |
 | 6 | Stripe live keys + webhook URL setup | You | Stripe account auth |
 | 7 | Apple shared secret + service account JSON for receipt validation | You | Per-account credentials |
 | 8 | TestFlight beta with real shift-worker testers | You | Real human testers, not me |

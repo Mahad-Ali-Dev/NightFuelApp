@@ -145,7 +145,7 @@ export default function CommunityFeedPage() {
                         <h1 className="text-3xl font-black text-white flex items-center gap-3">
                             <Users className="text-brand-500" /> Community
                         </h1>
-                        <p className="text-neutral-400 text-sm mt-0.5">Connect with other NightFuel athletes</p>
+                        <p className="text-neutral-400 text-sm mt-0.5">Connect with other Zeitra athletes</p>
                     </div>
                     <div className="flex gap-3">
                         <Link href="/dashboard/community/challenges">

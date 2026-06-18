@@ -8,7 +8,7 @@ from .plan_generator import LLMProvider
 from ..llm_config import ANTHROPIC_MODEL, OPENAI_MODEL
 
 AUDIT_SYSTEM_PROMPT = """
-You are NightFuel, an elite chrono-nutrition AI coach. 
+You are Zeitra, an elite chrono-nutrition AI coach. 
 Your task is to analyze a user's last 7 days of performance and provide a 'Weekly Coaching Audit'.
 
 DATA PROVIDED:

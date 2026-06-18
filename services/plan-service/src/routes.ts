@@ -3,7 +3,7 @@ import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { PlanService } from './plan.service';
-import { getPlanParamsSchema, getPlanResponseSchema, generatePlanBodySchema, storePlanBodySchema, createProtocolSchema, updateProtocolSchema } from './schemas';
+import { getPlanParamsSchema, getPlanResponseSchema, generatePlanBodySchema, storePlanBodySchema, createProtocolSchema, updateProtocolSchema, getPlanHistoryQuerySchema } from './schemas';
 import { createLogger } from '@nightfuel/config';
 
 const logger = createLogger('plan-service:routes');
@@ -100,17 +100,23 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
         }
     );
 
-    // GET /v1/plans/history — list all plans for the authenticated user
+    // GET /v1/plans/history — list the authenticated user's plans, OPTIONALLY
+    // bounded to a [start,end] date range. With no params the behaviour is
+    // unchanged (server caps at take:30); the range is validated by the shared
+    // bound helper (a reversed/over-span range → 400 on path ['end']).
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/history',
         {
             onRequest: [(fastify as any).authenticate],
+            schema: {
+                querystring: getPlanHistoryQuerySchema,
+            },
         },
         async (request, reply) => {
             try {
                 // @ts-ignore
                 const userId = request.user.userId;
-                const plans = await planService.getPlanHistory(userId);
+                const plans = await planService.getPlanHistory(userId, request.query);
                 return reply.send(plans);
             } catch (err: any) {
                 logger.error(err);

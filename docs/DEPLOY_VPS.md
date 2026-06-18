@@ -1,9 +1,9 @@
-# Deploy the NightFuel backend to your own VPS
+# Deploy the Zeitra backend to your own VPS
 
 This brings up the **entire API backend** (Postgres + Redis + Nginx gateway + 16
 services) with one Docker Compose command, so the mobile app's login, onboarding,
 meals, exercises, AI, etc. all work against your server instead of a dead
-`api.nightfuel.app`.
+`api.zeitra.app`.
 
 > **You do NOT need the web client for mobile testing.** `nginx` only depends on
 > the 16 API services, so `docker compose up -d --build nginx` skips the heavy
@@ -17,7 +17,7 @@ meals, exercises, AI, etc. all work against your server instead of a dead
 |------|-------|
 | **VPS** | Ubuntu/Debian recommended. **≥ 4 GB RAM** (8 GB comfortable) — it builds 16 Node images. On 2 GB add swap (see Troubleshooting). |
 | **Root/sudo SSH access** | To install Docker and open the firewall. |
-| **A domain (optional but recommended)** | e.g. `api.nightfuel.app` → your VPS IP. Needed for HTTPS/TLS. Without it you can test over `http://<vps-ip>` from Android Expo Go only. |
+| **A domain (optional but recommended)** | e.g. `api.zeitra.app` → your VPS IP. Needed for HTTPS/TLS. Without it you can test over `http://<vps-ip>` from Android Expo Go only. |
 | **Anthropic API key (optional)** | For real AI plans/coach. Without it the AI pipeline returns canned demo text — everything else still works. |
 
 ---

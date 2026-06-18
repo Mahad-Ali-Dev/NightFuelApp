@@ -108,7 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                     transition={{ duration: 0.2 }}
                                     className="font-black text-white text-lg tracking-tight overflow-hidden whitespace-nowrap"
                                 >
-                                    NightFuel
+                                    Zeitra
                                 </motion.span>
                             )}
                         </AnimatePresence>
@@ -261,7 +261,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <div className="w-7 h-7 bg-brand-500 rounded-lg flex items-center justify-center">
                             <Zap size={13} className="text-white" />
                         </div>
-                        <span className="font-black text-white text-base">NightFuel</span>
+                        <span className="font-black text-white text-base">Zeitra</span>
                     </div>
                     <button
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

@@ -12,7 +12,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "NightFuel — Chrono-Nutrition for Shift Workers",
+  title: "Zeitra — Chrono-Nutrition for Shift Workers",
   description: "AI-powered meal timing, caffeine strategy, and workout planning built around your circadian rhythm.",
 };
 

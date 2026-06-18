@@ -12,7 +12,7 @@ interface MarkdownDocProps {
 }
 
 /**
- * Renders a long-form legal/markdown document with the NightFuel dark theme.
+ * Renders a long-form legal/markdown document with the Zeitra dark theme.
  * Styling is applied via an explicit component map so we don't depend on the
  * Tailwind typography plugin.
  */
@@ -24,7 +24,7 @@ export function MarkdownDoc({ content, kicker }: MarkdownDocProps) {
                     href="/"
                     className="mb-10 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
-                    ← Back to NightFuel
+                    ← Back to Zeitra
                 </Link>
                 {kicker && (
                     <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-brand-400">

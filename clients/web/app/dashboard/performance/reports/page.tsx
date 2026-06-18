@@ -159,7 +159,7 @@ export default function AIReportsPage() {
                                         </div>
 
                                         <div className="flex flex-col items-center justify-center p-4 bg-white/5 rounded-2xl min-w-[140px]">
-                                            <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-2">NightFuel Score</p>
+                                            <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-2">Zeitra Score</p>
                                             <div className="relative w-16 h-16 flex items-center justify-center">
                                                 <svg className="w-full h-full -rotate-90 absolute inset-0" viewBox="0 0 100 100">
                                                     <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />

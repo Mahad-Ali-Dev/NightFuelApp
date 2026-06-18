@@ -28,38 +28,38 @@ import { resolveDeepLink } from '@/lib/deepLinks';
 
 describe('resolveDeepLink — allow cases', () => {
   test('accepts email verify link with token', () => {
-    const r = resolveDeepLink('https://nightfuel.app/verify?token=tok123');
+    const r = resolveDeepLink('https://zeitra.app/verify?token=tok123');
     expect(r.safe).toBe(true);
     expect(r.route).toContain('/(auth)/verify');
     expect(r.route).toContain('token=tok123');
   });
 
   test('accepts the alternate /verify-email path', () => {
-    const r = resolveDeepLink('https://nightfuel.app/verify-email?token=tok123');
+    const r = resolveDeepLink('https://zeitra.app/verify-email?token=tok123');
     expect(r.safe).toBe(true);
     expect(r.route).toContain('/(auth)/verify');
   });
 
   test('accepts subscription return URL (no required params)', () => {
-    const r = resolveDeepLink('https://nightfuel.app/subscription/return');
+    const r = resolveDeepLink('https://zeitra.app/subscription/return');
     expect(r.safe).toBe(true);
     expect(r.route).toContain('/(settings)/subscription');
   });
 
   test('accepts shared workout and substitutes the id', () => {
-    const r = resolveDeepLink('https://nightfuel.app/share/workout/wk-42');
+    const r = resolveDeepLink('https://zeitra.app/share/workout/wk-42');
     expect(r.safe).toBe(true);
     expect(r.route).toContain('/(exercises)/wk-42');
   });
 
   test('matches paths case-insensitively', () => {
-    const r = resolveDeepLink('https://nightfuel.app/RESET?token=abc');
+    const r = resolveDeepLink('https://zeitra.app/RESET?token=abc');
     expect(r.safe).toBe(true);
     expect(r.route).toContain('/(auth)/reset');
   });
 
   test('tolerates a trailing slash on the path', () => {
-    const r = resolveDeepLink('https://nightfuel.app/subscription/return/');
+    const r = resolveDeepLink('https://zeitra.app/subscription/return/');
     expect(r.safe).toBe(true);
     expect(r.route).toContain('/(settings)/subscription');
   });
@@ -67,33 +67,33 @@ describe('resolveDeepLink — allow cases', () => {
 
 describe('resolveDeepLink — +not-found and unknown paths', () => {
   test('rejects the Expo-router "+not-found" sentinel path', () => {
-    const r = resolveDeepLink('https://nightfuel.app/+not-found');
+    const r = resolveDeepLink('https://zeitra.app/+not-found');
     expect(r.safe).toBe(false);
     expect(r.reason).toBe('unknown_path');
     expect(r.route).toBe('');
   });
 
   test('rejects a nested "+not-found" path', () => {
-    const r = resolveDeepLink('https://nightfuel.app/some/+not-found');
+    const r = resolveDeepLink('https://zeitra.app/some/+not-found');
     expect(r.safe).toBe(false);
     expect(r.reason).toBe('unknown_path');
   });
 
   test('rejects the bare root path', () => {
-    const r = resolveDeepLink('https://nightfuel.app/');
+    const r = resolveDeepLink('https://zeitra.app/');
     expect(r.safe).toBe(false);
     expect(r.reason).toBe('unknown_path');
   });
 
   test('rejects a path that only partially matches an allowed prefix', () => {
     // /coach/invite REQUIRES a token segment; /coach alone is unknown.
-    const r = resolveDeepLink('https://nightfuel.app/coach');
+    const r = resolveDeepLink('https://zeitra.app/coach');
     expect(r.safe).toBe(false);
     expect(r.reason).toBe('unknown_path');
   });
 
   test('rejects /share/workout with no id segment', () => {
-    const r = resolveDeepLink('https://nightfuel.app/share/workout');
+    const r = resolveDeepLink('https://zeitra.app/share/workout');
     expect(r.safe).toBe(false);
     expect(r.reason).toBe('unknown_path');
   });
@@ -107,25 +107,25 @@ describe('resolveDeepLink — deny cases (schemes & required params)', () => {
   });
 
   test('rejects http:// (only https is allowed, not plain http)', () => {
-    const r = resolveDeepLink('http://nightfuel.app/reset?token=abc');
+    const r = resolveDeepLink('http://zeitra.app/reset?token=abc');
     expect(r.safe).toBe(false);
     expect(r.reason).toBe('unsafe_scheme');
   });
 
   test('rejects an unrelated custom scheme', () => {
-    const r = resolveDeepLink('evil://nightfuel.app/reset?token=abc');
+    const r = resolveDeepLink('evil://zeitra.app/reset?token=abc');
     expect(r.safe).toBe(false);
     expect(r.reason).toBe('unsafe_scheme');
   });
 
   test('rejects /verify when the token param is empty', () => {
-    const r = resolveDeepLink('https://nightfuel.app/verify?token=');
+    const r = resolveDeepLink('https://zeitra.app/verify?token=');
     expect(r.safe).toBe(false);
     expect(r.reason).toBe('missing_required_param');
   });
 
   test('rejects /reset when only an unrelated param is present', () => {
-    const r = resolveDeepLink('https://nightfuel.app/reset?foo=bar');
+    const r = resolveDeepLink('https://zeitra.app/reset?foo=bar');
     expect(r.safe).toBe(false);
     expect(r.reason).toBe('missing_required_param');
   });
@@ -133,14 +133,14 @@ describe('resolveDeepLink — deny cases (schemes & required params)', () => {
 
 describe('resolveDeepLink — query param handling', () => {
   test('preserves additional safe query params on the resolved route', () => {
-    const r = resolveDeepLink('https://nightfuel.app/reset?token=abc&ref=email');
+    const r = resolveDeepLink('https://zeitra.app/reset?token=abc&ref=email');
     expect(r.safe).toBe(true);
     expect(r.route).toContain('token=abc');
     expect(r.route).toContain('ref=email');
   });
 
   test('url-encodes query param values', () => {
-    const r = resolveDeepLink('https://nightfuel.app/subscription/return?msg=a b&x=1');
+    const r = resolveDeepLink('https://zeitra.app/subscription/return?msg=a b&x=1');
     expect(r.safe).toBe(true);
     // A space in a value must be encoded, never passed raw.
     expect(r.route).not.toContain('msg=a b');
@@ -148,22 +148,22 @@ describe('resolveDeepLink — query param handling', () => {
   });
 
   test('always reports the original URL as source', () => {
-    const url = 'https://nightfuel.app/admin/secret';
+    const url = 'https://zeitra.app/admin/secret';
     const r = resolveDeepLink(url);
     expect(r.source).toBe(url);
   });
 });
 
 describe('resolveDeepLink — app scheme parity', () => {
-  test('nightfuel:// reset resolves to the same route as https', () => {
-    const r = resolveDeepLink('nightfuel://reset?token=abc');
+  test('zeitra:// reset resolves to the same route as https', () => {
+    const r = resolveDeepLink('zeitra://reset?token=abc');
     expect(r.safe).toBe(true);
     expect(r.route).toContain('/(auth)/reset');
     expect(r.route).toContain('token=abc');
   });
 
-  test('nightfuel:// coach invite folds hostname back into the path', () => {
-    const r = resolveDeepLink('nightfuel://coach/invite/xyz');
+  test('zeitra:// coach invite folds hostname back into the path', () => {
+    const r = resolveDeepLink('zeitra://coach/invite/xyz');
     expect(r.safe).toBe(true);
     expect(r.route).toContain('/(coach)/invite/xyz');
   });

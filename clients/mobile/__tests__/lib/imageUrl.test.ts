@@ -15,7 +15,7 @@ import { safeImageUri, isHttpsUrl } from '@/lib/imageUrl';
 
 describe('safeImageUri', () => {
   test('passes through a well-formed https URL', () => {
-    const url = 'https://cdn.nightfuel.app/uploads/post-123.jpg';
+    const url = 'https://cdn.zeitra.app/uploads/post-123.jpg';
     expect(safeImageUri(url)).toBe(url);
   });
 

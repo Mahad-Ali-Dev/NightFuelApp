@@ -70,16 +70,16 @@ export function resolveDeepLink(rawUrl: string): DeepLinkResolution {
   // Reject anything that's not http(s) or our app scheme.
   // (Linking.parse strips the scheme for us — check the original URL.)
   const scheme = (rawUrl.match(/^([a-z][a-z0-9+.-]*):/i)?.[1] ?? '').toLowerCase();
-  const ALLOWED_SCHEMES = ['https', 'nightfuel'];
+  const ALLOWED_SCHEMES = ['https', 'zeitra'];
   if (scheme && !ALLOWED_SCHEMES.includes(scheme)) {
     return { safe: false, route: '', reason: 'unsafe_scheme', source };
   }
 
-  // For the custom app scheme (e.g. nightfuel://reset), expo-linking puts the
+  // For the custom app scheme (e.g. zeitra://reset), expo-linking puts the
   // first segment in `hostname`, not `path`. Fold it back in so app-launched
   // URLs resolve the same as their https:// equivalents.
   let rawPath = parsed.path ?? '';
-  if (scheme === 'nightfuel' && parsed.hostname) {
+  if (scheme === 'zeitra' && parsed.hostname) {
     rawPath = parsed.hostname + (rawPath ? '/' + rawPath : '');
   }
   const path = '/' + rawPath.replace(/^\/+/, '');

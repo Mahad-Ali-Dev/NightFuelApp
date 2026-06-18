@@ -4,8 +4,8 @@ import type { Metadata } from 'next';
 import { MarkdownDoc } from '@/components/MarkdownDoc';
 
 export const metadata: Metadata = {
-    title: 'Terms of Service — NightFuel',
-    description: 'The terms governing your use of NightFuel.',
+    title: 'Terms of Service — Zeitra',
+    description: 'The terms governing your use of Zeitra.',
 };
 
 /** Drop internal author notes (e.g. the "Legal review required" blockquote) from the public render. */

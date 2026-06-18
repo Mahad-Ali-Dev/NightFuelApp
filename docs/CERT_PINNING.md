@@ -6,7 +6,7 @@ Certificate pinning makes the mobile app refuse connections that don't present a
 
 ## Status
 
-Pinning is **NOT yet enabled** in NightFuel. This doc is the setup guide. Apple's `NSPinnedDomains` (iOS 14+) and Android's `network_security_config.xml` are both supported natively without any new dependencies — the only blocker is producing the pin values, which require your live cert.
+Pinning is **NOT yet enabled** in Zeitra. This doc is the setup guide. Apple's `NSPinnedDomains` (iOS 14+) and Android's `network_security_config.xml` are both supported natively without any new dependencies — the only blocker is producing the pin values, which require your live cert.
 
 ---
 
@@ -17,7 +17,7 @@ You pin the hash of the certificate's **Subject Public Key Info (SPKI)**, NOT th
 ### Step 1 — Pull your live cert
 
 ```bash
-echo | openssl s_client -servername api.nightfuel.app -connect api.nightfuel.app:443 2>/dev/null \
+echo | openssl s_client -servername api.zeitra.app -connect api.zeitra.app:443 2>/dev/null \
   | openssl x509 -outform PEM > current-cert.pem
 ```
 
@@ -59,7 +59,7 @@ Add to `clients/mobile/app.json`:
     "NSAppTransportSecurity": {
       "NSAllowsArbitraryLoads": false,
       "NSPinnedDomains": {
-        "api.nightfuel.app": {
+        "api.zeitra.app": {
           "NSIncludesSubdomains": false,
           "NSPinnedCAIdentities": [
             {
@@ -88,7 +88,7 @@ Create `clients/mobile/android/app/src/main/res/xml/network_security_config.xml`
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
     <domain-config>
-        <domain includeSubdomains="false">api.nightfuel.app</domain>
+        <domain includeSubdomains="false">api.zeitra.app</domain>
         <pin-set expiration="2027-01-01">
             <pin digest="SHA-256"><paste-current-pin-here></pin>
             <pin digest="SHA-256"><paste-backup-pin-here></pin>

@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
 
-app = FastAPI(title="NightFuel AI Pipeline", lifespan=lifespan)
+app = FastAPI(title="Zeitra AI Pipeline", lifespan=lifespan)
 
 from fastapi.exceptions import RequestValidationError
 

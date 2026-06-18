@@ -378,7 +378,7 @@ export default function NotificationPreferencesScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Manage system notification permissions"
                     style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 20 }}
-                    onPress={() => Alert.alert('Open Settings', 'Go to Settings → Notifications → NightFuel to manage system-level permissions.')}
+                    onPress={() => Alert.alert('Open Settings', 'Go to Settings → Notifications → Zeitra to manage system-level permissions.')}
                 >
                     <Ionicons name="settings-outline" size={16} color={colors.text.tertiary} />
                     <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 8 }]}>

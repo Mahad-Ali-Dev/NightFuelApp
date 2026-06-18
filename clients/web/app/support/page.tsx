@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 export const metadata: Metadata = {
-    title: 'Support — NightFuel',
-    description: 'Get help with NightFuel — contact support, report a bug, or manage your subscription.',
+    title: 'Support — Zeitra',
+    description: 'Get help with Zeitra — contact support, report a bug, or manage your subscription.',
 };
 
 const FAQ = [
@@ -17,11 +17,11 @@ const FAQ = [
     },
     {
         q: 'How do I delete my account and data?',
-        a: 'Go to Settings → Account → Delete Account, or email privacy@nightfuel.app and we will remove your data within 30 days.',
+        a: 'Go to Settings → Account → Delete Account, or email privacy@zeitra.app and we will remove your data within 30 days.',
     },
     {
-        q: 'Is NightFuel medical advice?',
-        a: 'No. NightFuel provides general chrono-nutrition and fitness guidance and is not a substitute for professional medical advice. Consult a healthcare provider before making significant dietary or training changes.',
+        q: 'Is Zeitra medical advice?',
+        a: 'No. Zeitra provides general chrono-nutrition and fitness guidance and is not a substitute for professional medical advice. Consult a healthcare provider before making significant dietary or training changes.',
     },
 ];
 
@@ -33,7 +33,7 @@ export default function SupportPage() {
                     href="/"
                     className="mb-10 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
                 >
-                    ← Back to NightFuel
+                    ← Back to Zeitra
                 </Link>
 
                 <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-brand-400">Support</p>
@@ -45,32 +45,32 @@ export default function SupportPage() {
 
                 <div className="mb-12 grid gap-4 sm:grid-cols-2">
                     <a
-                        href="mailto:support@nightfuel.app"
+                        href="mailto:support@zeitra.app"
                         className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-colors hover:border-brand-500/50"
                     >
                         <p className="text-sm font-semibold text-white">General support</p>
-                        <p className="mt-1 text-sm text-brand-400">support@nightfuel.app</p>
+                        <p className="mt-1 text-sm text-brand-400">support@zeitra.app</p>
                     </a>
                     <a
-                        href="mailto:billing@nightfuel.app"
+                        href="mailto:billing@zeitra.app"
                         className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-colors hover:border-brand-500/50"
                     >
                         <p className="text-sm font-semibold text-white">Billing &amp; subscriptions</p>
-                        <p className="mt-1 text-sm text-brand-400">billing@nightfuel.app</p>
+                        <p className="mt-1 text-sm text-brand-400">billing@zeitra.app</p>
                     </a>
                     <a
-                        href="mailto:privacy@nightfuel.app"
+                        href="mailto:privacy@zeitra.app"
                         className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-colors hover:border-brand-500/50"
                     >
                         <p className="text-sm font-semibold text-white">Privacy &amp; data requests</p>
-                        <p className="mt-1 text-sm text-brand-400">privacy@nightfuel.app</p>
+                        <p className="mt-1 text-sm text-brand-400">privacy@zeitra.app</p>
                     </a>
                     <a
-                        href="mailto:legal@nightfuel.app"
+                        href="mailto:legal@zeitra.app"
                         className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-colors hover:border-brand-500/50"
                     >
                         <p className="text-sm font-semibold text-white">Legal</p>
-                        <p className="mt-1 text-sm text-brand-400">legal@nightfuel.app</p>
+                        <p className="mt-1 text-sm text-brand-400">legal@zeitra.app</p>
                     </a>
                 </div>
 

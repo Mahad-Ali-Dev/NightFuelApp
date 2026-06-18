@@ -1,6 +1,6 @@
 import { Platform, ViewStyle } from 'react-native';
 
-// NightFuel Design System — Elevation Shadows
+// Zeitra Design System — Elevation Shadows
 
 export const shadows = {
   sm: Platform.select<ViewStyle>({

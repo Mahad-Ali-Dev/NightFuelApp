@@ -91,7 +91,7 @@ const PodiumItem = React.memo(function PodiumItem({ user, rank }: any) {
                     <Text style={[typography.captionMedium, { color: colors.text.inverse }]}>{rank}</Text>
                 </View>
             </View>
-            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 12 }]} numberOfLines={1}>{user.userName || user.name || 'NightFuel Member'}</Text>
+            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 12 }]} numberOfLines={1}>{user.userName || user.name || 'Zeitra Member'}</Text>
             <Text style={[typography.statTiny, { color: colors.accent.cyan, marginTop: 2 }]}>{(user.score ?? user.xp ?? 0).toLocaleString()} pts</Text>
         </View>
     );
@@ -106,7 +106,7 @@ const LeaderRow = React.memo(function LeaderRow({ user, rank, isMe }: any) {
                 <Ionicons name="person" size={14} color={colors.text.tertiary} />
             </View>
             <View style={{ flex: 1, marginLeft: 16 }}>
-                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: isMe ? 'bold' : 'normal' }]} numberOfLines={1}>{user.userName || user.name || 'NightFuel Member'}{isMe ? ' (You)' : ''}</Text>
+                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: isMe ? 'bold' : 'normal' }]} numberOfLines={1}>{user.userName || user.name || 'Zeitra Member'}{isMe ? ' (You)' : ''}</Text>
             </View>
             <Text style={[typography.statTiny, { color: colors.accent.cyan }]}>{(user.score ?? user.xp ?? 0).toLocaleString()}</Text>
         </View>

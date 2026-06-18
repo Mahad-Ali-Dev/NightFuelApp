@@ -112,8 +112,8 @@ placeholders) — **none are production-safe.**
       from `connect-src`, and tighten/remove `'unsafe-inline'`/`'unsafe-eval'` for
       scripts. **Test thoroughly — Next.js may need `'unsafe-inline'` for styles;
       verify the app still loads before shipping.**
-- [ ] Deploy `clients/web` and point `nightfuel.app` DNS at it; point
-      `api.nightfuel.app` at the nginx gateway. Verify the legal/well-known URLs return
+- [ ] Deploy `clients/web` and point `zeitra.app` DNS at it; point
+      `api.zeitra.app` at the nginx gateway. Verify the legal/well-known URLs return
       200 with the right content-type.
 - [ ] Add footer links to `/privacy` and `/terms` on the landing page (polish).
 

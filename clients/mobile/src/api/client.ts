@@ -40,7 +40,7 @@ const DEFAULT_BASE_URL = __DEV__
       ? 'http://10.0.2.2:3000/api'
       : 'http://localhost:3000/api';
   })()
-  : 'https://api.nightfuel.app';
+  : 'https://api.zeitra.app';
 
 /**
  * Resolve the base URL at module-load time.

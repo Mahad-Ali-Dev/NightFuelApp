@@ -16,11 +16,11 @@
  * Disambiguation — there are TWO button-role nodes named "Log Meal" on the
  * dashboard: this PRIMARY CtaButton (icon="checkmark") AND the static QUICK
  * ACTIONS "Log Meal" image tile (icon="restaurant"). Both happen to route to
- * '/(tabs)/nutrition', but this test pins the PRIMARY CTA specifically: it picks
- * the "Log Meal" button whose subtree carries the checkmark glyph (rendered as
- * the text `icon:checkmark` by the @expo/vector-icons stub), which is uniquely
- * the CtaButton. A regression that drops the CTA, relabels it, or changes its
- * destination/arity turns this RED.
+ * '/(tabs)/nutrition', but this test pins the PRIMARY CTA specifically via its
+ * stable testID="dashboard-up-next-log-meal-cta" (CtaButton forwards `testID`
+ * verbatim to its root Pressable), which is uniquely the CtaButton — no glyph /
+ * icon-name matching needed. A regression that drops the CTA, relabels it, or
+ * changes its destination/arity turns this RED.
  *
  * Navigation is asserted through a hoisted `mockPush` holder (the `mock` prefix
  * lets babel-plugin-jest-hoist allow the hoisted factory to close over it).
@@ -120,9 +120,9 @@ jest.mock('@/store/authStore', () => ({
 }));
 
 // Decorative glyphs → plain <Text> surfacing the icon name (mirrors the rest of
-// the suite). This is also the disambiguation hook: the primary CtaButton's
-// `icon="checkmark"` renders as the text `icon:checkmark`, which uniquely
-// distinguishes it from the QUICK ACTIONS "Log Meal" tile (icon="restaurant").
+// the suite). The dashboard still renders glyphs elsewhere, so the stub stays;
+// it is no longer the disambiguation hook (the primary CTA is now pinned by its
+// stable testID, not by the `icon:checkmark` text).
 jest.mock('@expo/vector-icons', () => {
   const { Text: RNText } = require('react-native');
   return {
@@ -175,7 +175,7 @@ jest.mock('@/components/ActivityHeatmap', () => {
 
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
-import { render, fireEvent, screen, within } from '@testing-library/react-native';
+import { render, fireEvent, screen } from '@testing-library/react-native';
 import {
   ThemeContext,
   getThemeColors,
@@ -198,20 +198,13 @@ function renderScreen() {
 
 /**
  * Resolve the dashboard's PRIMARY "Log Meal" CtaButton (NOT the QUICK ACTIONS
- * tile that shares the name). Both expose role=button + name "Log Meal"; the
- * primary CTA is the one whose subtree carries the checkmark glyph (the
- * @expo/vector-icons stub renders `icon="checkmark"` as the text
- * `icon:checkmark`), which is uniquely the CtaButton.
+ * tile that shares the name). It carries the stable
+ * testID="dashboard-up-next-log-meal-cta" (CtaButton forwards `testID` verbatim
+ * to its root Pressable), which uniquely identifies the primary CTA without any
+ * glyph / icon-name matching.
  */
 function getPrimaryLogMealCta() {
-  const buttons = screen.getAllByRole('button', { name: 'Log Meal' });
-  const cta = buttons.find((b) => within(b).queryByText('icon:checkmark') != null);
-  if (!cta) {
-    throw new Error(
-      `Expected a primary "Log Meal" CtaButton (with the checkmark glyph) among ${buttons.length} "Log Meal" button(s)`,
-    );
-  }
-  return cta;
+  return screen.getByTestId('dashboard-up-next-log-meal-cta');
 }
 
 describe('Dashboard — primary "Log Meal" CTA', () => {
@@ -229,7 +222,7 @@ describe('Dashboard — primary "Log Meal" CTA', () => {
     expect(screen.getByText('UP NEXT')).toBeTruthy();
     expect(screen.getAllByText('Power Breakfast').length).toBeGreaterThanOrEqual(1);
 
-    // …and the primary CTA resolves uniquely (checkmark glyph in its subtree).
+    // …and the primary CTA resolves uniquely (stable testID on the CtaButton).
     const cta = getPrimaryLogMealCta();
     expect(cta).toBeTruthy();
     expect(String(cta.props.accessibilityLabel)).toBe('Log Meal');

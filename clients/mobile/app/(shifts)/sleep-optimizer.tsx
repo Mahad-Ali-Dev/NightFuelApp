@@ -8,10 +8,28 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAnalytics, log } from '@/api/sleep';
+import { getCurrent } from '@/api/shifts';
+import { computeLightPlan } from '@/lib/lightPlan';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
+
+/**
+ * Format an anchor instant as a short device-local time, e.g. "11:30 PM".
+ * Mirrors the helper in LightPlanCard (the canonical light-plan renderer) so the
+ * sleep optimizer's Light-timing windows read identically to the dashboard card,
+ * with the same Intl-less fallback for RN engines lacking full Intl.
+ */
+function formatLightTime(d: Date): string {
+    try {
+        return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } catch {
+        const h = String(d.getHours()).padStart(2, '0');
+        const m = String(d.getMinutes()).padStart(2, '0');
+        return `${h}:${m}`;
+    }
+}
 
 export default function SleepOptimizerScreen() {
     const { colors, typography, spacing, shadows } = useTheme();
@@ -22,6 +40,19 @@ export default function SleepOptimizerScreen() {
     const { data: analytics, isLoading, isError, refetch } = useQuery({
         queryKey: ['sleep-analytics'],
         queryFn: getAnalytics,
+    });
+
+    // The user's current shift, used to derive the Light-timing windows below.
+    // Keyed ['current-shift'] to match the app's existing shift-query pattern
+    // (dashboard / circadian / shift-detail all key off this), so the cache is
+    // shared rather than duplicated. `getCurrent` resolves null when no shift is
+    // scheduled; the Light-timing section degrades to its empty state for null.
+    const {
+        data: shift,
+        isLoading: shiftLoading,
+    } = useQuery({
+        queryKey: ['current-shift'],
+        queryFn: getCurrent,
     });
 
     const logMutation = useMutation({
@@ -38,6 +69,23 @@ export default function SleepOptimizerScreen() {
             Alert.alert('Error', err?.response?.data?.message ?? 'Failed to log sleep. Please try again.');
         },
     });
+
+    // ── Light-timing plan (guarded) ──────────────────────────────────────────
+    // `computeLightPlan` is a pure reuse of the shift transition math; per its
+    // documented contract it THROWS on a missing / malformed ISO rather than
+    // returning NaN windows. We compute it defensively here so a bad shift can
+    // never crash the screen: try/catch collapses any throw to `null`, and the
+    // section below treats `null` (no shift, malformed shift, or a throw) the
+    // same way — it falls back to the screen's existing Skeleton (while the shift
+    // query is in flight) or EmptyState (no usable shift), never a crash.
+    let lightPlan: ReturnType<typeof computeLightPlan> | null = null;
+    if (shift) {
+        try {
+            lightPlan = computeLightPlan(shift);
+        } catch {
+            lightPlan = null;
+        }
+    }
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
@@ -135,6 +183,55 @@ export default function SleepOptimizerScreen() {
                         <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>90-minute cycle to top off cognitive alertness before shift.</Text>
                     </GlassCard>
 
+                    {/* Light timing — seek/avoid light windows derived from the
+                        user's current shift via the pure computeLightPlan reuse.
+                        Falls back to the screen's Skeleton while the shift query
+                        is loading, and to an EmptyState when there's no usable
+                        shift (none scheduled, or a malformed shift whose ISO made
+                        computeLightPlan throw) — never a crash. */}
+                    <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing.xl, marginBottom: spacing.lg }]}>Light Timing</Text>
+
+                    {shiftLoading ? (
+                        <Skeleton width="100%" height={140} radius={borderRadius.xl} style={{ marginBottom: spacing.lg }} />
+                    ) : !lightPlan ? (
+                        <GlassCard style={[styles.windowCard, { borderColor: colors.border.default }]}>
+                            <EmptyState
+                                icon="sunny-outline"
+                                title="No shift to plan light around"
+                                subtitle="Log a shift to see when to seek and avoid light."
+                                style={styles.lightEmpty}
+                            />
+                        </GlassCard>
+                    ) : (
+                        <GlassCard style={[styles.windowCard, { borderColor: withAlpha(colors.accent.amber, 0.25) }]}>
+                            <View style={styles.windowHeader}>
+                                <View style={[styles.windowIcon, { backgroundColor: withAlpha(colors.accent.amber, 0.14), borderColor: withAlpha(colors.accent.amber, 0.28), borderWidth: 1 }]}>
+                                    <Ionicons name="sunny" size={18} color={colors.accent.amber} />
+                                </View>
+                                <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: spacing.md }]}>Seek Light</Text>
+                                <View style={{ flex: 1 }} />
+                                <Text style={[typography.statTiny, { color: colors.accent.amber }]}>
+                                    {`${formatLightTime(lightPlan.seekLight.start)} – ${formatLightTime(lightPlan.seekLight.end)}`}
+                                </Text>
+                            </View>
+                            <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>Bright light early in your shift holds alertness and anchors your clock.</Text>
+
+                            <View style={[styles.lightDivider, { backgroundColor: colors.border.default }]} />
+
+                            <View style={styles.windowHeader}>
+                                <View style={[styles.windowIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.28), borderWidth: 1 }]}>
+                                    <Ionicons name="glasses-outline" size={18} color={colors.accent.purple} />
+                                </View>
+                                <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: spacing.md }]}>Avoid Light</Text>
+                                <View style={{ flex: 1 }} />
+                                <Text style={[typography.statTiny, { color: colors.accent.purple }]}>
+                                    {`${formatLightTime(lightPlan.avoidLight.start)} – ${formatLightTime(lightPlan.avoidLight.end)}`}
+                                </Text>
+                            </View>
+                            <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>Dim down / wear blue-blockers before sleep so melatonin can rise.</Text>
+                        </GlassCard>
+                    )}
+
                     <TouchableOpacity
                         activeOpacity={0.85}
                         accessibilityRole="button"
@@ -194,6 +291,17 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius.md,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    // Hairline separator between the two light windows inside the Light-timing card.
+    lightDivider: {
+        height: StyleSheet.hairlineWidth,
+        marginVertical: spacingTokens.lg,
+        opacity: 0.6,
+    },
+    // Trim the EmptyState's default vertical padding so the no-shift fallback sits
+    // comfortably inside the Light-timing card rather than ballooning its height.
+    lightEmpty: {
+        paddingVertical: spacingTokens.lg,
     },
     logBtn: {
         height: 56,

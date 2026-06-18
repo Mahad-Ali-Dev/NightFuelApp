@@ -49,7 +49,7 @@ export default function PermissionsScreen() {
                     Final <Text style={{ color: colors.accent.cyan }}>Steps</Text>
                 </Text>
                 <Text style={[typography.body, { color: colors.text.secondary, marginBottom: spacing['2xl'] }]}>
-                    Enable permissions to let NightFuel keep your circadian clock synchronized automatically.
+                    Enable permissions to let Zeitra keep your circadian clock synchronized automatically.
                 </Text>
 
                 <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.md }]}>
@@ -97,7 +97,7 @@ export default function PermissionsScreen() {
 
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: spacing['2xl'] }]}>
                 <CtaButton
-                    label="Start NightFuel"
+                    label="Start Zeitra"
                     icon="rocket"
                     size="lg"
                     onPress={handleFinish}

@@ -502,6 +502,47 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Single Leg Glute Bridge': 'Single_Leg_Glute_Bridge',
   // Traps — cable
   'Cable Shrug': 'Cable_Shrugs',
+
+  // ── Widened FEDB-backed tranche #5 (data-only, zero new fetch) ───────────────
+  // A further slice of distinct catalogue movements. Every KEY below is NEW —
+  // absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries above (tranches #1-#4),
+  // YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos() admits each one as
+  // kind:'fedb_frames', verified:false. Every slug VALUE was machine-verified to be
+  // present in BOTH FEDB_SLUGS (exerciseDemos.ts) AND __tests__/fixtures/
+  // fedb-catalog-slugs.json (the shipped 873-slug catalogue), and each is a fresh
+  // slug dir not already referenced by an earlier tranche — so every entry resolves
+  // to an ordered 2-frame [0.jpg, 1.jpg] HTTPS pair with NO new HTTP call. Strictly
+  // additive: the kind:'youtube'-only sync guard (scripts/check-demo-maps-in-sync.js)
+  // and pendingHumanReviewIds.json (YouTube ids only) are both untouched, so
+  // check-demo-maps-in-sync stays green.
+
+  // Chest — dumbbell / cable / machine variants
+  'Incline Dumbbell Press': 'Incline_Dumbbell_Press',
+  'Cable Chest Press': 'Cable_Chest_Press',
+  'Leverage Chest Press': 'Leverage_Chest_Press',
+  'Incline Cable Flye': 'Incline_Cable_Flye',
+  'Bent-Arm Dumbbell Pullover': 'Bent-Arm_Dumbbell_Pullover',
+  // Back / pulls
+  'Incline Bench Pull': 'Incline_Bench_Pull',
+  'Leverage High Row': 'Leverage_High_Row',
+  'Elevated Cable Rows': 'Elevated_Cable_Rows',
+  'Weighted Pull Ups': 'Weighted_Pull_Ups',
+  // Shoulders / delts
+  'Cuban Press': 'Cuban_Press',
+  'Leverage Shoulder Press': 'Leverage_Shoulder_Press',
+  'Standing Alternating Dumbbell Press': 'Standing_Alternating_Dumbbell_Press',
+  'Side Laterals to Front Raise': 'Side_Laterals_to_Front_Raise',
+  // Arms — biceps / triceps
+  'Overhead Cable Curl': 'Overhead_Cable_Curl',
+  'Reverse Cable Curl': 'Reverse_Cable_Curl',
+  'Zottman Preacher Curl': 'Zottman_Preacher_Curl',
+  'Standing Towel Triceps Extension': 'Standing_Towel_Triceps_Extension',
+  'Decline Dumbbell Triceps Extension': 'Decline_Dumbbell_Triceps_Extension',
+  // Legs / glutes
+  'Standing Leg Curl': 'Standing_Leg_Curl',
+  'Glute Kickback': 'Glute_Kickback',
+  'One Leg Barbell Squat': 'One_Leg_Barbell_Squat',
+  'Weighted Sissy Squat': 'Weighted_Sissy_Squat',
 };
 
 /**
@@ -515,7 +556,7 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
  * pendingHumanReviewIds.json or the companion test will fail.
  */
 const YOUTUBE_PENDING: Readonly<Record<string, string>> = {
-  // Pelvic-floor / kegel variants commonly programmed in NightFuel but not in
+  // Pelvic-floor / kegel variants commonly programmed in Zeitra but not in
   // the backend's curated YouTube map. Each watch URL is a specific demo, not
   // a search/results page.
   'Reverse Kegel': 'https://www.youtube.com/watch?v=Lj2KshDeEXk',
@@ -655,4 +696,40 @@ export function getCuratedDemoVerified(name: string): boolean | null {
   const demo = getCuratedDemo(name);
   if (!demo) return null;
   return demo.verified;
+}
+
+/**
+ * The single source-of-truth accessor for the YouTube video-ids that still
+ * await human review.
+ *
+ * Walks {@link CURATED_DEMOS} and, for every entry that is `kind: 'youtube'`
+ * AND `verified: false`, extracts the `<id>` from its
+ * `https://www.youtube.com/watch?v=<id>` URL. The returned list is de-duped and
+ * sorted, giving a deterministic, stable set a reviewer (or the
+ * `pendingHumanReviewIds.json` drift guard) can compare against.
+ *
+ * This formalizes the human-review pipeline: the JSON mirror in
+ * {@link ./pendingHumanReviewIds.json} must equal exactly this set — the
+ * companion test cross-checks both directions (nothing missing, no orphans).
+ * Flipping any entry to `verified: true` (a user-gated review step) naturally
+ * drops it from this list.
+ *
+ * Pure: dependency-free, no I/O, no JSON read at runtime, never throws. Derives
+ * solely from the in-memory {@link CURATED_DEMOS} map. Safe on render.
+ */
+export function getPendingHumanReviewIds(): string[] {
+  const ids = new Set<string>();
+  for (const demo of Object.values(CURATED_DEMOS)) {
+    if (demo.kind !== 'youtube' || demo.verified) continue;
+    // Extract the id from `https://www.youtube.com/watch?v=<id>`: take the
+    // substring after `watch?v=`, then stop at the first `&`/`#` (if any) so an
+    // extra query param can never leak into the id. No regex/dependency needed.
+    const marker = 'watch?v=';
+    const at = demo.url.indexOf(marker);
+    if (at === -1) continue;
+    const rest = demo.url.slice(at + marker.length);
+    const id = rest.split(/[&#]/)[0];
+    if (id) ids.add(id);
+  }
+  return Array.from(ids).sort();
 }

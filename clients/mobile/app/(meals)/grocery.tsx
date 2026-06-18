@@ -173,7 +173,7 @@ export default function GroceryListScreen() {
     const isNoPlanError = (groceryQuery.error as any)?.response?.status === 400;
 
     const handleShare = async () => {
-        const lines: string[] = ['🛒 Grocery List — NightFuel', ''];
+        const lines: string[] = ['🛒 Grocery List — Zeitra', ''];
 
         // Custom items grouped by category (matches the on-screen grouping)
         Object.keys(groupedCustom).forEach((category) => {

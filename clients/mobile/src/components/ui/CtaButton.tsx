@@ -66,6 +66,8 @@ export interface CtaButtonProps {
   /** Defaults to `label` when omitted. */
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
+  /** Optional test handle, forwarded verbatim to the root Pressable. */
+  testID?: string;
 }
 
 export function CtaButton({
@@ -77,6 +79,7 @@ export function CtaButton({
   disabled = false,
   accessibilityLabel,
   style,
+  testID,
 }: CtaButtonProps) {
   const { colors, shadows } = useTheme();
   const isDisabled = disabled || loading;
@@ -86,6 +89,7 @@ export function CtaButton({
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
+      testID={testID}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: isDisabled }}

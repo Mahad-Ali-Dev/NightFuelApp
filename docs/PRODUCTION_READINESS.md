@@ -1,4 +1,4 @@
-# NightFuel Mobile — Production Readiness Audit
+# Zeitra Mobile — Production Readiness Audit
 
 **Auditor:** Claude (`senior-architect` + `senior-security` + `senior-ml-engineer` + `app-store-optimization` skill ensemble)
 **Target:** `clients/mobile` — React Native, Expo SDK 55, expo-router, Zustand + TanStack Query
@@ -104,7 +104,7 @@ There's no `posthog-react-native`, `@amplitude/analytics-react-native`, `firebas
 The `[API Request]` log in [`client.ts`](../clients/mobile/src/api/client.ts) is now wrapped in `if (__DEV__) { ... }`. The dev-mode check is sufficient on RN — `__DEV__` is replaced at build time so the log is dead-code-eliminated from prod bundles, not just no-op'd.
 
 ### A4. 🟠 Hardcoded production API URL with no env override
-[`client.ts:43`](../clients/mobile/src/api/client.ts) falls back to `'https://api.nightfuel.app'`. This means staging and prod use the same URL unless someone remembers to set `EXPO_PUBLIC_NF_API_BASE_URL`. Bad for accidental staging→prod traffic.
+[`client.ts:43`](../clients/mobile/src/api/client.ts) falls back to `'https://api.zeitra.app'`. This means staging and prod use the same URL unless someone remembers to set `EXPO_PUBLIC_NF_API_BASE_URL`. Bad for accidental staging→prod traffic.
 
 **Fix:** Use EAS Build environment variables per profile (development / preview / production) in `eas.json`. Make production builds **fail to build** if `EXPO_PUBLIC_NF_API_BASE_URL` is unset.
 
@@ -153,20 +153,20 @@ Expo doesn't support React Native `import()` lazy loading on iOS by default (Her
 
 ### S1. ✅ Deep-link hijacking — code-side DONE, hosting still required
 **Code:**
-- [`app.json`](../clients/mobile/app.json) iOS now declares `associatedDomains: ["applinks:nightfuel.app", "applinks:www.nightfuel.app"]`
-- [`app.json`](../clients/mobile/app.json) Android now has `intentFilters` with `autoVerify: true` for `https://nightfuel.app` + `https://www.nightfuel.app`
+- [`app.json`](../clients/mobile/app.json) iOS now declares `associatedDomains: ["applinks:zeitra.app", "applinks:www.zeitra.app"]`
+- [`app.json`](../clients/mobile/app.json) Android now has `intentFilters` with `autoVerify: true` for `https://zeitra.app` + `https://www.zeitra.app`
 - [`lib/deepLinks.ts`](../clients/mobile/src/lib/deepLinks.ts) implements the **belt-and-braces path allowlist** + a `resolveDeepLink()` parser that URL-encodes capture groups (defends against path-traversal pivots like `/coach/invite/..%2Fadmin`)
 - [`app/_layout.tsx`](../clients/mobile/app/_layout.tsx) uses `Linking.getInitialURL()` + `Linking.addEventListener('url', ...)` and only navigates if `resolveDeepLink()` says safe; rejected links are reported to Sentry as `deep_link_rejected` with the path (never the full URL)
 
 **Still need from you (hosting):**
-1. Host `https://nightfuel.app/.well-known/apple-app-site-association` (no extension, JSON content-type) with:
+1. Host `https://zeitra.app/.well-known/apple-app-site-association` (no extension, JSON content-type) with:
    ```json
-   {"applinks":{"apps":[],"details":[{"appID":"<TEAM_ID>.com.nightfuel.app","paths":["/reset","/reset-password","/verify","/verify-email","/coach/invite/*","/subscription/return","/share/workout/*"]}]}}
+   {"applinks":{"apps":[],"details":[{"appID":"<TEAM_ID>.com.zeitra.app","paths":["/reset","/reset-password","/verify","/verify-email","/coach/invite/*","/subscription/return","/share/workout/*"]}]}}
    ```
    Replace `<TEAM_ID>` with your Apple Developer Team ID (10-char alphanumeric).
-2. Host `https://nightfuel.app/.well-known/assetlinks.json` with:
+2. Host `https://zeitra.app/.well-known/assetlinks.json` with:
    ```json
-   [{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.nightfuel.app","sha256_cert_fingerprints":["<SHA256_FROM_EAS>"]}}]
+   [{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"com.zeitra.app","sha256_cert_fingerprints":["<SHA256_FROM_EAS>"]}}]
    ```
    Get the SHA-256 via `eas credentials` after your first Android build.
 
@@ -188,7 +188,7 @@ Implement as a higher-order navigation guard, not per-screen.
 ### S4. 🟠 No jailbreak / root detection
 Trivially exploitable on jailbroken devices: dump SecureStore via `frida` or by reading the unprotected sandbox.
 
-**Fix:** Install `expo-device-detect` (or `jail-monkey`). On detect, **don't crash** — show a "for security, NightFuel can't run on rooted/jailbroken devices" screen with an exit button. Critically: **don't rely on this alone for security** (a determined attacker can patch the check). It's a friction layer, not a wall.
+**Fix:** Install `expo-device-detect` (or `jail-monkey`). On detect, **don't crash** — show a "for security, Zeitra can't run on rooted/jailbroken devices" screen with an exit button. Critically: **don't rely on this alone for security** (a determined attacker can patch the check). It's a friction layer, not a wall.
 
 ### S5. ✅ Mobile-side input sanitization — DONE (server-side still recommended)
 [`lib/aiSafety.ts`](../clients/mobile/src/lib/aiSafety.ts) `sanitizeAiInput()` runs on every user-supplied AI prompt:
@@ -293,9 +293,9 @@ You'll want to test prompt variants ("be conversational vs. clinical", different
 
 **Title** (30 chars max — 27 used):
 ```
-NightFuel: Shift Worker Diet
+Zeitra: Shift Worker Diet
 ```
-Rationale: "NightFuel" brand + primary keyword "shift worker" + secondary "diet". "Shift" is high-volume in the niche (~12K monthly est.); "diet" outranks "nutrition" 3:1 in mobile search.
+Rationale: "Zeitra" brand + primary keyword "shift worker" + secondary "diet". "Shift" is high-volume in the niche (~12K monthly est.); "diet" outranks "nutrition" 3:1 in mobile search.
 
 **Subtitle** (30 chars max — 28 used):
 ```
@@ -305,7 +305,7 @@ Two more high-intent keywords ("night shift", "meals", "workouts").
 
 **Promotional Text** (170 chars — editable without app update):
 ```
-Built for nurses, drivers, factory & ER workers. NightFuel times your meals, workouts and caffeine to your real shift — not a 9-to-5. New: Ramadan Mode + AI coach.
+Built for nurses, drivers, factory & ER workers. Zeitra times your meals, workouts and caffeine to your real shift — not a 9-to-5. New: Ramadan Mode + AI coach.
 ```
 
 **Keywords field** (100 chars max — comma separated, NO spaces, NO plurals, NO words from title):
@@ -321,13 +321,13 @@ NIGHTFUEL — Built for People Who Don't Sleep at Night
 
 You're a nurse working three nights a week. A long-haul trucker. A factory tech on rotating shifts. An ER doctor pulling 24-hour calls.
 
-Every other fitness app assumes you sleep at 11 PM and eat breakfast at 7 AM. NightFuel doesn't.
+Every other fitness app assumes you sleep at 11 PM and eat breakfast at 7 AM. Zeitra doesn't.
 
 We're the only chrono-nutrition app built specifically for the 1.8 billion shift workers worldwide whose bodies operate on a different clock.
 
 — THE PROBLEM EVERY OTHER APP IGNORES —
 
-Eating the same meal at 2 PM vs. 2 AM has completely different metabolic effects. Standard meal planners get this wrong. NightFuel doesn't.
+Eating the same meal at 2 PM vs. 2 AM has completely different metabolic effects. Standard meal planners get this wrong. Zeitra doesn't.
 
 Shift workers face 23% higher diabetes risk and 29% higher cardiovascular risk — driven by chronic circadian disruption, not lack of willpower.
 
@@ -370,9 +370,9 @@ Cancel anytime. No ads, ever.
 
 Built by ex-shift-workers and certified nutritionists who got tired of nutrition apps treating "9 to 5" as the only schedule.
 
-Contact: hello@nightfuel.app
-Privacy: nightfuel.app/privacy
-Terms: nightfuel.app/terms
+Contact: hello@zeitra.app
+Privacy: zeitra.app/privacy
+Terms: zeitra.app/terms
 
 — WHAT'S NEW —
 
@@ -402,7 +402,7 @@ v1.0.0 Launch — full chrono-nutrition platform with AI coach, 760-food offline
 
 **App Title** (30 chars used — Play allows 50):
 ```
-NightFuel: Shift Worker Diet
+Zeitra: Shift Worker Diet
 ```
 
 **Short Description** (80 chars max — 79 used):
@@ -417,7 +417,7 @@ Chrono-nutrition for shift workers. Meals, workouts & sleep on YOUR schedule.
 
 ### Competitive positioning (vs MyFitnessPal / Cronometer / Centr)
 
-| Competitor | Their angle | Where NightFuel wins |
+| Competitor | Their angle | Where Zeitra wins |
 |-----------|-------------|----------------------|
 | **MyFitnessPal** | Generic calorie counter, broadest food DB | They assume 3-meal day. We chrono-time. They charge for AI. We use it as the engine. |
 | **Cronometer** | Micronutrient detail, science-y | They're aimed at biohackers. We're aimed at the 1.8B shift workers Cronometer ignores. |
@@ -438,12 +438,12 @@ Chrono-nutrition for shift workers. Meals, workouts & sleep on YOUR schedule.
   5. "Free to start. Cancel anytime."
 - [ ] App preview video (15–30s) — optional but converts +20%
 - [ ] First impression frame shows the dashboard with a real shift schedule, not a generic illustration
-- [ ] Privacy policy URL live at `nightfuel.app/privacy` BEFORE submission
-- [ ] Terms of use URL live at `nightfuel.app/terms` BEFORE submission
-- [ ] Support URL: `nightfuel.app/support` (or Notion / Discord) — Apple wants a human-reachable channel
+- [ ] Privacy policy URL live at `zeitra.app/privacy` BEFORE submission
+- [ ] Terms of use URL live at `zeitra.app/terms` BEFORE submission
+- [ ] Support URL: `zeitra.app/support` (or Notion / Discord) — Apple wants a human-reachable channel
 - [ ] App Store Connect "App Information" → Marketing URL filled
-- [ ] Demo account with `email` + `password` for App Review (don't use real user data — make a `reviewer@nightfuel.app` with seeded sample data)
-- [ ] In-app purchase products configured: `nightfuel.pro.monthly`, `nightfuel.pro.yearly`, `nightfuel.premium.monthly`, `nightfuel.premium.yearly`. Stripe is web-side; iOS will require **either StoreKit2 in-app or a webview redirect to your site** — App Review **will reject** subscriptions that bypass IAP (3.1.1 guideline) unless you're a reader app. NightFuel is not a reader app.
+- [ ] Demo account with `email` + `password` for App Review (don't use real user data — make a `reviewer@zeitra.app` with seeded sample data)
+- [ ] In-app purchase products configured: `nightfuel.pro.monthly`, `nightfuel.pro.yearly`, `nightfuel.premium.monthly`, `nightfuel.premium.yearly`. Stripe is web-side; iOS will require **either StoreKit2 in-app or a webview redirect to your site** — App Review **will reject** subscriptions that bypass IAP (3.1.1 guideline) unless you're a reader app. Zeitra is not a reader app.
 
 ⚠️ **The Stripe-vs-StoreKit decision is a 1-week project on its own.** Apple takes 30%/15% via IAP. You can't just keep the Stripe flow on iOS without implementing reader-app exemption logic. **Open question — discuss before building anything.**
 

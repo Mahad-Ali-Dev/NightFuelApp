@@ -77,8 +77,8 @@ export default function SettingsIndexScreen() {
         {
             title: 'Support',
             items: [
-                { label: 'Help Center', icon: 'help-circle-outline', url: 'https://nightfuel.app/support' },
-                { label: 'Terms of Service', icon: 'document-text-outline', url: 'https://nightfuel.app/terms' },
+                { label: 'Help Center', icon: 'help-circle-outline', url: 'https://zeitra.app/support' },
+                { label: 'Terms of Service', icon: 'document-text-outline', url: 'https://zeitra.app/terms' },
             ]
         }
     ], [subscription?.tier]);
@@ -118,7 +118,7 @@ export default function SettingsIndexScreen() {
                             end={{ x: 1, y: 0 }}
                             style={[styles.badge, shadows.glow(colors.accent.coral)]}
                         >
-                            <Text style={[typography.overline, { color: colors.text.primary }]}>NightFuel</Text>
+                            <Text style={[typography.overline, { color: colors.text.primary }]}>Zeitra</Text>
                         </LinearGradient>
                     </View>
                 </View>
@@ -203,7 +203,7 @@ export default function SettingsIndexScreen() {
                 </TouchableOpacity>
 
                 <Text style={[typography.captionMedium, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing['3xl'] }]}>
-                    NightFuel v{appVersion}
+                    Zeitra v{appVersion}
                 </Text>
             </ScrollView>
         </View>

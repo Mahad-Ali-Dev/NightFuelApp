@@ -205,13 +205,28 @@ export const SHIFT_END_ORDER_MSG = 'Shift end must be after start (or overnight)
 export const SHIFT_ZERO_LENGTH_MSG = 'Shift start and end cannot be the same';
 
 /**
- * Upper bound on a single shift's wall-clock duration, in hours. A shift can
- * legitimately cross midnight (overnight, e.g. 19:00 → 07:00), but once the
- * overnight roll is applied the longest sane value is one full day. Anything
- * longer is an absurd input (a typo, or a malformed roll) and is rejected
- * before it can reach the API. A 24h span only arises at start === end, which
- * the zero-length guard already rejects, so this mainly bounds the rolled value
- * and future-proofs the rule if the overnight convention is ever refined.
+ * Upper bound on a single shift's wall-clock duration, in hours.
+ *
+ * DELIBERATE-UNREACHABLE / FUTURE-PROOFING — read before "simplifying" this:
+ * A shift is logged against a SINGLE `shiftDate`. The overnight convention
+ * (`isOvernightShift` = start > end) rolls an end that is at-or-before the start
+ * forward by exactly +24h, so the rolled span for every valid HH:MM pair is
+ * mathematically capped strictly BELOW 24h — the maximal overnight (e.g.
+ * 00:01 → 00:00) is 23h59m. The only way to reach a 24h span is start === end,
+ * and the zero-length guard above rejects that first (claiming `endTime` so this
+ * branch is skipped). Therefore, FOR A SINGLE-shiftDate SHIFT,
+ * `durationMins > MAX_SHIFT_HOURS * 60` can never fire — it is currently dead.
+ *
+ * We KEEP the branch (rather than delete it) on purpose: `SHIFT_TOO_LONG_MSG` /
+ * `MAX_SHIFT_HOURS` are exported and may be imported elsewhere, and the bound is
+ * the single source of truth if the overnight convention is ever refined (e.g. a
+ * multi-day or explicit-end-date shift, where a >24h rolled span WOULD become
+ * reachable). It documents and enforces the rule cheaply without changing any
+ * currently-reachable behaviour.
+ *
+ * (The sibling `MAX_SLEEP_HOURS` bound below is NOT in the same boat — a sleep
+ * session spans an explicit start/end DAY pair, so a wrong end day makes a >24h
+ * span genuinely reachable. That one is live and load-bearing.)
  */
 export const MAX_SHIFT_HOURS = 24;
 export const SHIFT_TOO_LONG_MSG = 'A shift cannot be longer than 24 hours';
@@ -269,10 +284,17 @@ export function validateLogShiftForm(
     // Upper duration bound — honour the overnight roll (treat an overnight end
     // as +24h) so the rolled span is what gets bounded. Only meaningful when no
     // higher-priority ordering/zero-length error already claimed endTime, so
-    // those messages always win. A 24h span only occurs at start === end (the
-    // zero-length reject above), so this mainly bounds the rolled value and
-    // future-proofs the rule. Keeps 19:00 → 07:00 (12h) and 07:00 → 15:00 (8h)
-    // valid.
+    // those messages always win.
+    //
+    // DELIBERATELY UNREACHABLE for a single-shiftDate shift (see MAX_SHIFT_HOURS
+    // above): the overnight roll caps every valid HH:MM pair's span strictly
+    // below 24h (the maximal overnight, 00:01 → 00:00, is 23h59m), and the only
+    // 24h span (start === end) is already rejected by the zero-length guard. So
+    // `durationMins > MAX_SHIFT_HOURS * 60` cannot fire here today; the branch is
+    // kept as the single source of truth for the rule and as future-proofing for
+    // a refined overnight convention (e.g. an explicit end-date / multi-day
+    // shift) where a >24h span would become reachable. Keeps 19:00 → 07:00 (12h)
+    // and 07:00 → 15:00 (8h) valid.
     if (!fieldErrors.endTime) {
       const [startH, startM] = input.startTime.split(':').map((n) => Number(n));
       const [endH, endM] = input.endTime.split(':').map((n) => Number(n));

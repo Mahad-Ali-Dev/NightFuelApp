@@ -1,4 +1,4 @@
-# 🌙 NightFuel Mobile
+# 🌙 Zeitra Mobile
 
 > **React Native Mobile App — Chrono-Nutrition & Fitness for Shift Workers**
 > Built with Expo SDK 52 · React Native 0.76 · TypeScript 5.5+
@@ -34,9 +34,9 @@
 
 ## Overview
 
-NightFuel Mobile is the native companion to the NightFuel platform — a **chrono-nutrition and fitness app** purpose-built for night-shift workers, rotating-schedule professionals, and anyone outside the 9-to-5 paradigm.
+Zeitra Mobile is the native companion to the Zeitra platform — a **chrono-nutrition and fitness app** purpose-built for night-shift workers, rotating-schedule professionals, and anyone outside the 9-to-5 paradigm.
 
-The app connects to the existing NightFuel microservices backend (16 services) and delivers all platform functionality through a premium, dark-themed mobile experience with circadian-aware features.
+The app connects to the existing Zeitra microservices backend (16 services) and delivers all platform functionality through a premium, dark-themed mobile experience with circadian-aware features.
 
 ### Why Mobile?
 
@@ -300,7 +300,7 @@ clients/mobile/
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    NightFuel Mobile App                      │
+│                    Zeitra Mobile App                      │
 ├─────────────┬──────────────┬──────────────┬────────────────┤
 │  Expo Router│  Reanimated  │ Gesture Hndlr│  Notifications │
 │  (Screens)  │  (Animate)   │  (Touch)     │  (Push/Local)  │
@@ -322,7 +322,7 @@ clients/mobile/
 ├─────────────────────────────────────────────────────────────┤
 │  expo-secure-store │ expo-sqlite │ Socket.IO │ expo-camera  │
 ├─────────────────────────────────────────────────────────────┤
-│              NightFuel Backend (16 Microservices)            │
+│              Zeitra Backend (16 Microservices)            │
 │  :3001 auth │ :3002 shift │ :3003 circadian │ :3004 ai     │
 │  :3005 plan │ :3006 meal  │ :3007 progress  │ :3008 notif  │
 │  :3009 user │ :3010 sleep │ :3011 exercise  │ :3012 subs   │
@@ -523,7 +523,7 @@ module.exports = config;
 
 ## Backend Integration
 
-The mobile app connects directly to the 16 NightFuel microservices. Unlike the web client (which uses Next.js `rewrites()` as a proxy), the mobile app talks to services **directly** via their base URLs.
+The mobile app connects directly to the 16 Zeitra microservices. Unlike the web client (which uses Next.js `rewrites()` as a proxy), the mobile app talks to services **directly** via their base URLs.
 
 ### Service Map
 
@@ -786,8 +786,8 @@ eas submit --platform android
     },
     "production": {
       "autoIncrement": true,
-      "ios": { "bundleIdentifier": "com.nightfuel.app" },
-      "android": { "package": "com.nightfuel.app" }
+      "ios": { "bundleIdentifier": "com.zeitra.app" },
+      "android": { "package": "com.zeitra.app" }
     }
   },
   "submit": {
@@ -821,7 +821,7 @@ npx jest --testPathPattern=components
 
 ```yaml
 # maestro/flows/login.yaml
-appId: com.nightfuel.app
+appId: com.zeitra.app
 ---
 - launchApp
 - tapOn: "Email"
@@ -895,7 +895,7 @@ chore(deps): bump expo-router to 4.1.0
 
 ## License
 
-MIT © NightFuel
+MIT © Zeitra
 
 ---
 

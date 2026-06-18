@@ -146,7 +146,7 @@ export async function GET(req: NextRequest) {
     ].join(',');
 
     const headers = {
-        'User-Agent': 'NightFuel-App/1.0 (https://nightfuel.app; contact@nightfuel.app)',
+        'User-Agent': 'Zeitra-App/1.0 (https://zeitra.app; contact@zeitra.app)',
     };
 
     try {

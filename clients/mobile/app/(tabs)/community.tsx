@@ -265,9 +265,9 @@ const PostItem = React.memo(function PostItem({ post, onLike, onComment, onPress
                         style={styles.actionItem}
                         onPress={async () => {
                             try {
-                                const author = post.author?.name || 'A NightFuel member';
+                                const author = post.author?.name || 'A Zeitra member';
                                 await Share.share({
-                                    message: `${author} on NightFuel:\n\n"${post.content}"`,
+                                    message: `${author} on Zeitra:\n\n"${post.content}"`,
                                 });
                             } catch {
                                 // Share sheet dismissed or unavailable — no action needed.

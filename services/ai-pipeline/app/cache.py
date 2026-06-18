@@ -1,5 +1,5 @@
 """
-Semantic-cache initialisation for the NightFuel AI Pipeline.
+Semantic-cache initialisation for the Zeitra AI Pipeline.
 
 Strategy (in order of preference):
   1. Redis SemanticCache  – deduplicates near-identical LLM calls across restarts.

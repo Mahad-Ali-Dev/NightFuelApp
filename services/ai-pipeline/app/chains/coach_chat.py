@@ -11,7 +11,7 @@ from ..logger import logger
 CHAT_PROMPT = """
 {system_prompt}
 
-You are Ria, the NightFuel AI Coach. You are speaking directly to the user in a chat interface. 
+You are Ria, the Zeitra AI Coach. You are speaking directly to the user in a chat interface. 
 Keep your responses engaging, concise (1-3 sentences unless asked for detail), and highly actionable.
 
 USER CONTEXT & CURRENT STATUS:
@@ -36,7 +36,7 @@ async def generate_chat_response(
     if not active_key or active_key in ("mock-key", "sk-ant-...", "sk-..."):
         from ..logger import logger as chat_logger
         chat_logger.warning("Coach chat using mock response — no valid API key found")
-        return "Hey! I'm Ria, your NightFuel coach. I'm currently running in demo mode. Once the AI service is fully configured, I'll be able to give you personalized advice on nutrition, sleep, and training based on your shift schedule. Stay consistent! 💪"
+        return "Hey! I'm Ria, your Zeitra coach. I'm currently running in demo mode. Once the AI service is fully configured, I'll be able to give you personalized advice on nutrition, sleep, and training based on your shift schedule. Stay consistent! 💪"
 
     try:
         llm = get_llm(provider)

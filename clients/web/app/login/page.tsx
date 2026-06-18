@@ -54,7 +54,7 @@ function LoginForm() {
                 <div className="h-14 w-14 rounded-2xl bg-brand-500 flex items-center justify-center shadow-2xl shadow-brand-500/40 mb-4">
                     <Zap className="h-7 w-7 text-white" strokeWidth={2.5} />
                 </div>
-                <h1 className="text-2xl font-black text-white tracking-tight">NightFuel</h1>
+                <h1 className="text-2xl font-black text-white tracking-tight">Zeitra</h1>
                 <p className="text-neutral-500 text-sm mt-1">Chrono-nutrition for shift workers</p>
             </div>
 
@@ -133,7 +133,7 @@ function LoginForm() {
                 </form>
 
                 <p className="text-center text-sm text-neutral-500">
-                    New to NightFuel?{' '}
+                    New to Zeitra?{' '}
                     <Link href="/register" className="text-brand-400 hover:text-brand-300 font-medium transition-colors">
                         Create an account
                     </Link>

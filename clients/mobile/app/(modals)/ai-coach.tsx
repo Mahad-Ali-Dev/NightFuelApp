@@ -87,7 +87,7 @@ export default function AICoachScreen() {
                 setMessages([{
                     id: 'init',
                     sender: 'ai',
-                    text: `Hi ${user?.name?.split(' ')[0] || 'there'}! 👋 I'm Ria, your NightFuel AI Coach. I'm here to help you optimize your nutrition, sleep, and training around your shift schedule. What's on your mind?`,
+                    text: `Hi ${user?.name?.split(' ')[0] || 'there'}! 👋 I'm Ria, your Zeitra AI Coach. I'm here to help you optimize your nutrition, sleep, and training around your shift schedule. What's on your mind?`,
                     timestamp: new Date(),
                 }]);
             }
