@@ -1,0 +1,13 @@
+{
+  "name": "zeitra-landing",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zeitra marketing landing + legal pages (static site)",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "marked": "^12.0.2"
+  }
+}

@@ -1,0 +1,178 @@
+// Zeitra landing — build step. Wraps partial bodies + converts the legal
+// markdown into a fully static dist/ folder (no runtime JS needed to read them).
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, rmSync } from 'node:fs';
+import { marked } from 'marked';
+
+const OUT = 'dist';
+// The canonical legal copy lives in the sibling web client; we read it at build
+// time so the published pages always match the in-app Privacy/Terms.
+const REPO_CONTENT = '../web/content';
+const SITE = 'https://zeitra.app';
+
+marked.setOptions({ gfm: true, breaks: false });
+
+const read = (p) => readFileSync(p, 'utf8');
+
+const LOGO = `<svg class="logo-mark" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false">
+  <defs><linearGradient id="zg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#FF8C42"/><stop offset="1" stop-color="#FF5A5F"/>
+  </linearGradient></defs>
+  <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#zg)"/>
+  <path d="M10 11h12l-9 10h9" fill="none" stroke="#0b0c12" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="22.5" cy="9.5" r="2.1" fill="#0b0c12"/>
+</svg>`;
+
+function nav(active) {
+  const link = (href, label, id) =>
+    `<a href="${href}"${id && active === id ? ' aria-current="page"' : ''}>${label}</a>`;
+  return `<header class="site-header">
+  <div class="container nav">
+    <a class="brand" href="/index.html" aria-label="Zeitra home">${LOGO}<span>Zeitra</span></a>
+    <button class="nav-toggle" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      ${link('/index.html#how', 'How it works', '')}
+      ${link('/index.html#shifts', 'Your shift', '')}
+      ${link('/index.html#pricing', 'Pricing', '')}
+      ${link('/support.html', 'Support', 'support')}
+      <a class="btn btn-primary btn-sm" href="/index.html#waitlist">Join the waitlist</a>
+    </nav>
+  </div>
+</header>`;
+}
+
+function footer() {
+  const y = 2026;
+  return `<footer class="site-footer">
+  <div class="container footer-grid">
+    <div class="footer-brand">
+      <a class="brand" href="/index.html" aria-label="Zeitra home">${LOGO}<span>Zeitra</span></a>
+      <p>Chrono-nutrition for the 1.8&nbsp;billion people who work while the world sleeps.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Product</h4>
+      <a href="/index.html#how">How it works</a>
+      <a href="/index.html#shifts">Your shift</a>
+      <a href="/index.html#pricing">Pricing</a>
+    </div>
+    <div class="footer-col">
+      <h4>Legal</h4>
+      <a href="/privacy.html">Privacy</a>
+      <a href="/terms.html">Terms</a>
+    </div>
+    <div class="footer-col">
+      <h4>Get in touch</h4>
+      <a href="/support.html">Support</a>
+      <a href="mailto:hello@zeitra.app">hello@zeitra.app</a>
+    </div>
+  </div>
+  <div class="container footer-base">
+    <span>&copy; ${y} Tase LLC. All rights reserved.</span>
+    <span>Made for people who don't sleep at night.</span>
+  </div>
+</footer>`;
+}
+
+function shell({ title, description, body, active = '', wide = false }) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${title}</title>
+  <meta name="description" content="${description}">
+  <meta name="theme-color" content="#07080d">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="canonical" href="${SITE}/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Zeitra">
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${description}">
+  <meta property="og:url" content="${SITE}/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+  ${nav(active)}
+  <main id="main"${wide ? ' class="main-prose"' : ''}>
+${body}
+  </main>
+  ${footer()}
+  <script src="/app.js" defer></script>
+</body>
+</html>`;
+}
+
+// Convert the legal markdown -> HTML, dropping the internal reviewer admonition.
+function legal(mdPath) {
+  const md = read(mdPath)
+    .split('\n')
+    .filter((l) => !/Legal review required/i.test(l))
+    .join('\n');
+  return marked.parse(md);
+}
+
+// ---- build -------------------------------------------------------------
+rmSync(OUT, { recursive: true, force: true });
+mkdirSync(`${OUT}/assets`, { recursive: true });
+
+writeFileSync(
+  `${OUT}/index.html`,
+  shell({
+    title: 'Zeitra — Meals, Workouts & Sleep on Your Shift, Not a 9-to-5',
+    description:
+      'Zeitra is chrono-nutrition for shift workers. It times your meals, workouts, caffeine and sleep to your real schedule. Coming soon to iOS and Android.',
+    body: read('partials/landing.html'),
+    active: 'home',
+  }),
+);
+
+writeFileSync(
+  `${OUT}/support.html`,
+  shell({
+    title: 'Support — Zeitra',
+    description: 'Get help with Zeitra: FAQs, contact, account and subscription help.',
+    body: read('partials/support.html'),
+    active: 'support',
+  }),
+);
+
+writeFileSync(
+  `${OUT}/privacy.html`,
+  shell({
+    title: 'Privacy Policy — Zeitra',
+    description: 'How Zeitra collects, uses and protects your personal and health data.',
+    body: `<article class="prose container">${legal(`${REPO_CONTENT}/privacy.md`)}</article>`,
+    wide: true,
+  }),
+);
+
+writeFileSync(
+  `${OUT}/terms.html`,
+  shell({
+    title: 'Terms of Service — Zeitra',
+    description: 'The terms that govern your use of Zeitra.',
+    body: `<article class="prose container">${legal(`${REPO_CONTENT}/terms.md`)}</article>`,
+    wide: true,
+  }),
+);
+
+copyFileSync('styles.css', `${OUT}/styles.css`);
+copyFileSync('app.js', `${OUT}/app.js`);
+copyFileSync('assets/favicon.svg', `${OUT}/assets/favicon.svg`);
+
+writeFileSync(`${OUT}/robots.txt`, `User-agent: *\nAllow: /\nSitemap: ${SITE}/sitemap.xml\n`);
+writeFileSync(
+  `${OUT}/sitemap.xml`,
+  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    ['/', '/support.html', '/privacy.html', '/terms.html']
+      .map((u) => `  <url><loc>${SITE}${u}</loc></url>`)
+      .join('\n') +
+    `\n</urlset>\n`,
+);
+
+console.log('Built dist/ — index, support, privacy, terms, robots, sitemap.');

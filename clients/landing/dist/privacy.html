@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy — Zeitra</title>
+  <meta name="description" content="How Zeitra collects, uses and protects your personal and health data.">
+  <meta name="theme-color" content="#07080d">
+  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
+  <link rel="canonical" href="https://zeitra.app/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Zeitra">
+  <meta property="og:title" content="Privacy Policy — Zeitra">
+  <meta property="og:description" content="How Zeitra collects, uses and protects your personal and health data.">
+  <meta property="og:url" content="https://zeitra.app/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+  <header class="site-header">
+  <div class="container nav">
+    <a class="brand" href="/index.html" aria-label="Zeitra home"><svg class="logo-mark" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false">
+  <defs><linearGradient id="zg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#FF8C42"/><stop offset="1" stop-color="#FF5A5F"/>
+  </linearGradient></defs>
+  <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#zg)"/>
+  <path d="M10 11h12l-9 10h9" fill="none" stroke="#0b0c12" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="22.5" cy="9.5" r="2.1" fill="#0b0c12"/>
+</svg><span>Zeitra</span></a>
+    <button class="nav-toggle" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
+      <a href="/index.html#how">How it works</a>
+      <a href="/index.html#shifts">Your shift</a>
+      <a href="/index.html#pricing">Pricing</a>
+      <a href="/support.html">Support</a>
+      <a class="btn btn-primary btn-sm" href="/index.html#waitlist">Join the waitlist</a>
+    </nav>
+  </div>
+</header>
+  <main id="main" class="main-prose">
+<article class="prose container"><h1>Zeitra Privacy Policy</h1>
+<p><strong>Last updated:</strong> 2026-05-04
+<strong>Version:</strong> 1.0</p>
+<hr>
+<h2>1. Who we are</h2>
+<p>Zeitra is operated by <strong>Tase LLC</strong> (&quot;Zeitra,&quot; &quot;we,&quot; &quot;us,&quot; &quot;our&quot;). This Privacy Policy explains how we collect, use, share, and protect your personal information when you use the Zeitra mobile or web application (the &quot;Service&quot;).</p>
+<p>If you have questions, contact: <strong><a href="mailto:privacy@zeitra.app">privacy@zeitra.app</a></strong>.</p>
+<h2>2. What we collect</h2>
+<p>We collect only what&#39;s needed to make Zeitra work for you.</p>
+<h3>2.1 Account information</h3>
+<ul>
+<li>Email address</li>
+<li>Display name</li>
+<li>Password (stored as an Argon2id / bcrypt hash — never plain text)</li>
+<li>Region, timezone, locale</li>
+<li>Role (user, coach, etc.)</li>
+</ul>
+<h3>2.2 Health &amp; fitness data (you provide)</h3>
+<ul>
+<li>Date of birth, biological sex, height, weight</li>
+<li>Sleep schedule, shift type, work hours</li>
+<li>Dietary preferences, dietary restrictions, allergies</li>
+<li>Health conditions you choose to disclose (e.g., acne, injuries, diabetes — only if you select them)</li>
+<li>Meal logs (foods, quantities, timestamps)</li>
+<li>Workout logs (exercises, sets, reps, weights)</li>
+<li>Body measurements and progress photos</li>
+<li>Sleep logs</li>
+</ul>
+<h3>2.3 Health data (from connected services — opt-in)</h3>
+<p>If you enable Apple Health integration, we may read sleep, activity, heart rate, and workout data from HealthKit. We never write to HealthKit unless you explicitly grant write permission.</p>
+<h3>2.4 AI conversation data</h3>
+<p>When you use the AI coach features (chat, plan generation, meal scoring), the messages you send and the resulting AI responses are processed by Anthropic&#39;s Claude API on our behalf. The text content is transmitted in flight to Anthropic for the purpose of generating your response. We log AI interactions on our servers for service improvement and abuse prevention.</p>
+<p>We <strong>never</strong> include your email, full name, or government-issued IDs in prompts sent to the AI provider.</p>
+<h3>2.5 Device &amp; technical data</h3>
+<ul>
+<li>Device model, OS version, app version</li>
+<li>Anonymous device identifier (used for crash reports — not advertising)</li>
+<li>Locale, timezone</li>
+<li>IP address (used for region detection and abuse prevention; not stored long-term)</li>
+<li>Push notification token (only if you grant notification permission)</li>
+</ul>
+<h3>2.6 Usage data</h3>
+<ul>
+<li>Screens viewed, feature usage, in-app actions (event-level — used to improve the product)</li>
+<li>Crash reports (no identifying request bodies; PII fields like <code>email</code>, <code>password</code>, <code>Authorization</code> headers are automatically redacted before being sent to our error tracker)</li>
+</ul>
+<h3>2.7 Payment data</h3>
+<p>We do not store credit card numbers. Payment is processed by:</p>
+<ul>
+<li><strong>Apple App Store</strong> (iOS in-app purchases) or <strong>Google Play</strong> (Android in-app purchases) — we receive only the subscription tier and renewal status.</li>
+<li><strong>Stripe</strong> (web purchases) — we receive a tokenized payment method ID and the subscription status; full card data never touches our servers.</li>
+</ul>
+<h2>3. How we use your data</h2>
+<p>We use your information to:</p>
+<ul>
+<li>Provide the core service (meal planning, workout planning, sleep tracking, AI coaching)</li>
+<li>Generate personalized plans and recommendations</li>
+<li>Process subscriptions and payments</li>
+<li>Send service-related notifications (push and email)</li>
+<li>Detect and prevent fraud and abuse</li>
+<li>Improve app reliability (crash reports, performance monitoring)</li>
+<li>Comply with legal obligations</li>
+</ul>
+<p>We do <strong>not</strong> sell your personal information to third parties. We do not show targeted advertising in Zeitra.</p>
+<h2>4. Who we share data with</h2>
+<p>We share data only with service providers who help us run the Service, under contracts that limit their use to what we authorize:</p>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Purpose</th>
+<th>Data shared</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Supabase</strong> (Postgres hosting)</td>
+<td>Primary database</td>
+<td>All application data (encrypted at rest)</td>
+</tr>
+<tr>
+<td><strong>Upstash</strong> (Redis hosting)</td>
+<td>Caching, event bus, rate limiting</td>
+<td>Session tokens, transient cache entries</td>
+</tr>
+<tr>
+<td><strong>Anthropic</strong> (Claude AI)</td>
+<td>AI plan generation and chat</td>
+<td>Your AI prompts and conversation context (no email/name)</td>
+</tr>
+<tr>
+<td><strong>Sentry</strong></td>
+<td>Error tracking</td>
+<td>Stack traces, device model, anonymous device ID; PII (email, tokens, passwords) is scrubbed before transmission</td>
+</tr>
+<tr>
+<td><strong>Apple App Store / Google Play</strong></td>
+<td>iOS/Android subscriptions</td>
+<td>Receipt validation tokens</td>
+</tr>
+<tr>
+<td><strong>Stripe</strong></td>
+<td>Web subscription billing</td>
+<td>Tokenized payment method, subscription state</td>
+</tr>
+<tr>
+<td><strong>AWS / Railway</strong></td>
+<td>Application hosting</td>
+<td>Server-side compute and storage</td>
+</tr>
+</tbody></table>
+<p>We may also disclose your data when required by law (court order, valid subpoena), to protect rights and safety, or in connection with a corporate transaction (merger, acquisition).</p>
+<h2>5. Your rights</h2>
+<p>Depending on where you live, you may have the right to:</p>
+<ul>
+<li><strong>Access</strong> — request a copy of the personal data we hold about you</li>
+<li><strong>Rectify</strong> — correct inaccurate data</li>
+<li><strong>Delete</strong> — request deletion of your account and data (&quot;right to be forgotten&quot; / GDPR Art. 17)</li>
+<li><strong>Port</strong> — receive your data in a machine-readable format (GDPR Art. 20)</li>
+<li><strong>Object</strong> — object to certain processing</li>
+<li><strong>Restrict</strong> — limit how we use your data</li>
+<li><strong>Withdraw consent</strong> — at any time, where processing is based on consent</li>
+<li><strong>Lodge a complaint</strong> — with your local data protection authority</li>
+</ul>
+<p>To exercise any of these rights, email <strong><a href="mailto:privacy@zeitra.app">privacy@zeitra.app</a></strong> or use the in-app <strong>Settings → Privacy → Delete my account</strong> flow.</p>
+<p>We will respond within 30 days (GDPR) or 45 days (CCPA), whichever applies to you.</p>
+<h2>6. Retention</h2>
+<ul>
+<li><strong>Active accounts:</strong> while your account is open</li>
+<li><strong>Meal/workout/sleep logs:</strong> indefinitely while account active; FREE tier history view limited to 30 days but data is retained</li>
+<li><strong>AI prompts:</strong> 90 days for abuse review, then auto-deleted</li>
+<li><strong>Crash reports:</strong> 90 days</li>
+<li><strong>Deleted accounts:</strong> purged within 30 days from active databases. Backups are rotated within 90 days.</li>
+</ul>
+<h2>7. Security</h2>
+<ul>
+<li>All traffic uses TLS 1.2+ in transit</li>
+<li>Passwords are stored as Argon2id / bcrypt hashes</li>
+<li>Auth tokens are stored in iOS Keychain / Android EncryptedSharedPreferences (never in plain text)</li>
+<li>Database is encrypted at rest</li>
+<li>Production services authenticate to each other with mutual JWT</li>
+<li>We follow defense-in-depth principles (rate limiting, deep-link allowlists, AI input sanitization, etc.)</li>
+</ul>
+<p>No system is perfectly secure. If we suffer a breach affecting your data, we will notify you and the relevant authorities within 72 hours of becoming aware (per GDPR Art. 33).</p>
+<h2>8. Children</h2>
+<p>Zeitra is intended for users 17 and older. We do not knowingly collect data from children under 13. If you believe a child has signed up, contact us immediately and we will delete the account.</p>
+<h2>9. International transfers</h2>
+<p>If you are in the EEA, UK, or Switzerland, your data may be transferred to the United States or other countries where our service providers operate. We rely on Standard Contractual Clauses or equivalent safeguards for these transfers.</p>
+<h2>10. Changes to this policy</h2>
+<p>We will post any updates here and notify users in the app for material changes. Continued use after a material change means you accept the updated policy.</p>
+<h2>11. Contact</h2>
+<ul>
+<li><strong>Privacy questions:</strong> <a href="mailto:privacy@zeitra.app">privacy@zeitra.app</a></li>
+<li><strong>Data subject requests:</strong> <a href="mailto:privacy@zeitra.app">privacy@zeitra.app</a></li>
+<li><strong>Mail:</strong> Tase LLC, [Address — fill in before publishing]</li>
+</ul>
+</article>
+  </main>
+  <footer class="site-footer">
+  <div class="container footer-grid">
+    <div class="footer-brand">
+      <a class="brand" href="/index.html" aria-label="Zeitra home"><svg class="logo-mark" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false">
+  <defs><linearGradient id="zg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#FF8C42"/><stop offset="1" stop-color="#FF5A5F"/>
+  </linearGradient></defs>
+  <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#zg)"/>
+  <path d="M10 11h12l-9 10h9" fill="none" stroke="#0b0c12" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="22.5" cy="9.5" r="2.1" fill="#0b0c12"/>
+</svg><span>Zeitra</span></a>
+      <p>Chrono-nutrition for the 1.8&nbsp;billion people who work while the world sleeps.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Product</h4>
+      <a href="/index.html#how">How it works</a>
+      <a href="/index.html#shifts">Your shift</a>
+      <a href="/index.html#pricing">Pricing</a>
+    </div>
+    <div class="footer-col">
+      <h4>Legal</h4>
+      <a href="/privacy.html">Privacy</a>
+      <a href="/terms.html">Terms</a>
+    </div>
+    <div class="footer-col">
+      <h4>Get in touch</h4>
+      <a href="/support.html">Support</a>
+      <a href="mailto:hello@zeitra.app">hello@zeitra.app</a>
+    </div>
+  </div>
+  <div class="container footer-base">
+    <span>&copy; 2026 Tase LLC. All rights reserved.</span>
+    <span>Made for people who don't sleep at night.</span>
+  </div>
+</footer>
+  <script src="/app.js" defer></script>
+</body>
+</html>
