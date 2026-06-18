@@ -20,6 +20,7 @@ import { getCurrent as getCurrentShift } from '@/api/shifts';
 import { getNotificationPreferences } from '@/api/notifications';
 import { useAuthStore } from '@/store/authStore';
 import { OFFSETS } from '@/lib/shiftTransition';
+import { BLUE_BLOCKER_LEAD_HOURS } from '@/lib/lightPlan';
 
 const IS_EXPO_GO = Constants.appOwnership === 'expo';
 
@@ -51,6 +52,17 @@ export function buildShiftReminders(shift: { startTime: string; endTime: string 
       body: 'Dim the lights and start winding down — melatonin is rising.', date: shift_(end, OFFSETS.sleepStartAfterEnd) },
     { id: 'nf-log-sleep', prefKey: 'sleepReminderEnabled', title: 'How did you sleep? 😴',
       body: "Log last night's rest to keep your recovery score accurate.", date: shift_(end, OFFSETS.sleepEndAfterEnd) },
+    // Blue-blocker / dim-down nudge, fired at computeLightPlan(shift).avoidLight.start
+    // so the LightPlanCard's "Avoid light / blue-blockers" window and this scheduled
+    // reminder tell ONE story. We compute the instant directly here rather than calling
+    // computeLightPlan to keep buildShiftReminders pure (no throw on malformed ISO):
+    // avoidLight.start === sleepWindow.start − BLUE_BLOCKER_LEAD_HOURS
+    //                   === end + (OFFSETS.sleepStartAfterEnd − BLUE_BLOCKER_LEAD_HOURS)h,
+    // which is bit-identical to computeLightPlan(shift).avoidLight.start by construction.
+    // Reuses the existing sleepReminderEnabled pref — no new preference key.
+    { id: 'nf-avoid-light', prefKey: 'sleepReminderEnabled', title: 'Dim the lights 🕶️',
+      body: 'Switch to blue-blockers / dim light now so melatonin can rise before your recovery sleep.',
+      date: shift_(end, OFFSETS.sleepStartAfterEnd - BLUE_BLOCKER_LEAD_HOURS) },
   ];
 }
 

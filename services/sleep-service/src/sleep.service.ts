@@ -212,10 +212,18 @@ export class SleepService {
         const d = sessions.filter(s => s.durationMins != null).map(s => s.durationMins as number);
         const avgQuality = q.length ? q.reduce((a, b) => a + b, 0) / q.length : null;
         const avgDurationMins = d.length ? Math.round(d.reduce((a, b) => a + b, 0) / d.length) : null;
-        const qScore = avgQuality != null ? (avgQuality / 10) * 100 : null;
-        const dScore = avgDurationMins != null ? Math.min(100, (avgDurationMins / 480) * 100) : null;
-        const score = (qScore != null && dScore != null) ? Math.round(0.6 * qScore + 0.4 * dScore)
-            : (qScore != null ? Math.round(qScore) : (dScore != null ? Math.round(dScore) : null));
+        // Finite-ness invariant: every sub-score and the final score is either a
+        // finite number or null — a NaN/Infinity (hypothetically from a poisoned
+        // duration/quality value) is collapsed to null rather than escaping into
+        // the analytics summary. Behaviour-preserving for any real history: finite
+        // inputs round exactly as before; only a non-finite intermediate changes.
+        const rawQ = avgQuality != null ? (avgQuality / 10) * 100 : null;
+        const qScore = rawQ != null && Number.isFinite(rawQ) ? rawQ : null;
+        const rawD = avgDurationMins != null ? (avgDurationMins / 480) * 100 : null;
+        const dScore = rawD != null && Number.isFinite(rawD) ? Math.min(100, rawD) : null;
+        const blended = (qScore != null && dScore != null) ? 0.6 * qScore + 0.4 * dScore
+            : (qScore != null ? qScore : dScore);
+        const score = blended != null && Number.isFinite(blended) ? Math.round(blended) : null;
         const last = sessions[0];
         return {
             score,
@@ -232,29 +240,42 @@ export class SleepService {
     }
 
     async getAnalytics(userId: string) {
-        const sessions = await this.prisma.sleepSession.findMany({
-            where: { userId }, orderBy: { startTime: 'desc' }, take: 30,
-        });
-        const quality = await this.getQuality(userId);
-        const recent = sessions.slice(0, 7).reverse();
-        const chartData = recent.map(s => ({
-            date: s.startTime.toISOString().slice(0, 10),
-            durationMins: s.durationMins ?? 0,
-            quality: s.quality ?? 0,
-            alignmentScore: s.circadianAlignmentScore ?? 0,
-        }));
-        const aligns = sessions.filter(s => s.circadianAlignmentScore != null).map(s => s.circadianAlignmentScore as number);
-        const circadianAlignment = aligns.length ? Math.round(aligns.reduce((a, b) => a + b, 0) / aligns.length) : null;
-        return {
-            qualityScore: quality.score,
-            avgDuration: quality.avgDurationMins,
-            avgQuality: quality.avgQuality,
-            sessionsLogged: sessions.length,
-            circadianAlignment,
-            chartData,
-            summary: sessions.length === 0
-                ? 'Log your sleep to unlock personalized analytics.'
-                : `Across ${sessions.length} night(s), average sleep was ${quality.avgDurationMins ?? 0} min at a ${quality.score ?? 0}/100 quality score.`,
-        };
+        // Guarded analytics path: the happy-path return object is byte-identical
+        // to before, but any thrown error (e.g. a Prisma/DB failure in findMany)
+        // is logged server-side with full detail and then re-thrown as a FIXED
+        // generic Error. The thrown message NEVER carries raw err.message, so the
+        // route's catch surfaces only its fixed { error: 'An unexpected error
+        // occurred' } body — no internal detail can leak via the analytics path.
+        try {
+            const sessions = await this.prisma.sleepSession.findMany({
+                where: { userId }, orderBy: { startTime: 'desc' }, take: 30,
+            });
+            const quality = await this.getQuality(userId);
+            const recent = sessions.slice(0, 7).reverse();
+            const chartData = recent.map(s => ({
+                date: s.startTime.toISOString().slice(0, 10),
+                durationMins: s.durationMins ?? 0,
+                quality: s.quality ?? 0,
+                alignmentScore: s.circadianAlignmentScore ?? 0,
+            }));
+            const aligns = sessions.filter(s => s.circadianAlignmentScore != null).map(s => s.circadianAlignmentScore as number);
+            const circadianAlignment = aligns.length ? Math.round(aligns.reduce((a, b) => a + b, 0) / aligns.length) : null;
+            return {
+                qualityScore: quality.score,
+                avgDuration: quality.avgDurationMins,
+                avgQuality: quality.avgQuality,
+                sessionsLogged: sessions.length,
+                circadianAlignment,
+                chartData,
+                summary: sessions.length === 0
+                    ? 'Log your sleep to unlock personalized analytics.'
+                    : `Across ${sessions.length} night(s), average sleep was ${quality.avgDurationMins ?? 0} min at a ${quality.score ?? 0}/100 quality score.`,
+            };
+        } catch (err) {
+            // Log the REAL cause server-side (structured, never on the wire)…
+            logger.error({ err, userId }, 'Failed to compute sleep analytics');
+            // …and re-throw a generic, detail-free error. No raw err.message.
+            throw new Error('Failed to compute sleep analytics');
+        }
     }
 }

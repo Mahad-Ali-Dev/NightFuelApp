@@ -472,6 +472,36 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Standing Cable Wood Chop': 'Standing_Cable_Wood_Chop',
   'Seated Glute Stretch': 'Seated_Glute',
   'Wrist Roller': 'Wrist_Roller',
+
+  // ── Widened FEDB-backed tranche #4 (data-only, zero new fetch) ───────────────
+  // A further slice of distinct catalogue movements. Every KEY below is NEW —
+  // absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries above (tranches #1-#3),
+  // YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos() admits each one as
+  // kind:'fedb_frames', verified:false. Every slug VALUE was machine-verified to be
+  // present in BOTH FEDB_SLUGS (exerciseDemos.ts) AND __tests__/fixtures/
+  // fedb-catalog-slugs.json (the 873-slug catalogue), and each slug is a fresh dir
+  // not already referenced by an earlier tranche — so every entry resolves to an
+  // ordered 2-frame [0.jpg, 1.jpg] HTTPS pair with NO new HTTP call. Strictly
+  // additive: the kind:'youtube'-only sync guard (scripts/check-demo-maps-in-sync.js)
+  // and pendingHumanReviewIds.json (YouTube ids only) are both untouched, so
+  // check-demo-maps-in-sync stays green.
+
+  // Triceps — barbell / EZ-bar / dumbbell isolation
+  'Decline EZ Bar Triceps Extension': 'Decline_EZ_Bar_Triceps_Extension',
+  'Incline Barbell Triceps Extension': 'Incline_Barbell_Triceps_Extension',
+  'Seated Bent-Over One-Arm Dumbbell Triceps Extension': 'Seated_Bent-Over_One-Arm_Dumbbell_Triceps_Extension',
+  // Shoulders — dumbbell / cable / machine press
+  'Dumbbell One-Arm Shoulder Press': 'Dumbbell_One-Arm_Shoulder_Press',
+  'Cable Shoulder Press': 'Cable_Shoulder_Press',
+  'Machine Shoulder (Military) Press': 'Machine_Shoulder_Military_Press',
+  'Smith Machine Upright Row': 'Smith_Machine_Upright_Row',
+  // Chest — cable
+  'Standing Cable Chest Press': 'Standing_Cable_Chest_Press',
+  // Legs / glutes — machine & bodyweight
+  'Lying Machine Squat': 'Lying_Machine_Squat',
+  'Single Leg Glute Bridge': 'Single_Leg_Glute_Bridge',
+  // Traps — cable
+  'Cable Shrug': 'Cable_Shrugs',
 };
 
 /**

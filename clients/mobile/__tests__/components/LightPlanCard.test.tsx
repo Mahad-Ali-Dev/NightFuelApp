@@ -60,8 +60,13 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
 }));
 
-// Import AFTER the mocks are registered.
+// Import AFTER the mocks are registered. `computeLightPlan` is the pure window
+// math the card renders from; importing it lets us assert the rendered
+// "Avoid light / blue-blockers" row uses the EXACT window computeLightPlan
+// returns (card ↔ source-of-truth parity), not just the test's hand-rolled
+// arithmetic — the same instant the nf-avoid-light reminder fires at.
 import LightPlanCard from '@/components/home/LightPlanCard';
+import { computeLightPlan } from '@/lib/lightPlan';
 
 function renderWithTheme(ui: React.ReactElement) {
   return render(
@@ -168,6 +173,19 @@ describe('LightPlanCard', () => {
       renderWithTheme(<LightPlanCard shift={SHIFT} />);
       const affordance = screen.getByRole('button', { name: 'Open your light plan' });
       expect(affordance).toBeTruthy();
+    });
+
+    test('the "Avoid light / blue-blockers" row uses the exact window computeLightPlan returns', () => {
+      // Card ↔ source-of-truth parity: build the expected row value from the SAME
+      // computeLightPlan output (avoidLight) with the SAME Intl/fmt call the card
+      // uses, so the rendered window is provably the one computeLightPlan derives
+      // — the same avoidLight.start the nf-avoid-light circadian reminder fires at
+      // (see __tests__/lib/lightPlanReminderParity.test.ts).
+      const { avoidLight } = computeLightPlan(SHIFT);
+      const expected = `${fmt(avoidLight.start)} – ${fmt(avoidLight.end)}`;
+      renderWithTheme(<LightPlanCard shift={SHIFT} />);
+      expect(screen.getByText('Avoid light / blue-blockers')).toBeTruthy();
+      expect(screen.getByText(expected)).toBeTruthy();
     });
   });
 });

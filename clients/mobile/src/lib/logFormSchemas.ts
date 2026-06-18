@@ -204,6 +204,18 @@ export const SHIFT_FUTURE_DATE_MSG = "Shift date can't be that far in the future
 export const SHIFT_END_ORDER_MSG = 'Shift end must be after start (or overnight)';
 export const SHIFT_ZERO_LENGTH_MSG = 'Shift start and end cannot be the same';
 
+/**
+ * Upper bound on a single shift's wall-clock duration, in hours. A shift can
+ * legitimately cross midnight (overnight, e.g. 19:00 → 07:00), but once the
+ * overnight roll is applied the longest sane value is one full day. Anything
+ * longer is an absurd input (a typo, or a malformed roll) and is rejected
+ * before it can reach the API. A 24h span only arises at start === end, which
+ * the zero-length guard already rejects, so this mainly bounds the rolled value
+ * and future-proofs the rule if the overnight convention is ever refined.
+ */
+export const MAX_SHIFT_HOURS = 24;
+export const SHIFT_TOO_LONG_MSG = 'A shift cannot be longer than 24 hours';
+
 export function validateLogShiftForm(
   input: LogShiftFormInput,
   options?: { now?: Date },
@@ -252,6 +264,25 @@ export function validateLogShiftForm(
           ? SHIFT_ZERO_LENGTH_MSG
           : SHIFT_END_ORDER_MSG;
       fieldErrors.endTime = humanizeFieldError('endTime', msg);
+    }
+
+    // Upper duration bound — honour the overnight roll (treat an overnight end
+    // as +24h) so the rolled span is what gets bounded. Only meaningful when no
+    // higher-priority ordering/zero-length error already claimed endTime, so
+    // those messages always win. A 24h span only occurs at start === end (the
+    // zero-length reject above), so this mainly bounds the rolled value and
+    // future-proofs the rule. Keeps 19:00 → 07:00 (12h) and 07:00 → 15:00 (8h)
+    // valid.
+    if (!fieldErrors.endTime) {
+      const [startH, startM] = input.startTime.split(':').map((n) => Number(n));
+      const [endH, endM] = input.endTime.split(':').map((n) => Number(n));
+      const startMins = (startH as number) * 60 + (startM as number);
+      const endMins =
+        (endH as number) * 60 + (endM as number) + (overnight ? 1440 : 0);
+      const durationMins = endMins - startMins;
+      if (durationMins > MAX_SHIFT_HOURS * 60) {
+        fieldErrors.endTime = humanizeFieldError('endTime', SHIFT_TOO_LONG_MSG);
+      }
     }
   }
 
@@ -315,6 +346,17 @@ export interface LogSleepFormValue {
  * against them without duplicating the wording). */
 export const SLEEP_FUTURE_DAY_MSG = "Sleep day can't be in the future";
 export const SLEEP_FUTURE_END_MSG = "Sleep can't end in the future";
+
+/**
+ * Upper bound on a single sleep session's duration, in hours. A normal
+ * overnight session (e.g. 23:00 → 07:00, ~8h) is well under this; a 24h+ span
+ * (e.g. start-day to two days later) is an absurd input — typically a wrong
+ * start/end day — and is rejected before it can reach the API. Applied only
+ * after the zero-length and future-wake guards, so their more specific
+ * messages always win on the shared endTime field.
+ */
+export const MAX_SLEEP_HOURS = 24;
+export const SLEEP_TOO_LONG_MSG = 'A sleep session cannot be longer than 24 hours';
 
 export function validateLogSleepForm(
   input: LogSleepFormInput,
@@ -419,6 +461,23 @@ export function validateLogSleepForm(
         isImplausibleFutureDate(effectiveEndDay, now)
       ) {
         fieldErrors.endTime = humanizeFieldError('endTime', SLEEP_FUTURE_END_MSG);
+      }
+
+      // Upper duration bound. Use the SAME effectiveEndDay roll-forward the file
+      // already derives above so the span we measure matches what the screen
+      // actually persists (an overnight 23:00 → 07:00 is ~8h, not -16h). Only
+      // fires when no higher-priority endTime error (zero-length / future) is
+      // already set, so those more specific messages always win. Keeps the
+      // default overnight 23:00 → 07:00 (8h) valid; rejects an absurd multi-day
+      // span (e.g. a wrong end day landing ~31h out).
+      if (!fieldErrors.endTime) {
+        const effectiveEnd = new Date(`${effectiveEndDay}T${input.endTime}:00`);
+        if (!isNaN(effectiveEnd.getTime())) {
+          const durationMs = effectiveEnd.getTime() - start.getTime();
+          if (durationMs > MAX_SLEEP_HOURS * 3_600_000) {
+            fieldErrors.endTime = humanizeFieldError('endTime', SLEEP_TOO_LONG_MSG);
+          }
+        }
       }
     }
   }

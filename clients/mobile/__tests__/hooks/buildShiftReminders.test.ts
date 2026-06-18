@@ -1,19 +1,22 @@
 /**
  * Tests for buildShiftReminders — the pure time-deriving core of
  * useCircadianReminders. It maps a shift's ISO start/end timestamps to the
- * six circadian-coach reminders and their fire times.
+ * seven circadian-coach reminders and their fire times.
  *
  * buildShiftReminders is a pure function with no React / native dependencies,
- * so it needs no mocks. We assert both the shape (6 reminders, ids, prefKeys,
+ * so it needs no mocks. We assert both the shape (7 reminders, ids, prefKeys,
  * titles) and the exact derived Date for each reminder relative to the shift.
  *
  * The 'nf-bright-light' reminder is the reconciliation anchor with the coach
- * card's brightLightWindow — see the parity test in __tests__/lib/shiftTransition.test.ts
- * for the bit-identical assertion that the reminder fires at the same instant
+ * card's brightLightWindow, and the 'nf-avoid-light' reminder is the analogous
+ * anchor for the card's avoidLight (blue-blocker) window — see the parity test
+ * in __tests__/lib/shiftTransition.test.ts and __tests__/lib/lightPlanReminderParity.test.ts
+ * for the bit-identical assertions that each reminder fires at the same instant
  * the card advertises.
  */
 import { buildShiftReminders } from '@/hooks/useCircadianReminders';
 import { OFFSETS } from '@/lib/shiftTransition';
+import { BLUE_BLOCKER_LEAD_HOURS } from '@/lib/lightPlan';
 
 const HOUR = 3_600_000;
 
@@ -30,8 +33,8 @@ function build() {
 }
 
 describe('buildShiftReminders', () => {
-  test('returns exactly six reminders', () => {
-    expect(build()).toHaveLength(6);
+  test('returns exactly seven reminders', () => {
+    expect(build()).toHaveLength(7);
   });
 
   test('emits the expected reminder ids in order', () => {
@@ -42,6 +45,7 @@ describe('buildShiftReminders', () => {
       'nf-caffeine-cutoff',
       'nf-winddown',
       'nf-log-sleep',
+      'nf-avoid-light',
     ]);
   });
 
@@ -62,6 +66,7 @@ describe('buildShiftReminders', () => {
     expect(byId['nf-caffeine-cutoff']).toBe('sleepReminderEnabled');
     expect(byId['nf-winddown']).toBe('sleepReminderEnabled');
     expect(byId['nf-log-sleep']).toBe('sleepReminderEnabled');
+    expect(byId['nf-avoid-light']).toBe('sleepReminderEnabled');
   });
 
   test('bright-light reminder uses sleepReminderEnabled pref key (no new pref this sprint)', () => {
@@ -78,6 +83,15 @@ describe('buildShiftReminders', () => {
     // the anchor maps to the coach card's brightLightWindow guidance.
     const brightLight = build().find((r) => r.id === 'nf-bright-light')!;
     expect(brightLight.body.toLowerCase()).toContain('bright light');
+  });
+
+  test('avoid-light reminder uses sleepReminderEnabled pref key (no new pref this sprint)', () => {
+    // Like nf-bright-light, the new blue-blocker nudge piggy-backs on the
+    // existing sleep toggle rather than introducing a dedicated pref — users who
+    // opted out of sleep nudges aren't surprised by a new alert channel.
+    const avoidLight = build().find((r) => r.id === 'nf-avoid-light');
+    expect(avoidLight).toBeDefined();
+    expect(avoidLight!.prefKey).toBe('sleepReminderEnabled');
   });
 
   test('every reminder fire time is a valid Date', () => {
@@ -115,22 +129,35 @@ describe('buildShiftReminders', () => {
       expect(byId()['nf-log-sleep']).toBe(endMs + 9 * HOUR);
     });
 
-    test('all six fire times are distinct or document the exact tie', () => {
+    test('avoid-light reminder fires at end + (sleepStartAfterEnd − BLUE_BLOCKER_LEAD_HOURS)h', () => {
+      // Bit-identical to the card's avoidLight.start (== sleepWindow.start −
+      // BLUE_BLOCKER_LEAD_HOURS) — asserted bit-for-bit in the lib parity test.
+      // For this fixture (sleepStartAfterEnd=1, lead=2) that is end − 1h.
+      expect(byId()['nf-avoid-light']).toBe(
+        endMs + (OFFSETS.sleepStartAfterEnd - BLUE_BLOCKER_LEAD_HOURS) * HOUR,
+      );
+    });
+
+    test('all seven fire times are distinct or document the exact tie', () => {
       // The reminders are emitted in a logical (not strictly chronological)
       // order — e.g. for a short night shift the caffeine cutoff (end-6h) can
       // precede the midpoint. The bright-light reminder fires at clock-in
       // (start + OFFSETS.brightLightStartAfterStart), which on a real shift
       // ties only with anchors derived from `start` at the same offset — and
-      // we have none others at offset 0 from start. For this night fixture
-      // every fire time should be unique; if a future offset change introduces
-      // a tie, this test should be relaxed with a deliberate comment.
+      // we have none others at offset 0 from start. The new avoid-light reminder
+      // fires at end-1h (sleepStartAfterEnd − BLUE_BLOCKER_LEAD_HOURS), distinct
+      // from caffeine-cutoff (end-6h) and winddown (end+1h). For this night
+      // fixture every fire time should be unique; if a future offset change
+      // introduces a tie, this test should be relaxed with a deliberate comment.
       const times = build().map((r) => r.date.getTime());
       expect(new Set(times).size).toBe(times.length);
     });
 
     test('the earliest reminder is the pre-shift meal and the latest is log-sleep', () => {
       // preshift-meal at start-1h is still earlier than bright-light at start+0h,
-      // and log-sleep at end+9h is still latest. Bright-light slots in second.
+      // and log-sleep at end+9h is still latest. Bright-light slots in second and
+      // avoid-light at end-1h sits between caffeine-cutoff (end-6h) and winddown
+      // (end+1h) — neither displaces the earliest/latest extremes.
       const reminders = build();
       const sorted = [...reminders].sort((a, b) => a.date.getTime() - b.date.getTime());
       expect(sorted[0]!.id).toBe('nf-preshift-meal');
@@ -164,5 +191,6 @@ describe('buildShiftReminders', () => {
     expect(byId['nf-caffeine-cutoff']).toBe(eMs + OFFSETS.caffeineCutoffBeforeEnd * HOUR);
     expect(byId['nf-winddown']).toBe(eMs + OFFSETS.sleepStartAfterEnd * HOUR);
     expect(byId['nf-log-sleep']).toBe(eMs + OFFSETS.sleepEndAfterEnd * HOUR);
+    expect(byId['nf-avoid-light']).toBe(eMs + (OFFSETS.sleepStartAfterEnd - BLUE_BLOCKER_LEAD_HOURS) * HOUR);
   });
 });

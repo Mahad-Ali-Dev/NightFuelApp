@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useTheme, spacing as spacingTokens, borderRadius } from '@/theme';
 import { withAlpha } from '@/theme/utils';
-import { Card } from '@/components/ui/Card';
+import { GlassCard } from '@/components/ui/GlassCard';
 import { Skeleton, EmptyState } from '@/components/ui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -78,12 +78,11 @@ export default function SleepOptimizerScreen() {
                 <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
 
                     {/* Hero Score */}
-                    <Card
-                        variant="glass"
+                    <GlassCard
+                        glow={colors.accent.purple}
                         style={[
                             styles.heroCard,
                             { borderColor: withAlpha(colors.accent.purple, 0.3) },
-                            shadows.glow(colors.accent.purple),
                         ]}
                     >
                         <LinearGradient
@@ -107,12 +106,12 @@ export default function SleepOptimizerScreen() {
                         <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing.xl, marginHorizontal: spacing.sm }]}>
                             {analytics?.summary ?? 'Log a sleep block to see your recovery analytics.'}
                         </Text>
-                    </Card>
+                    </GlassCard>
 
                     {/* Recommendations */}
                     <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.lg }]}>Recommended Windows</Text>
 
-                    <Card variant="glass" style={[styles.windowCard, { borderColor: withAlpha(colors.accent.purple, 0.25) }]}>
+                    <GlassCard style={[styles.windowCard, { borderColor: withAlpha(colors.accent.purple, 0.25) }]}>
                         <View style={styles.windowHeader}>
                             <View style={[styles.windowIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.28), borderWidth: 1 }]}>
                                 <Ionicons name="moon" size={18} color={colors.accent.purple} />
@@ -122,9 +121,9 @@ export default function SleepOptimizerScreen() {
                             <Text style={[typography.statTiny, { color: colors.accent.cyan }]}>{analytics?.anchorSleepWindow ?? '—'}</Text>
                         </View>
                         <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>Total darkness required. Avoid light exposure upon shift exit.</Text>
-                    </Card>
+                    </GlassCard>
 
-                    <Card variant="glass" style={[styles.windowCard, { borderColor: withAlpha(colors.accent.amber, 0.25) }]}>
+                    <GlassCard style={[styles.windowCard, { borderColor: withAlpha(colors.accent.amber, 0.25) }]}>
                         <View style={styles.windowHeader}>
                             <View style={[styles.windowIcon, { backgroundColor: withAlpha(colors.accent.amber, 0.14), borderColor: withAlpha(colors.accent.amber, 0.28), borderWidth: 1 }]}>
                                 <Ionicons name="battery-charging" size={18} color={colors.accent.amber} />
@@ -134,7 +133,7 @@ export default function SleepOptimizerScreen() {
                             <Text style={[typography.statTiny, { color: colors.accent.amber }]}>{analytics?.preShiftNapWindow ?? '—'}</Text>
                         </View>
                         <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>90-minute cycle to top off cognitive alertness before shift.</Text>
-                    </Card>
+                    </GlassCard>
 
                     <TouchableOpacity
                         activeOpacity={0.85}

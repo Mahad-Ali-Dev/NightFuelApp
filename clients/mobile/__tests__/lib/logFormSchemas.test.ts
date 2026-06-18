@@ -23,8 +23,12 @@ import {
   SHIFT_FUTURE_DATE_MSG,
   SHIFT_END_ORDER_MSG,
   SHIFT_ZERO_LENGTH_MSG,
+  SHIFT_TOO_LONG_MSG,
+  MAX_SHIFT_HOURS,
   SLEEP_FUTURE_DAY_MSG,
   SLEEP_FUTURE_END_MSG,
+  SLEEP_TOO_LONG_MSG,
+  MAX_SLEEP_HOURS,
   type LogShiftFormInput,
   type LogSleepFormInput,
 } from '@/lib/logFormSchemas';
@@ -220,6 +224,13 @@ describe('humanizeFieldError', () => {
     // refined — but the humanizer must still forward it verbatim.
     expect(humanizeFieldError('endTime', SHIFT_END_ORDER_MSG)).toBe(SHIFT_END_ORDER_MSG);
   });
+
+  test('passes through the too-long duration messages verbatim on the endTime path', () => {
+    // Both contain "cannot", so they already match the /cannot/ branch of the
+    // endTime case and forward unchanged — no new switch case was added.
+    expect(humanizeFieldError('endTime', SHIFT_TOO_LONG_MSG)).toBe(SHIFT_TOO_LONG_MSG);
+    expect(humanizeFieldError('endTime', SLEEP_TOO_LONG_MSG)).toBe(SLEEP_TOO_LONG_MSG);
+  });
 });
 
 // ── validateLogShiftForm ─────────────────────────────────────────────────────
@@ -367,6 +378,59 @@ describe('validateLogShiftForm', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.fieldErrors.shiftDate).toBe('Enter a real date (YYYY-MM-DD)');
+    }
+  });
+
+  // ── additive guard: upper duration bound (<= 24h) ──────────────────────────
+
+  test('MAX_SHIFT_HOURS is 24', () => {
+    expect(MAX_SHIFT_HOURS).toBe(24);
+  });
+
+  // Re-assert the work-item happy paths under a pinned now: the new bound must
+  // not touch them.
+  test('overnight 19:00 → 07:00 (12h) still passes under the duration bound', () => {
+    const result = validateLogShiftForm(
+      shiftInput({ startTime: '19:00', endTime: '07:00' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  test('same-day 07:00 → 15:00 (8h) still passes under the duration bound', () => {
+    const result = validateLogShiftForm(
+      shiftInput({ startTime: '07:00', endTime: '15:00' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  // A shift has a single date with the end rolled forward at most +24h on an
+  // overnight, so the rolled span is mathematically capped below 24h for every
+  // valid HH:MM pair (the maximal overnight, e.g. 00:01 → 00:00, is 23h59m).
+  // The bound therefore future-proofs the rolled value rather than rejecting any
+  // currently-reachable input — these two cases prove it does NOT over-clamp the
+  // near-24h edge and the rationale's own 19:00 → 18:59 example.
+  test('the maximal overnight span (00:01 → 00:00, 23h59m) stays valid — not over-clamped', () => {
+    const result = validateLogShiftForm(
+      shiftInput({ startTime: '00:01', endTime: '00:00' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      // Guard against a future regression that wrongly clamps the legitimate edge.
+      expect(result.fieldErrors.endTime).not.toBe(SHIFT_TOO_LONG_MSG);
+    }
+  });
+
+  test('the rationale 19:00 → 18:59 "overnight" edge (23h59m) stays valid, not flagged too-long', () => {
+    const result = validateLogShiftForm(
+      shiftInput({ startTime: '19:00', endTime: '18:59' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      expect(result.fieldErrors.endTime).not.toBe(SHIFT_TOO_LONG_MSG);
     }
   });
 });
@@ -556,6 +620,66 @@ describe('validateLogSleepForm', () => {
       { now: NOW },
     );
     expect(result.ok).toBe(true);
+  });
+
+  // ── additive guard: upper duration bound (<= 24h) ──────────────────────────
+
+  test('MAX_SLEEP_HOURS is 24', () => {
+    expect(MAX_SLEEP_HOURS).toBe(24);
+  });
+
+  // Work-item case: a multi-day span (startDay 2026-06-16 23:00 → endDay
+  // 2026-06-18 06:00, ~31h) is rejected on endTime with SLEEP_TOO_LONG_MSG.
+  // endDay is only +1 day from NOW (2026-06-17), inside MAX_FUTURE_DAYS=2, so
+  // neither the future-day nor future-wake guard fires — the duration bound is
+  // what catches it.
+  test('a >24h sleep (~31h across two days) is rejected on endTime with SLEEP_TOO_LONG_MSG', () => {
+    const result = validateLogSleepForm(
+      sleepInput({
+        startDay: '2026-06-16',
+        startTime: '23:00',
+        endDay: '2026-06-18',
+        endTime: '06:00',
+      }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fieldErrors.endTime).toBe(SLEEP_TOO_LONG_MSG);
+      // The day-level and future-wake guards stayed quiet (endDay is within
+      // tolerance), so the too-long message is the one that surfaced.
+      expect(result.fieldErrors.startDay).toBeUndefined();
+      expect(result.fieldErrors.endDay).toBeUndefined();
+    }
+  });
+
+  // Re-assert the work-item happy paths under a pinned now: the default
+  // overnight 23:00 → 07:00 (~8h) and same-day 01:00 → 08:00 (7h) must stay
+  // valid under the new bound.
+  test('the default overnight 23:00 → 07:00 sleep (~8h) still passes under the duration bound', () => {
+    const result = validateLogSleepForm(sleepInput(), { now: NOW });
+    expect(result.ok).toBe(true);
+  });
+
+  test('a same-day 01:00 → 08:00 sleep (7h) still passes under the duration bound', () => {
+    const result = validateLogSleepForm(
+      sleepInput({ startTime: '01:00', endTime: '08:00' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  test('a zero-length sleep still wins the dedicated message over the too-long bound', () => {
+    // Priority check: when start === end the zero-length copy must surface, not
+    // the duration bound (which only fires once endTime is otherwise clean).
+    const result = validateLogSleepForm(
+      sleepInput({ startTime: '23:00', endTime: '23:00' }),
+      { now: NOW },
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fieldErrors.endTime).toBe('Sleep start must be before sleep end');
+    }
   });
 });
 

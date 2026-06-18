@@ -6,6 +6,12 @@ import { ShiftType } from '@nightfuel/types';
 // any downstream circadian/aggregation math.
 const MAX_COMMUTE_MINUTES = 600; // ~10h
 
+// Server-side bound: the widest shift-history window a client may request in a
+// single call. Caps the start..end span so a reversed or absurd multi-decade
+// range can't force an unbounded DB scan / downstream circadian aggregation.
+// 366 days covers any full calendar year (incl. a leap year) of shift history.
+const MAX_QUERY_RANGE_DAYS = 366; // ~1 leap year
+
 // Cross-field invariant message reused by create + update so the client sees
 // an identical, unambiguous error regardless of which path validated it.
 const END_AFTER_START_MESSAGE = 'endTime must be after startTime';
@@ -48,12 +54,49 @@ export const updateShiftSchema = z
         }
     );
 
-export const getShiftsQuerySchema = z.object({
+// Raw shape for the list-shifts query. Kept as a plain object literal (mirroring
+// `shiftShape`) so `getShiftsQuerySchema` stays a ZodObject — the route layer
+// calls `getShiftsQuerySchema.omit({ userId: true })`, and `.omit()` does NOT
+// exist on a `.refine()`-wrapped schema (a ZodEffects).
+const getShiftsQueryShape = {
     // userId injected from JWT — only start/end come from the client
     userId: z.string().uuid().optional(),
-    start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-});
+    start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
+    end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD
+};
+
+// Public, omit-friendly schema consumed by routes.ts. Left as a bare ZodObject
+// so existing `.omit({ userId: true })` keeps type-checking — DO NOT wrap this
+// export in `.refine()`/`.superRefine()` (that would turn it into a ZodEffects
+// and break the route's `.omit` call).
+export const getShiftsQuerySchema = z.object(getShiftsQueryShape);
+
+// Bounded variant: the same shape PLUS two cross-field range guards. Parse the
+// dates as explicit UTC midnight (`+ 'T00:00:00.000Z'`) so the comparison and
+// the whole-day span are deterministic regardless of the host timezone.
+//   (a) end must be on or after start  — rejects a reversed range.
+//   (b) span (in whole days) <= MAX_QUERY_RANGE_DAYS — rejects an absurd
+//       multi-decade window that would force an unbounded DB scan.
+// Both errors are attached to path ['end'] so the client can surface them on
+// the field the caller would adjust.
+export const getShiftsQuerySchemaBounded = z
+    .object(getShiftsQueryShape)
+    .refine((data) => new Date(data.end + 'T00:00:00.000Z') >= new Date(data.start + 'T00:00:00.000Z'), {
+        message: 'end must be on or after start',
+        path: ['end'],
+    })
+    .refine(
+        (data) =>
+            Math.round(
+                (Date.parse(data.end + 'T00:00:00.000Z') -
+                    Date.parse(data.start + 'T00:00:00.000Z')) /
+                    86400000
+            ) <= MAX_QUERY_RANGE_DAYS,
+        {
+            message: `date range must not exceed ${MAX_QUERY_RANGE_DAYS} days`,
+            path: ['end'],
+        }
+    );
 
 export type CreateShiftBody = z.infer<typeof createShiftSchema>;
 export type UpdateShiftBody = z.infer<typeof updateShiftSchema>;
