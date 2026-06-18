@@ -20,13 +20,18 @@
  *     on a migrated screen is exactly the drift this guard catches: it forks the
  *     CTA look (wrong gradient stop → white-on-coral fails AA), drops the glow /
  *     pressed-scale / a11y the primitive owns, and re-opens the per-screen copy
- *     CtaButton was built to retire. After the conversion landed, the ONLY
- *     app-tree files that still render a coral-token <LinearGradient> are the
- *     NON-CTA fills (overlay scrims, FABs / avatar rings, icon-only hero badges)
- *     and the small set of legitimate inline CTAs this sprint did not convert
- *     (path-allowlisted below) — so this guard exits 0. A future regression that
- *     drops a labeled coral-CTA <LinearGradient> back into an app screen can't
- *     merge.
+ *     CtaButton was built to retire. The labeled inline coral CTAs have now ALL
+ *     been migrated to CtaButton (or, where the surface is a rich card / custom-
+ *     loading button that CtaButton cannot express — the (tabs)/training.tsx
+ *     active-session card and the (shifts)/index.tsx generate-plan hero — to the
+ *     sanctioned absoluteFill overlay-fill shape behind the existing content), so
+ *     the app-tree allowlist below is now EMPTY: the ONLY app-tree files that
+ *     still render a coral-token <LinearGradient> are the NON-CTA fills (overlay
+ *     scrims, FABs / avatar rings, icon-only send buttons / hero badges, the
+ *     messages own-message chat bubble), each kept green by the detector's own
+ *     overlay / named-signature / no-Text classification — so this guard exits 0.
+ *     A future regression that drops a labeled coral-CTA <LinearGradient> back
+ *     into an app screen can't merge.
  *
  *     This mirrors check-no-inline-glass.js: a structural, dependency-free static
  *     guard that drift-proofs a cross-screen UI-primitive contract. CtaButton is
@@ -80,7 +85,7 @@
  *   1:1 onto the original, so reported line numbers are exact.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * ALLOWLIST (repo-relative POSIX paths) — two kinds:
+ * ALLOWLIST (repo-relative POSIX paths) — now ONE entry: the CtaButton primitive.
  *
  *   The CtaButton primitive itself:
  *     • clients/mobile/src/components/ui/CtaButton.tsx
@@ -90,34 +95,31 @@
  *         is documented here for completeness (exactly like GlassCard.tsx is in
  *         check-no-inline-glass.js).
  *
- *   Legitimate inline coral CTAs this sprint does NOT convert (PATH-allowlisted
- *   so the guard exits 0 on the CURRENT tree and only catches NEW drift). Each is
- *   skipped before detection; remove its entry the moment the screen is migrated
- *   to CtaButton so the guard re-arms on it:
- *     • clients/mobile/app/(community)/userProfile.tsx
- *         The "MESSAGE this member" CTA (icon + Text label).
- *     • clients/mobile/app/(community)/[postId].tsx
- *         The comment "Send message" button (icon-only today, but path-pinned so
- *         a future label can't slip a new inline CTA past the guard).
- *     • clients/mobile/app/messages/[id].tsx
- *         The coral chat bubble fill (own-message bubble carries Text) + the
- *         icon-only send button.
- *     • clients/mobile/app/(exercises)/report.tsx
- *         The "BACK TO TRAINING" CTA (Text label).
- *     • clients/mobile/app/(exercises)/calculator.tsx
- *         The "SAVE TO RECORDS" CTA (icon + Text label). (Its result-ring fill is
- *         separately a /ring/ non-CTA, signature-allowed.)
- *     • clients/mobile/app/(tabs)/training.tsx
- *         The "SESSION IN PROGRESS" active-session card (coralCta + Text).
- *     • clients/mobile/app/(shifts)/index.tsx
- *         The "Generate nutrition" hero CTA.
- *     • clients/mobile/app/(settings)/index.tsx
- *         The "NightFuel" membership badge (badge-styled, also Text). Path-pinned
- *         in addition to its /badge/ signature, belt-and-suspenders.
- *     • clients/mobile/app/training/onboarding.tsx
- *         The "Start Workout" CTA (Text + icon).
+ *   The screens that were once path-exempted have all been retired off the
+ *   allowlist — the labeled inline coral CTAs are now CtaButton, and the two
+ *   surfaces CtaButton cannot express plus the genuine non-CTA fills are kept
+ *   green by the detector's own classification (no path pin needed):
+ *     • (community)/userProfile.tsx — "MESSAGE" → <CtaButton icon label>.
+ *     • (exercises)/report.tsx — "BACK TO TRAINING" → <CtaButton label size="lg">.
+ *     • (exercises)/calculator.tsx — "SAVE TO RECORDS" → <CtaButton icon label
+ *       size="lg" loading>. (Its result-ring fill stays a /ring/ non-CTA.)
+ *     • training/onboarding.tsx — "Start Workout" → <CtaButton icon label size="lg"
+ *       loading>.
+ *     • (tabs)/training.tsx — the "SESSION IN PROGRESS" active-session card is a
+ *       rich card (icon disc + two-line copy + chevron), not a button; its coralCta
+ *       fill is now an absoluteFillObject overlay behind the content (allowed (a)).
+ *     • (shifts)/index.tsx — the "Generate AI Nutrition Plan" hero has a custom
+ *       GeneratingSteps loading state; its coral fill is now an absoluteFillObject
+ *       overlay behind that content (allowed (a)).
+ *     • (community)/[postId].tsx — icon-only comment send button (no <Text>,
+ *       allowed (c)).
+ *     • messages/[id].tsx — icon-only send button (allowed (c)) + the own-message
+ *       chat bubble, whose coral fill is now a self-rounding absoluteFillObject
+ *       overlay behind the bubble text (allowed (a)); it is a chat bubble, not a CTA.
+ *     • (settings)/index.tsx — the "NightFuel" membership badge keeps its /badge/
+ *       style name (allowed (b)); it is decorative chrome, not a CTA.
  *
- * Files in the allowlist are skipped before detection; the detector's own
+ * The lone allowlisted file is skipped before detection; the detector's own
  * overlay / named-signature / no-Text classification then keeps every genuine
  * non-CTA gradient (and any future one of those shapes) green regardless. If a
  * coral gradient cannot be positively tied to the labeled-CTA signature, it is
@@ -166,15 +168,6 @@ const SKIP_DIRS = new Set([
 // in code (mirrors how check-no-inline-glass.js lists GlassCard.tsx).
 const ALLOWLIST = new Set([
     'clients/mobile/src/components/ui/CtaButton.tsx',
-    'clients/mobile/app/(community)/userProfile.tsx',
-    'clients/mobile/app/(community)/[postId].tsx',
-    'clients/mobile/app/messages/[id].tsx',
-    'clients/mobile/app/(exercises)/report.tsx',
-    'clients/mobile/app/(exercises)/calculator.tsx',
-    'clients/mobile/app/(tabs)/training.tsx',
-    'clients/mobile/app/(shifts)/index.tsx',
-    'clients/mobile/app/(settings)/index.tsx',
-    'clients/mobile/app/training/onboarding.tsx',
 ]);
 
 // An opening <LinearGradient …> JSX tag. The `(?=[\s/>])` lookahead means a

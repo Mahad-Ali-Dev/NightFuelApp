@@ -11,9 +11,9 @@ import { useQuery } from '@tanstack/react-query';
 import { getWorkout } from '@/api/exercises';
 import { format } from 'date-fns';
 import { LinearGradient } from 'expo-linear-gradient';
-import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
-import { Skeleton, EmptyState } from '@/components/ui';
+import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
+import { StatusBar } from 'expo-status-bar';
 
 const { width } = Dimensions.get('window');
 
@@ -126,6 +126,7 @@ export default function WorkoutReportScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top, borderBottomColor: colors.border.default }]}>
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} style={styles.backBtn}>
@@ -225,24 +226,13 @@ export default function WorkoutReportScreen() {
             </ScrollView>
 
             <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-                <TouchableOpacity
-                    style={[shadows.glow(colors.accent.coral), { borderRadius: borderRadius.full }]}
-                    accessibilityRole="button"
+                <CtaButton
+                    label="BACK TO TRAINING"
+                    size="lg"
                     accessibilityLabel="Back to training"
                     onPress={() => router.push('/(tabs)/training' as any)}
-                    activeOpacity={0.85}
-                >
-                    <LinearGradient
-                        colors={colors.gradients.coral}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={[styles.mainBtn, { borderRadius: borderRadius.full }]}
-                    >
-                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>
-                            BACK TO TRAINING
-                        </Text>
-                    </LinearGradient>
-                </TouchableOpacity>
+                    style={[styles.mainBtn, { borderRadius: borderRadius.full }]}
+                />
             </View>
         </View>
     );

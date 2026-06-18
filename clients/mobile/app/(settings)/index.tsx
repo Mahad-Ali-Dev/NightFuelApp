@@ -13,6 +13,7 @@ import { getProfile } from '@/api/users';
 import { getStatus } from '@/api/subscriptions';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import Constants from 'expo-constants';
@@ -84,6 +85,7 @@ export default function SettingsIndexScreen() {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
                 <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={{ padding: 4 }}>

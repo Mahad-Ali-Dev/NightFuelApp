@@ -3,6 +3,8 @@ import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIn
 
 import { useTheme } from '@/theme';
 import { Card } from '@/components/ui/Card';
+import { CtaButton } from '@/components/ui';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 
 export default function TrainingOnboardingScreen() {
-    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
+    const { colors, typography, spacing, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -40,6 +42,7 @@ export default function TrainingOnboardingScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <ImageBackgroundGradient />
 
             <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -101,28 +104,14 @@ export default function TrainingOnboardingScreen() {
             </ScrollView>
 
             <View style={[styles.footer, { paddingBottom: insets.bottom || 24, backgroundColor: colors.background.primary, borderTopColor: colors.border.default }]}>
-                <TouchableOpacity
-                    style={[styles.startBtn, shadows.glow(colors.accent.coral)]}
+                <CtaButton
+                    label="Start Workout"
+                    icon="play"
+                    size="lg"
+                    loading={startMutation.isPending}
                     onPress={handleStart}
-                    disabled={startMutation.isPending}
-                    activeOpacity={0.9}
-                >
-                    <LinearGradient
-                        colors={colors.gradients.coral}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 0 }}
-                        style={styles.startBtnInner}
-                    >
-                        {startMutation.isPending ? (
-                            <ActivityIndicator color={colors.text.primary} />
-                        ) : (
-                            <>
-                                <Text style={[typography.h3, { color: colors.text.primary, marginRight: 8 }]}>Start Workout</Text>
-                                <Ionicons name="play" size={20} color={colors.text.primary} />
-                            </>
-                        )}
-                    </LinearGradient>
-                </TouchableOpacity>
+                    style={styles.startBtn}
+                />
             </View>
         </View>
     );
@@ -177,13 +166,5 @@ const styles = StyleSheet.create({
     startBtn: {
         height: 56,
         borderRadius: 28,
-    },
-    startBtnInner: {
-        flex: 1,
-        flexDirection: 'row',
-        borderRadius: 28,
-        overflow: 'hidden',
-        alignItems: 'center',
-        justifyContent: 'center',
     }
 });

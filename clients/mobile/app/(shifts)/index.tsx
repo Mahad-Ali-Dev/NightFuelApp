@@ -47,6 +47,7 @@ import { getScheduledSessionsForShift, type ScheduledSession } from '@/api/train
 import { generatePlan } from '@/api/plans';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 
 export default function ShiftCalendarScreen() {
     const { colors, typography, spacing, borderRadius, shadows } = useTheme();
@@ -86,6 +87,7 @@ export default function ShiftCalendarScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <ImageBackgroundGradient />
 
             <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -213,12 +215,13 @@ export default function ShiftCalendarScreen() {
                                     });
                                 }}
                             >
-                                <LinearGradient
-                                    colors={colors.gradients.coral}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 0 }}
-                                    style={styles.heroBtnGradient}
-                                >
+                                <View style={styles.heroBtnGradient}>
+                                    <LinearGradient
+                                        colors={colors.gradients.coral}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 0 }}
+                                        style={StyleSheet.absoluteFillObject}
+                                    />
                                     {generateMutation.isPending ? (
                                         <GeneratingSteps
                                             active={generateMutation.isPending}
@@ -233,7 +236,7 @@ export default function ShiftCalendarScreen() {
                                             <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>Generate AI Nutrition Plan</Text>
                                         </>
                                     )}
-                                </LinearGradient>
+                                </View>
                             </TouchableOpacity>
 
                             {/* Training around this shift — READ-ONLY inverse of

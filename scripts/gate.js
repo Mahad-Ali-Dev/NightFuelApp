@@ -58,6 +58,21 @@
  *      (mobile jest run; --ci so it doesn't wait for an interactive watcher
  *      and disables snapshot updates)
  *
+ * The 11 steps above are HARD: the FIRST non-zero exit FAILS the gate. After all
+ * 11 pass, the gate ALSO runs ONE informational reporting step whose exit code is
+ * deliberately IGNORED:
+ *
+ *   • Aurora coverage report (INFORMATIONAL — node scripts/check-aurora-
+ *     coverage.js): prints how many clients/mobile/app screens have adopted the
+ *     GlassCard / CtaButton / StatusBar Aurora primitives, as counts AND
+ *     percentages plus a total screen count. It is a METRIC, not a guard — the
+ *     script always exits 0, and the gate runs it via runReportingStep (a runStep
+ *     variant that streams its stdio but NEVER short-circuits main()), so the
+ *     coverage numbers can never affect the gate's PASS/FAIL. It runs SEPARATELY
+ *     from buildSteps() (not part of the hard step array) so the gate-steps meta
+ *     self-test — which forbids on-disk guard steps from carrying a `file:` field
+ *     — is unaffected, and so a 0% coverage number can never block a merge.
+ *
  * Dependency-free on purpose — uses only Node's built-in `fs`, `path`, and
  * `child_process`. Steps stream their output directly to the gate's stdio so
  * a CI log captures everything verbatim (the per-service log suppression
@@ -65,8 +80,9 @@
  * fully visible).
  *
  * Usage:   node scripts/gate.js
- * Exit:    0 = every step green; 1 = at least one step failed (prints the
- *               name of the first failing step before exiting).
+ * Exit:    0 = every HARD step green; 1 = at least one HARD step failed (prints
+ *               the name of the first failing step before exiting). The
+ *               informational coverage report NEVER changes the exit code.
  */
 
 'use strict';
@@ -140,6 +156,60 @@ function runStep(step) {
         console.error(`----- gate step: ${step.name} FAIL (exit ${exit}) -----`);
     }
     return exit;
+}
+
+/**
+ * Run an INFORMATIONAL reporting step: stream its stdio (so its output is fully
+ * visible in the gate log) but NEVER let its exit code affect the gate. This is
+ * the non-fatal sibling of runStep — main() calls it OUTSIDE the hard step loop,
+ * so whatever the script prints (and whatever code it returns) the gate's
+ * PASS/FAIL is untouched. Used for the Aurora coverage report, which is a metric
+ * (always exits 0) rather than a guard.
+ *
+ * Returns the observed exit code purely for logging/diagnostics; the caller
+ * ignores it by contract. A reporting step is intentionally NOT existsSync-
+ * guarded here — if its script is genuinely missing, spawnSync surfaces that in
+ * the log without failing the gate.
+ */
+function runReportingStep(step) {
+    console.log(`\n----- gate report (informational, non-blocking): ${step.name} -----`);
+    const useShell = step.cmd === NPM;
+    const result = spawnSync(step.cmd, step.args, {
+        cwd: REPO_ROOT,
+        stdio: 'inherit',
+        shell: useShell,
+    });
+    const exit = typeof result.status === 'number' ? result.status : 1;
+    // Informational ONLY — we report the outcome but DO NOT propagate it. Even a
+    // non-zero exit here is logged as a note, never a gate failure.
+    if (exit === 0) {
+        console.log(`----- gate report: ${step.name} done (informational) -----`);
+    } else {
+        console.log(`----- gate report: ${step.name} returned exit ${exit} — IGNORED (informational, non-blocking) -----`);
+    }
+    return exit;
+}
+
+/**
+ * Informational reporting steps, run AFTER the hard buildSteps() loop with their
+ * exit codes ignored (see runReportingStep + main()). Kept SEPARATE from
+ * buildSteps() on purpose: the gate-steps meta self-test asserts that every
+ * on-disk guard step in buildSteps() carries no `file:` field, so the coverage
+ * report — which is not a guard — must not live in that array. Exposed via
+ * module.exports.__test.buildReportingSteps so tests can assert the wiring.
+ */
+function buildReportingSteps() {
+    return [
+        {
+            // Aurora-adoption coverage (GlassCard / CtaButton / StatusBar) over
+            // clients/mobile/app — counts + percentages + total. INFORMATIONAL:
+            // the script always exits 0 and runReportingStep ignores its exit
+            // code, so these numbers can never block the gate.
+            name: 'aurora-coverage (informational)',
+            cmd: NODE,
+            args: [path.join(REPO_ROOT, 'scripts', 'check-aurora-coverage.js')],
+        },
+    ];
 }
 
 /**
@@ -318,6 +388,18 @@ function main() {
         }
     }
 
+    // All HARD steps green. Now run the INFORMATIONAL reporting steps with their
+    // exit codes IGNORED — they print metrics (e.g. Aurora coverage) but never
+    // change the gate's PASS/FAIL. Wrapped defensively so a throwing reporter
+    // can't turn a green gate red.
+    for (const report of buildReportingSteps()) {
+        try {
+            runReportingStep(report);
+        } catch (err) {
+            console.log(`----- gate report: ${report.name} threw — IGNORED (informational, non-blocking) -----`);
+        }
+    }
+
     console.log('\ngate PASS — every step green');
     process.exit(0);
 }
@@ -328,5 +410,7 @@ if (require.main === module) {
 
 module.exports.__test = {
     runStep,
+    runReportingStep,
     buildSteps,
+    buildReportingSteps,
 };

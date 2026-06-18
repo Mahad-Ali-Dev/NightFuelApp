@@ -9,6 +9,7 @@ import {
     Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -107,6 +108,7 @@ export default function AIWorkoutPlannerScreen() {
 
     return (
         <View style={[s.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             {/* Header */}
             <LinearGradient
                 colors={[withAlpha(colors.accent.purple, 0.18), 'transparent']}

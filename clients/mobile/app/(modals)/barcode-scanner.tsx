@@ -4,6 +4,7 @@ import {
     ActivityIndicator, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -110,6 +111,7 @@ export default function BarcodeScannerModal() {
 
     return (
         <View style={[styles.container, { backgroundColor: '#000' }]}>
+            <StatusBar style="light" />
             <CameraView
                 style={StyleSheet.absoluteFillObject}
                 facing="back"

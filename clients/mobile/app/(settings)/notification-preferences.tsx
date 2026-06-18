@@ -4,6 +4,7 @@ import {
     ActivityIndicator, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -219,6 +220,7 @@ export default function NotificationPreferencesScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary, paddingTop: insets.top }]}>
+            <StatusBar style="light" />
             <Header
                 router={router}
                 colors={colors}

@@ -14,6 +14,7 @@ import { withAlpha } from '@/theme/utils';
 import { safeImageUri } from '@/lib/imageUrl';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { Card, Button, Skeleton, EmptyState } from '@/components/ui';
 import { shadows } from '@/theme';
 import { formatDistanceToNow } from 'date-fns';
@@ -116,6 +117,7 @@ export default function PostDetailScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             style={[styles.container, { backgroundColor: colors.background.primary }]}
         >
+            <StatusBar style="light" />
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
                 <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backBtn}>

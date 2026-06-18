@@ -9,6 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMessages, sendMessage, startConversation, createSocketConnection } from '@/api/chat';
 import type { Socket } from 'socket.io-client';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { Skeleton, EmptyState } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 
@@ -100,19 +101,20 @@ export default function UnifiedChatScreen() {
         if (isMe) {
             return (
                 <View style={[styles.bubbleRow, styles.myRow]}>
-                    <LinearGradient
-                        colors={colors.gradients.coral}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={[styles.bubble, shadows.glow(colors.accent.pink)]}
-                    >
+                    <View style={[styles.bubble, shadows.glow(colors.accent.pink)]}>
+                        <LinearGradient
+                            colors={colors.gradients.coral}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
+                        />
                         <Text style={[typography.body, { color: colors.text.primary, lineHeight: 22 }]}>
                             {item.text}
                         </Text>
                         <Text style={[typography.caption, { color: withAlpha(colors.text.primary, 0.7), fontSize: 10, marginTop: 6, alignSelf: 'flex-end' }]}>
                             {timeStamp}
                         </Text>
-                    </LinearGradient>
+                    </View>
                 </View>
             );
         }
@@ -138,6 +140,7 @@ export default function UnifiedChatScreen() {
 
     return (
         <KeyboardAvoidingView style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <StatusBar style="light" />
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" activeOpacity={0.85} onPress={() => router.back()} style={[styles.headerBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>

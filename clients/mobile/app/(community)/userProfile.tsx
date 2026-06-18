@@ -8,9 +8,9 @@ import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Card } from '@/components/ui/Card';
-import { Skeleton, EmptyState } from '@/components/ui';
+import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
+import { StatusBar } from 'expo-status-bar';
 import { shadows } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { formatDistanceToNow } from 'date-fns';
@@ -93,6 +93,7 @@ export default function UserProfileScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <View style={[styles.header, { paddingTop: insets.top + 10, borderBottomColor: colors.border.default }]}>
                 <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={{ padding: 8 }}>
                     <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
@@ -134,23 +135,13 @@ export default function UserProfileScreen() {
                         </View>
                     </View>
 
-                    <TouchableOpacity
-                        accessibilityRole="button"
+                    <CtaButton
+                        label="MESSAGE"
+                        icon="chatbubble-ellipses"
                         accessibilityLabel="Message this member"
-                        style={[styles.messageBtn, shadows.glow(colors.accent.coral)]}
                         onPress={() => router.push(`/messages/${userId}` as any)}
-                        activeOpacity={0.9}
-                    >
-                        <LinearGradient
-                            colors={colors.gradients.coral}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={styles.messageBtnGradient}
-                        >
-                            <Ionicons name="chatbubble-ellipses" size={20} color={colors.text.primary} />
-                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginLeft: 8 }]}>MESSAGE</Text>
-                        </LinearGradient>
-                    </TouchableOpacity>
+                        style={styles.messageBtn}
+                    />
                 </View>
 
                 {/* Posts */}
@@ -209,8 +200,7 @@ const styles = StyleSheet.create({
     avatarLarge: { width: 80, height: 80, borderRadius: 40, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
     statsRow: { flexDirection: 'row', justifyContent: 'center', gap: 40, marginTop: 24, paddingHorizontal: 20 },
     statBox: { alignItems: 'center' },
-    messageBtn: { marginTop: 24, width: '60%', borderRadius: 24, overflow: 'hidden' },
-    messageBtnGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, paddingHorizontal: 32 },
+    messageBtn: { marginTop: 24, width: '60%', borderRadius: 24 },
     postCard: { padding: 18, marginBottom: 16, borderWidth: 1 },
     postImg: { width: '100%', height: 200, marginBottom: 12 },
 });

@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getFeed, likePost, getChallenges, Post } from '@/api/community';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Card, Button, Skeleton, EmptyState } from '@/components/ui';
@@ -52,6 +53,7 @@ export default function CommunityFeedScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             {/* Header */}
             <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
                 <Text style={[typography.h1, { color: colors.text.primary }]}>Community</Text>

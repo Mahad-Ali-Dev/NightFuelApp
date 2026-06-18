@@ -4,6 +4,7 @@ import {
     ActivityIndicator, Dimensions, Alert, Linking, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { colors as palette } from '@/theme/colors';
 import { spacing, borderRadius as br } from '@/theme/spacing';
@@ -270,6 +271,7 @@ function SubscriptionScreenContent() {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
                 <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={{ padding: 4 }}>
                     <Ionicons name="arrow-back" size={24} color={colors.text.primary} />

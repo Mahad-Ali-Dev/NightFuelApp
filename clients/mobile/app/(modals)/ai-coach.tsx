@@ -5,12 +5,13 @@ import {
     ActivityIndicator, Animated,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { shadows } from '@/theme/shadows';
 import { typography as themeTypography } from '@/theme/typography';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Card } from '@/components/ui/Card';
+import { SafeBlurView } from '@/components/SafeBlurView';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRiaMessages, sendRiaMessage, type RiaMessage } from '@/api/chat';
 import { streamChat } from '@/api/ai';
@@ -346,34 +347,44 @@ export default function AICoachScreen() {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
-            {/* Header */}
-            <View style={[styles.header, { borderBottomColor: colors.border.default, backgroundColor: colors.background.secondary }]}>
-                <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name="close" size={28} color={colors.text.primary} />
-                </TouchableOpacity>
+            <StatusBar style="light" translucent backgroundColor="transparent" />
 
-                <View style={styles.headerCenter}>
-                    <LinearGradient
-                        colors={colors.gradients.purple}
-                        style={[styles.riaAvatar, shadows.glow(colors.accent.purple)]}
-                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                    >
-                        <Ionicons name="sparkles" size={18} color={colors.text.primary} />
-                    </LinearGradient>
-                    <View style={{ marginLeft: 10 }}>
-                        <Text style={[typography.heading, { color: colors.text.primary, fontSize: 17, fontWeight: '800' }]}>
-                            Coach Ria
-                        </Text>
-                        <View style={styles.statusBadge}>
-                            <View style={[styles.statusDot, { backgroundColor: isTyping ? colors.accent.amber : colors.accent.emerald }]} />
-                            <Text style={[typography.caption, { color: isTyping ? colors.accent.amber : colors.accent.emerald, fontWeight: 'bold', fontSize: 11 }]}>
-                                {isTyping ? 'Thinking...' : 'AI Coach · Online'}
-                            </Text>
+            {/* Glass header — frosts only the bottom edge (clipping View owns the
+                hairline + overflow; SafeBlurView owns the frost). */}
+            <View style={[styles.headerClip, { borderBottomColor: colors.border.default }]}>
+                <SafeBlurView tint="dark" intensity={40}>
+                    <View style={styles.header}>
+                        <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                            <Ionicons name="close" size={28} color={colors.text.primary} />
+                        </TouchableOpacity>
+
+                        <View style={styles.headerCenter}>
+                            <LinearGradient
+                                colors={colors.gradients.purple}
+                                style={[styles.riaAvatar, shadows.glow(colors.accent.purple)]}
+                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                            >
+                                <Ionicons name="sparkles" size={18} color={colors.text.primary} />
+                            </LinearGradient>
+                            <View style={{ marginLeft: 10 }}>
+                                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 17, fontWeight: '800' }]}>
+                                    Coach Ria
+                                </Text>
+                                <View style={styles.statusBadge}>
+                                    <View style={[styles.statusDot, { backgroundColor: isTyping ? colors.accent.amber : colors.accent.emerald }]} />
+                                    <Text
+                                        style={[typography.caption, { color: isTyping ? colors.accent.amber : colors.accent.emerald, fontWeight: 'bold', fontSize: 11 }]}
+                                        maxFontSizeMultiplier={1.3}
+                                    >
+                                        {isTyping ? 'Thinking...' : 'AI Coach · Online'}
+                                    </Text>
+                                </View>
+                            </View>
                         </View>
-                    </View>
-                </View>
 
-                <View style={{ width: 40 }} />
+                        <View style={{ width: 40 }} />
+                    </View>
+                </SafeBlurView>
             </View>
 
             <KeyboardAvoidingView
@@ -403,11 +414,14 @@ export default function AICoachScreen() {
 
                     {/* Typing indicator (hidden once live tokens are streaming) */}
                     {showThinkingDots && (
-                        <View style={[styles.aiBubble, { backgroundColor: colors.background.tertiary, marginBottom: 14 }]}>
+                        <View style={[styles.thinkingBubble, {
+                            backgroundColor: colors.background.tertiary,
+                            borderColor: withAlpha(colors.accent.purple, 0.2),
+                        }]}>
                             <View style={styles.aiHeader}>
-                                <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', fontSize: 10 }]}>RIA</Text>
+                                <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', fontSize: 10, letterSpacing: 0.5 }]} maxFontSizeMultiplier={1.3}>RIA</Text>
                             </View>
-                            <View style={styles.dotsRow}>
+                            <View style={styles.dotsRow} importantForAccessibility="no">
                                 {[dot1, dot2, dot3].map((dot, i) => (
                                     <Animated.View
                                         key={i}
@@ -441,7 +455,7 @@ export default function AICoachScreen() {
                                             backgroundColor: withAlpha(colors.accent.cyan, 0.06),
                                         }]}
                                     >
-                                        <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: '600' }]}>{sug}</Text>
+                                        <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: '600' }]} maxFontSizeMultiplier={1.3}>{sug}</Text>
                                     </TouchableOpacity>
                                 ))}
                             </View>
@@ -449,42 +463,47 @@ export default function AICoachScreen() {
                     )}
                 </ScrollView>
 
-                {/* Input Area */}
-                <View style={[styles.inputArea, {
+                {/* Glass input bar — clipping View owns the top hairline + safe-area
+                    pad; SafeBlurView owns the frost. Pinned to the keyboard. */}
+                <View style={[styles.inputClip, {
                     borderTopColor: colors.border.default,
-                    backgroundColor: colors.background.secondary,
                     paddingBottom: Math.max(insets.bottom, 16),
                 }]}>
-                    <TextInput
-                        style={[styles.textInput, {
-                            color: colors.text.primary,
-                            backgroundColor: colors.background.tertiary,
-                            borderColor: colors.border.default,
-                        }]}
-                        placeholder="Ask Ria about your shift protocol..."
-                        placeholderTextColor={colors.text.tertiary}
-                        value={input}
-                        onChangeText={setInput}
-                        multiline
-                        maxLength={500}
-                        returnKeyType="send"
-                        blurOnSubmit={false}
-                    />
+                    <SafeBlurView tint="dark" intensity={40}>
+                        <View style={styles.inputArea}>
+                            <TextInput
+                                style={[styles.textInput, {
+                                    color: colors.text.primary,
+                                    backgroundColor: colors.background.tertiary,
+                                    borderColor: colors.border.default,
+                                }]}
+                                placeholder="Ask Ria about your shift protocol..."
+                                placeholderTextColor={colors.text.tertiary}
+                                value={input}
+                                onChangeText={setInput}
+                                multiline
+                                maxLength={500}
+                                returnKeyType="send"
+                                blurOnSubmit={false}
+                            />
 
-                    <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Send"
-                        style={[styles.sendBtn, {
-                            backgroundColor: input.trim() ? colors.accent.purple : colors.background.tertiary,
-                            opacity: (mutation.isPending || isStreaming) ? 0.5 : 1,
-                        }, input.trim() && shadows.glow(colors.accent.purple)]}
-                        onPress={() => sendMessage(input)}
-                        disabled={mutation.isPending || isStreaming || !input.trim()}
-                    >
-                        <Ionicons
-                            name="arrow-up"
-                            size={20}
-                            color={input.trim() ? colors.text.primary : colors.text.tertiary}
-                        />
-                    </TouchableOpacity>
+                            <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Send"
+                                accessibilityState={{ disabled: mutation.isPending || isStreaming || !input.trim() }}
+                                style={[styles.sendBtn, {
+                                    backgroundColor: input.trim() ? colors.accent.purple : colors.background.tertiary,
+                                    opacity: (mutation.isPending || isStreaming) ? 0.5 : 1,
+                                }, input.trim() && shadows.glow(colors.accent.purple)]}
+                                onPress={() => sendMessage(input)}
+                                disabled={mutation.isPending || isStreaming || !input.trim()}
+                            >
+                                <Ionicons
+                                    name="arrow-up"
+                                    size={20}
+                                    color={input.trim() ? colors.text.primary : colors.text.tertiary}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                    </SafeBlurView>
                 </View>
             </KeyboardAvoidingView>
         </View>
@@ -496,10 +515,16 @@ export default function AICoachScreen() {
 const MessageBubble = React.memo(function MessageBubble({ msg, colors, typography }: { msg: Message; colors: any; typography: any }) {
     const isAI = msg.sender === 'ai';
     return (
-        <View style={[
-            styles.messageRow,
-            isAI ? { justifyContent: 'flex-start' } : { justifyContent: 'flex-end' },
-        ]}>
+        <View
+            style={[
+                styles.messageRow,
+                isAI ? { justifyContent: 'flex-start' } : { justifyContent: 'flex-end' },
+            ]}
+            accessible
+            accessibilityRole="text"
+            accessibilityLabel={`${isAI ? 'Ria' : 'You'}: ${msg.text}`}
+            accessibilityLiveRegion={msg.streaming ? 'polite' : 'none'}
+        >
             {isAI && (
                 <LinearGradient
                     colors={colors.gradients.purple}
@@ -512,28 +537,36 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
             <View style={[
                 styles.messageBubble,
                 isAI
-                    ? [styles.aiBubble, { backgroundColor: colors.background.tertiary }]
+                    ? [styles.aiBubble, {
+                        backgroundColor: colors.background.tertiary,
+                        borderWidth: 1,
+                        borderColor: withAlpha(colors.accent.purple, 0.2),
+                    }, shadows.glow(colors.accent.purple), { shadowOpacity: 0.12 }]
                     : [styles.userBubble, { backgroundColor: colors.accent.purple }],
             ]}>
                 {isAI && (
                     <View style={styles.aiHeader}>
-                        <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', fontSize: 10, letterSpacing: 0.5 }]}>RIA</Text>
-                        {msg.streaming && <View style={[styles.streamingDot, { backgroundColor: colors.accent.purpleLight }]} />}
+                        <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', fontSize: 10, letterSpacing: 0.5 }]} maxFontSizeMultiplier={1.3}>RIA</Text>
+                        {msg.streaming && <View style={[styles.streamingDot, { backgroundColor: colors.accent.purpleLight }]} importantForAccessibility="no" />}
                     </View>
                 )}
                 <Text style={[typography.body, {
-                    color: isAI ? colors.text.primary : colors.text.primary,
+                    color: colors.text.primary,
                     lineHeight: 22,
                 }]}>
                     {msg.text}
-                    {msg.streaming && <Text style={{ color: colors.accent.purpleLight }}>▌</Text>}
+                    {msg.streaming && <Text style={{ color: colors.accent.purpleLight }} importantForAccessibility="no">▌</Text>}
                 </Text>
-                <Text style={[typography.caption, {
-                    color: isAI ? colors.text.tertiary : withAlpha(colors.text.primary, 0.5),
-                    fontSize: 10,
-                    marginTop: 6,
-                    textAlign: isAI ? 'left' : 'right',
-                }]}>
+                <Text
+                    style={[typography.caption, {
+                        color: isAI ? colors.text.tertiary : withAlpha(colors.text.primary, 0.7),
+                        fontSize: 10,
+                        marginTop: 6,
+                        textAlign: isAI ? 'left' : 'right',
+                    }]}
+                    maxFontSizeMultiplier={1.3}
+                    importantForAccessibility="no"
+                >
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
             </View>
@@ -545,13 +578,18 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
+    // Clipping wrapper for the frosted header: owns the bottom hairline + radius
+    // clipping so SafeBlurView frosts only the bottom edge (no 4-sided boxing).
+    headerClip: {
+        overflow: 'hidden',
+        borderBottomWidth: 1,
+    },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderBottomWidth: 1,
     },
     headerCenter: {
         flexDirection: 'row',
@@ -605,6 +643,17 @@ const styles = StyleSheet.create({
     },
     aiBubble: { borderBottomLeftRadius: 4 },
     userBubble: { borderBottomRightRadius: 4 },
+    // Standalone "thinking" bubble (no live text yet) — mirrors a Ria AI bubble:
+    // bg.tertiary fill, faint purple glass hairline, flattened tail corner.
+    thinkingBubble: {
+        alignSelf: 'flex-start',
+        maxWidth: '80%',
+        padding: 14,
+        borderRadius: 18,
+        borderBottomLeftRadius: 4,
+        borderWidth: 1,
+        marginBottom: 14,
+    },
     streamingDot: {
         width: 6,
         height: 6,
@@ -631,12 +680,17 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         borderWidth: 1,
     },
+    // Clipping wrapper for the frosted input bar: owns the top hairline + the
+    // bottom safe-area pad; SafeBlurView (inside) owns the frost.
+    inputClip: {
+        overflow: 'hidden',
+        borderTopWidth: 1,
+    },
     inputArea: {
         flexDirection: 'row',
         alignItems: 'flex-end',
         paddingHorizontal: 12,
         paddingTop: 12,
-        borderTopWidth: 1,
         gap: 10,
     },
     textInput: {

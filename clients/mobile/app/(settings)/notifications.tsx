@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, FlatList, Platform } from 'react-native';
 
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { spacing, borderRadius as br } from '@/theme/spacing';
 import { withAlpha } from '@/theme/utils';
@@ -89,6 +90,7 @@ export default function NotificationsScreen() {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
                 <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={{ padding: 4 }}>
                     <Ionicons name="arrow-back" size={24} color={colors.text.primary} />

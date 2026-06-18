@@ -5,6 +5,7 @@ import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getStats, getUsers, toggleBanUser } from '@/api/admin';
 import { Card } from '@/components/ui/Card';
@@ -94,6 +95,7 @@ export default function AdminDashboardScreen() {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             {header}
 
             <ScrollView

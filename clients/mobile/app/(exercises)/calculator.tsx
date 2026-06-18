@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { logOneRepMax } from '@/api/exercises';
-import { GlassCard } from '@/components/ui';
+import { GlassCard, CtaButton } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { shadows } from '@/theme/shadows';
@@ -178,27 +178,15 @@ export default function CalculatorScreen() {
                         ))}
                     </View>
 
-                    <TouchableOpacity
-                        style={[shadows.glow(colors.accent.coral), { borderRadius: borderRadius.xl, marginTop: 24, opacity: saveMutation.isPending ? 0.7 : 1 }]}
-                        onPress={() => saveMutation.mutate()}
-                        disabled={saveMutation.isPending}
-                        accessibilityRole="button"
+                    <CtaButton
+                        label="SAVE TO RECORDS"
+                        icon="trophy"
+                        size="lg"
+                        loading={saveMutation.isPending}
                         accessibilityLabel="Save to records"
-                        accessibilityState={{ disabled: saveMutation.isPending }}
-                        activeOpacity={0.85}
-                    >
-                        <LinearGradient
-                            colors={colors.gradients.coral}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={[styles.saveBtn, { borderRadius: borderRadius.xl }]}
-                        >
-                            <Ionicons name="trophy" size={20} color="#FFF" />
-                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginLeft: 8 }]}>
-                                {saveMutation.isPending ? 'SAVING...' : 'SAVE TO RECORDS'}
-                            </Text>
-                        </LinearGradient>
-                    </TouchableOpacity>
+                        onPress={() => saveMutation.mutate()}
+                        style={[styles.saveBtn, { borderRadius: borderRadius.xl, marginTop: 24 }]}
+                    />
 
                     {/* Zone Table */}
                     <Text style={[typography.heading, { color: colors.text.primary, marginTop: spacing['2xl'], marginBottom: spacing.md }]}>

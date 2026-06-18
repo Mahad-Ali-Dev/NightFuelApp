@@ -78,9 +78,10 @@ export default function TrainingHubScreen() {
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:TAB_BAR_H+80}}>
                     {activeSession ? (
                         <TouchableOpacity activeOpacity={0.9} accessibilityRole="button" accessibilityLabel="Session in progress, touch to resume" style={[s.activeWrap,{marginHorizontal:20,marginBottom:24},shadows.glow(colors.accent.pink)]} onPress={()=>router.push('/training/workout' as any)}>
-                            <LinearGradient colors={colors.gradients.coralCta} start={{x:0,y:0}} end={{x:1,y:1}} style={s.activeCard}>
+                            <View style={s.activeCard}>
+                                <LinearGradient colors={colors.gradients.coralCta} start={{x:0,y:0}} end={{x:1,y:1}} style={StyleSheet.absoluteFillObject} />
                                 <View style={s.activeRow}><View style={s.activeIcon}><Ionicons name="play" size={24} color={colors.accent.coral} /></View><View style={{flex:1,marginLeft:16}}><Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'900'},s.txtShadow]}>SESSION IN PROGRESS</Text><Text style={[typography.caption,{color:colors.text.primary},s.txtShadow]}>Touch to resume</Text></View><Ionicons name="chevron-forward" size={24} color={colors.text.primary} /></View>
-                            </LinearGradient>
+                            </View>
                         </TouchableOpacity>
                     ) : (
                         <TouchableOpacity activeOpacity={0.9} accessibilityRole="button" accessibilityLabel="Start new session" style={{marginHorizontal:20,marginBottom:24}} onPress={()=>router.push('/training/onboarding' as any)}>
