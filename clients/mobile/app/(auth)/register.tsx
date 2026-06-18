@@ -7,12 +7,14 @@ import {
   Platform,
   ScrollView,
   Pressable,
+  AccessibilityInfo,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter, Link } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Input, Button, Card } from '@/components/ui';
+import { Input, Card, CtaButton, GlassCard } from '@/components/ui';
 import { useTheme } from '@/theme';
 import { spacing, borderRadius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
@@ -33,6 +35,14 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Surface a validation/error message both visually (the error pill) and to
+  // screen readers. liveRegion handles TalkBack on Android; announceForAccessibility
+  // is what reaches VoiceOver on iOS (liveRegion is Android-only), so we fire both.
+  const fail = (message: string) => {
+    setError(message);
+    AccessibilityInfo.announceForAccessibility(message);
+  };
+
   const handleRegister = async () => {
     const cleanName = sanitizeInput(name);
     // Lowercase + trim the email exactly like the backend does before it is
@@ -40,19 +50,19 @@ export default function RegisterScreen() {
     // normalize differently. sanitizeInput first strips any stray HTML.
     const cleanEmail = normalizeEmail(sanitizeInput(email));
     if (!cleanName || !cleanEmail || !password) {
-      setError('Please fill in all fields');
+      fail('Please fill in all fields');
       return;
     }
     if (!isValidEmail(cleanEmail)) {
-      setError('Please enter a valid email address');
+      fail('Please enter a valid email address');
       return;
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      fail('Passwords do not match');
       return;
     }
     if (!isStrongPassword(password)) {
-      setError('Password must be at least 8 characters with a number and uppercase letter');
+      fail('Password must be at least 8 characters with a number and uppercase letter');
       return;
     }
     setLoading(true);
@@ -66,7 +76,7 @@ export default function RegisterScreen() {
       });
       router.replace('/(onboarding)/metrics-goals');
     } catch (e: any) {
-      setError(e?.message ?? 'Registration failed. Please try again.');
+      fail(e?.message ?? 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -74,6 +84,7 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]}>
+      <StatusBar style="light" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
@@ -112,7 +123,7 @@ export default function RegisterScreen() {
           </View>
 
           {/* Form */}
-          <View style={styles.form}>
+          <GlassCard style={styles.formCard}>
             <Text style={[styles.sectionLabel, { color: colors.text.secondary }]}>
               Your details
             </Text>
@@ -169,21 +180,24 @@ export default function RegisterScreen() {
                     borderColor: withAlpha(colors.error, 0.25),
                   },
                 ]}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="assertive"
               >
                 <Ionicons name="alert-circle" size={16} color={colors.error} />
                 <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
               </View>
             ) : null}
+          </GlassCard>
 
-            <Button
-              title="Create Account"
-              onPress={handleRegister}
-              loading={loading}
-              fullWidth
-              size="lg"
-              icon={<Ionicons name="rocket-outline" size={20} color={colors.text.primary} />}
-            />
-          </View>
+          {/* Primary CTA — outside the GlassCard so the coral glow halo reads on the dark bg */}
+          <CtaButton
+            label="Create Account"
+            size="lg"
+            icon="rocket-outline"
+            loading={loading}
+            onPress={handleRegister}
+            style={styles.cta}
+          />
 
           {/* Login link */}
           <View style={styles.loginRow}>
@@ -215,7 +229,12 @@ function PasswordRequirements({ password }: { password: string }) {
   return (
     <Card variant="glass" padding="md" style={styles.pwReqs}>
       {rules.map(rule => (
-        <View key={rule.label} style={styles.pwReqRow}>
+        <View
+          key={rule.label}
+          style={styles.pwReqRow}
+          accessibilityRole="text"
+          accessibilityLabel={`${rule.label}, ${rule.met ? 'met' : 'not met'}`}
+        >
           <Ionicons
             name={rule.met ? 'checkmark-circle' : 'ellipse-outline'}
             size={14}
@@ -269,7 +288,9 @@ const styles = StyleSheet.create({
     ...typography.body,
     marginTop: spacing.sm,
   },
-  form: {},
+  formCard: {
+    padding: spacing.xl,
+  },
   sectionLabel: {
     ...typography.overline,
     marginBottom: spacing.lg,
@@ -289,6 +310,10 @@ const styles = StyleSheet.create({
   errorText: {
     ...typography.bodySm,
     flex: 1,
+  },
+  cta: {
+    width: '100%',
+    marginTop: spacing.xl,
   },
   loginRow: {
     flexDirection: 'row',

@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { TAB_BAR_H } from './_layout';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -61,6 +62,7 @@ export default function TrainingHubScreen() {
     return (
         <ImageBackground blurRadius={4} source={HERO_TRAINING} style={[s.container,{backgroundColor:colors.background.primary}]} imageStyle={{opacity:0.35}}>
             <LinearGradient colors={['rgba(10,10,13,0.8)',colors.background.primary]} style={StyleSheet.absoluteFillObject} />
+            <StatusBar style="light" />
             <View style={[s.hdr,{paddingTop:insets.top+20}]}>
                 <View><Text style={[typography.display,{color:colors.text.primary,fontSize:34}]}>Training</Text><Text style={[typography.body,{color:colors.text.secondary,marginTop:2}]}>Level up your strength today.</Text></View>
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="History" style={[s.iconBtn,{backgroundColor:colors.background.secondary,borderWidth:1,borderColor:colors.border.default}]} onPress={()=>router.push('/(exercises)/history' as any)}><Ionicons name="time-outline" size={22} color={colors.text.primary} /></TouchableOpacity>

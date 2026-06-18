@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -9,9 +9,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { logMeal, searchFoods, getFoodById, getRecipe, FoodItem } from '@/api/meals';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
-import { shadows } from '@/theme/shadows';
 import { borderRadius } from '@/theme/spacing';
-import { Skeleton, EmptyState } from '@/components/ui';
+import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
 import { getErrorMessage } from '@/utils/validation';
 const MT = [
     { id:'BREAKFAST', label:'Breakfast', img:require('../../assets/images/meal-breakfast.png'), color:'#F59E0B' },
@@ -177,17 +176,16 @@ export default function LogMealScreen() {
                 )}
             </ScrollView>
             <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,20)}]}>
-                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Log meal" accessibilityState={{ disabled: plate.length===0||logM.isPending }} style={[s.logBtnWrap,plate.length>0&&shadows.glow(colors.accent.coral)]} onPress={handleLog} disabled={plate.length===0||logM.isPending} activeOpacity={0.85}>
-                    {plate.length>0?(
-                        <LinearGradient colors={colors.gradients.coral} start={{x:0,y:0}} end={{x:1,y:0}} style={s.logBtn}>
-                            {logM.isPending?<ActivityIndicator color="#FFF" />:<><Ionicons name="checkmark-circle" size={22} color="#FFF" /><Text style={[typography.subhead,{color:'#FFF',fontWeight:'900',marginLeft:8,fontSize:16}]}>LOG MEAL</Text></>}
-                        </LinearGradient>
-                    ):(
-                        <View style={[s.logBtn,{backgroundColor:colors.background.secondary,borderWidth:1,borderColor:colors.border.default}]}>
-                            <Ionicons name="checkmark-circle" size={22} color={colors.text.tertiary} /><Text style={[typography.subhead,{color:colors.text.secondary,fontWeight:'900',marginLeft:8,fontSize:16}]}>LOG MEAL</Text>
-                        </View>
-                    )}
-                </TouchableOpacity>
+                <CtaButton
+                    label="LOG MEAL"
+                    icon="checkmark-circle"
+                    size="lg"
+                    accessibilityLabel="Log meal"
+                    loading={logM.isPending}
+                    disabled={plate.length===0}
+                    onPress={handleLog}
+                    style={s.logBtnWrap}
+                />
             </View>
         </View>
     );
@@ -205,6 +203,5 @@ const s = StyleSheet.create({
     qtyRow:{flexDirection:'row',alignItems:'center'},
     macroRow:{flexDirection:'row',borderWidth:1,borderRadius:14,padding:14,marginTop:10,marginBottom:24},
     footer:{position:'absolute',bottom:0,left:0,right:0,paddingHorizontal:20},
-    logBtnWrap:{height:60,borderRadius:30,overflow:'hidden'},
-    logBtn:{flex:1,height:60,flexDirection:'row',alignItems:'center',justifyContent:'center',borderRadius:30},
+    logBtnWrap:{height:60,borderRadius:30},
 });

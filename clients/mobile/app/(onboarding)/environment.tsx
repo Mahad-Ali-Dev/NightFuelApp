@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
-import { Button } from '@/components/ui/Button';
+import { CtaButton, GlassCard } from '@/components/ui';
 import { Card } from '@/components/ui/Card';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
@@ -51,6 +52,7 @@ export default function EnvironmentScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
                 <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
                     Work <Text style={{ color: colors.accent.cyan }}>Environment</Text>
@@ -59,7 +61,7 @@ export default function EnvironmentScreen() {
                     How active is your shift? We use this to calculate your total daily energy expenditure (TDEE).
                 </Text>
 
-                <View style={{ gap: spacing.md }}>
+                <GlassCard style={[styles.optionsPanel, { padding: spacing.md, gap: spacing.md }]}>
                     {LIFESTYLES.map((l) => {
                         const isSelected = lifestyle === l.value;
                         return (
@@ -96,16 +98,15 @@ export default function EnvironmentScreen() {
                             </TouchableOpacity>
                         )
                     })}
-                </View>
+                </GlassCard>
             </ScrollView>
 
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: spacing['2xl'] }]}>
-                <Button
-                    title="Continue"
-                    iconRight={<Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
+                <CtaButton
+                    label="Continue"
+                    size="lg"
                     onPress={handleNext}
                     disabled={!lifestyle}
-                    fullWidth
                 />
             </View>
         </View>
@@ -115,6 +116,10 @@ export default function EnvironmentScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    optionsPanel: {
+        // GlassCard panel wrapping the work-environment options; per-row Card
+        // glow/borders stay intact inside the Aurora frosted container.
     },
     envCard: {
         padding: 16,

@@ -4,6 +4,7 @@ import {
     Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { Ionicons } from '@expo/vector-icons';
@@ -75,6 +76,7 @@ export default function AnalyticsScreen() {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
                 <View style={{ width: 32 }} />
                 <Text style={[typography.h1, { color: colors.text.primary }]}>Insights</Text>

@@ -1,9 +1,19 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  AccessibilityInfo,
+} from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Input, Button, Card } from '@/components/ui';
+import { Input, Button, CtaButton, GlassCard } from '@/components/ui';
 import { useTheme } from '@/theme';
 import { spacing, borderRadius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
@@ -33,6 +43,9 @@ export default function ForgotPasswordScreen() {
     try {
       await forgotPassword(cleanEmail);
       setSent(true);
+      AccessibilityInfo.announceForAccessibility(
+        'Request received. Password reset by email is not available yet. Reach us at support@nightfuel.app'
+      );
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.message ?? 'Failed to send reset link. Please try again.');
     } finally {
@@ -40,8 +53,22 @@ export default function ForgotPasswordScreen() {
     }
   };
 
+  const header = (
+    <>
+      {!sent && (
+        <Text style={[styles.kicker, { color: colors.accent.coral }]}>Account recovery</Text>
+      )}
+      <Text style={[styles.title, { color: colors.text.primary }]}>
+        Reset your{'\n'}
+        <Text style={{ color: colors.accent.coral }}>password</Text>
+      </Text>
+    </>
+  );
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]}>
+      <StatusBar style="light" />
+
       <Pressable
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         accessibilityRole="button"
@@ -59,17 +86,18 @@ export default function ForgotPasswordScreen() {
         <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
       </Pressable>
 
-      <View style={styles.content}>
-        {!sent && (
-          <Text style={[styles.kicker, { color: colors.accent.coral }]}>Account recovery</Text>
-        )}
-        <Text style={[styles.title, { color: colors.text.primary }]}>
-          Reset your{'\n'}
-          <Text style={{ color: colors.accent.coral }}>password</Text>
-        </Text>
+      {sent ? (
+        <View style={styles.content}>
+          {header}
 
-        {sent ? (
-          <Card variant="glass" padding="2xl" style={styles.successBox}>
+          <GlassCard
+            style={{
+              padding: spacing['2xl'],
+              alignItems: 'center',
+              gap: spacing.md,
+              marginTop: spacing['4xl'],
+            }}
+          >
             <View
               style={[
                 styles.successIcon,
@@ -112,9 +140,16 @@ export default function ForgotPasswordScreen() {
               size="lg"
               style={{ marginTop: spacing['2xl'] }}
             />
-          </Card>
-        ) : (
-          <>
+          </GlassCard>
+        </View>
+      ) : (
+        <KeyboardAvoidingView
+          style={styles.content}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          {header}
+
+          <GlassCard style={{ padding: spacing['2xl'] }}>
             <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
               Enter the email address associated with your account and we'll send you a link to reset
               your password.
@@ -130,16 +165,16 @@ export default function ForgotPasswordScreen() {
               autoCapitalize="none"
             />
 
-            <Button
-              title="Send Reset Link"
-              onPress={handleSubmit}
-              loading={loading}
-              fullWidth
+            <CtaButton
+              label="Send Reset Link"
               size="lg"
+              loading={loading}
+              onPress={handleSubmit}
+              style={{ width: '100%' }}
             />
-          </>
-        )}
-      </View>
+          </GlassCard>
+        </KeyboardAvoidingView>
+      )}
     </SafeAreaView>
   );
 }
@@ -176,12 +211,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...typography.body,
-    marginBottom: spacing['3xl'],
-  },
-  successBox: {
-    alignItems: 'center',
-    marginTop: spacing['4xl'],
-    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   successIcon: {
     width: 88,

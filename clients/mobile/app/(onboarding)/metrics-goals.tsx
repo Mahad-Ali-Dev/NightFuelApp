@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
-import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { DateTimeField } from '@/components/ui';
+import { CtaButton, DateTimeField, GlassCard } from '@/components/ui';
 import { Card } from '@/components/ui/Card';
 import { shadows } from '@/theme/shadows';
 import { useOnboardingStore } from '@/store/onboardingStore';
@@ -64,6 +64,7 @@ export default function BiologicalDataScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing['2xl'] }}>
                 <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
                     Your <Text style={{ color: colors.accent.cyan }}>Biological Profile</Text>
@@ -112,7 +113,7 @@ export default function BiologicalDataScreen() {
                     Biological Sex
                 </Text>
 
-                <View style={{ gap: spacing.sm }}>
+                <GlassCard style={[styles.optionsPanel, { padding: spacing.md, gap: spacing.sm }]}>
                     {SEX_OPTIONS.map((s) => {
                         const isSelected = sex === s.value;
                         return (
@@ -140,16 +141,15 @@ export default function BiologicalDataScreen() {
                             </TouchableOpacity>
                         )
                     })}
-                </View>
+                </GlassCard>
             </ScrollView>
 
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: spacing['2xl'] }]}>
-                <Button
-                    title="Continue"
-                    iconRight={<Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
+                <CtaButton
+                    label="Continue"
+                    size="lg"
                     onPress={handleNext}
                     disabled={!isValid}
-                    fullWidth
                 />
             </View>
         </View>
@@ -162,6 +162,10 @@ const styles = StyleSheet.create({
     },
     row: {
         flexDirection: 'row',
+    },
+    optionsPanel: {
+        // GlassCard panel wrapping the biological-sex options; per-row Card
+        // glow/borders stay intact inside the Aurora frosted container.
     },
     optionCard: {
         flexDirection: 'row',

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { CtaButton, GlassCard } from '@/components/ui';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
 import { useOnboardingStore } from '@/store/onboardingStore';
@@ -34,6 +35,7 @@ export default function GoalsScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
                 <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
                     What is your <Text style={{ color: colors.accent.coral }}>primary goal</Text>?
@@ -42,7 +44,7 @@ export default function GoalsScreen() {
                     Choose the objective that best describes what you want to achieve with NightFuel.
                 </Text>
 
-                <View style={{ gap: spacing.md }}>
+                <GlassCard style={[styles.optionsPanel, { padding: spacing.md, gap: spacing.md }]}>
                     {GOALS.map((option) => {
                         const isSelected = goal === option.value;
                         return (
@@ -81,16 +83,15 @@ export default function GoalsScreen() {
                             </TouchableOpacity>
                         )
                     })}
-                </View>
+                </GlassCard>
             </ScrollView>
 
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: spacing['2xl'] }]}>
-                <Button
-                    title="Continue"
-                    iconRight={<Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
+                <CtaButton
+                    label="Continue"
+                    size="lg"
                     onPress={handleNext}
                     disabled={!goal}
-                    fullWidth
                 />
             </View>
         </View>
@@ -100,6 +101,10 @@ export default function GoalsScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    optionsPanel: {
+        // GlassCard panel wrapping the goal options; per-row Card glow/borders
+        // stay intact, the panel just gives the Aurora frosted container.
     },
     card: {
         padding: 20,

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useTheme, colors as palette } from '@/theme';
-import { Button } from '@/components/ui/Button';
+import { CtaButton, GlassCard } from '@/components/ui';
 import { Card } from '@/components/ui/Card';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
@@ -47,6 +48,7 @@ export default function AIOptimizationScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
                 <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
                     AI <Text style={{ color: colors.accent.purple }}>Optimization</Text>
@@ -55,7 +57,7 @@ export default function AIOptimizationScreen() {
                     How deeply should Coach Ria optimize your schedule?
                 </Text>
 
-                <View style={{ gap: spacing.md }}>
+                <GlassCard style={[styles.optionsPanel, { padding: spacing.md, gap: spacing.md }]}>
                     {AI_LEVELS.map((level) => {
                         const isSelected = aiLevel === level.value;
                         return (
@@ -86,15 +88,15 @@ export default function AIOptimizationScreen() {
                             </TouchableOpacity>
                         )
                     })}
-                </View>
+                </GlassCard>
             </ScrollView>
 
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: spacing['2xl'] }]}>
-                <Button
-                    title="Build My Profile"
-                    iconRight={<Ionicons name="sparkles" size={20} color={colors.text.primary} />}
+                <CtaButton
+                    label="Build My Profile"
+                    icon="sparkles"
+                    size="lg"
                     onPress={handleNext}
-                    fullWidth
                 />
             </View>
         </View>
@@ -104,6 +106,10 @@ export default function AIOptimizationScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    optionsPanel: {
+        // GlassCard panel wrapping the AI-level options; per-row Card glow/borders
+        // stay intact inside the Aurora frosted container.
     },
     levelCard: {
         padding: 20,

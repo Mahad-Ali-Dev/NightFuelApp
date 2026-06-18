@@ -12,7 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getGroceryList, GroceryItem } from '@/api/meals';
 import { LinearGradient } from 'expo-linear-gradient';
 import { shadows } from '@/theme/shadows';
-import { Skeleton, EmptyState } from '@/components/ui';
+import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
 
 const { width } = Dimensions.get('window');
 const STORAGE_KEY = '@nightfuel_weekly_grocery';
@@ -454,20 +454,14 @@ export default function GroceryListScreen() {
                                 </ScrollView>
 
                                 {/* Add Button */}
-                                <TouchableOpacity
-                                    style={[styles.addButtonWrap, shadows.glow(colors.accent.coral)]}
-                                    onPress={handleAddItem}
-                                    accessibilityRole="button"
+                                <CtaButton
+                                    label="ADD TO LIST"
+                                    icon="add-circle"
+                                    size="lg"
                                     accessibilityLabel="Add to list"
-                                    activeOpacity={0.85}
-                                >
-                                    <LinearGradient colors={colors.gradients.coral} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.addButton}>
-                                        <Ionicons name="add-circle" size={22} color="#FFF" />
-                                        <Text style={[typography.subhead, { color: '#FFF', fontWeight: '900', marginLeft: 8, fontSize: 16 }]}>
-                                            ADD TO LIST
-                                        </Text>
-                                    </LinearGradient>
-                                </TouchableOpacity>
+                                    onPress={handleAddItem}
+                                    style={styles.addButtonWrap}
+                                />
                             </View>
                         </TouchableOpacity>
                     </TouchableOpacity>
@@ -495,5 +489,4 @@ const styles = StyleSheet.create({
     input: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, height: 48, fontSize: 15 },
     categoryChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8 },
     addButtonWrap: { height: 56, borderRadius: 28, overflow: 'hidden' },
-    addButton: { flex: 1, height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 28 },
 });

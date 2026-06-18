@@ -11,7 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { borderRadius } from '@/theme/spacing';
-import { Skeleton, EmptyState } from '@/components/ui';
+import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
 // Bundled Aurora dark-glass placeholder so the browse tiles never depend on an
 // external host (no 404 / rate-limit). '@/*' resolves to ./src, so the asset is
 // required by relative path (same pattern as the exercise fallbacks). The
@@ -170,11 +170,14 @@ export default function FoodEncyclopediaScreen() {
                                         ))}
                                     </View>
                                 </View>
-                                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Log meal" accessibilityState={{ disabled: logM.isPending }} style={[s.logBtnWrap,{marginTop:24},!logM.isPending&&shadows.glow(colors.accent.coral)]} onPress={()=>logM.mutate(servingModal)} disabled={logM.isPending} activeOpacity={0.85}>
-                                    <LinearGradient colors={colors.gradients.coral} start={{x:0,y:0}} end={{x:1,y:0}} style={s.logBtn}>
-                                        <Text style={[typography.subhead,{color:'#FFF',fontWeight:'900',fontSize:16}]}>{logM.isPending?'LOGGING...':'LOG MEAL'}</Text>
-                                    </LinearGradient>
-                                </TouchableOpacity>
+                                <CtaButton
+                                    label="LOG MEAL"
+                                    size="lg"
+                                    accessibilityLabel="Log meal"
+                                    loading={logM.isPending}
+                                    onPress={()=>logM.mutate(servingModal)}
+                                    style={[s.logBtnWrap,{marginTop:24}]}
+                                />
                             </ScrollView>
                         )}
                     </View>
@@ -197,6 +200,5 @@ const s = StyleSheet.create({
     numInput:{height:56,paddingHorizontal:16,fontSize:20,fontWeight:'bold',borderRadius:14,borderWidth:1,marginBottom:8},
     typeBtn:{flex:1,minWidth:'45%',height:44,borderRadius:22,borderWidth:1,alignItems:'center',justifyContent:'center'},
     sumCard:{borderRadius:14,borderWidth:1,padding:20,marginBottom:8},
-    logBtnWrap:{height:60,borderRadius:30,overflow:'hidden'},
-    logBtn:{flex:1,height:60,borderRadius:30,alignItems:'center',justifyContent:'center'},
+    logBtnWrap:{height:60,borderRadius:30},
 });

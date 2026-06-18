@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
-import { Button } from '@/components/ui/Button';
-import { DateTimeField } from '@/components/ui';
+import { CtaButton, DateTimeField, GlassCard } from '@/components/ui';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
 import { useOnboardingStore } from '@/store/onboardingStore';
-import { Ionicons } from '@expo/vector-icons';
 import { ShiftType, ActivityLevel, ExperienceLevel, LifestyleType, HealthCondition } from '@/types/enums';
 import { isValidTime } from '@/utils/validation';
 
@@ -130,6 +129,7 @@ export default function LifestyleScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
                 <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
                     Your <Text style={{ color: colors.accent.coral }}>Lifestyle</Text>
@@ -157,41 +157,42 @@ export default function LifestyleScreen() {
                 <View style={{ height: spacing.lg }} />
 
                 <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.md }]}>Health Conditions (Optional)</Text>
-                <View style={[styles.optionsRow, { flexWrap: 'wrap' }]}>
-                    {HEALTH_CONDITIONS.map((opt) => {
-                        const active = conditions.includes(opt.value);
-                        return (
-                            <TouchableOpacity
-                                key={opt.value}
-                                activeOpacity={0.85}
-                                onPress={() => toggleCondition(opt.value)}
-                                accessibilityRole="button"
-                                accessibilityState={{ selected: active }}
-                                accessibilityLabel={opt.label}
-                                style={[
-                                    styles.chip,
-                                    { backgroundColor: colors.background.secondary, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.border.default },
-                                    active && { backgroundColor: withAlpha(colors.accent.cyan, 0.16), borderColor: colors.accent.cyan }
-                                ]}
-                            >
-                                <Text style={[typography.captionMedium, { color: active ? colors.accent.cyan : colors.text.secondary }]}>
-                                    {opt.label}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
+                <GlassCard style={[styles.optionsPanel, { padding: spacing.md }]}>
+                    <View style={[styles.optionsRow, { flexWrap: 'wrap' }]}>
+                        {HEALTH_CONDITIONS.map((opt) => {
+                            const active = conditions.includes(opt.value);
+                            return (
+                                <TouchableOpacity
+                                    key={opt.value}
+                                    activeOpacity={0.85}
+                                    onPress={() => toggleCondition(opt.value)}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected: active }}
+                                    accessibilityLabel={opt.label}
+                                    style={[
+                                        styles.chip,
+                                        { backgroundColor: colors.background.secondary, borderRadius: borderRadius.full, borderWidth: 1, borderColor: colors.border.default },
+                                        active && { backgroundColor: withAlpha(colors.accent.cyan, 0.16), borderColor: colors.accent.cyan }
+                                    ]}
+                                >
+                                    <Text style={[typography.captionMedium, { color: active ? colors.accent.cyan : colors.text.secondary }]}>
+                                        {opt.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                </GlassCard>
 
                 <View style={{ height: 100 }} />
             </ScrollView>
 
             <View style={[styles.footer, { backgroundColor: withAlpha(colors.background.primary, 0.92), borderTopColor: colors.border.default, paddingHorizontal: spacing.xl, paddingBottom: Platform.OS === 'ios' ? spacing['3xl'] : spacing['2xl'] }]}>
-                <Button
-                    title="Continue"
-                    iconRight={<Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
+                <CtaButton
+                    label="Continue"
+                    size="lg"
                     onPress={handleNext}
                     disabled={!isValid}
-                    fullWidth
                 />
             </View>
         </View>
@@ -208,6 +209,10 @@ const styles = StyleSheet.create({
     optionsRow: {
         flexDirection: 'row',
         gap: 8,
+    },
+    optionsPanel: {
+        // GlassCard panel wrapping the health-condition chips; the chips keep
+        // their own pill borders/selected fill inside the Aurora frosted panel.
     },
     chip: {
         paddingHorizontal: 16,

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Animated, ScrollView, Alert } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
+import { CtaButton, GlassCard } from '@/components/ui';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
@@ -133,7 +133,7 @@ export default function ProfileSummaryScreen() {
 
     /** Loading placeholder that mirrors the summary card while we sync to the backend. */
     const SyncingSkeleton = () => (
-        <Card variant="glass" style={styles.summaryCard}>
+        <GlassCard style={styles.summaryCard}>
             <View style={styles.summaryGrid}>
                 {[0, 1].map((col) => (
                     <View key={col} style={styles.summaryColumn}>
@@ -164,11 +164,12 @@ export default function ProfileSummaryScreen() {
                     <Skeleton width={40} height={10} radius={4} style={{ marginTop: spacing.sm }} />
                 </View>
             </View>
-        </Card>
+        </GlassCard>
     );
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary, paddingTop: insets.top }]}>
+            <StatusBar style="light" />
             <ScrollView contentContainerStyle={styles.scrollContent}>
                 <View style={styles.heroBadgeWrap}>
                     <LinearGradient
@@ -189,7 +190,7 @@ export default function ProfileSummaryScreen() {
 
                 {isLoading ? <SyncingSkeleton /> : (
                 <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-                    <Card variant="glass" style={styles.summaryCard}>
+                    <GlassCard style={styles.summaryCard}>
                         <View style={styles.summaryGrid}>
                             <View style={styles.summaryColumn}>
                                 <Text style={[typography.heading, { color: colors.accent.cyan, marginBottom: spacing.md }]}>Biological</Text>
@@ -218,26 +219,32 @@ export default function ProfileSummaryScreen() {
                                 <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing.xs }]}>MODE</Text>
                             </View>
                         </View>
-                    </Card>
+                    </GlassCard>
 
-                    <View style={[styles.infoBox, { backgroundColor: withAlpha(colors.accent.coral, 0.08), borderColor: withAlpha(colors.accent.coral, 0.22) }, shadows.glow(colors.accent.coral)]}>
-                        <Ionicons name="sparkles" size={20} color={colors.accent.coral} />
-                        <Text style={[typography.body, { color: colors.text.secondary, flex: 1, marginLeft: spacing.sm }]}>
-                            Based on your {data.shiftType?.toLowerCase().replace('_', ' ')} schedule, we've optimized your metabolic window for maximum performance.
-                        </Text>
-                    </View>
+                    <GlassCard
+                        glow={colors.accent.coral}
+                        radius={16}
+                        style={[styles.infoBox, { borderColor: withAlpha(colors.accent.coral, 0.22) }]}
+                    >
+                        <View style={styles.infoBoxRow}>
+                            <Ionicons name="sparkles" size={20} color={colors.accent.coral} />
+                            <Text style={[typography.body, { color: colors.text.secondary, flex: 1, marginLeft: spacing.sm }]}>
+                                Based on your {data.shiftType?.toLowerCase().replace('_', ' ')} schedule, we've optimized your metabolic window for maximum performance.
+                            </Text>
+                        </View>
+                    </GlassCard>
                 </Animated.View>
                 )}
             </ScrollView>
 
             <View style={[styles.footer, { backgroundColor: withAlpha(colors.background.primary, 0.92), borderTopColor: colors.border.default, paddingHorizontal: spacing.xl, paddingBottom: Math.max(insets.bottom, spacing['2xl']) }]}>
-                <Button
-                    title={isLoading ? 'Saving Profile...' : 'Finish & Sync'}
-                    iconRight={!isLoading ? <Ionicons name="checkmark-circle" size={20} color={colors.text.primary} /> : undefined}
+                <CtaButton
+                    label={isLoading ? 'Saving Profile...' : 'Finish & Sync'}
+                    icon={!isLoading ? 'checkmark-circle' : undefined}
+                    size="lg"
                     loading={isLoading}
                     onPress={handleFinish}
                     disabled={isLoading}
-                    fullWidth
                 />
             </View>
         </View>
@@ -303,11 +310,12 @@ const styles = StyleSheet.create({
         height: 30,
     },
     infoBox: {
-        flexDirection: 'row',
-        padding: 16,
-        borderRadius: 16,
         marginTop: 24,
         borderWidth: 1,
+    },
+    infoBoxRow: {
+        flexDirection: 'row',
+        padding: 16,
         alignItems: 'center',
     },
     footer: {

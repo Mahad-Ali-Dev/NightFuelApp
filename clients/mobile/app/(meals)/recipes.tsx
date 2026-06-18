@@ -11,7 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { spacing, borderRadius } from '@/theme/spacing';
-import { Skeleton, EmptyState } from '@/components/ui';
+import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
 // Bundled Aurora dark-glass placeholder so imageless recipes never depend on an
 // external host (no 404 / rate-limit). '@/*' resolves to ./src, so the asset is
 // required by relative path (same pattern as the exercise fallbacks).
@@ -143,12 +143,14 @@ export default function RecipesScreen() {
                                             <Text style={[typography.body,{color:colors.text.secondary,flex:1,marginLeft:14,lineHeight:22}]}>{step}</Text>
                                         </View>
                                     ))}
-                                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Log as meal" style={[s.ctaWrap,{marginTop:40},shadows.glow(colors.accent.coral)]} activeOpacity={0.85} onPress={()=>{ setDetailId(null); router.push({pathname:'/(meals)/log-meal',params:{recipeId:detailQ.data?.id}}); }}>
-                                        <LinearGradient colors={colors.gradients.coral} start={{x:0,y:0}} end={{x:1,y:0}} style={s.ctaBtn}>
-                                            <Ionicons name="restaurant" size={20} color="#FFF" />
-                                            <Text style={[typography.subhead,{color:'#FFF',fontWeight:'900',marginLeft:8,fontSize:16}]}>LOG AS MEAL</Text>
-                                        </LinearGradient>
-                                    </TouchableOpacity>
+                                    <CtaButton
+                                        label="LOG AS MEAL"
+                                        icon="restaurant"
+                                        size="lg"
+                                        accessibilityLabel="Log as meal"
+                                        style={[s.ctaWrap,{marginTop:40}]}
+                                        onPress={()=>{ setDetailId(null); router.push({pathname:'/(meals)/log-meal',params:{recipeId:detailQ.data?.id}}); }}
+                                    />
                                 </View>
                             </ScrollView>
                         ):(
@@ -178,6 +180,5 @@ const s = StyleSheet.create({
     closeBtn:{position:'absolute',right:20,width:44,height:44,borderRadius:22,alignItems:'center',justifyContent:'center'},
     modalBody:{padding:24,marginTop:-40},
     stepNum:{width:30,height:30,borderRadius:15,alignItems:'center',justifyContent:'center'},
-    ctaWrap:{borderRadius:30,marginBottom:40,overflow:'hidden'},
-    ctaBtn:{height:60,borderRadius:30,flexDirection:'row',alignItems:'center',justifyContent:'center'},
+    ctaWrap:{height:60,borderRadius:30,marginBottom:40},
 });

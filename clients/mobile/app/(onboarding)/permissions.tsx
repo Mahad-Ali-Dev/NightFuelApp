@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Switch } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { Button } from '@/components/ui/Button';
+import { CtaButton } from '@/components/ui';
 import { Card } from '@/components/ui/Card';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
@@ -31,6 +33,7 @@ export default function PermissionsScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
                 <View style={styles.heroBadgeWrap}>
                     <LinearGradient
@@ -93,11 +96,11 @@ export default function PermissionsScreen() {
             </ScrollView>
 
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: spacing['2xl'] }]}>
-                <Button
-                    title="Start NightFuel"
-                    iconRight={<Ionicons name="rocket" size={20} color={colors.text.primary} />}
+                <CtaButton
+                    label="Start NightFuel"
+                    icon="rocket"
+                    size="lg"
                     onPress={handleFinish}
-                    fullWidth
                 />
                 <Button
                     title="Skip for now"

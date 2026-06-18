@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
-import { Button } from '@/components/ui/Button';
+import { CtaButton, GlassCard } from '@/components/ui';
 import { Card } from '@/components/ui/Card';
 import { shadows } from '@/theme/shadows';
 import { useOnboardingStore } from '@/store/onboardingStore';
@@ -47,6 +48,7 @@ export default function NutritionScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
             <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
                 <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
                     Your <Text style={{ color: colors.accent.cyan }}>Nutrition</Text>
@@ -58,7 +60,7 @@ export default function NutritionScreen() {
                 <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing.md, marginBottom: spacing.md }]}>
                     Dietary Preference
                 </Text>
-                <View style={{ gap: spacing.sm }}>
+                <GlassCard style={[styles.optionsPanel, { padding: spacing.md, gap: spacing.sm }]}>
                     {PREFERENCES.map((d) => {
                         const isSelected = preference === d.value;
                         return (
@@ -79,12 +81,12 @@ export default function NutritionScreen() {
                             </TouchableOpacity>
                         )
                     })}
-                </View>
+                </GlassCard>
 
                 <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing.xl, marginBottom: spacing.md }]}>
                     Diet Mode
                 </Text>
-                <View style={{ gap: spacing.sm }}>
+                <GlassCard style={[styles.optionsPanel, { padding: spacing.md, gap: spacing.sm }]}>
                     {MODES.map((m) => {
                         const isSelected = mode === m.value;
                         return (
@@ -109,18 +111,17 @@ export default function NutritionScreen() {
                             </TouchableOpacity>
                         )
                     })}
-                </View>
+                </GlassCard>
 
                 <View style={{ height: 100 }} />
             </ScrollView>
 
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: spacing['2xl'] }]}>
-                <Button
-                    title="Continue"
-                    iconRight={<Ionicons name="arrow-forward" size={20} color={colors.text.primary} />}
+                <CtaButton
+                    label="Continue"
+                    size="lg"
                     onPress={handleNext}
                     disabled={!isValid}
-                    fullWidth
                 />
             </View>
         </View>
@@ -130,6 +131,10 @@ export default function NutritionScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+    },
+    optionsPanel: {
+        // GlassCard panel wrapping each option list; per-row Card glow/borders
+        // stay intact inside the Aurora frosted container.
     },
     optionCard: {
         flexDirection: 'row',

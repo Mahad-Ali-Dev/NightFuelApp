@@ -7,12 +7,14 @@ import {
   Platform,
   ScrollView,
   Pressable,
+  AccessibilityInfo,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter, Link } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Input, Button } from '@/components/ui';
+import { Input, CtaButton, GlassCard } from '@/components/ui';
 import { useTheme } from '@/theme';
 import { spacing, borderRadius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
@@ -36,10 +38,12 @@ export default function LoginScreen() {
     const cleanEmail = sanitizeInput(email);
     if (!cleanEmail || !password) {
       setError('Please fill in all fields');
+      AccessibilityInfo.announceForAccessibility('Please fill in all fields');
       return;
     }
     if (!isValidEmail(cleanEmail)) {
       setError('Please enter a valid email address');
+      AccessibilityInfo.announceForAccessibility('Please enter a valid email address');
       return;
     }
     setLoading(true);
@@ -49,7 +53,9 @@ export default function LoginScreen() {
       // Let app/index.tsx decide: onboarding vs tabs based on onboardingComplete
       router.replace('/');
     } catch (e: any) {
-      setError(e?.message ?? 'Login failed. Please try again.');
+      const message = e?.message ?? 'Login failed. Please try again.';
+      setError(message);
+      AccessibilityInfo.announceForAccessibility(message);
     } finally {
       setLoading(false);
     }
@@ -57,6 +63,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]}>
+      <StatusBar style="light" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
@@ -89,7 +96,7 @@ export default function LoginScreen() {
           </View>
 
           {/* Form */}
-          <View style={styles.form}>
+          <GlassCard style={styles.form}>
             <Text style={[styles.sectionLabel, { color: colors.text.secondary }]}>
               Sign in to your account
             </Text>
@@ -136,21 +143,23 @@ export default function LoginScreen() {
                     borderColor: withAlpha(colors.error, 0.25),
                   },
                 ]}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="assertive"
               >
                 <Ionicons name="alert-circle" size={16} color={colors.error} />
                 <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
               </View>
             ) : null}
 
-            <Button
-              title="Sign In"
-              onPress={handleLogin}
-              loading={loading}
-              fullWidth
+            <CtaButton
+              label="Sign In"
               size="lg"
-              icon={<Ionicons name="log-in-outline" size={20} color={colors.text.primary} />}
+              icon="log-in-outline"
+              loading={loading}
+              onPress={handleLogin}
+              style={{ width: '100%' }}
             />
-          </View>
+          </GlassCard>
 
           {/* Register link */}
           <View style={styles.registerRow}>
@@ -209,7 +218,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   form: {
-    marginBottom: spacing['2xl'],
+    padding: spacing.xl,
   },
   sectionLabel: {
     ...typography.overline,
