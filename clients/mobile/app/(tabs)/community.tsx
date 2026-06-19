@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Dimensions, RefreshControl, ImageBackground, Share } from 'react-native';
-import { GlassCard } from '@/components/ui';
+import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl, ImageBackground, Share } from 'react-native';
+import { GlassCard, EmptyState, Skeleton, SkeletonCard } from '@/components/ui';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
@@ -30,6 +30,45 @@ function timeAgo(createdAt?: string): string {
     if (isNaN(d.getTime())) return 'Just now';
     return `${formatDistanceToNow(d)} ago`;
 }
+
+/**
+ * Honest loading scaffold for the feed — a few PostItem-shaped placeholders
+ * (avatar circle + name/time lines, body lines, and an image block) instead of
+ * a bare full-screen spinner, so the feed doesn't "pop" when data arrives. Wraps
+ * each placeholder in the same <GlassCard> as a real PostItem so the surface
+ * geometry matches exactly. Memoized: it takes no props and renders many
+ * Skeleton instances, so a stable element identity avoids needless re-renders
+ * (list-performance-item-memo). Hooks (useTheme) are read inside, so each
+ * shimmer block stays theme-aware.
+ */
+const FeedSkeleton = React.memo(function FeedSkeleton() {
+    const { borderRadius } = useTheme();
+    return (
+        <View accessibilityRole="progressbar" accessibilityLabel="Loading the feed">
+            {Array.from({ length: 3 }).map((_, i) => (
+                <GlassCard key={i} intensity={40} style={{ marginBottom: 16 }}>
+                    <View style={{ padding: 16 }}>
+                        {/* Header: avatar circle + name / time lines */}
+                        <View style={styles.postHeader}>
+                            <SkeletonCard height={32} radius={16} style={styles.skeletonAvatar} />
+                            <View style={{ marginLeft: 12 }}>
+                                <Skeleton width={120} height={15} radius={borderRadius.sm} />
+                                <Skeleton width={70} height={12} radius={borderRadius.sm} style={{ marginTop: 6 }} />
+                            </View>
+                        </View>
+                        {/* Body lines */}
+                        <View style={{ marginVertical: 16 }}>
+                            <Skeleton width="95%" height={14} radius={borderRadius.sm} />
+                            <Skeleton width="80%" height={14} radius={borderRadius.sm} style={{ marginTop: 8 }} />
+                        </View>
+                        {/* Image block — mirrors PostItem's 220-tall post image */}
+                        <Skeleton width="100%" height={220} radius={borderRadius.xl} />
+                    </View>
+                </GlassCard>
+            ))}
+        </View>
+    );
+});
 
 export default function CommunityTab() {
     const { colors, typography, borderRadius } = useTheme();
@@ -184,15 +223,29 @@ export default function CommunityTab() {
                 {/* Feed Items */}
                 <View style={{ paddingHorizontal: 20 }}>
                     {isFeedLoading ? (
-                        <ActivityIndicator size="large" color={colors.accent.cyan} style={{ marginTop: 40 }} />
+                        // Honest loading scaffold mirroring the PostItem layout — a
+                        // few feed-card placeholders instead of a bare full-screen
+                        // spinner, so the feed doesn't "pop" when data arrives.
+                        <FeedSkeleton />
                     ) : isFeedError ? (
-                        <View style={styles.emptyFeed}>
-                            <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center' }]}>Couldn't load the feed. Pull down to retry.</Text>
-                        </View>
+                        // Honest retryable error — a failed fetch would otherwise fall
+                        // through to the "No posts yet" empty layout, which misreads as
+                        // "nothing has been posted". The retry refetches the feed query.
+                        <EmptyState
+                            icon="cloud-offline-outline"
+                            title="Couldn't load the feed"
+                            subtitle="Something went wrong fetching the community feed. Check your connection and try again."
+                            actionLabel="Try Again"
+                            onAction={() => refetch()}
+                        />
                     ) : !feed || feed.length === 0 ? (
-                        <View style={styles.emptyFeed}>
-                            <Text style={[typography.body, { color: colors.text.secondary }]}>No posts yet. Start the conversation!</Text>
-                        </View>
+                        <EmptyState
+                            icon="chatbubbles-outline"
+                            title="No posts yet"
+                            subtitle="Be the first to share something with the community."
+                            actionLabel="Create a post"
+                            onAction={() => router.push('/(modals)/create-post' as any)}
+                        />
                     ) : (
                         feedItems
                     )}
@@ -276,7 +329,10 @@ const styles = StyleSheet.create({
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 },
     challIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
     avatarMini: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-    emptyFeed: { alignItems: 'center', padding: 40 },
+    // Constrains the avatar SkeletonCard to the 32×32 avatarMini circle (it
+    // defaults to full width + a bottom margin) so the loading scaffold lines up
+    // with the loaded PostItem header.
+    skeletonAvatar: { width: 32, marginBottom: 0 },
     postHeader: { flexDirection: 'row', alignItems: 'center' },
     postImg: { width: '100%', height: 220, marginBottom: 12 },
     postActions: { flexDirection: 'row', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, gap: 24 },

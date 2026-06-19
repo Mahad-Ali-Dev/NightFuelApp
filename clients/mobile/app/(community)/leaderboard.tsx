@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity,
-    ActivityIndicator, FlatList, Platform,
+    FlatList, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 // item 5 owns community.ts — this item only IMPORTS follow/social helpers + getLeaderboard.
 import { getLeaderboard, followUser, unfollowUser, getUserSocial } from '@/api/community';
-import { EmptyState, Avatar } from '@/components/ui';
+import { EmptyState, Avatar, Skeleton } from '@/components/ui';
 import { shadows } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { safeImageUri } from '@/lib/imageUrl';
@@ -40,7 +40,7 @@ const displayNameOf = (row: LeaderRowData) =>
 const scoreOf = (row: LeaderRowData) => row.score ?? row.xp ?? 0;
 
 export default function LeaderboardScreen() {
-    const { colors, typography } = useTheme();
+    const { colors, typography, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
 
@@ -50,7 +50,12 @@ export default function LeaderboardScreen() {
     const authUserId = useAuthStore((s) => s.user?.id);
 
     // ── Queries ─────────────────────────────────────────────────────────────
-    const { data: leaderboardData, isLoading } = useQuery({
+    // `isError`/`refetch` drive the honest retryable error state below — a failed
+    // fetch must surface a retry rather than falling through to the "No rankings
+    // yet" empty state (an empty list reads as "nobody has ranked" when the
+    // request actually failed). The cache stays the single source of truth, so we
+    // never mirror the error flag into local state (react-state-fallback).
+    const { data: leaderboardData, isLoading, isError, refetch } = useQuery({
         queryKey: ['community-leaderboard'],
         queryFn: () => getLeaderboard(50),
     });
@@ -125,14 +130,47 @@ export default function LeaderboardScreen() {
             </View>
 
             {isLoading ? (
-                <View style={styles.center}>
-                    <ActivityIndicator size="large" color={colors.accent.cyan} />
+                // Honest loading scaffold mirroring the loaded layout — a podium row
+                // (three circular avatar placeholders, the centre one taller like the
+                // rank-1 slot) followed by a handful of ROW_HEIGHT list-row skeletons
+                // (rank + avatar + name). Not a bare spinner, so the screen doesn't
+                // "pop" when data arrives.
+                <View style={styles.skeletonContent}>
+                    <View style={styles.podiumContainer}>
+                        {[72, 80, 72].map((size, i) => (
+                            <View key={i} style={[styles.podiumItem, i === 1 && { marginTop: -20 }]}>
+                                <Skeleton width={size} height={size} radius={size / 2} />
+                                <Skeleton width={64} height={14} radius={borderRadius.sm} style={{ marginTop: 12 }} />
+                                <Skeleton width={44} height={11} radius={borderRadius.sm} style={{ marginTop: 6 }} />
+                            </View>
+                        ))}
+                    </View>
+                    {Array.from({ length: 7 }).map((_, i) => (
+                        <View key={i} style={styles.skeletonRow}>
+                            <Skeleton width={18} height={14} radius={borderRadius.sm} />
+                            <Skeleton width={32} height={32} radius={16} style={{ marginLeft: 12 }} />
+                            <Skeleton width={140} height={14} radius={borderRadius.sm} style={{ marginLeft: 12 }} />
+                        </View>
+                    ))}
                 </View>
+            ) : isError ? (
+                // Honest retryable error — a failed fetch would otherwise fall through
+                // to the "No rankings yet" empty layout, which misreads as "nobody has
+                // ranked yet". The retry refetches the leaderboard query.
+                <EmptyState
+                    icon="cloud-offline-outline"
+                    title="Couldn't load the leaderboard"
+                    subtitle="Something went wrong fetching the rankings. Check your connection and try again."
+                    actionLabel="Try Again"
+                    onAction={() => refetch()}
+                    style={styles.stateFill}
+                />
             ) : !rows.length ? (
                 <EmptyState
                     icon="podium-outline"
                     title="No rankings yet"
                     subtitle="Earn XP by logging workouts, sleep, and challenge progress to climb the leaderboard."
+                    style={styles.stateFill}
                 />
             ) : (
                 <FlatList
@@ -320,7 +358,13 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
     backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    // Fills the area below the header so the error / empty EmptyState centers in the
+    // remaining space rather than hugging the top.
+    stateFill: { flex: 1 },
+    // Loading scaffold: same horizontal rhythm as the loaded list (podium block +
+    // ROW_HEIGHT rows), padded so the placeholders line up with the real rows.
+    skeletonContent: { flex: 1 },
+    skeletonRow: { flexDirection: 'row', alignItems: 'center', height: ROW_HEIGHT, paddingHorizontal: 20 },
     listContent: { paddingBottom: 140 },
     podiumContainer: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-start', paddingVertical: 40, paddingHorizontal: 10 },
     podiumItem: { alignItems: 'center', flex: 1 },

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 
 import { useTheme } from '@/theme';
 import { Card } from '@/components/ui/Card';
-import { CtaButton } from '@/components/ui';
+import { CtaButton, Skeleton, EmptyState } from '@/components/ui';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +22,13 @@ export default function TrainingOnboardingScreen() {
     const { routineId } = useLocalSearchParams<{ routineId?: string }>();
     const [selectedRoutine, setSelectedRoutine] = useState<string | null>(routineId ?? null);
 
-    const { data: routines, isLoading: loadingRoutines } = useQuery({
+    // `isError`/`refetch` drive the honest retryable error state below: a failed
+    // routines fetch surfaces a retry instead of an indefinite spinner. The
+    // Freestyle session option renders in every state (it doesn't depend on the
+    // routines list), so the user can always start a workout. The react-query
+    // cache stays the source of truth — the error flag is never mirrored into
+    // local state (react-state-fallback).
+    const { data: routines, isLoading: loadingRoutines, isError, refetch } = useQuery({
         queryKey: ['routines'],
         queryFn: getRoutines,
     });
@@ -59,47 +65,70 @@ export default function TrainingOnboardingScreen() {
 
                 <Text style={[typography.h3, { color: colors.text.primary, marginBottom: 16 }]}>Your Routines</Text>
 
+                {/* Freestyle session — rendered in every state (loading / error /
+                    loaded) since it doesn't depend on the routines list. Keeps the
+                    user able to start a workout even when routines fail to load. */}
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => setSelectedRoutine(null)}
+                >
+                    <Card style={[styles.routineCard, { borderColor: colors.border.default }, !selectedRoutine && { borderColor: colors.accent.cyan, backgroundColor: colors.background.tertiary }]}>
+                        <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.cyan, 0.16) }]}>
+                            <Ionicons name="infinite" size={24} color={colors.accent.cyan} />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 16 }}>
+                            <Text style={[typography.subtitle, { color: colors.text.primary }]}>Freestyle Session</Text>
+                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>Log any exercise as you go</Text>
+                        </View>
+                        {selectedRoutine === null && <Ionicons name="checkmark-circle" size={24} color={colors.accent.cyan} />}
+                    </Card>
+                </TouchableOpacity>
+
                 {loadingRoutines ? (
-                    <ActivityIndicator color={colors.accent.purple} />
+                    // Honest loading scaffold mirroring the routine cards (icon
+                    // square + name/meta lines) instead of a bare spinner.
+                    Array.from({ length: 3 }).map((_, i) => (
+                        <Card key={i} style={[styles.routineCard, { borderColor: colors.border.default }]}>
+                            <Skeleton width={48} height={48} radius={12} />
+                            <View style={{ flex: 1, marginLeft: 16 }}>
+                                <Skeleton width="55%" height={16} radius={borderRadius.sm} />
+                                <Skeleton width="35%" height={12} radius={borderRadius.sm} style={{ marginTop: 8 }} />
+                            </View>
+                        </Card>
+                    ))
+                ) : isError ? (
+                    // Honest retryable error — a failed fetch would otherwise read
+                    // as "you have no routines". The retry refetches the routines
+                    // query; the Freestyle option above stays usable meanwhile.
+                    <EmptyState
+                        icon="cloud-offline-outline"
+                        title="Couldn't load your routines"
+                        subtitle="Something went wrong fetching your saved routines. Check your connection and try again."
+                        actionLabel="Try Again"
+                        onAction={() => refetch()}
+                        style={styles.routinesError}
+                    />
                 ) : (
-                    <>
+                    (routines || []).map((routine: any) => (
                         <TouchableOpacity
+                            key={routine.id}
                             activeOpacity={0.8}
-                            onPress={() => setSelectedRoutine(null)}
+                            onPress={() => setSelectedRoutine(routine.id)}
                         >
-                            <Card style={[styles.routineCard, { borderColor: colors.border.default }, !selectedRoutine && { borderColor: colors.accent.cyan, backgroundColor: colors.background.tertiary }]}>
-                                <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.cyan, 0.16) }]}>
-                                    <Ionicons name="infinite" size={24} color={colors.accent.cyan} />
+                            <Card style={[styles.routineCard, { borderColor: colors.border.default }, selectedRoutine === routine.id && { borderColor: colors.accent.purple, backgroundColor: colors.background.tertiary }]}>
+                                <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.purple, 0.16) }]}>
+                                    <Ionicons name="list" size={24} color={colors.accent.purple} />
                                 </View>
                                 <View style={{ flex: 1, marginLeft: 16 }}>
-                                    <Text style={[typography.subtitle, { color: colors.text.primary }]}>Freestyle Session</Text>
-                                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>Log any exercise as you go</Text>
+                                    <Text style={[typography.subtitle, { color: colors.text.primary }]}>{routine.name}</Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>
+                                        {routine.exercises?.length || 0} Exercises • {(routine.exercises?.length || 0) * 8} min
+                                    </Text>
                                 </View>
-                                {selectedRoutine === null && <Ionicons name="checkmark-circle" size={24} color={colors.accent.cyan} />}
+                                {selectedRoutine === routine.id && <Ionicons name="checkmark-circle" size={24} color={colors.accent.purple} />}
                             </Card>
                         </TouchableOpacity>
-
-                        {(routines || []).map((routine: any) => (
-                            <TouchableOpacity
-                                key={routine.id}
-                                activeOpacity={0.8}
-                                onPress={() => setSelectedRoutine(routine.id)}
-                            >
-                                <Card style={[styles.routineCard, { borderColor: colors.border.default }, selectedRoutine === routine.id && { borderColor: colors.accent.purple, backgroundColor: colors.background.tertiary }]}>
-                                    <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.purple, 0.16) }]}>
-                                        <Ionicons name="list" size={24} color={colors.accent.purple} />
-                                    </View>
-                                    <View style={{ flex: 1, marginLeft: 16 }}>
-                                        <Text style={[typography.subtitle, { color: colors.text.primary }]}>{routine.name}</Text>
-                                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>
-                                            {routine.exercises?.length || 0} Exercises • {(routine.exercises?.length || 0) * 8} min
-                                        </Text>
-                                    </View>
-                                    {selectedRoutine === routine.id && <Ionicons name="checkmark-circle" size={24} color={colors.accent.purple} />}
-                                </Card>
-                            </TouchableOpacity>
-                        ))}
-                    </>
+                    ))
                 )}
             </ScrollView>
 
@@ -146,6 +175,11 @@ const styles = StyleSheet.create({
         padding: 16,
         marginBottom: 12,
         borderWidth: 2,
+    },
+    // Trim the EmptyState's default top padding so the routines-error state sits
+    // naturally below the Freestyle card rather than floating mid-screen.
+    routinesError: {
+        paddingVertical: 24,
     },
     iconBox: {
         width: 48,

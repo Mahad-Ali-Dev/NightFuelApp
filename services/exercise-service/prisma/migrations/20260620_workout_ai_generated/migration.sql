@@ -1,0 +1,22 @@
+-- Exercise Service — aiGenerated accounting on workout_routines
+--
+-- Adds:
+--   workout_routines.ai_generated  — TRUE only for routines created by the AI
+--                                    generator (POST /v1/exercises/routines/generate);
+--                                    manual creates (POST /v1/exercises/routines)
+--                                    leave it FALSE.
+--
+-- Why: the daily AI-generation quota COUNT now filters on
+--   `aiGenerated = true`, so a user creating MANUAL routines no longer burns
+--   their per-plan AI cap. Backfilling every existing row to the DEFAULT
+--   (false) is correct: pre-existing routines were counted indiscriminately
+--   before, and treating them as non-AI simply stops them from consuming quota
+--   going forward (the safe, user-favourable direction).
+--
+-- NOTE: This migration FILE is intentionally NOT applied here — there is no DB
+-- in CI or in an agent session. It is applied out-of-band against the live
+-- database, together with this round's code (the quota COUNT query references
+-- the new column, so the column MUST exist when this round's code runs). See
+-- docs/DEPLOY-HANDOFF.md §1.
+
+ALTER TABLE "workout_routines" ADD COLUMN "ai_generated" BOOLEAN NOT NULL DEFAULT false;

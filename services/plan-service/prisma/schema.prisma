@@ -24,6 +24,7 @@ model DayPlan {
   generationTokens    Int?       @map("generation_tokens")
   userRating          Int?       @map("user_rating")
   status              PlanStatus @default(ACTIVE)
+  aiGenerated         Boolean    @default(false) @map("ai_generated")
   createdAt           DateTime   @default(now()) @map("created_at")
   updatedAt           DateTime   @updatedAt @map("updated_at")
 

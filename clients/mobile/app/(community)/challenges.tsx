@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getChallenges, joinChallenge, updateChallengeProgress } from '@/api/community';
 import { withAlpha } from '@/theme/utils';
-import { Card, Button, EmptyState } from '@/components/ui';
+import { Card, Button, EmptyState, Skeleton, SkeletonCard } from '@/components/ui';
 import { shadows } from '@/theme';
 
 export default function ChallengesScreen() {
@@ -26,7 +26,12 @@ export default function ChallengesScreen() {
     const [progressInputs, setProgressInputs] = useState<Record<string, string>>({});
 
     // ── Queries ─────────────────────────────────────────────────────────────
-    const { data: challenges, isLoading } = useQuery({
+    // `isError`/`refetch` drive the honest retryable error state below — a failed
+    // fetch must surface a retry rather than falling through to the "No active
+    // challenges" empty state (an empty list reads as "nothing is running" when the
+    // request actually failed). The cache stays the single source of truth, so we
+    // never mirror the error flag into local state (react-state-fallback).
+    const { data: challenges, isLoading, isError, refetch } = useQuery({
         queryKey: ['community-challenges'],
         queryFn: getChallenges,
     });
@@ -90,7 +95,41 @@ export default function ChallengesScreen() {
                     keyboardShouldPersistTaps="handled"
                 >
                     {isLoading ? (
-                        <ActivityIndicator size="large" color={colors.accent.cyan} style={{ marginTop: 40 }} />
+                        // Honest loading scaffold mirroring the loaded layout — a few
+                        // challenge-card-shaped placeholders (icon square + title/desc
+                        // lines) instead of a bare spinner, so the screen doesn't "pop"
+                        // when data arrives.
+                        Array.from({ length: 3 }).map((_, i) => (
+                            <Card
+                                key={i}
+                                style={[
+                                    styles.challCard,
+                                    { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl },
+                                ]}
+                            >
+                                <View style={styles.challBody}>
+                                    <SkeletonCard height={52} radius={14} style={styles.skeletonIcon} />
+                                    <View style={{ flex: 1, marginLeft: 16 }}>
+                                        <Skeleton width="70%" height={17} radius={borderRadius.sm} />
+                                        <Skeleton width="95%" height={13} radius={borderRadius.sm} style={{ marginTop: 8 }} />
+                                        <Skeleton width={90} height={12} radius={borderRadius.sm} style={{ marginTop: 12 }} />
+                                        <Skeleton width={140} height={44} radius={borderRadius.lg} style={{ marginTop: 14 }} />
+                                    </View>
+                                </View>
+                            </Card>
+                        ))
+                    ) : isError ? (
+                        // Honest retryable error — a failed fetch would otherwise fall
+                        // through to the "No active challenges" empty layout, which
+                        // misreads as "nothing is running". The retry refetches the
+                        // challenges query.
+                        <EmptyState
+                            icon="cloud-offline-outline"
+                            title="Couldn't load challenges"
+                            subtitle="Something went wrong fetching the community challenges. Check your connection and try again."
+                            actionLabel="Try Again"
+                            onAction={() => refetch()}
+                        />
                     ) : !challenges || challenges.length === 0 ? (
                         <EmptyState
                             icon="trophy-outline"
@@ -258,6 +297,9 @@ const styles = StyleSheet.create({
     backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
 
     challCard: { marginBottom: 16, borderWidth: 1, overflow: 'hidden' },
+    // Constrains SkeletonCard to the 52×52 challIcon square (it defaults to full
+    // width + a bottom margin) so the loading scaffold lines up with the loaded card.
+    skeletonIcon: { width: 52, marginBottom: 0 },
     joinedBadge: {
         flexDirection: 'row',
         alignItems: 'center',

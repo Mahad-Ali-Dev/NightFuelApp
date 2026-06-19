@@ -14,6 +14,7 @@ import { useSleep } from '@/hooks/useSleep';
 import { useQuery } from '@tanstack/react-query';
 import { getUserScore } from '@/api/community';
 import { Skeleton, EmptyState } from '@/components/ui';
+import { EntrainmentCard } from '@/components/dashboard/EntrainmentCard';
 import { TAB_BAR_H } from './_layout';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -316,6 +317,16 @@ export default function AnalyticsScreen() {
                         </View>
                     </View>
                 </View>
+
+                {/* ── Circadian Entrainment Insight ─────────────────────── */}
+                {/* First consumer of the F3 helper (src/lib/circadian/entrainment.ts):
+                    drives its advice copy from the user's alignment score. We
+                    reuse the analytics `correlationScore` (a finite 0–100 read,
+                    or null when there isn't enough data yet) as the entrainment
+                    score — null is default-safe and never throws. */}
+                <EntrainmentCard
+                    score={typeof correlationScore === 'number' ? correlationScore : null}
+                />
 
                 {/* ── Weekly AI Report ─────────────────────────────────── */}
                 <TouchableOpacity

@@ -88,16 +88,20 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                     timeoutMs: INTERNAL_REQUEST_TIMEOUT_MS,
                 });
                 const now = new Date();
-                // Count this user's plans created since UTC midnight. The chosen
-                // persistence table is DayPlan (prisma.dayPlan): every generation
-                // (and store) writes exactly one DayPlan row with userId +
-                // createdAt, so a same-day rowcount is the generation usage. We
-                // count INLINE via the prisma client on the PlanService instance
-                // (plan.service.ts is owned by another concern and left
-                // untouched); the field is compile-time private, hence the cast.
+                // Count this user's ROUTE-AI plans created since UTC midnight.
+                // The chosen persistence table is DayPlan (prisma.dayPlan), but a
+                // raw rowcount would over-count: generateAndStorePlan is also run
+                // SYSTEM-side (worker.ts checkAndRegenerate, events.ts circadian
+                // handler) and the manual /store path writes rows too — none of
+                // those consume the user's paid daily quota. Only this /generate
+                // route passes aiGenerated:true into the create, so we scope the
+                // count to aiGenerated:true and those auto-gen / store rows stay
+                // uncounted. We count INLINE via the prisma client on the
+                // PlanService instance; the field is compile-time private, hence
+                // the cast.
                 const startOfUtcDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
                 const usedToday: number = await (planService as any).prisma.dayPlan.count({
-                    where: { userId, createdAt: { gte: startOfUtcDay } },
+                    where: { userId, aiGenerated: true, createdAt: { gte: startOfUtcDay } },
                 });
                 const limit = AI_LIMITS[plan_tier].generations;
                 const q = assertWithinDailyLimit({ usedToday, limit, now });
@@ -116,7 +120,8 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                     userId,
                     date,
                     shiftId ?? null,
-                    shiftType ?? 'ROTATING'
+                    shiftType ?? 'ROTATING',
+                    true // aiGenerated: route-triggered AI generation IS counted toward the daily cap
                 );
                 return reply.code(201).send(plan);
             } catch (err: any) {

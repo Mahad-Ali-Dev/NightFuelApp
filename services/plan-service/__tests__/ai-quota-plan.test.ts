@@ -47,18 +47,25 @@ const FAKE_PLAN = { id: 'plan-1', userId: USER_ID, planVersion: 1, status: 'ACTI
  */
 function makeMockPlanService(usedToday: number) {
     const count = jest.fn(async ({ where }: any) => {
-        // Counts the caller's OWN plans since UTC midnight — userId scoped, with
-        // a createdAt lower bound. Lock both so the gate can't silently widen.
+        // Counts the caller's OWN ROUTE-AI plans since UTC midnight — userId
+        // scoped, aiGenerated:true scoped, with a createdAt lower bound. Lock all
+        // three so the gate can't silently widen. The aiGenerated:true filter is
+        // what keeps the SYSTEM auto-gen (worker/events) and manual /store rows
+        // OUT of the counted usage.
         expect(where.userId).toBe(USER_ID);
+        expect(where.aiGenerated).toBe(true);
         expect(where.createdAt.gte).toBeInstanceOf(Date);
         return usedToday;
     });
     const generateAndStorePlan = jest.fn(async () => FAKE_PLAN);
+    const storePlan = jest.fn(async () => FAKE_PLAN);
     return {
         generateAndStorePlan,
+        storePlan,
         prisma: { dayPlan: { count } },
     } as unknown as PlanService & {
         generateAndStorePlan: ReturnType<typeof jest.fn>;
+        storePlan: ReturnType<typeof jest.fn>;
         prisma: { dayPlan: { count: ReturnType<typeof jest.fn> } };
     };
 }
@@ -114,6 +121,15 @@ function generate(app: FastifyInstance) {
     });
 }
 
+function store(app: FastifyInstance) {
+    return app.inject({
+        method: 'POST',
+        url: '/v1/plans/store',
+        headers: { authorization: `Bearer ${validToken()}` },
+        payload: { date: '2026-06-20', structuredPlan: { calorieTarget: 2000 } },
+    });
+}
+
 describe('plan-service POST /v1/plans/generate — AI daily-generation quota', () => {
     const realFetch = global.fetch;
     let app: FastifyInstance;
@@ -140,6 +156,9 @@ describe('plan-service POST /v1/plans/generate — AI daily-generation quota', (
         expect(res.statusCode).toBe(201);
         expect(res.json()).toMatchObject({ id: 'plan-1' });
         expect((planService as any).generateAndStorePlan).toHaveBeenCalledTimes(1);
+        // The route must flag its generation as aiGenerated:true (trailing 6th
+        // arg) so it — and ONLY it — feeds the counted daily usage.
+        expect((planService as any).generateAndStorePlan.mock.calls[0][5]).toBe(true);
     });
 
     it('AT/OVER cap (FREE): returns 429 ai_quota_exceeded {limit,plan,resetsAt} and NEVER calls generateAndStorePlan', async () => {
@@ -205,6 +224,27 @@ describe('plan-service POST /v1/plans/generate — AI daily-generation quota', (
 
         expect(res.statusCode).toBe(401);
         expect((planService as any).prisma.dayPlan.count).not.toHaveBeenCalled();
+        expect((planService as any).generateAndStorePlan).not.toHaveBeenCalled();
+    });
+
+    it('POST /store does NOT feed the counted usage — no quota gate, storePlan stays aiGenerated-default(false)', async () => {
+        // /store persists a pre-generated plan. It is NOT the paid AI pipeline, so
+        // it must neither consult the quota gate (no DayPlan count) nor flag its
+        // row aiGenerated:true — the create there stays at the schema default
+        // (false), keeping these rows OUT of the counted usage.
+        mockFetchTier('PRO');
+        // Set the count spy high enough that, IF /store wrongly hit the gate, an
+        // over-cap 429 would surface instead of the 201 we expect.
+        const planService = makeMockPlanService(PRO_LIMIT);
+        app = await buildApp(planService);
+
+        const res = await store(app);
+
+        expect(res.statusCode).toBe(201);
+        // No gate on /store: the same-day count is never consulted…
+        expect((planService as any).prisma.dayPlan.count).not.toHaveBeenCalled();
+        // …and the route delegates to storePlan, not the counted generate path.
+        expect((planService as any).storePlan).toHaveBeenCalledTimes(1);
         expect((planService as any).generateAndStorePlan).not.toHaveBeenCalled();
     });
 });

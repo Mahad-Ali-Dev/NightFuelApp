@@ -9,6 +9,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPlanByDate, generatePlan, ratePlan } from '@/api/plans';
 import { getCurrent as getCurrentShift } from '@/api/shifts';
+// planner.tsx calls the METERED plan-service generatePlan (POST /v1/plans/generate),
+// so a daily-cap failure arrives as the SHARED 429
+// { error:'ai_quota_exceeded', limit, plan, resetsAt }. We REUSE the canonical
+// parser from '@/api/ai' (endpoint-agnostic — the single home of the
+// AiQuotaError contract) to flip into the distinct upgrade state instead of the
+// old destructive Alert. Same pattern as ai-planner.tsx / circadian.tsx.
+import { parseAiQuotaError, type AiQuotaError } from '@/api/ai';
 import { format, addDays, startOfWeek } from 'date-fns';
 import { withAlpha } from '@/theme/utils';
 import { getErrorMessage } from '@/utils/validation';
@@ -27,6 +34,18 @@ const MEAL_IMGS: Record<string,number> = {
     dinner:require('../../assets/images/meal-dinner.png'),
     snack:require('../../assets/images/meal-snack.png'),
 };
+// Human-readable "resets" line for the daily-limit upgrade block. Renders a
+// short local clock time ("Resets at 6:00 AM") when `resetsAt` is a parseable
+// ISO timestamp, else a sensible fallback so the block never shows a raw date
+// or "Invalid Date". Hoisted to module scope (no per-render Intl alloc); copied
+// verbatim from ai-planner.tsx / circadian.tsx's formatResetsAt.
+function formatResetsAt(resetsAt:string):string {
+    if (!resetsAt) return 'Resets at midnight UTC';
+    const when = new Date(resetsAt);
+    if (Number.isNaN(when.getTime())) return 'Resets at midnight UTC';
+    const time = when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return `Resets at ${time}`;
+}
 export default function MealPlannerScreen() {
     const { colors, typography } = useTheme();
     const insets = useSafeAreaInsets();
@@ -34,6 +53,14 @@ export default function MealPlannerScreen() {
     const qc = useQueryClient();
     const [selDate, setSelDate] = useState(new Date());
     const [rating, setRating] = useState(0);
+    // ── Plan-generation failure ground truth — two MUTUALLY-EXCLUSIVE vars ───
+    // `quota` holds the parsed daily-AI-limit 429 (the distinct upgrade state);
+    // `genError` holds any other failure message (the retryable inline notice).
+    // Exactly one is ever non-null — both clear on runGenerate + onSuccess, and
+    // onError sets precisely one. The visible cards are DERIVED from whichever is
+    // set (state = ground truth, not the rendered output).
+    const [quota,setQuota] = useState<AiQuotaError|null>(null);
+    const [genError,setGenError] = useState<string|null>(null);
     const dateStr = format(selDate,'yyyy-MM-dd');
     const planQ = useQuery({ queryKey:['nutrition-plan',dateStr], queryFn:()=>getPlanByDate(dateStr), retry:false });
     const shiftQ = useQuery({ queryKey:['current-shift'], queryFn:()=>getCurrentShift(), retry:false });
@@ -43,9 +70,19 @@ export default function MealPlannerScreen() {
             shiftId: shiftQ.data?.id,
             shiftType: shiftQ.data?.type,
         }),
-        onSuccess:()=>{ qc.invalidateQueries({queryKey:['nutrition-plan',dateStr]}); Alert.alert('Plan Generated','Your AI-powered nutrition protocol is ready.'); },
-        onError:(err:unknown)=>Alert.alert('Generation Failed', getErrorMessage(err)),
+        onSuccess:()=>{ setQuota(null); setGenError(null); qc.invalidateQueries({queryKey:['nutrition-plan',dateStr]}); Alert.alert('Plan Generated','Your AI-powered nutrition protocol is ready.'); },
+        onError:(err:unknown)=>{
+            // A 429 daily-AI-limit flips into the distinct upgrade state; any
+            // other error (network / 5xx / non-quota 4xx) takes the retryable
+            // inline error path. Set exactly one; clear the other — no Alert.
+            const q=parseAiQuotaError(err);
+            if(q){ setQuota(q); setGenError(null); }
+            else { setQuota(null); setGenError(getErrorMessage(err)); }
+        },
     });
+    // Clear any prior failure state and kick off generation (used by the empty-
+    // state CTA, the regenerate control, and the inline "Try Again").
+    const runGenerate=()=>{ setQuota(null); setGenError(null); genM.mutate(); };
     const rateM = useMutation({
         mutationFn:(rating:number)=>ratePlan(planQ.data!.id,rating),
         onSuccess:()=>qc.invalidateQueries({queryKey:['nutrition-plan',dateStr]}),
@@ -53,6 +90,54 @@ export default function MealPlannerScreen() {
     });
     const weekDays = useMemo(()=>{ const start=startOfWeek(new Date(),{weekStartsOn:1}); return Array.from({length:7}).map((_,i)=>addDays(start,i)); },[]);
     const plan = planQ.data;
+    // Mutually-exclusive failure surfaces, rendered ONLY when no generation is in
+    // flight. Defined ONCE here and dropped into BOTH render branches (empty +
+    // loaded) so the message shows whether or not a plan already exists. Token
+    // backgrounds only (no inline coral-CTA gradient / SafeBlurView — the Upgrade
+    // action is the sanctioned CtaButton). Mirrors ai-planner.tsx lines 358-414.
+    const failureNotices = !genM.isPending ? (
+        <>
+            {/* Daily-AI-limit 429 → distinct upgrade state (NOT the retryable
+                error). Mutually exclusive with `genError`; the Upgrade action is
+                the shared CtaButton routing to the premium modal. */}
+            {!!quota && (
+                <View style={[s.noticeCard,{backgroundColor:withAlpha(colors.accent.coral,0.08),borderColor:withAlpha(colors.accent.coral,0.35)}]} accessibilityRole="alert">
+                    <View style={{flexDirection:'row',alignItems:'flex-start'}}>
+                        <Ionicons name="flash-outline" size={20} color={colors.accent.coral} style={{marginTop:1}} />
+                        <View style={{flex:1,marginLeft:10}}>
+                            <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'700'}]}>Daily AI limit reached</Text>
+                            <Text style={[typography.caption,{color:colors.text.secondary,marginTop:2,lineHeight:18}]}>{`You've used all ${quota.limit} of your ${quota.plan==='pro'?'Pro':'free'} daily AI plans. ${formatResetsAt(quota.resetsAt)}.`}</Text>
+                        </View>
+                    </View>
+                    <CtaButton
+                        label="Upgrade"
+                        icon="sparkles"
+                        size="sm"
+                        onPress={()=>router.push('/(modals)/premium')}
+                        accessibilityLabel="Upgrade to remove the daily AI limit"
+                        style={{alignSelf:'flex-start',marginTop:12}}
+                    />
+                </View>
+            )}
+            {/* Persistent, retryable inline error — survives until a retry
+                succeeds. Mutually exclusive with `quota`. */}
+            {!!genError && (
+                <View style={[s.noticeCard,{backgroundColor:withAlpha(colors.accent.coral,0.08),borderColor:withAlpha(colors.accent.coral,0.35)}]} accessibilityRole="alert">
+                    <View style={{flexDirection:'row',alignItems:'flex-start'}}>
+                        <Ionicons name="alert-circle" size={20} color={colors.accent.coral} style={{marginTop:1}} />
+                        <View style={{flex:1,marginLeft:10}}>
+                            <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'700'}]}>Generation Failed</Text>
+                            <Text style={[typography.caption,{color:colors.text.secondary,marginTop:2,lineHeight:18}]}>{genError}</Text>
+                        </View>
+                    </View>
+                    <TouchableOpacity style={[s.tryAgainBtn,{borderColor:withAlpha(colors.accent.coral,0.5)}]} onPress={runGenerate} accessibilityRole="button" accessibilityLabel="Try again" activeOpacity={0.85}>
+                        <Ionicons name="refresh" size={16} color={colors.accent.coral} />
+                        <Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'700',marginLeft:6}]}>Try Again</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+        </>
+    ) : null;
     return (
         <View style={[s.container,{backgroundColor:colors.background.primary}]}>
             <StatusBar style="light" />
@@ -110,9 +195,10 @@ export default function MealPlannerScreen() {
                             label="GENERATE AI PLAN"
                             accessibilityLabel="Generate AI plan"
                             style={[s.genBtnWrap,{marginTop:32}]}
-                            onPress={()=>genM.mutate()}
+                            onPress={runGenerate}
                             loading={genM.isPending}
                         />
+                        {!!failureNotices&&<View style={{width:'100%',marginTop:8}}>{failureNotices}</View>}
                     </View>
                 ):(
                     <View>
@@ -170,7 +256,8 @@ export default function MealPlannerScreen() {
                                 ))}
                             </View>
                         </View>
-                        <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Regenerate plan" accessibilityState={{ disabled: genM.isPending, busy: genM.isPending }} style={[s.genBtn,{backgroundColor:colors.background.secondary,marginTop:32,borderWidth:1,borderColor:colors.border.default},genM.isPending&&{opacity:0.6}]} onPress={()=>genM.mutate()} disabled={genM.isPending}>
+                        {!!failureNotices&&<View style={{marginTop:32}}>{failureNotices}</View>}
+                        <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Regenerate plan" accessibilityState={{ disabled: genM.isPending, busy: genM.isPending }} style={[s.genBtn,{backgroundColor:colors.background.secondary,marginTop:32,borderWidth:1,borderColor:colors.border.default},genM.isPending&&{opacity:0.6}]} onPress={runGenerate} disabled={genM.isPending}>
                             {genM.isPending
                                 ? <ActivityIndicator size="small" color={colors.text.primary} />
                                 : <Ionicons name="refresh" size={20} color={colors.text.primary} />}
@@ -197,4 +284,9 @@ const s = StyleSheet.create({
     suppCard:{borderRadius:14,borderWidth:1,padding:4}, suppRow:{flexDirection:'row',alignItems:'center',padding:14},
     genBtnWrap:{width:'100%',borderRadius:28,overflow:'hidden',marginBottom:20},
     genBtn:{height:56,borderRadius:28,flexDirection:'row',alignItems:'center',justifyContent:'center',marginBottom:20},
+    // Inline upgrade / retryable-error notice surface (token-filled View — NOT a
+    // coral-CTA gradient or SafeBlurView; the Upgrade action is a CtaButton).
+    // Mirrors ai-planner.tsx's errorCard/tryAgainBtn.
+    noticeCard:{borderRadius:16,borderCurve:'continuous',borderWidth:1,padding:16,marginBottom:12},
+    tryAgainBtn:{flexDirection:'row',alignItems:'center',justifyContent:'center',alignSelf:'flex-start',marginTop:12,paddingHorizontal:16,paddingVertical:8,borderRadius:20,borderCurve:'continuous',borderWidth:1.5},
 });

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    TextInput, ActivityIndicator, Alert, Modal, Dimensions,
+    TextInput, Alert, Modal, Dimensions,
     KeyboardAvoidingView, Platform
 } from 'react-native';
 
@@ -9,6 +9,7 @@ import { useTheme } from '@/theme';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { CircularProgress } from '@/components/ui/CircularProgress';
+import { Skeleton, EmptyState } from '@/components/ui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -178,7 +179,18 @@ export default function ActiveWorkoutScreen() {
     const persistenceRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // ── Fetch Session ───────────────────────────────────────────────────────
-    const { data: session, isLoading: isSessionLoading } = useQuery({
+    // `isError`/`refetch` drive the honest retryable error state below: when the
+    // active-session fetch fails we surface a retry instead of hanging forever on
+    // the loading skeleton (init only runs once `sessionReady` is true, and a
+    // failed query never flips `isLoading` back off on its own). The react-query
+    // cache stays the single source of truth — we never mirror the error flag
+    // into local state (react-state-fallback).
+    const {
+        data: session,
+        isLoading: isSessionLoading,
+        isError: isSessionError,
+        refetch: refetchSession,
+    } = useQuery({
         queryKey: ['active-session', sessionId],
         queryFn: getActiveSession,
         enabled: !!sessionId,
@@ -186,8 +198,16 @@ export default function ActiveWorkoutScreen() {
 
     // When launched from a routine (START button), fetch routines so we can seed
     // the session with that routine's exercises — the backend creates an empty
-    // session, so without this the workout would open with no exercises.
-    const { data: routines, isLoading: routinesLoading } = useQuery({
+    // session, so without this the workout would open with no exercises. Same
+    // error contract as the session query: a failed routine fetch (only enabled
+    // when we arrived via a routine) surfaces a retry rather than seeding an
+    // empty, exercise-less workout.
+    const {
+        data: routines,
+        isLoading: routinesLoading,
+        isError: isRoutinesError,
+        refetch: refetchRoutines,
+    } = useQuery({
         queryKey: ['routines'],
         queryFn: getRoutines,
         enabled: !!paramRoutineId,
@@ -320,10 +340,15 @@ export default function ActiveWorkoutScreen() {
 
         const sessionReady = session || !isSessionLoading;
         const routineReady = !paramRoutineId || !routinesLoading;
-        if (sessionReady && routineReady) {
+        // Hold off initialization while a relevant query is in error: a failed
+        // load must surface the retry EmptyState below (and refetch on tap),
+        // not initialize an empty, exercise-less session off undefined data.
+        // A successful refetch clears the flag and re-runs this effect → init().
+        const loadErrored = isSessionError || (!!paramRoutineId && isRoutinesError);
+        if (sessionReady && routineReady && !loadErrored) {
             init();
         }
-    }, [session, isSessionLoading, paramExercise, sessionId, paramRoutineId, routines, routinesLoading]);
+    }, [session, isSessionLoading, isSessionError, paramExercise, sessionId, paramRoutineId, routines, routinesLoading, isRoutinesError]);
 
     // ── Timers ──────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -556,11 +581,87 @@ export default function ActiveWorkoutScreen() {
         </View>
     );
 
-    if (!isInitialized) {
+    // A failed session fetch (or, when we arrived via a routine, a failed routine
+    // fetch) must surface a retry rather than hanging on the loading skeleton or
+    // silently opening an empty, exercise-less workout. The retry refetches only
+    // the query that actually errored (and the other only when it is relevant),
+    // which re-runs the init effect on success. Active-workout session logic,
+    // timers, and persistence are untouched — this branch is reached only before
+    // a session has initialized.
+    const routineRelevant = !!paramRoutineId;
+    const loadError = isSessionError || (routineRelevant && isRoutinesError);
+    if (!isInitialized && loadError) {
         return (
             <View style={[styles.container, { backgroundColor: colors.background.primary, justifyContent: 'center' }]}>
                 <StatusBar style="light" />
-                <ActivityIndicator size="large" color={colors.accent.coral} />
+                <EmptyState
+                    icon="cloud-offline-outline"
+                    title="Couldn't start your workout"
+                    subtitle="Something went wrong loading your session. Check your connection and try again."
+                    actionLabel="Try Again"
+                    onAction={() => {
+                        if (isSessionError) refetchSession();
+                        if (routineRelevant && isRoutinesError) refetchRoutines();
+                    }}
+                />
+            </View>
+        );
+    }
+
+    if (!isInitialized) {
+        // Honest loading scaffold mirroring the active-workout chrome (header +
+        // an expanded exercise card with set rows) instead of a bare spinner, so
+        // the screen doesn't "pop" when the session initializes.
+        return (
+            <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+                <StatusBar style="light" />
+                <View style={{ paddingTop: insets.top, flex: 1 }}>
+                    {/* Header placeholder: ACTIVE WORKOUT overline + timer block on
+                        the left, FINISH button block on the right. */}
+                    <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
+                        <View>
+                            <Skeleton width={110} height={11} radius={borderRadius.sm} />
+                            <Skeleton width={90} height={34} radius={borderRadius.md} style={{ marginTop: 6 }} />
+                        </View>
+                        <Skeleton width={96} height={44} radius={borderRadius.lg} />
+                    </View>
+
+                    <View style={{ padding: spacing.lg }}>
+                        {Array.from({ length: 3 }).map((_, i) => (
+                            <Card
+                                key={i}
+                                variant="glass"
+                                noPadding
+                                style={{ marginBottom: spacing.md, borderColor: colors.border.default }}
+                            >
+                                <View style={styles.exHeader}>
+                                    <View style={styles.exTitleRow}>
+                                        <Skeleton width={44} height={44} radius={12} />
+                                        <View style={{ flex: 1, marginLeft: spacing.md }}>
+                                            <Skeleton width="60%" height={16} radius={borderRadius.sm} />
+                                            <Skeleton width="40%" height={12} radius={borderRadius.sm} style={{ marginTop: 8 }} />
+                                        </View>
+                                    </View>
+                                    {/* First card expanded: a couple of set-row placeholders so the
+                                        scaffold matches the default-expanded loaded layout. */}
+                                    {i === 0 ? (
+                                        <View style={{ marginTop: spacing.md }}>
+                                            {Array.from({ length: 3 }).map((__, s) => (
+                                                <Skeleton
+                                                    key={s}
+                                                    width="100%"
+                                                    height={40}
+                                                    radius={borderRadius.md}
+                                                    style={{ marginBottom: 8 }}
+                                                />
+                                            ))}
+                                        </View>
+                                    ) : null}
+                                </View>
+                            </Card>
+                        ))}
+                    </View>
+                </View>
             </View>
         );
     }

@@ -23,18 +23,18 @@ they live only in the host env (`infra/docker/.env`) or the relevant provider co
 
 ## Contents
 
-1. [Three unapplied DB migrations](#1-three-unapplied-db-migrations)
+1. [Five unapplied DB migrations](#1-five-unapplied-db-migrations)
 2. [Recipe catalog re-seed](#2-recipe-catalog-re-seed)
-3. [AI-call accounting — `aiGenerated` flag (SKETCH, not applied)](#3-ai-call-accounting--aigenerated-flag-sketch-not-applied)
+3. [AI-call accounting — `aiGenerated` flag (migration files committed)](#3-ai-call-accounting--aigenerated-flag-migration-files-committed)
 4. [Payments — RevenueCat + App Store / Play product IDs](#4-payments--revenuecat--app-store--play-product-ids)
 5. [Push delivery — EAS dev build + APNs/FCM](#5-push-delivery--eas-dev-build--apnsfcm)
 6. [Fitness-watch native pairing — dev build required](#6-fitness-watch-native-pairing--dev-build-required)
 
 ---
 
-## 1. Three unapplied DB migrations
+## 1. Five unapplied DB migrations
 
-**What.** Three services gained a new column / table this sprint. The migration
+**What.** Five services/columns gained a new column / table this sprint. The migration
 **files** are committed; whether they auto-apply on `docker compose up` depends on
 the service's startup command (its `Dockerfile` `CMD`), which differs per service —
 see the table. Run the explicit command below **only if** the column/table is missing
@@ -50,6 +50,8 @@ owner-only, out-of-band action — the chat migration file even says so in its h
 | `chat-service` | `conversations.request_state` (TEXT, default `'pending'`) + `messages.read_at` (TIMESTAMP, nullable) | `services/chat-service/prisma/migrations/20260619_chat_requests_readat/migration.sql` | `Dockerfile` `CMD` runs **`prisma migrate deploy`** → this migration applies automatically on (re)start | `docker compose exec chat-service npx prisma migrate deploy` |
 | `community-service` | new `follows` table (`follower_id`, `following_id`, unique pair, index on `following_id`) | `services/community-service/prisma/migrations/20260619_follow/migration.sql` | `Dockerfile` `CMD` runs **`prisma migrate deploy`** → applies automatically on (re)start | `docker compose exec community-service npx prisma migrate deploy` |
 | `user-service` | `user_profiles.is_private` (BOOLEAN, default `false`) | `services/user-service/prisma/migrations/20260619_user_isprivate/migration.sql` | `Dockerfile` `CMD` runs **`prisma db push`** (NOT migrate deploy — see drift note) → the column is reconciled from `schema.prisma` on (re)start | `docker compose exec user-service npx prisma db push --skip-generate --accept-data-loss` |
+| `exercise-service` | `workout_routines.ai_generated` (BOOLEAN, NOT NULL, default `false`) | `services/exercise-service/prisma/migrations/20260620_workout_ai_generated/migration.sql` | `Dockerfile` `CMD` runs **`prisma db push`** (incomplete hand-written migrations — see drift note) → the `ai_generated` column is reconciled from `schema.prisma` on (re)start (the field is declared `aiGenerated Boolean @default(false) @map("ai_generated")`) | `docker compose exec exercise-service npx prisma db push --skip-generate --accept-data-loss` |
+| `plan-service` | `day_plans.ai_generated` (BOOLEAN, NOT NULL, default `false`) | `services/plan-service/prisma/migrations/20260620_plan_ai_generated/migration.sql` | `Dockerfile` `CMD` runs **`prisma db push`** (drift — see `services/plan-service/Dockerfile` comment) → the `ai_generated` column is reconciled from `schema.prisma` on (re)start | `docker compose exec plan-service npx prisma db push --skip-generate --accept-data-loss` |
 
 > ### Why user-service uses `db push`, not `migrate deploy`
 > Repo migration-drift convention (see `services/user-service/Dockerfile` comment and
@@ -62,6 +64,29 @@ owner-only, out-of-band action — the chat migration file even says so in its h
 > `is_private` column because the field already exists in `schema.prisma`
 > (`isPrivate Boolean @default(false) @map("is_private")`). chat-service and
 > community-service do **not** have this drift, so they keep `migrate deploy`.
+> exercise-service and plan-service ALSO use `db push` (their hand-written
+> migrations are likewise incomplete — see each `Dockerfile` comment), so their new
+> `ai_generated` columns are created from `schema.prisma` on (re)start; the
+> `20260620_*_ai_generated/migration.sql` files are kept as the human-readable record.
+
+> ### 🔴 CRITICAL — apply the two `ai_generated` migrations *together with this round's code*
+> The exercise-service and plan-service `ai_generated` columns are **not optional**:
+> this round's code makes the daily-quota **COUNT query reference the new column**, e.g.
+> ```ts
+> // exercise-service src/index.ts — POST /v1/exercises/routines/generate
+> where: { userId, aiGenerated: true, createdAt: { gte: startOfUtcDay } }
+> // plan-service src/routes.ts — POST /v1/plans/generate
+> where: { userId, aiGenerated: true, createdAt: { gte: startOfUtcDay } }
+> ```
+> If you deploy the **code without the column** (e.g. `git pull` + restart a stack
+> whose `db push` didn't run, or a Supabase DB that wasn't reconciled), that COUNT
+> fails with Postgres **`column "ai_generated" does not exist`** (Prisma **`P2022`**),
+> and the AI-routine / AI-plan generate endpoints **error on every call**. So: bring up
+> each service in a way that runs its `db push` (rebuild/restart so the `Dockerfile`
+> `CMD` executes), **or** run the manual `db push` command in the table above, in the
+> **same deploy** as this round's code — never code-first. Applying the column early is
+> harmless (default `false`; pre-existing routines/plans simply stop counting toward the
+> AI cap, the user-favourable direction).
 
 > ### ⛔ DO NOT run from an agent session
 > These run `docker compose exec` **against the live VPS** stack. Owner-only, from the
@@ -80,6 +105,12 @@ docker compose exec postgres psql -U postgres -d user_service -c '\d user_profil
 
 # community-service: follows table present
 docker compose exec postgres psql -U postgres -d community_service -c '\d follows'
+
+# exercise-service: workout_routines.ai_generated present
+docker compose exec postgres psql -U postgres -d exercise_service -c '\d workout_routines'
+
+# plan-service: day_plans.ai_generated present
+docker compose exec postgres psql -U postgres -d plan_service -c '\d day_plans'
 ```
 
 (Adjust `-d <db>` / `-U <user>` to your actual Postgres connection — Supabase
@@ -128,74 +159,58 @@ npm run seed:recipes          # ts-node src/seed-recipes.ts
 
 ---
 
-## 3. AI-call accounting — `aiGenerated` flag (SKETCH, not applied)
+## 3. AI-call accounting — `aiGenerated` flag (migration files committed)
 
-**What (today's behavior).** The daily AI-generation quota in two services counts
-**every** row a user created since UTC midnight, because neither table has a flag
-marking a row as AI-generated vs. manually created:
+**What (now implemented in-repo).** The daily AI-generation quota in two services used
+to count **every** routine/plan a user created since UTC midnight, so creating one
+**manually** burned the AI cap. This sprint added an `aiGenerated` flag to both tables;
+only AI-generated rows now consume quota. The **code change is committed** and the
+**migration files exist** — the only owner-gated step left is applying the new column
+on the two live DBs, which is covered by **[§1](#1-five-unapplied-db-migrations)**
+(both apply via `db push` on (re)start, or the manual command in that table).
 
-- **exercise-service** — `services/exercise-service/src/index.ts` (~L366–369):
+What shipped, per service:
+
+- **exercise-service** — `services/exercise-service/prisma/schema.prisma` declares
+  `aiGenerated Boolean @default(false) @map("ai_generated")` on `WorkoutRoutine`;
+  migration `services/exercise-service/prisma/migrations/20260620_workout_ai_generated/migration.sql`.
+  The generator (`POST /v1/exercises/routines/generate`) calls
+  `createRoutine(userId, routineData, /* aiGenerated */ true)`; the manual route
+  (`POST /v1/exercises/routines`) leaves the default `false`. The quota COUNT in
+  `src/index.ts` now filters on the flag:
   ```ts
-  const startOfUtcDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const usedToday = await prisma.workoutRoutine.count({
-      where: { userId, createdAt: { gte: startOfUtcDay } },
+      where: { userId, aiGenerated: true, createdAt: { gte: startOfUtcDay } },
   });
   ```
-  This counts **all** `WorkoutRoutine` rows since UTC midnight (the source comment
-  spells this out). A user manually creating a routine therefore **consumes AI quota**.
 
-- **plan-service** — `services/plan-service/src/routes.ts` (~L98–100):
+- **plan-service** — `services/plan-service/prisma/schema.prisma` declares the matching
+  `aiGenerated` flag on `DayPlan`; migration
+  `services/plan-service/prisma/migrations/20260620_plan_ai_generated/migration.sql`.
+  The AI plan generator sets `aiGenerated: true`; other create paths leave `false`;
+  the quota COUNT in `src/routes.ts` filters on the flag the same way:
   ```ts
-  const startOfUtcDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const usedToday: number = await (planService as any).prisma.dayPlan.count({
-      where: { userId, createdAt: { gte: startOfUtcDay } },
-  });
+  where: { userId, aiGenerated: true, createdAt: { gte: startOfUtcDay } }
   ```
-  Same pattern: **all** `DayPlan` rows since UTC midnight count, AI-generated or not.
 
-**Why gated / why only a sketch.** Fixing this cleanly needs a real schema change
-(a new column) on two production databases — an owner-only migration. It is **out of
-scope for this in-repo sprint** and intentionally left as a documented sketch.
+> Note on table names: Prisma `@@map`s these models to snake_case, so the real columns
+> are `"workout_routines"."ai_generated"` and `"day_plans"."ai_generated"` — which is
+> exactly what each `migration.sql` `ALTER TABLE` targets.
 
-> ### ⚠️ NOT APPLIED — do NOT create migration files for this
-> The SQL below is a **design sketch only**. It is **not** committed as a migration,
-> **no** `prisma/migrations/` directory exists for it, and the Prisma schemas
-> (`services/exercise-service/prisma/schema.prisma`,
-> `services/plan-service/prisma/schema.prisma`) do **not** declare an `aiGenerated`
-> field. Do not add it from an agent session — this is a future, owner-approved change.
-
-**Sketch — the column the owner would add (NOT APPLIED):**
-
-```sql
--- exercise-service DB — services/exercise-service/prisma/schema.prisma → model WorkoutRoutine (@@map("workout_routines"))
-ALTER TABLE "WorkoutRoutine" ADD COLUMN "aiGenerated" BOOLEAN NOT NULL DEFAULT false;
-
--- plan-service DB — services/plan-service/prisma/schema.prisma → model DayPlan (@@map("day_plans"))
-ALTER TABLE "DayPlan" ADD COLUMN "aiGenerated" BOOLEAN NOT NULL DEFAULT false;
-```
-
-> Note on table names: Prisma `@@map`s these models to snake_case
-> (`workout_routines`, `day_plans`). The Prisma-model-named form above is shown to
-> mirror the model; the actual `ALTER TABLE` the owner runs must target the real
-> table name (`"workout_routines"` / `"day_plans"`). Either way this is a sketch.
-
-**How the code would change once that column exists (future, owner-gated):**
-
-1. The **generators** (the AI routine/plan creation paths) would set
-   `aiGenerated: true` on the row they write; all other create paths leave the
-   default `false`.
-2. The two quota COUNTs above would add `aiGenerated: true` to the filter so only AI
-   creations consume quota, e.g.:
-   ```ts
-   // exercise-service
-   where: { userId, aiGenerated: true, createdAt: { gte: startOfUtcDay } }
-   // plan-service
-   where: { userId, aiGenerated: true, createdAt: { gte: startOfUtcDay } }
-   ```
+> ### 🔴 The column MUST ship with this code — see [§1](#1-five-unapplied-db-migrations)
+> Because the quota COUNT above references `ai_generated`, deploying this code against a
+> DB that does not yet have the column makes the generate endpoints fail with Prisma
+> `P2022` (`column "ai_generated" does not exist`). Apply the migration **in the same
+> deploy** as this round's code — never code-first. Full rationale + the apply/verify
+> commands live in §1's **CRITICAL** callout. This was previously a "sketch, not
+> applied" note; it is now implemented, so the old "do NOT create migration files"
+> warning no longer applies.
 
 > ### ⛔ DO NOT run from an agent session
-> Adding this column is a live migration on two databases plus a code change across
-> generators and quota checks. Owner-only, and only after deciding to do it.
+> Applying the column is a live `db push` against two production databases. Owner-only —
+> the repo work (schema fields, migration files, code) is file-only; the apply step is
+> the owner's, per §1. Never run a migration/`db push` from Claude Code or any
+> automated session.
 
 ---
 
@@ -316,11 +331,12 @@ entitlements. Cannot be exercised in Expo Go and cannot be built from a session.
 
 ## Quick checklist (all owner-only)
 
-- [ ] Apply / confirm the 3 migrations on the live DBs (§1) — chat & community via
-      `migrate deploy`, user via `db push`.
+- [ ] Apply / confirm the 5 migrations on the live DBs (§1) — chat & community via
+      `migrate deploy`; user, exercise & plan via `db push`.
+- [ ] 🔴 Apply the exercise-service **and** plan-service `ai_generated` columns (§1/§3)
+      **in the same deploy as this round's code** — the quota COUNT now references the
+      column, so code-without-column makes the AI generate endpoints fail (`P2022`).
 - [ ] Re-seed recipes if the catalog is empty/stale (§2) — safe to re-run.
-- [ ] (Future, optional) Add the `aiGenerated` column + filter the quota COUNTs (§3) —
-      **not applied; sketch only.**
 - [ ] Create store IAP products + wire RevenueCat (§4).
 - [ ] EAS dev build + APNs/FCM for remote push (§5).
 - [ ] EAS dev build + on-device health permissions for watch pairing (§6).

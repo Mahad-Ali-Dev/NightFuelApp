@@ -504,10 +504,13 @@ export class ExerciseService {
         });
     }
 
-    async createRoutine(userId: string, data: any) {
+    async createRoutine(userId: string, data: any, aiGenerated = false) {
         // Explicit whitelist: never blind-spread client `data` into Prisma. Only
         // these named columns of WorkoutRoutine are accepted; anything else the
         // client sends (e.g. id, userId override, createdAt) is dropped.
+        // `aiGenerated` is set ONLY from the trusted caller (the AI generate route
+        // passes true; the manual create route leaves the default false) — never
+        // from client `data` — so a manual routine never burns the daily AI quota.
         const { title, description, splitType, muscleGroups, exercises } = data ?? {};
         return this.prisma.workoutRoutine.create({
             data: {
@@ -516,6 +519,7 @@ export class ExerciseService {
                 splitType: splitType ?? null,
                 muscleGroups: muscleGroups ?? [],
                 userId,
+                aiGenerated,
                 // Ensure exercises is a proper JSON array
                 exercises: exercises ?? []
             }

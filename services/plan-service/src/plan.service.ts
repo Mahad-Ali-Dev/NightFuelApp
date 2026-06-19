@@ -50,7 +50,7 @@ export class PlanService {
         return (await response.json()) as any;
     }
 
-    async generateAndStorePlan(profileData: any, userId: string, date: string, shiftId: string | null = null, shiftType: string = 'ROTATING'): Promise<any> {
+    async generateAndStorePlan(profileData: any, userId: string, date: string, shiftId: string | null = null, shiftType: string = 'ROTATING', aiGenerated: boolean = false): Promise<any> {
         logger.info(`Generating plan for user ${userId} on ${date}`);
 
         // 1. Fetch user state from state-service
@@ -241,6 +241,7 @@ export class PlanService {
                 generationLatencyMs: latencyMs,
                 generationTokens: planResult.tokensUsed ?? null,
                 status: 'ACTIVE',
+                aiGenerated,
             },
         });
 

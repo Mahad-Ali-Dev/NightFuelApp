@@ -705,6 +705,67 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   // Kettlebell
   'Two-Arm Kettlebell Military Press': 'Two-Arm_Kettlebell_Military_Press',
   'Kettlebell Pistol Squat': 'Kettlebell_Pistol_Squat',
+
+  // ── Widened FEDB-backed tranche #9 (data-only, zero new fetch) ───────────────
+  // A further slice of distinct catalogue movements. Every KEY below is NEW —
+  // absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries above (tranches #1-#8),
+  // YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos() admits each one as
+  // kind:'fedb_frames', verified:false (precedence: an already-set name is skipped).
+  // Every slug VALUE was machine-verified to be present in BOTH FEDB_SLUGS
+  // (exerciseDemos.ts) AND __tests__/fixtures/fedb-catalog-slugs.json (the shipped
+  // 873-slug catalogue), and each is a fresh slug dir not already referenced by an
+  // earlier tranche — so every entry resolves to an ordered 2-frame [0.jpg, 1.jpg]
+  // HTTPS pair via fedbPair() with NO new HTTP call. Strictly additive: the
+  // kind:'youtube'-only sync guard (scripts/check-demo-maps-in-sync.js) and
+  // pendingHumanReviewIds.json (YouTube ids only) are both untouched, so
+  // check-demo-maps-in-sync stays green.
+
+  // Dumbbell — flyes / raises / curls
+  'One-Arm Flat Bench Dumbbell Flye': 'One-Arm_Flat_Bench_Dumbbell_Flye',
+  'Alternate Incline Dumbbell Curl': 'Alternate_Incline_Dumbbell_Curl',
+  'Dumbbell Prone Incline Curl': 'Dumbbell_Prone_Incline_Curl',
+  'Lying Supine Dumbbell Curl': 'Lying_Supine_Dumbbell_Curl',
+  'Dumbbell Scaption': 'Dumbbell_Scaption',
+  'Alternating Deltoid Raise': 'Alternating_Deltoid_Raise',
+  'Lying One-Arm Lateral Raise': 'Lying_One-Arm_Lateral_Raise',
+  'Front Incline Dumbbell Raise': 'Front_Incline_Dumbbell_Raise',
+  'Lying Rear Delt Raise': 'Lying_Rear_Delt_Raise',
+  // Cable / machine — chest / shoulders / back
+  'Single-Arm Cable Crossover': 'Single-Arm_Cable_Crossover',
+  'Incline Cable Chest Press': 'Incline_Cable_Chest_Press',
+  'Alternating Cable Shoulder Press': 'Alternating_Cable_Shoulder_Press',
+  'Low Pulley Row To Neck': 'Low_Pulley_Row_To_Neck',
+  'Leverage Iso Row': 'Leverage_Iso_Row',
+  'Leverage Decline Chest Press': 'Leverage_Decline_Chest_Press',
+  // Triceps — dumbbell / cable
+  'Standing One-Arm Dumbbell Triceps Extension': 'Standing_One-Arm_Dumbbell_Triceps_Extension',
+  'Seated Bent-Over Two-Arm Dumbbell Triceps Extension': 'Seated_Bent-Over_Two-Arm_Dumbbell_Triceps_Extension',
+  'Cable Incline Pushdown': 'Cable_Incline_Pushdown',
+  'Dumbbell Tricep Extension (Pronated Grip)': 'Dumbbell_Tricep_Extension_-Pronated_Grip',
+  // Back / pulls / dips
+  'One Arm Chin-Up': 'One_Arm_Chin-Up',
+  'Bent Over One-Arm Long Bar Row': 'Bent_Over_One-Arm_Long_Bar_Row',
+  'Dips (Chest Version)': 'Dips_-_Chest_Version',
+  'Inverted Row with Straps': 'Inverted_Row_with_Straps',
+  // Legs / glutes / hamstrings
+  'Ball Leg Curl': 'Ball_Leg_Curl',
+  'Single-Leg Leg Extension': 'Single-Leg_Leg_Extension',
+  'Single-Leg High Box Squat': 'Single-Leg_High_Box_Squat',
+  'Kneeling Squat': 'Kneeling_Squat',
+  'Freehand Jump Squat': 'Freehand_Jump_Squat',
+  // Core / abs
+  'Decline Oblique Crunch': 'Decline_Oblique_Crunch',
+  'Flat Bench Lying Leg Raise': 'Flat_Bench_Lying_Leg_Raise',
+  'Gorilla Chin Crunch': 'Gorilla_Chin_Crunch',
+  'Tuck Crunch': 'Tuck_Crunch',
+  'Cocoons': 'Cocoons',
+  // Kettlebell / conditioning
+  'Kettlebell Arnold Press': 'Kettlebell_Arnold_Press',
+  'One-Arm Kettlebell Row': 'One-Arm_Kettlebell_Row',
+  'Two-Arm Kettlebell Clean': 'Two-Arm_Kettlebell_Clean',
+  // Calves
+  'Calf Raise On A Dumbbell': 'Calf_Raise_On_A_Dumbbell',
+  'Dumbbell Seated One-Leg Calf Raise': 'Dumbbell_Seated_One-Leg_Calf_Raise',
 };
 
 /**

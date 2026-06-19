@@ -346,12 +346,14 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generat
     const { goal, level, daysPerWeek, focusAreas, equipment } = request.body;
 
     // ── Daily AI quota — gated BEFORE the AI-pipeline fetch / any createRoutine ──
-    // This is the ONLY AI-routine creation path, and WorkoutRoutine has NO
-    // aiGenerated flag this sprint, so ALL of a user's routines created since UTC
-    // midnight count toward the per-plan `generations` quota (no DB column to add
-    // here). At/over the cap we reply 429 and DO NOT call the AI pipeline or
-    // createRoutine. Plan tier is resolved the same way the chat-service Ria quota
-    // does; an unreachable subscription-service degrades to the safer free limit.
+    // Only AI-generated routines count toward the per-plan `generations` quota:
+    // the count filters on aiGenerated:true, and this generate route is the only
+    // path that writes aiGenerated:true (it calls createRoutine(...,true) below).
+    // Manual creates (POST /v1/exercises/routines) write aiGenerated:false, so they
+    // do NOT consume this quota. At/over the cap we reply 429 and DO NOT call the
+    // AI pipeline or createRoutine. Plan tier is resolved the same way the
+    // chat-service Ria quota does; an unreachable subscription-service degrades to
+    // the safer free limit.
     // resolver centralized into @nightfuel/config; the shared token mints {userId,
     // sub} — a compatible superset (subscription-service reads only userId/id), so
     // chat's old role:'SYSTEM'/no-sub and exercise/plan's sub/no-role both reduce to
@@ -366,7 +368,7 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generat
     const now = new Date();
     const startOfUtcDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const usedToday = await prisma.workoutRoutine.count({
-        where: { userId, createdAt: { gte: startOfUtcDay } },
+        where: { userId, aiGenerated: true, createdAt: { gte: startOfUtcDay } },
     });
     const limit = AI_LIMITS[plan].generations;
     const q = assertWithinDailyLimit({ usedToday, limit, now });
@@ -431,7 +433,9 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generat
     }
 
     try {
-        const created = await exerciseSvc.createRoutine(userId, routineData);
+        // aiGenerated:true — this is the AI generator path, so the row counts
+        // toward the daily AI quota above. Manual creates pass the default false.
+        const created = await exerciseSvc.createRoutine(userId, routineData, true);
         return reply.code(201).send(created);
     } catch (err: any) {
         logger.error({ err }, 'AI routine persistence failed');

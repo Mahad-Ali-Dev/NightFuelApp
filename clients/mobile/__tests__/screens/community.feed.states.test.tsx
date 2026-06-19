@@ -1,0 +1,273 @@
+/**
+ * community.feed.states.test.tsx
+ *
+ * Screen-level coverage for the FOUR load-bearing states of the Aurora community
+ * TAB feed — `app/(tabs)/community.tsx` (the primary Community tab: challenge
+ * strip + create-post row + the post feed). This file owns the spinner-debt
+ * burn-down for THAT screen specifically and is DISJOINT from:
+ *   - `community.test.tsx`, which targets the `(community)/index.tsx` sub-screen;
+ *   - `challenges.states.test.tsx` / `leaderboard.states.test.tsx` (item 4),
+ *     which own `(community)/challenges.tsx` + `(community)/leaderboard.tsx`.
+ * (NOTE for sequencing: if a sibling later claims `(tabs)/community.tsx`, fold
+ * this coverage into item 4 instead — but as of this change the tab screen has
+ * no other owner.)
+ *
+ * The tab screen drives the ['community-feed'] query (getFeed) and renders four
+ * mutually exclusive branches inside its feed column:
+ *
+ *   - Test A (loading): while the feed query is `isLoading`, the screen mounts
+ *     its PostItem-shaped SKELETON scaffold ONLY — none of the empty
+ *     ("No posts yet"), error ("Couldn't load the feed") or loaded post copy is
+ *     in the tree, and there is NO bare full-screen <ActivityIndicator> as the
+ *     feed loading state. The skeleton exposes an accessible "Loading the feed"
+ *     progressbar so the assertion rides on a stable handle, not shimmer internals.
+ *   - Test B (error): when the feed query is `isError`, the screen shows the
+ *     "Couldn't load the feed" EmptyState whose "Try Again" action RE-INVOKES the
+ *     feed query's `refetch` (exactly once) — and the empty / loaded copy is absent.
+ *   - Test C (empty): with the feed resolved to `[]`, the screen shows the
+ *     "No posts yet" EmptyState and renders no post rows.
+ *   - Test D (loaded): with a populated feed the screen renders the real post
+ *     content + author — and neither edge-state copy is present.
+ *
+ * Behaviour-pinning, not just rendering: the error test proves the retry wiring
+ * (refetch), and Test D additionally proves the like mutation is left intact
+ * (the like button still calls likeMutation.mutate(postId)) so this spinner-debt
+ * change is provably non-destructive to the feed's mutations.
+ *
+ * Mock conventions mirror the sibling screen suites (challenges.states.test.tsx +
+ * community.test.tsx): a hoisted `mock`-prefixed react-query stub branches on
+ * queryKey[0] over a mutable holder (so each test picks the loading / error /
+ * empty / loaded branch BEFORE render), and a single `refetch` spy proves the
+ * error retry wiring. `@/api/community` is fully mocked so the real axios client
+ * never loads; the like `useMutation` returns a `mutate` spy (the like mutation
+ * is untouched by this change but asserted as still-wired in Test D). The
+ * `@/components/ui` barrel is left REAL so the assertions ride on the actual
+ * EmptyState copy + primary action and the real Skeleton / SkeletonCard, and
+ * `@/components/SafeBlurView` is a passthrough so the real GlassCard mounts.
+ *
+ * Additive: NEW test file only; the screen file is the sibling edit in this item.
+ */
+
+// ── jest.mock hoisting block (runs ABOVE the imports) ────────────────────────
+
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
+}));
+
+// Controlled state for the ['community-feed'] query — each test mutates this
+// holder BEFORE render() (the factory reads it at call-time). `refetch` is the
+// spy the error branch's "Try Again" action must RE-INVOKE.
+type FeedState = { data: any; isLoading: boolean; isError: boolean };
+const mockFeed: FeedState = { data: undefined, isLoading: false, isError: false };
+const mockRefetch = jest.fn();
+
+// Active-challenges strip kept empty so the tests focus on the feed branches
+// (an empty array makes the screen render no challenge cards — the strip is
+// gated on `challenges && challenges.length > 0`).
+const mockChallenges: any[] = [];
+
+// The like mutation's `mutate` spy. The screen calls `likeMutation.mutate(post.id)`,
+// so asserting on this with the post id proves the like wiring is intact.
+const mockLikeMutate = jest.fn();
+
+// react-query: branch useQuery on queryKey[0]. ['community-feed'] reads the
+// mutable holder + the shared refetch spy; ['community-challenges'] returns the
+// (empty) challenges holder. useMutation returns the like spy. useQueryClient is
+// a benign stub (onRefresh / like onSuccess invalidate through it).
+jest.mock('@tanstack/react-query', () => ({
+  useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
+    const key = queryKey[0];
+    if (key === 'community-feed') {
+      return {
+        data: mockFeed.data,
+        isLoading: mockFeed.isLoading,
+        isError: mockFeed.isError,
+        refetch: mockRefetch,
+      };
+    }
+    if (key === 'community-challenges') {
+      return { data: mockChallenges, isLoading: false, isError: false, refetch: jest.fn() };
+    }
+    return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
+  },
+  useMutation: () => ({ mutate: mockLikeMutate, isPending: false, isError: false, reset: jest.fn() }),
+  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
+}));
+
+// API module the screen statically imports — stub to plain jest.fns so axios
+// (via @/api/client) never loads. useQuery / useMutation are fully stubbed above,
+// so these are never actually invoked; they only satisfy the import graph.
+// `Post` is a type-only import (erased by Babel), so no runtime export is needed.
+jest.mock('@/api/community', () => ({
+  getFeed: jest.fn(),
+  likePost: jest.fn(),
+  getChallenges: jest.fn(),
+}));
+
+// Decorative glyphs → plain <Text> surfacing the icon name (mirrors the suite).
+jest.mock('@expo/vector-icons', () => {
+  const { Text: RNText } = require('react-native');
+  return {
+    Ionicons: ({ name }: { name?: string }) => <RNText>{`icon:${name ?? ''}`}</RNText>,
+  };
+});
+
+// Deterministic insets so the screen lays out without the native provider.
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
+}));
+
+// expo-linear-gradient ships a native module — passthrough View so the screen's
+// gradient (and the EmptyState's primary Button gradient) mount on the jest
+// renderer.
+jest.mock('expo-linear-gradient', () => {
+  const RN = require('react-native');
+  return { LinearGradient: (props: any) => <RN.View {...props} /> };
+});
+
+// expo-status-bar renders nothing in the tree under test.
+jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
+
+// expo-image ships a native module; the post card's avatar / image only render
+// for a populated post with a URL — our fixtures omit URLs, so this is a
+// defensive passthrough.
+jest.mock('expo-image', () => {
+  const RN = require('react-native');
+  return { Image: (props: any) => <RN.View {...props} /> };
+});
+
+// GlassCard wraps a SafeBlurView (expo-blur native). Replace SafeBlurView with a
+// passthrough View — forwarding props — so the real GlassCard (the feed-card
+// surface AND the loading skeleton's card placeholders) mounts cleanly and its
+// accessibility props survive.
+jest.mock('@/components/SafeBlurView', () => {
+  const RN = require('react-native');
+  return { SafeBlurView: ({ children, ...props }: any) => <RN.View {...props}>{children}</RN.View> };
+});
+
+// date-fns: the post card formats createdAt via formatDistanceToNow — pin it to
+// a constant so the rendered timestamp is deterministic and tz-agnostic.
+jest.mock('date-fns', () => ({
+  formatDistanceToNow: () => '1 hour',
+}));
+
+// ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
+import React from 'react';
+import { render, fireEvent, screen } from '@testing-library/react-native';
+import {
+  ThemeContext,
+  getThemeColors,
+  typography,
+  spacing,
+  borderRadius,
+  shadows,
+} from '@/theme';
+import CommunityTab from '../../app/(tabs)/community';
+
+function renderScreen() {
+  return render(
+    <ThemeContext.Provider
+      value={{ scheme: 'dark', colors: getThemeColors('dark'), typography, spacing, borderRadius, shadows }}
+    >
+      <CommunityTab />
+    </ThemeContext.Provider>,
+  );
+}
+
+// A single populated post for the loaded-branch case. `userId` is required by
+// the Post type; no image/avatar URL so the expo-image stub stays inert.
+const POST = {
+  id: 'p1',
+  userId: 'u1',
+  author: { id: 'a1', name: 'Sam' },
+  content: 'hello world',
+  createdAt: '2026-06-13T00:00:00.000Z',
+  likes: 2,
+  commentsCount: 1,
+};
+
+describe('CommunityTab — feed loading / error / empty / loaded states', () => {
+  beforeEach(() => {
+    mockFeed.data = undefined;
+    mockFeed.isLoading = false;
+    mockFeed.isError = false;
+    mockRefetch.mockClear();
+    mockLikeMutate.mockClear();
+  });
+
+  // ── Test A: loading → skeleton scaffold only (no bare spinner) ─────────────
+  test('loading: mounts the feed skeleton scaffold with no empty / error / loaded copy and no bare spinner', () => {
+    mockFeed.isLoading = true;
+
+    expect(() => renderScreen()).not.toThrow();
+
+    // The loading branch renders the PostItem-shaped skeleton scaffold, surfaced
+    // via its accessible "Loading the feed" progressbar handle…
+    expect(screen.getByLabelText('Loading the feed')).toBeTruthy();
+
+    // …and NONE of the empty / error / loaded copy is in the tree yet.
+    expect(screen.queryByText('No posts yet')).toBeNull();
+    expect(screen.queryByText("Couldn't load the feed")).toBeNull();
+    expect(screen.queryByText('Try Again')).toBeNull();
+    expect(screen.queryByText('hello world')).toBeNull();
+
+    // The honest loading scaffold replaced the bare full-screen spinner: there is
+    // no ActivityIndicator host component anywhere in the feed loading state.
+    expect(screen.UNSAFE_queryByType(require('react-native').ActivityIndicator)).toBeNull();
+
+    // The header title renders in every branch (it lives outside the conditional),
+    // a sanity check that the screen mounted at all.
+    expect(screen.getByText('Community')).toBeTruthy();
+  });
+
+  // ── Test B: error → retry RE-INVOKES the feed query ────────────────────────
+  test('error: shows the "Couldn\'t load the feed" EmptyState whose Try Again re-invokes the feed refetch', () => {
+    mockFeed.isError = true;
+
+    renderScreen();
+
+    // The honest error copy is present and the empty / loaded copy is absent.
+    expect(screen.getByText("Couldn't load the feed")).toBeTruthy();
+    expect(screen.queryByText('No posts yet')).toBeNull();
+    expect(screen.queryByText('hello world')).toBeNull();
+
+    // The retry action (EmptyState's primary Button, label "Try Again") re-invokes
+    // the feed query — exactly once.
+    fireEvent.press(screen.getByText('Try Again'));
+    expect(mockRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Test C: resolved-but-empty feed → honest empty state ───────────────────
+  test('empty: feed [] → "No posts yet" EmptyState and no post rows', () => {
+    mockFeed.data = [];
+
+    renderScreen();
+
+    expect(screen.getByText('No posts yet')).toBeTruthy();
+    // …and the screen does NOT fall through to the error or loaded copy.
+    expect(screen.queryByText("Couldn't load the feed")).toBeNull();
+    expect(screen.queryByText('hello world')).toBeNull();
+  });
+
+  // ── Test D: loaded → post rows render + like mutation stays wired ──────────
+  test('loaded: renders the real post content/author, no edge-state copy, and the like button still calls mutate(postId)', () => {
+    mockFeed.data = [POST];
+
+    renderScreen();
+
+    // The post content + author render (proving the loaded branch, not an
+    // EmptyState or the skeleton, is on screen).
+    expect(screen.getByText('hello world')).toBeTruthy();
+    expect(screen.getByText('Sam')).toBeTruthy();
+    expect(screen.queryByText('No posts yet')).toBeNull();
+    expect(screen.queryByText("Couldn't load the feed")).toBeNull();
+    expect(screen.queryByLabelText('Loading the feed')).toBeNull();
+
+    // The like mutation is provably untouched by this spinner-debt change: the
+    // like button (accessibilityLabel "Like, <n> likes") still calls the mutation
+    // with THIS post's id.
+    fireEvent.press(screen.getByRole('button', { name: /^Like,/ }));
+    expect(mockLikeMutate).toHaveBeenCalledTimes(1);
+    expect(mockLikeMutate).toHaveBeenCalledWith('p1');
+  });
+});

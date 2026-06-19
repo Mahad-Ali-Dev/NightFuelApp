@@ -135,18 +135,20 @@ async function runGenerateRoutine(
     body: { goal: string; level: string; daysPerWeek: number; focusAreas?: string[]; equipment?: string },
     deps: {
         prisma: { workoutRoutine: { count: (args: any) => Promise<number> } };
-        createRoutine: (userId: string, data: any) => Promise<any>;
+        createRoutine: (userId: string, data: any, aiGenerated?: boolean) => Promise<any>;
     },
 ) {
     const reply = makeReply();
     const { goal, level, daysPerWeek, focusAreas, equipment } = body;
 
     // ── Daily AI quota — gated BEFORE the AI-pipeline fetch / createRoutine ──
+    // Only AI-generated routines count: the filter includes aiGenerated:true, so
+    // manual routine creates (aiGenerated:false) never burn the quota.
     const plan = await resolvePlan(userId);
     const now = new Date();
     const startOfUtcDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const usedToday = await deps.prisma.workoutRoutine.count({
-        where: { userId, createdAt: { gte: startOfUtcDay } },
+        where: { userId, aiGenerated: true, createdAt: { gte: startOfUtcDay } },
     });
     const limit = AI_LIMITS[plan].generations;
     const q = assertWithinDailyLimit({ usedToday, limit, now });
@@ -173,7 +175,24 @@ async function runGenerateRoutine(
     if (!routineData || !Array.isArray(routineData.exercises) || routineData.exercises.length === 0) {
         routineData = { title: `${goal} routine`, exercises: [{ name: 'Barbell Squat', sets: 4, reps: 10 }] };
     }
-    const created = await deps.createRoutine(userId, routineData);
+    // aiGenerated:true — the generate route always persists its routine as
+    // AI-generated (mirrors src/index.ts createRoutine(userId, routineData, true)),
+    // so the row counts toward tomorrow's quota.
+    const created = await deps.createRoutine(userId, routineData, true);
+    return reply.code(201).send(created);
+}
+
+// ── The manual create route, copied VERBATIM from index.ts (POST /v1/exercises/
+// routines). It does NO quota gate and persists the routine with the DEFAULT
+// aiGenerated=false, so a manual create NEVER consumes the daily AI quota. Modeled
+// here so the regression can assert manual-vs-AI accounting directly. ──
+async function runCreateRoutine(
+    userId: string,
+    body: any,
+    deps: { createRoutine: (userId: string, data: any, aiGenerated?: boolean) => Promise<any> },
+) {
+    const reply = makeReply();
+    const created = await deps.createRoutine(userId, body);
     return reply.code(201).send(created);
 }
 
@@ -216,8 +235,11 @@ describe('AI-routine quota gate — POST /v1/exercises/routines/generate', () =>
         return {
             workoutRoutine: {
                 count: jest.fn(async ({ where }: any) => {
-                    // Counts the caller's OWN routines since UTC midnight.
+                    // Counts the caller's OWN *AI-generated* routines since UTC
+                    // midnight. The aiGenerated:true filter is what makes manual
+                    // creates (aiGenerated:false) not consume the AI quota.
                     expect(where.userId).toBe(USER);
+                    expect(where.aiGenerated).toBe(true);
                     expect(where.createdAt.gte instanceof Date).toBe(true);
                     return usedToday;
                 }),
@@ -237,6 +259,9 @@ describe('AI-routine quota gate — POST /v1/exercises/routines/generate', () =>
         expect(reply.body).toMatchObject({ id: 'routine-1' });
         expect(aiCalls.length).toBe(1);            // AI pipeline WAS called
         expect(createRoutine).toHaveBeenCalledTimes(1);
+        // The generate route persists the routine AS AI-generated so it counts
+        // toward the daily quota: createRoutine(userId, data, /* aiGenerated */ true).
+        expect(createRoutine).toHaveBeenCalledWith(USER, expect.any(Object), true);
         // token minted AS the target user so /me resolves them, not a principal
         expect(fakeJwt.sign).toHaveBeenCalledWith({ userId: USER, sub: USER }, { expiresIn: '60s' });
     });
@@ -347,6 +372,112 @@ describe('AI-routine quota gate — POST /v1/exercises/routines/generate', () =>
             plan: 'pro',
         });
         expect(aiCalls.length).toBe(0);
+        expect(createRoutine).not.toHaveBeenCalled();
+    });
+});
+
+// ── Manual-vs-AI accounting regression ──────────────────────────────────────────
+// The whole point of the aiGenerated column: a MANUAL routine create must NOT
+// burn the daily AI quota, while an AI generate must. Both routes share a single
+// in-memory store of {aiGenerated} rows; the quota COUNT — exactly as the generate
+// route runs it (where.aiGenerated:true) — only sees the AI rows. So creating many
+// manual routines leaves the counted usage at 0, and a free user can still generate.
+describe('manual-vs-AI accounting — manual creates do not consume the AI quota', () => {
+    const realFetch = (global as any).fetch;
+    afterEach(() => {
+        (global as any).fetch = realFetch;
+        jest.clearAllMocks();
+    });
+
+    // A tiny stateful Prisma double. `createRoutine(userId, data, aiGenerated)`
+    // pushes a row; `count({where})` honours the aiGenerated:true filter the
+    // generate route passes — i.e. it counts ONLY AI-generated rows since UTC
+    // midnight, mirroring prisma.workoutRoutine.count's real filter semantics.
+    function makeStatefulStore() {
+        const rows: Array<{ userId: string; aiGenerated: boolean; createdAt: Date }> = [];
+        const createRoutine = jest.fn(async (userId: string, _data: any, aiGenerated = false) => {
+            const row = { userId, aiGenerated, createdAt: new Date() };
+            rows.push(row);
+            return { id: `routine-${rows.length}`, ...row };
+        });
+        const prisma = {
+            workoutRoutine: {
+                count: jest.fn(async ({ where }: any) => {
+                    // The generate route ALWAYS passes aiGenerated:true here.
+                    expect(where.aiGenerated).toBe(true);
+                    return rows.filter(
+                        (r) =>
+                            r.userId === where.userId &&
+                            r.aiGenerated === where.aiGenerated &&
+                            r.createdAt >= where.createdAt.gte,
+                    ).length;
+                }),
+            },
+        };
+        return { rows, prisma, createRoutine };
+    }
+
+    it('many MANUAL creates leave AI-counted usage at 0; a FREE user can still generate', async () => {
+        const { rows, prisma, createRoutine } = makeStatefulStore();
+
+        // Create MANY manual routines — well past the free cap. Each persists
+        // aiGenerated=false (the manual route never passes aiGenerated).
+        for (let i = 0; i < AI_LIMITS.free.generations + 5; i++) {
+            await runCreateRoutine(USER, { title: `manual ${i}`, exercises: [] }, { createRoutine });
+        }
+        // Every manual row is non-AI.
+        expect(rows.length).toBe(AI_LIMITS.free.generations + 5);
+        expect(rows.every((r) => r.aiGenerated === false)).toBe(true);
+        // The manual route never passes an explicit aiGenerated arg (it relies on
+        // the createRoutine default false): every recorded call has arity 2.
+        expect(createRoutine.mock.calls.every((c: any[]) => c.length === 2 && c[0] === USER)).toBe(true);
+
+        // Now a FREE user generates: despite many manual rows, the AI-filtered
+        // COUNT is still 0 (< free cap), so the generate path runs and 201s.
+        installFetch({ tier: 'FREE' });
+        const reply = await runGenerateRoutine(USER, BODY, { prisma, createRoutine });
+
+        expect(reply.statusCode).toBe(201);
+        // The count query saw zero AI rows — manual creates did NOT consume quota.
+        expect(prisma.workoutRoutine.count).toHaveBeenCalledTimes(1);
+        await expect((prisma.workoutRoutine.count as any).mock.results[0].value).resolves.toBe(0);
+        // The generated routine WAS persisted as AI-generated, so it now counts.
+        const aiRows = rows.filter((r) => r.aiGenerated === true);
+        expect(aiRows.length).toBe(1);
+    });
+
+    it('AI generate persists aiGenerated:true and that row is the only one counted', async () => {
+        const { rows, prisma, createRoutine } = makeStatefulStore();
+        installFetch({ tier: 'FREE' });
+
+        // One manual create (not counted) then one AI generate (counted).
+        await runCreateRoutine(USER, { title: 'manual', exercises: [] }, { createRoutine });
+        const reply = await runGenerateRoutine(USER, BODY, { prisma, createRoutine });
+
+        expect(reply.statusCode).toBe(201);
+        // The generate route called createRoutine with aiGenerated === true.
+        expect(createRoutine).toHaveBeenLastCalledWith(USER, expect.any(Object), true);
+        // Exactly one AI row exists; the manual row is excluded from the count.
+        expect(rows.filter((r) => r.aiGenerated === true).length).toBe(1);
+        expect(rows.filter((r) => r.aiGenerated === false).length).toBe(1);
+        await expect((prisma.workoutRoutine.count as any).mock.results[0].value).resolves.toBe(0);
+    });
+
+    it('once at the AI cap, further AI generates are blocked even with manual rows present', async () => {
+        const { rows, prisma, createRoutine } = makeStatefulStore();
+
+        // Seed the store at the free cap of AI rows directly (simulating earlier
+        // AI generations today) plus some manual noise that must NOT raise/lower
+        // the AI count.
+        for (let i = 0; i < AI_LIMITS.free.generations; i++) rows.push({ userId: USER, aiGenerated: true, createdAt: new Date() });
+        for (let i = 0; i < 3; i++) rows.push({ userId: USER, aiGenerated: false, createdAt: new Date() });
+
+        installFetch({ tier: 'FREE' });
+        const reply = await runGenerateRoutine(USER, BODY, { prisma, createRoutine });
+
+        // AI-filtered count == free cap -> 429, and createRoutine never fires.
+        expect(reply.statusCode).toBe(429);
+        expect(reply.body).toMatchObject({ error: 'ai_quota_exceeded', plan: 'free', limit: AI_LIMITS.free.generations });
         expect(createRoutine).not.toHaveBeenCalled();
     });
 });

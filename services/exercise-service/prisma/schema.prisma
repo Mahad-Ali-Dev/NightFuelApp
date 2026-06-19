@@ -76,6 +76,12 @@ model WorkoutRoutine {
   splitType    String?  @map("split_type")
   muscleGroups String[] @map("muscle_groups")
   exercises    Json     // Array of configured exercises
+  // True only for routines created by the AI generator
+  // (POST /v1/exercises/routines/generate). Manual creates
+  // (POST /v1/exercises/routines) leave this false so they do NOT
+  // consume the daily AI-generation quota — the quota COUNT filters
+  // on aiGenerated = true.
+  aiGenerated  Boolean  @default(false) @map("ai_generated")
   createdAt    DateTime @default(now()) @map("created_at")
 
   @@index([userId])
