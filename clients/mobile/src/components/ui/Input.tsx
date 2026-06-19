@@ -10,7 +10,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
 import { borderRadius as br, spacing } from '@/theme/spacing';
-import { shadows } from '@/theme/shadows';
 
 interface InputProps extends TextInputProps {
   label?: string;
@@ -42,14 +41,19 @@ export function Input({
           styles.inputContainer,
           {
             backgroundColor: colors.background.secondary,
+            // Focus feedback is COLOR-ONLY. On Android's new architecture,
+            // toggling borderWidth or an elevation/shadow (glow) when the
+            // TextInput gains focus recomposites the native view, which
+            // blurs+refocuses the input in a tight loop — the keyboard flickers
+            // and typing is impossible. Keep border width constant and drop the
+            // focus glow; the border-color change alone gives the focus cue.
             borderColor: error
               ? colors.error
               : focused
               ? colors.accent.coral
               : colors.border.default,
-            borderWidth: focused || error ? 1.5 : 1,
+            borderWidth: error ? 1.5 : 1,
           },
-          focused && !error && shadows.glow(colors.accent.coral),
         ]}
       >
         {icon && (
