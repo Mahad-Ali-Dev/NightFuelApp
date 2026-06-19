@@ -4,7 +4,7 @@ import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { PlanService } from './plan.service';
 import { getPlanParamsSchema, getPlanResponseSchema, generatePlanBodySchema, storePlanBodySchema, createProtocolSchema, updateProtocolSchema, getPlanHistoryQuerySchema } from './schemas';
-import { createLogger, assertWithinDailyLimit, AI_LIMITS, AI_QUOTA_EXCEEDED } from '@nightfuel/config';
+import { createLogger, assertWithinDailyLimit, AI_LIMITS, AI_QUOTA_EXCEEDED, resolvePlan } from '@nightfuel/config';
 
 const logger = createLogger('plan-service:routes');
 
@@ -19,46 +19,12 @@ const logger = createLogger('plan-service:routes');
 const INTERNAL_REQUEST_TIMEOUT_MS = 3_000;
 const DEFAULT_SUBSCRIPTION_SERVICE_URL = 'http://subscription-service:3015';
 
-/**
- * Resolve the caller's plan from the subscription-service, mirroring
- * chat-service's ChatService.resolvePlan so both AI gates classify tiers
- * identically. No JWT_SECRET -> cannot mint an internal token -> default to the
- * safer 'free'. Mints a 60s internal token via the already-registered
- * @fastify/jwt instance (avoids a new jsonwebtoken dependency); the
- * subscription-service /me derives its subject FROM the token, so it is minted
- * AS the target user. Unreachable / slow / non-OK / tier 'FREE' -> 'free';
- * anything else -> 'pro'.
- */
-async function resolvePlan(fastify: FastifyInstance, userId: string): Promise<'free' | 'pro'> {
-    // No secret -> @fastify/jwt cannot sign -> default to the safer free plan.
-    if (!process.env.JWT_SECRET) return 'free';
-
-    const baseUrl = (process.env.SUBSCRIPTION_SERVICE_URL ?? DEFAULT_SUBSCRIPTION_SERVICE_URL).replace(/\/+$/, '');
-    const url = `${baseUrl}/v1/subscriptions/me`;
-    // /me derives the subject from the token, so mint it AS the target user.
-    const token = (fastify as any).jwt.sign({ userId, sub: userId }, { expiresIn: '60s' });
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), INTERNAL_REQUEST_TIMEOUT_MS);
-    try {
-        const res = await fetch(url, {
-            method: 'GET',
-            headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
-            signal: controller.signal,
-        });
-        if (!res.ok) {
-            logger.debug({ userId, status: res.status }, 'Subscription lookup non-OK; defaulting plan=free');
-            return 'free';
-        }
-        const sub = (await res.json()) as { tier?: string };
-        return (sub.tier ?? 'FREE').toUpperCase() === 'FREE' ? 'free' : 'pro';
-    } catch (err) {
-        logger.warn({ err, userId }, 'Failed to resolve subscription tier; defaulting plan=free');
-        return 'free';
-    } finally {
-        clearTimeout(timer);
-    }
-}
+// resolvePlan centralized into @nightfuel/config; the shared token mints {userId,
+// sub} — a compatible superset (subscription-service reads only userId/id), so
+// chat's old role:'SYSTEM'/no-sub and exercise/plan's sub/no-role both reduce to
+// behavior-identical at /me. The shared fn mints via jwtSecret and strips the
+// trailing slash itself, so DEFAULT_SUBSCRIPTION_SERVICE_URL stays only as the
+// fallback value and this route no longer reaches into (fastify as any).jwt.
 
 export const planRoutes = async (fastify: FastifyInstance, opts: { planService: PlanService }) => {
     const { planService } = opts;
@@ -115,7 +81,12 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 // daily cap. circadian.tsx is intentionally NOT edited this
                 // sprint — surfacing/handling that 429 in the client is a
                 // separate work-item.
-                const plan_tier = await resolvePlan(fastify, userId);
+                const plan_tier = await resolvePlan({
+                    userId,
+                    jwtSecret: process.env.JWT_SECRET ?? '',
+                    subscriptionServiceUrl: process.env.SUBSCRIPTION_SERVICE_URL ?? DEFAULT_SUBSCRIPTION_SERVICE_URL,
+                    timeoutMs: INTERNAL_REQUEST_TIMEOUT_MS,
+                });
                 const now = new Date();
                 // Count this user's plans created since UTC midnight. The chosen
                 // persistence table is DayPlan (prisma.dayPlan): every generation

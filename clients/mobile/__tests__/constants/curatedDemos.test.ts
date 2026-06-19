@@ -697,3 +697,102 @@ describe('CURATED_DEMOS — widened GIF_PENDING alias tranche', () => {
     expect(getCuratedDemo('  PRESS up ')).toEqual(getCuratedDemo('Press Up'));
   });
 });
+
+// ---------------------------------------------------------------------------
+// (k) The "tranche #8" FEDB-backed additions resolve to a real catalogue slug
+// ---------------------------------------------------------------------------
+//
+// Same contract as tranches #4/#5/#7: DATA-ONLY additions that reuse FEDB slugs
+// already shipped in exerciseDemos.ts (no new HTTP fetch). This block pins a
+// representative slice of the NEW tranche-#8 keys explicitly AND cross-checks
+// that the slug directory both frames point at is a real entry in the 873-slug
+// FEDB catalogue fixture (__tests__/fixtures/fedb-catalog-slugs.json) — i.e. the
+// demo will actually load, not 404. Each ships kind:'fedb_frames', verified:false.
+describe('CURATED_DEMOS — FEDB-backed tranche #8 (data-only additions)', () => {
+  // A representative slice spanning press, squat, deadlift/posterior chain, rows,
+  // pulldowns, delts, biceps, triceps, calves, core and kettlebell.
+  const TRANCHE_8_NAMES = [
+    'Smith Machine Close-Grip Bench Press',
+    'Close-Grip EZ-Bar Press',
+    'Bent-Arm Barbell Pullover',
+    'Narrow Stance Hack Squats',
+    'Smith Machine Stiff-Legged Deadlift',
+    'Natural Glute Ham Raise',
+    'Lying Cambered Barbell Row',
+    'Rope Straight-Arm Pulldown',
+    'Cable Rope Rear-Delt Rows',
+    'Preacher Hammer Dumbbell Curl',
+    'Triceps Pushdown (Rope Attachment)',
+    'Barbell Seated Calf Raise',
+    'Cable Reverse Crunch',
+    'Two-Arm Kettlebell Military Press',
+  ] as const;
+
+  // Per-frame shape with the slug dir captured (group 1) and frame index (group 2).
+  const FEDB_FRAME_RE =
+    /^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\/main\/exercises\/([^/]+)\/([01])\.jpg$/;
+
+  // The authoritative 873-slug FEDB catalogue fixture — every tranche-#8 slug
+  // MUST be present here (and therefore in FEDB_SLUGS, the same set), so the
+  // frame URLs resolve to real images.
+  const CATALOG_SLUGS: ReadonlySet<string> = (() => {
+    const fixturePath = path.resolve(__dirname, '../fixtures/fedb-catalog-slugs.json');
+    const raw = fs.readFileSync(fixturePath, 'utf8');
+    const parsed = JSON.parse(raw) as Array<{ slug: string }>;
+    expect(Array.isArray(parsed)).toBe(true);
+    return new Set(parsed.map((e) => e.slug));
+  })();
+
+  test('the catalogue fixture loaded a healthy set of slugs', () => {
+    // Sanity: guards against a refactor that empties the fixture and makes the
+    // membership checks below vacuously pass.
+    expect(CATALOG_SLUGS.size).toBeGreaterThanOrEqual(800);
+  });
+
+  test.each(TRANCHE_8_NAMES)('getCuratedDemo(%j) is a verified:false kind:"fedb_frames" entry', (name) => {
+    const demo = getCuratedDemo(name);
+    expect(demo).not.toBeNull();
+    expect(demo!.kind).toBe('fedb_frames');
+    expect(demo!.verified).toBe(false);
+    expect(demo!.url).toMatch(FEDB_FRAME_PAIR_RE);
+  });
+
+  test.each(TRANCHE_8_NAMES)(
+    'getCuratedDemoFrames(%j) is an ordered 2-element HTTPS [0.jpg, 1.jpg] pair on a real catalogue slug',
+    (name) => {
+      const frames = getCuratedDemoFrames(name);
+      expect(frames).not.toBeNull();
+      expect(frames!.length).toBe(2);
+
+      const m0 = FEDB_FRAME_RE.exec(frames![0]!);
+      const m1 = FEDB_FRAME_RE.exec(frames![1]!);
+      expect(m0).not.toBeNull();
+      expect(m1).not.toBeNull();
+      // Both HTTPS (ATS-safe).
+      expect(frames![0]!.startsWith('https://')).toBe(true);
+      expect(frames![1]!.startsWith('https://')).toBe(true);
+      // Ordered start (0) → end (1).
+      expect(m0![2]).toBe('0');
+      expect(m1![2]).toBe('1');
+      // A genuine start/end pair: both frames share ONE slug directory…
+      expect(m0![1]).toBe(m1![1]);
+      // …and that slug is a real entry in the shipped FEDB catalogue (so the
+      // demo loads rather than 404s).
+      expect(CATALOG_SLUGS.has(m0![1]!)).toBe(true);
+    },
+  );
+
+  test.each(TRANCHE_8_NAMES)('getCuratedDemoVerified(%j) === false (renders the "Unreviewed" chip)', (name) => {
+    expect(getCuratedDemoVerified(name)).toBe(false);
+  });
+
+  test('no tranche-#8 name is a YouTube/gif entry (each is a pure fedb_frames addition)', () => {
+    for (const name of TRANCHE_8_NAMES) {
+      const demo = getCuratedDemo(name);
+      expect(demo).not.toBeNull();
+      // Never silently landed on a grandfathered YouTube key or a gif alias.
+      expect(demo!.kind).toBe('fedb_frames');
+      expect(getCuratedDemoFrames(name)).not.toBeNull();
+    }
+  });
+});

@@ -35,10 +35,13 @@
  *   - `../../app/(tabs)/_layout` is stubbed to just `{ TAB_BAR_H }` — the screen
  *     only needs that constant; the stub keeps the real tab navigator
  *     (expo-router <Tabs>, authStore, SafeBlurView) out of the render entirely.
- *   - api modules (`@/api/shifts` getCurrent, `@/api/ai` generatePlan,
+ *   - api modules (`@/api/shifts` getCurrent, `@/api/plans` generatePlan,
  *     `@/api/circadian` getModel) are plain jest.fns so the real axios client /
- *     env config (and ai's @/lib/aiSafety + sentry subtree) never load; useQuery
- *     /useMutation are fully stubbed, so these queryFns are never invoked.
+ *     env config never load; useQuery/useMutation are fully stubbed, so these
+ *     queryFns are never invoked. `@/api/ai` is mocked to a passthrough
+ *     `parseAiQuotaError` (the only symbol the screen now imports from it) so the
+ *     ai @/lib/aiSafety + sentry subtree never loads; it is never called on the
+ *     render paths under test (it only fires inside the mutation's onError).
  *   - decorative glyphs, safe-area insets, the linear gradient and the status
  *     bar are stubbed the same way as the rest of the screen suites.
  *
@@ -85,16 +88,15 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 // api modules the screen statically imports — stubbed so the real axios client
-// (via @/api/client) and ai's @/lib/aiSafety + sentry subtree never load.
-// useQuery / useMutation are stubbed above, so none of these are ever invoked.
+// (via @/api/client) never loads. The plan now generates via the METERED
+// `@/api/plans` generatePlan; `@/api/ai` is reduced to a passthrough
+// parseAiQuotaError (the only symbol still imported from it) so its
+// @/lib/aiSafety + sentry subtree never loads. useQuery / useMutation are
+// stubbed above, so none of these are ever invoked on the paths under test.
 jest.mock('@/api/shifts', () => ({ getCurrent: jest.fn() }));
-jest.mock('@/api/ai', () => ({ generatePlan: jest.fn() }));
+jest.mock('@/api/plans', () => ({ generatePlan: jest.fn() }));
+jest.mock('@/api/ai', () => ({ parseAiQuotaError: jest.fn(() => null) }));
 jest.mock('@/api/circadian', () => ({ getModel: jest.fn() }));
-
-// Auth store: the plan mutation reads `user.id`; a fixed id is enough.
-jest.mock('@/store/authStore', () => ({
-  useAuthStore: () => ({ user: { id: 'u-1' } }),
-}));
 
 // _layout stub: circadian.tsx only needs the TAB_BAR_H constant from it.
 // Mocking it keeps the real tab navigator (expo-router <Tabs>, auth store,

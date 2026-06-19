@@ -4,6 +4,22 @@ import { MealService } from './meal.service';
 import { mealSearchParamsSchema, mealSearchResponseSchema, logMealBodySchema, logMealResponseSchema, getMealLogsQuerySchema } from './schemas';
 import { z } from 'zod';
 
+// ── Input upper bounds ──────────────────────────────────────────────────────
+// Generous caps so every currently-valid app payload still passes; only
+// absurd/abusive values are rejected with the standard 400. Mirrors the named
+// `MAX_*` style in sleep-service/src/index.ts and the .max() bounds in
+// exercise-service/src/index.ts.
+const MAX_FILTER_LEN = 120;        // food-search region / foodGroup filter string
+const MAX_RECIPE_DESC_LEN = 2000;  // recipe description free text
+const MAX_INGREDIENTS = 100;       // ingredients per recipe
+const MAX_INGREDIENT_NAME_LEN = 200; // a single ingredient's name
+const MAX_INGREDIENT_AMOUNT_LEN = 60; // a single ingredient's amount (e.g. "1 1/2")
+const MAX_INGREDIENT_UNIT_LEN = 40;  // a single ingredient's unit (e.g. "tablespoons")
+const MAX_INSTRUCTIONS = 100;      // instruction steps per recipe
+const MAX_INSTRUCTION_LEN = 1000;  // a single instruction step
+const MAX_TAGS = 50;               // tags per recipe
+const MAX_TAG_LEN = 60;            // a single tag
+
 export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = async (fastify, options) => {
     const { mealService } = options;
 
@@ -27,8 +43,8 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
         schema: {
             querystring: z.object({
                 q:            z.string().min(1).max(100),
-                region:       z.string().optional(),
-                foodGroup:    z.string().optional(),
+                region:       z.string().max(MAX_FILTER_LEN).optional(),
+                foodGroup:    z.string().max(MAX_FILTER_LEN).optional(),
                 isVegan:      z.enum(['true', 'false']).optional(),
                 isGlutenFree: z.enum(['true', 'false']).optional(),
                 isHalal:      z.enum(['true', 'false']).optional(),
@@ -156,7 +172,7 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
         schema: {
             body: z.object({
                 title:          z.string().min(1).max(200),
-                description:    z.string().optional(),
+                description:    z.string().max(MAX_RECIPE_DESC_LEN).optional(),
                 prepTimeMins:   z.number().int().min(0).default(0),
                 cookTimeMins:   z.number().int().min(0).default(0),
                 servings:       z.number().int().min(1).default(1),
@@ -165,12 +181,12 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
                 carbs:          z.number().min(0).default(0),
                 fat:            z.number().min(0).default(0),
                 ingredients:    z.array(z.object({
-                    name:   z.string().min(1),
-                    amount: z.string().min(1),
-                    unit:   z.string().optional(),
-                })).default([]),
-                instructions:   z.array(z.string().min(1)).default([]),
-                tags:           z.array(z.string()).default([]),
+                    name:   z.string().min(1).max(MAX_INGREDIENT_NAME_LEN),
+                    amount: z.string().min(1).max(MAX_INGREDIENT_AMOUNT_LEN),
+                    unit:   z.string().max(MAX_INGREDIENT_UNIT_LEN).optional(),
+                })).max(MAX_INGREDIENTS).default([]),
+                instructions:   z.array(z.string().min(1).max(MAX_INSTRUCTION_LEN)).max(MAX_INSTRUCTIONS).default([]),
+                tags:           z.array(z.string().max(MAX_TAG_LEN)).max(MAX_TAGS).default([]),
                 image:          z.string().url().optional(),
             }),
         },

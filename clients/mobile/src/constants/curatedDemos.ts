@@ -649,6 +649,62 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Kettlebell Pirate Ships': 'Kettlebell_Pirate_Ships',
   'One-Arm Kettlebell Clean': 'One-Arm_Kettlebell_Clean',
   'One-Arm Kettlebell Snatch': 'One-Arm_Kettlebell_Snatch',
+
+  // ── Widened FEDB-backed tranche #8 (data-only, zero new fetch) ───────────────
+  // A further slice of distinct catalogue movements. Every KEY below is NEW —
+  // absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries above (tranches #1-#7),
+  // YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos() admits each one as
+  // kind:'fedb_frames', verified:false (precedence: an already-set name is skipped).
+  // Every slug VALUE was machine-verified to be present in BOTH FEDB_SLUGS
+  // (exerciseDemos.ts) AND __tests__/fixtures/fedb-catalog-slugs.json (the shipped
+  // 873-slug catalogue), and each is a fresh slug dir not already referenced by an
+  // earlier tranche — so every entry resolves to an ordered 2-frame [0.jpg, 1.jpg]
+  // HTTPS pair via fedbPair() with NO new HTTP call. Strictly additive: the
+  // kind:'youtube'-only sync guard (scripts/check-demo-maps-in-sync.js) and
+  // pendingHumanReviewIds.json (YouTube ids only) are both untouched, so
+  // check-demo-maps-in-sync stays green.
+
+  // Barbell / Smith / EZ-bar — press & pullover
+  'Smith Machine Close-Grip Bench Press': 'Smith_Machine_Close-Grip_Bench_Press',
+  'Smith Machine Overhead Shoulder Press': 'Smith_Machine_Overhead_Shoulder_Press',
+  'Smith Machine Decline Press': 'Smith_Machine_Decline_Press',
+  'Close-Grip EZ-Bar Press': 'Close-Grip_EZ-Bar_Press',
+  'Bent-Arm Barbell Pullover': 'Bent-Arm_Barbell_Pullover',
+  // Legs / squats — machine & single-leg
+  'Smith Machine Leg Press': 'Smith_Machine_Leg_Press',
+  'Narrow Stance Leg Press': 'Narrow_Stance_Leg_Press',
+  'Narrow Stance Hack Squats': 'Narrow_Stance_Hack_Squats',
+  'Smith Machine Pistol Squat': 'Smith_Machine_Pistol_Squat',
+  'Split Squats': 'Split_Squats',
+  // Posterior chain — deadlift / good morning / glute-ham
+  'Smith Machine Stiff-Legged Deadlift': 'Smith_Machine_Stiff-Legged_Deadlift',
+  'Seated Good Mornings': 'Seated_Good_Mornings',
+  'Natural Glute Ham Raise': 'Natural_Glute_Ham_Raise',
+  // Back / rows / pulldowns
+  'Lying Cambered Barbell Row': 'Lying_Cambered_Barbell_Row',
+  'Straight Bar Bench Mid Rows': 'Straight_Bar_Bench_Mid_Rows',
+  'One-Arm Long Bar Row': 'One-Arm_Long_Bar_Row',
+  'Rope Straight-Arm Pulldown': 'Rope_Straight-Arm_Pulldown',
+  'Full Range-Of-Motion Lat Pulldown': 'Full_Range-Of-Motion_Lat_Pulldown',
+  // Shoulders / delts
+  'Cable Rope Rear-Delt Rows': 'Cable_Rope_Rear-Delt_Rows',
+  'Seated Front Deltoid': 'Seated_Front_Deltoid',
+  'Front Two-Dumbbell Raise': 'Front_Two-Dumbbell_Raise',
+  // Biceps
+  'Seated Close-Grip Concentration Barbell Curl': 'Seated_Close-Grip_Concentration_Barbell_Curl',
+  'Preacher Hammer Dumbbell Curl': 'Preacher_Hammer_Dumbbell_Curl',
+  'One Arm Dumbbell Preacher Curl': 'One_Arm_Dumbbell_Preacher_Curl',
+  'Reverse Barbell Preacher Curls': 'Reverse_Barbell_Preacher_Curls',
+  // Triceps
+  'Kneeling Cable Triceps Extension': 'Kneeling_Cable_Triceps_Extension',
+  'Low Cable Triceps Extension': 'Low_Cable_Triceps_Extension',
+  'Triceps Pushdown (Rope Attachment)': 'Triceps_Pushdown_-_Rope_Attachment',
+  // Calves / core
+  'Barbell Seated Calf Raise': 'Barbell_Seated_Calf_Raise',
+  'Cable Reverse Crunch': 'Cable_Reverse_Crunch',
+  // Kettlebell
+  'Two-Arm Kettlebell Military Press': 'Two-Arm_Kettlebell_Military_Press',
+  'Kettlebell Pistol Squat': 'Kettlebell_Pistol_Squat',
 };
 
 /**

@@ -1,5 +1,5 @@
 import { PrismaClient } from './generated/prisma';
-import { createLogger } from '@nightfuel/config';
+import { createLogger, resolvePlan } from '@nightfuel/config';
 import type { EventBus } from '@nightfuel/events';
 import jwt from 'jsonwebtoken';
 import * as crypto from 'crypto';
@@ -386,7 +386,16 @@ export class ChatService {
      * the work-item RISK note.
      */
     async checkRiaQuota(userId: string): Promise<RiaQuotaResult> {
-        const plan = await this.resolvePlan(userId);
+        // resolver centralized into @nightfuel/config; the shared token mints
+        // {userId, sub} — a compatible superset (subscription-service reads only
+        // userId/id), so chat's old role:'SYSTEM'/no-sub and exercise/plan's
+        // sub/no-role both reduce to behavior-identical at /me.
+        const plan = await resolvePlan({
+            userId,
+            jwtSecret: this.jwtSecret,
+            subscriptionServiceUrl: this.subscriptionServiceUrl,
+            timeoutMs: INTERNAL_REQUEST_TIMEOUT_MS,
+        });
         const limit = plan === 'pro' ? AI_PRO_DAILY : AI_FREE_DAILY;
 
         const conv = await this.getRiaConversation(userId);
@@ -583,38 +592,4 @@ export class ChatService {
         }
     }
 
-    /**
-     * Resolve the caller's plan from the subscription-service. tier 'FREE' -> 'free',
-     * anything else -> 'pro'. Unreachable/slow/non-OK -> 'free' (safer default; see
-     * RISK note).
-     */
-    private async resolvePlan(userId: string): Promise<'free' | 'pro'> {
-        // No secret -> cannot mint an internal token -> default to the safer free plan.
-        if (!this.jwtSecret) return 'free';
-
-        const url = `${this.subscriptionServiceUrl}/v1/subscriptions/me`;
-        // /me derives the subject from the token, so mint it AS the target user.
-        const token = this.mintInternalToken(userId);
-
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), INTERNAL_REQUEST_TIMEOUT_MS);
-        try {
-            const res = await fetch(url, {
-                method: 'GET',
-                headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
-                signal: controller.signal,
-            });
-            if (!res.ok) {
-                logger.debug({ userId, status: res.status }, 'Subscription lookup non-OK; defaulting plan=free');
-                return 'free';
-            }
-            const sub = (await res.json()) as { tier?: string };
-            return (sub.tier ?? 'FREE').toUpperCase() === 'FREE' ? 'free' : 'pro';
-        } catch (err) {
-            logger.warn({ err, userId }, 'Failed to resolve subscription tier; defaulting plan=free');
-            return 'free';
-        } finally {
-            clearTimeout(timer);
-        }
-    }
 }

@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/utils';
@@ -12,9 +12,12 @@ import { useRouter } from 'expo-router';
 import { TAB_BAR_H } from './_layout';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getCurrent as getCurrentShift } from '@/api/shifts';
-import { generatePlan } from '@/api/ai';
+// Plan generation goes through the METERED plan-service path (see mutationFn
+// below), not '@/api/ai'. We still REUSE the shared 429 parser from '@/api/ai'
+// — it is endpoint-agnostic and the single home of the AiQuotaError contract.
+import { generatePlan } from '@/api/plans';
+import { parseAiQuotaError, type AiQuotaError } from '@/api/ai';
 import { getModel } from '@/api/circadian';
-import { useAuthStore } from '@/store/authStore';
 import { getErrorMessage } from '@/utils/validation';
 
 // Staged status lines shown while the AI protocol is generated (10–30s).
@@ -25,6 +28,19 @@ const PROTOCOL_GEN_STEPS = [
     'Scheduling your activation window…',
     'Finalizing your plan…',
 ];
+
+// Human-readable "resets" line for the daily-limit upgrade block. Renders a
+// short local clock time ("Resets at 6:00 AM") when `resetsAt` is a parseable
+// ISO timestamp, else a sensible fallback so the block never shows a raw date
+// or "Invalid Date". Mirrors ai-planner.tsx's formatResetsAt (hoisted to
+// module scope per the hoist-Intl rule — no per-render allocation).
+function formatResetsAt(resetsAt: string): string {
+    if (!resetsAt) return 'Resets at midnight UTC';
+    const when = new Date(resetsAt);
+    if (Number.isNaN(when.getTime())) return 'Resets at midnight UTC';
+    const time = when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return `Resets at ${time}`;
+}
 
 // ── Plan → meal normalization (module scope = stable, no per-render alloc) ──
 
@@ -104,7 +120,6 @@ function normalizePlannedMeal(item: any) {
 export default function CircadianScreen() {
     const { colors, typography, spacing, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
-    const { user } = useAuthStore();
     const router = useRouter();
     const [selectedTab, setSelectedTab] = useState<'profile' | 'plan'>('profile');
 
@@ -127,18 +142,51 @@ export default function CircadianScreen() {
     // label / "No active shift" regression when only `shiftType` was set.
     const shiftType = (currentShift?.type ?? (currentShift as any)?.shiftType) as string | undefined;
 
+    // ── Plan generation failure ground truth — two MUTUALLY-EXCLUSIVE vars ───
+    // `quota` holds the parsed daily-AI-limit 429 (the distinct upgrade state);
+    // `genError` holds any other failure message (the retryable inline notice).
+    // Exactly one is ever non-null — both are cleared on mutate start + success,
+    // and onError sets precisely one. The visible block is DERIVED from whichever
+    // is set (state = ground truth, not the rendered output).
+    const [quota, setQuota] = useState<AiQuotaError | null>(null);
+    const [genError, setGenError] = useState<string | null>(null);
+
     const { data: plan, isPending: isLoadingPlan, mutate: generateAIPlan } = useMutation({
-        mutationFn: () => {
-            const currentUserId = user?.id ? String(user.id) : 'unknown';
-            return generatePlan({
-                userId: currentUserId,
+        // METERED path: POST /v1/plans/generate (plan-service). Unlike '@/api/ai'
+        // generatePlan (ai-pipeline /v1/ai/generate-plan, whose 429 is a plain
+        // {error:'Rate limit exceeded',retryAfterSeconds}), this endpoint counts
+        // toward the per-plan generations quota and returns the SHARED
+        // 429 { error:'ai_quota_exceeded', limit, plan, resetsAt } contract — so
+        // parseAiQuotaError below is real here, not dead code.
+        mutationFn: () =>
+            generatePlan({
                 date: new Date().toISOString().split('T')[0] as string,
+                circadianProfile: circadianModel ?? undefined,
                 shiftId: String(currentShift?.id ?? ''),
                 shiftType: shiftType || 'night',
-            });
+            }),
+        onMutate: () => {
+            // New attempt → clear any prior failure state so the timeline/loader
+            // is the only thing showing while it runs.
+            setQuota(null);
+            setGenError(null);
+        },
+        onSuccess: () => {
+            setQuota(null);
+            setGenError(null);
         },
         onError: (error: unknown) => {
-            Alert.alert('Error', getErrorMessage(error));
+            // A 429 daily-AI-limit flips into the distinct upgrade state; any
+            // other error (network / 5xx / non-quota 4xx) takes the retryable
+            // inline error path. Set exactly one; clear the other.
+            const q = parseAiQuotaError(error);
+            if (q) {
+                setQuota(q);
+                setGenError(null);
+            } else {
+                setQuota(null);
+                setGenError(getErrorMessage(error));
+            }
         },
     });
 
@@ -496,6 +544,74 @@ export default function CircadianScreen() {
                             </Pressable>
                         </View>
 
+                        {/* Daily-AI-limit 429 → distinct upgrade state (NOT the
+                            retryable error). Mutually exclusive with `genError`;
+                            hidden while a fresh generation is in flight. The
+                            surface is a GlassCard and the action a CtaButton —
+                            the sanctioned Aurora primitives (no inline glass/CTA). */}
+                        {!!quota && !isLoadingPlan && (
+                            <GlassCard
+                                glow={colors.accent.coral}
+                                style={[styles.noticeCard, { borderColor: withAlpha(colors.accent.coral, 0.35), marginBottom: spacing.xl }]}
+                            >
+                                <View accessibilityRole="alert">
+                                    <View style={styles.noticeHead}>
+                                        <Ionicons name="flash-outline" size={20} color={colors.accent.coral} style={{ marginTop: 1 }} />
+                                        <View style={{ flex: 1, marginLeft: spacing.sm + 2 }}>
+                                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>
+                                                Daily AI limit reached
+                                            </Text>
+                                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2, lineHeight: 18 }]}>
+                                                {`You've used all ${quota.limit} of your ${quota.plan === 'pro' ? 'Pro' : 'free'} daily AI plans. ${formatResetsAt(quota.resetsAt)}.`}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    <CtaButton
+                                        label="Upgrade"
+                                        icon="sparkles"
+                                        size="sm"
+                                        onPress={() => router.push('/(modals)/premium')}
+                                        accessibilityLabel="Upgrade to remove the daily AI limit"
+                                        style={{ alignSelf: 'flex-start', marginTop: spacing.md }}
+                                    />
+                                </View>
+                            </GlassCard>
+                        )}
+
+                        {/* Persistent, retryable inline error — survives until a
+                            retry succeeds. Mutually exclusive with `quota`. */}
+                        {!!genError && !isLoadingPlan && (
+                            <GlassCard
+                                style={[styles.noticeCard, { borderColor: withAlpha(colors.accent.coral, 0.35), marginBottom: spacing.xl }]}
+                            >
+                                <View accessibilityRole="alert">
+                                    <View style={styles.noticeHead}>
+                                        <Ionicons name="alert-circle" size={20} color={colors.accent.coral} style={{ marginTop: 1 }} />
+                                        <View style={{ flex: 1, marginLeft: spacing.sm + 2 }}>
+                                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>
+                                                Generation failed
+                                            </Text>
+                                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2, lineHeight: 18 }]}>
+                                                {genError}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={[styles.tryAgainBtn, { borderColor: withAlpha(colors.accent.coral, 0.5), marginTop: spacing.md }]}
+                                        onPress={() => generateAIPlan()}
+                                        accessibilityRole="button"
+                                        accessibilityLabel="Try again"
+                                        activeOpacity={0.85}
+                                    >
+                                        <Ionicons name="refresh" size={16} color={colors.accent.coral} />
+                                        <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: '700', marginLeft: spacing.xs + 2 }]}>
+                                            Try Again
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </GlassCard>
+                        )}
+
                         {isLoadingPlan ? (
                             <View>
                                 <GlassCard
@@ -666,6 +782,25 @@ const styles = StyleSheet.create({
         paddingVertical: 24,
         paddingHorizontal: 20,
         alignItems: 'center',
+    },
+    // Inline upgrade / retryable-error notice surface (rendered inside a
+    // GlassCard on the AI Protocol tab — replaces the old destructive Alert).
+    noticeCard: {
+        padding: 16,
+    },
+    noticeHead: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    tryAgainBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        alignSelf: 'flex-start',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+        borderWidth: 1.5,
     },
     timelineItem: {
         flexDirection: 'row',

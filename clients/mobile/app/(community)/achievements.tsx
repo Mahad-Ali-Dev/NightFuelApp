@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Dimensions,
+    Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme';
+import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui';
 import { getMyBadges, getBadgeCatalog, getUserScore, type Badge } from '@/api/community';
 
 const { width } = Dimensions.get('window');
@@ -28,7 +29,7 @@ const TIER_META: Record<string, { color: string; gradient: [string, string]; lab
 const TIER_ORDER = ['platinum', 'gold', 'silver', 'bronze'];
 
 export default function AchievementsScreen() {
-    const { colors, typography } = useTheme();
+    const { colors, typography, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
 
@@ -66,6 +67,18 @@ export default function AchievementsScreen() {
     }, [catalog]);
 
     const isLoading = badgesQuery.isLoading || catalogQuery.isLoading;
+    // A failed catalog/badges fetch must surface a retryable error rather than
+    // silently rendering the empty layout (an empty 'All Badges' grid reads as
+    // "you have no badges" when the request actually failed).
+    const isError = badgesQuery.isError || catalogQuery.isError;
+
+    // Refetch all three queries from the error state's retry. scoreQuery feeds the
+    // XP card, so we refresh it alongside the two catalog queries that gate the view.
+    const handleRetry = () => {
+        badgesQuery.refetch();
+        catalogQuery.refetch();
+        scoreQuery.refetch();
+    };
 
     // XP progress for next level
     const xp = score?.xp ?? 0;
@@ -91,9 +104,53 @@ export default function AchievementsScreen() {
             </View>
 
             {isLoading ? (
-                <View style={styles.center}>
-                    <ActivityIndicator size="large" color={colors.accent.coral} />
-                </View>
+                // Loading scaffold mirrors the loaded layout: an xpCard-shaped block
+                // (with the level/XP/badge-count placeholders + the progress track)
+                // and a tier section of catalog-card placeholders. Honest loading —
+                // not a bare spinner — so the screen doesn't "pop" on data arrival.
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+                    <View style={[styles.xpCard, { marginHorizontal: 20, marginTop: 16, backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                        <View style={styles.xpCardInner}>
+                            <View style={{ flex: 1 }}>
+                                <Skeleton width={92} height={11} radius={borderRadius.sm} />
+                                <Skeleton width={64} height={44} radius={borderRadius.md} style={{ marginTop: 10 }} />
+                                <Skeleton width={120} height={14} radius={borderRadius.sm} style={{ marginTop: 10 }} />
+                            </View>
+                            <Skeleton width={80} height={80} radius={40} />
+                        </View>
+                        <Skeleton width="100%" height={6} radius={3} style={{ marginTop: 24 }} />
+                    </View>
+
+                    <Skeleton width={160} height={22} radius={borderRadius.sm} style={{ marginHorizontal: 20, marginTop: 32 }} />
+                    <View style={[styles.catalogGrid, { marginHorizontal: 16, marginTop: 16 }]}>
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <SkeletonCard key={i} height={130} radius={14} style={styles.catalogCardSkeleton} />
+                        ))}
+                    </View>
+                </ScrollView>
+            ) : isError ? (
+                // Honest retryable error — a failed catalog/badges fetch would
+                // otherwise fall through to the empty layout (a blank 'All Badges'
+                // grid), which misreads as "you have no badges". The retry refetches
+                // all three queries (react-state-fallback: the cache is the single
+                // source of truth, so we never mirror an error flag into state).
+                <EmptyState
+                    icon="cloud-offline-outline"
+                    title="Couldn't load achievements"
+                    subtitle="Something went wrong fetching your badges and level. Check your connection and try again."
+                    actionLabel="Try Again"
+                    onAction={handleRetry}
+                    style={styles.stateFill}
+                />
+            ) : catalog.length === 0 ? (
+                // Loaded but the badge catalog is empty — show an honest empty state
+                // instead of a blank 'All Badges' section.
+                <EmptyState
+                    icon="trophy-outline"
+                    title="No badges yet"
+                    subtitle="Badges will appear here as the catalog fills out. Keep training and check back soon."
+                    style={styles.stateFill}
+                />
             ) : (
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
 
@@ -108,16 +165,16 @@ export default function AchievementsScreen() {
                                 <Text style={[typography.overline, { color: withAlpha(colors.text.primary, 0.7) }]}>
                                     CURRENT LEVEL
                                 </Text>
-                                <Text style={[typography.statLarge, { color: colors.text.primary, marginTop: 2 }]}>
+                                <Text maxFontSizeMultiplier={1.3} style={[typography.statLarge, { color: colors.text.primary, marginTop: 2 }]}>
                                     {level}
                                 </Text>
-                                <Text style={[typography.body, { color: withAlpha(colors.text.primary, 0.75) }]}>
+                                <Text maxFontSizeMultiplier={1.3} style={[typography.body, { color: withAlpha(colors.text.primary, 0.75) }]}>
                                     {xp.toLocaleString()} XP total
                                 </Text>
                             </View>
                             <View style={[styles.badgeCountCircle, { borderColor: withAlpha(colors.text.primary, 0.2), backgroundColor: withAlpha(colors.text.primary, 0.08) }]}>
-                                <Text style={[typography.statSmall, { color: colors.text.primary }]}>{earned.length}</Text>
-                                <Text style={[typography.caption, { color: withAlpha(colors.text.primary, 0.6), fontSize: 10 }]}>BADGES</Text>
+                                <Text maxFontSizeMultiplier={1.3} style={[typography.statSmall, { color: colors.text.primary }]}>{earned.length}</Text>
+                                <Text maxFontSizeMultiplier={1.3} style={[typography.caption, { color: withAlpha(colors.text.primary, 0.6), fontSize: 10 }]}>BADGES</Text>
                             </View>
                         </View>
 
@@ -210,7 +267,15 @@ export default function AchievementsScreen() {
 const EarnedBadgeCard = React.memo(function EarnedBadgeCard({ badge, colors, typography }: { badge: Badge; colors: any; typography: any }) {
     const meta = TIER_META[badge.tier] ?? TIER_META.bronze!;
     return (
-        <View style={styles.earnedCard}>
+        // One a11y node per badge: a screen reader announces the badge name + its
+        // tier + earned state as a single summary rather than reading the emoji
+        // glyph and the tier pill as separate, contextless nodes.
+        <View
+            style={styles.earnedCard}
+            accessible
+            accessibilityRole="image"
+            accessibilityLabel={`${badge.name} badge, ${meta.label} tier, earned`}
+        >
             <LinearGradient
                 colors={[withAlpha(meta.color, 0.25), withAlpha(meta.color, 0.08)]}
                 style={[styles.earnedCardGradient, { borderColor: withAlpha(meta.color, 0.4) }]}
@@ -233,11 +298,18 @@ const CatalogBadgeCard = React.memo(function CatalogBadgeCard({
     badge, unlocked, tierColor, colors, typography
 }: { badge: Badge; unlocked: boolean; tierColor: string; colors: any; typography: any }) {
     return (
-        <View style={[styles.catalogCard, {
-            backgroundColor: colors.background.secondary,
-            borderColor: unlocked ? withAlpha(tierColor, 0.5) : colors.border.default,
-            opacity: unlocked ? 1 : 0.5,
-        }]}>
+        // One a11y node per catalog tile: collapses the emoji + name + description
+        // + lock badge into a single announcement of name and locked/unlocked state.
+        <View
+            accessible
+            accessibilityRole="image"
+            accessibilityLabel={`${badge.name} badge, ${unlocked ? 'unlocked' : 'locked'}`}
+            style={[styles.catalogCard, {
+                backgroundColor: colors.background.secondary,
+                borderColor: unlocked ? withAlpha(tierColor, 0.5) : colors.border.default,
+                opacity: unlocked ? 1 : 0.5,
+            }]}
+        >
             <Text style={{ fontSize: 26, opacity: unlocked ? 1 : 0.4 }}>{badge.iconEmoji}</Text>
             <Text style={[typography.caption, {
                 color: unlocked ? colors.text.primary : colors.text.tertiary,
@@ -283,7 +355,9 @@ const styles = StyleSheet.create({
         paddingBottom: 16,
     },
     backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    // Fills the area below the header so the empty / error EmptyState centers in
+    // the remaining space rather than hugging the top.
+    stateFill: { flex: 1 },
 
     xpCard: {
         borderRadius: 24,
@@ -291,6 +365,10 @@ const styles = StyleSheet.create({
         padding: 20,
         overflow: 'hidden',
     },
+    // Matches CatalogBadgeCard's width so the skeleton grid lines up with the
+    // loaded catalog grid; the SkeletonCard default marginBottom is zeroed since
+    // the grid's `gap` already spaces the tiles.
+    catalogCardSkeleton: { width: CARD_W, marginBottom: 0 },
     xpCardInner: {
         flexDirection: 'row',
         justifyContent: 'space-between',

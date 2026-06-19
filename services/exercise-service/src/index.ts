@@ -7,7 +7,7 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized, assertWithinDailyLimit, AI_LIMITS, AI_QUOTA_EXCEEDED } from '@nightfuel/config';
+import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized, assertWithinDailyLimit, AI_LIMITS, AI_QUOTA_EXCEEDED, resolvePlan } from '@nightfuel/config';
 import { z } from 'zod';
 import { ExerciseService } from './exercise.service';
 // fetchExerciseById now used internally by ExerciseService.getLibraryExerciseById
@@ -338,43 +338,6 @@ async function resolveLibraryId(name: string): Promise<string | null> {
     return partial?.id ?? null;
 }
 
-// Resolve the caller's plan from the subscription-service, mirroring
-// chat.service.resolvePlan EXACTLY so the AI-routine quota uses the same tier
-// signal as the Ria quota. tier 'FREE' -> 'free', anything else -> 'pro'.
-// No JWT_SECRET / unreachable / slow (>3s) / non-OK / throw -> 'free' (the
-// safer, lower limit). The internal token is minted with the already-registered
-// @fastify/jwt instance — no new dependency — and carries BOTH userId and sub so
-// subscription-service /v1/subscriptions/me (which derives its subject from the
-// token) resolves the TARGET user rather than a service principal.
-async function resolvePlan(userId: string): Promise<'free' | 'pro'> {
-    // No secret -> cannot mint an internal token -> default to the safer free plan.
-    if (!config.JWT_SECRET) return 'free';
-
-    const url = `${config.SUBSCRIPTION_SERVICE_URL}/v1/subscriptions/me`;
-    const token = (fastify as any).jwt.sign({ userId, sub: userId }, { expiresIn: '60s' });
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3000);
-    try {
-        const res = await fetch(url, {
-            method: 'GET',
-            headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
-            signal: controller.signal,
-        });
-        if (!res.ok) {
-            logger.debug({ userId, status: res.status }, 'Subscription lookup non-OK; defaulting plan=free');
-            return 'free';
-        }
-        const sub = (await res.json()) as { tier?: string };
-        return (sub.tier ?? 'FREE').toUpperCase() === 'FREE' ? 'free' : 'pro';
-    } catch (err) {
-        logger.warn({ err, userId }, 'Failed to resolve subscription tier; defaulting plan=free');
-        return 'free';
-    } finally {
-        clearTimeout(timer);
-    }
-}
-
 fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generate', {
     onRequest: [(fastify as any).authenticate],
     schema: { body: generateRoutineSchema },
@@ -389,7 +352,17 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generat
     // here). At/over the cap we reply 429 and DO NOT call the AI pipeline or
     // createRoutine. Plan tier is resolved the same way the chat-service Ria quota
     // does; an unreachable subscription-service degrades to the safer free limit.
-    const plan = await resolvePlan(userId);
+    // resolver centralized into @nightfuel/config; the shared token mints {userId,
+    // sub} — a compatible superset (subscription-service reads only userId/id), so
+    // chat's old role:'SYSTEM'/no-sub and exercise/plan's sub/no-role both reduce to
+    // behavior-identical at /me. The shared fn mints via jwtSecret, so this path no
+    // longer reaches into (fastify as any).jwt.
+    const plan = await resolvePlan({
+        userId,
+        jwtSecret: config.JWT_SECRET,
+        subscriptionServiceUrl: config.SUBSCRIPTION_SERVICE_URL,
+        timeoutMs: 3000,
+    });
     const now = new Date();
     const startOfUtcDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const usedToday = await prisma.workoutRoutine.count({

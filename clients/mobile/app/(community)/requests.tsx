@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -175,14 +175,33 @@ interface RequestRowProps {
  * the FlatList skips unchanged rows when one is acted on. The peer descriptor is
  * read off the CONTRACT `peer` field; values are derived in-row so the parent
  * never reparents the list (list-performance-function-references).
+ *
+ * `pending` is a row-LOCAL tap-guard, not mirrored server state: the two
+ * mutations are shared across the whole list, so binding their `isPending` here
+ * would dim EVERY row, and the acted row is optimistically removed the instant
+ * it is tapped. So we keep the minimal per-row source of truth for "this row's
+ * action already fired" (react-state-minimize) — it disables BOTH buttons (and
+ * dims them, surfacing accessibilityState.disabled) so a fast double-tap can't
+ * fire the handler twice in the frame before removeRow unmounts the row.
  */
 const RequestRow = React.memo(function RequestRow({ item, onAccept, onDecline }: RequestRowProps) {
     const { colors, typography } = useTheme();
     const peer = item.peer;
     const name = peer?.displayName ?? (peer?.userId ? `User ${peer.userId.slice(0, 4)}` : 'Athlete');
 
-    const handleAccept = useCallback(() => onAccept(item.id, peer?.userId), [onAccept, item.id, peer?.userId]);
-    const handleDecline = useCallback(() => onDecline(item.id), [onDecline, item.id]);
+    const [pending, setPending] = useState(false);
+
+    const handleAccept = useCallback(() => {
+        if (pending) return;
+        setPending(true);
+        onAccept(item.id, peer?.userId);
+    }, [pending, onAccept, item.id, peer?.userId]);
+
+    const handleDecline = useCallback(() => {
+        if (pending) return;
+        setPending(true);
+        onDecline(item.id);
+    }, [pending, onDecline, item.id]);
 
     return (
         <GlassCard style={styles.rowCard}>
@@ -211,9 +230,11 @@ const RequestRow = React.memo(function RequestRow({ item, onAccept, onDecline }:
                     <TouchableOpacity
                         accessibilityRole="button"
                         accessibilityLabel={`Decline message request from ${name}`}
+                        accessibilityState={{ disabled: pending }}
+                        disabled={pending}
                         activeOpacity={0.85}
                         onPress={handleDecline}
-                        style={[styles.declineBtn, { borderColor: colors.border.light }]}
+                        style={[styles.declineBtn, { borderColor: colors.border.light }, pending ? styles.btnPending : null]}
                     >
                         <Text style={[typography.subhead, { color: colors.text.secondary, fontWeight: '700' }]}>Decline</Text>
                     </TouchableOpacity>
@@ -221,6 +242,7 @@ const RequestRow = React.memo(function RequestRow({ item, onAccept, onDecline }:
                         label="Accept"
                         size="sm"
                         accessibilityLabel={`Accept message request from ${name}`}
+                        disabled={pending}
                         onPress={handleAccept}
                         style={styles.acceptBtn}
                     />
@@ -267,5 +289,9 @@ const styles = StyleSheet.create({
     rowInfo: { flex: 1, marginLeft: 14 },
     rowActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 16 },
     declineBtn: { minHeight: 40, paddingHorizontal: 20, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+    // Dim the Decline control while its row's action is in flight (the Accept
+    // CtaButton dims itself via its own disabled treatment) so a double-tap is
+    // visibly blocked and the accessibilityState.disabled reads true.
+    btnPending: { opacity: 0.6 },
     acceptBtn: { minWidth: 96, borderRadius: 14 },
 });

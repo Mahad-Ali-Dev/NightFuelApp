@@ -195,4 +195,104 @@ describe('MessageRequestsScreen', () => {
     // The error branch renders no rows, so no accept/decline mutation fires.
     expect(mockMutate).not.toHaveBeenCalled();
   });
+
+  // ── (iii) ROW branch — a11y roles, truncation, and the pending double-tap guard
+  // A populated list renders RequestRow(s). The row owns a LOCAL `pending`
+  // tap-guard: the first Accept/Decline tap disables BOTH controls (surfacing
+  // accessibilityState.disabled) so a fast double-tap can't fire the mutation
+  // twice. Because the optimistic removeRow goes through the MOCKED
+  // queryClient.setQueryData (a no-op here), the row stays mounted after the tap,
+  // letting us assert the disabled state and the guarded second press directly.
+  describe('request row (populated list)', () => {
+    // Two pending requests — a named peer and one whose displayName is absent so
+    // the screen renders its `User <id4>` fallback (a single <Text>-wrapped
+    // string, never a raw string beside a <Text> sibling — Text-in-Text safe).
+    const ROWS = [
+      { id: 'conv-1', peer: { userId: 'user-abcd1234', displayName: 'Dana Sprint', avatarUrl: null } },
+      { id: 'conv-2', peer: { userId: 'user-wxyz5678', displayName: undefined, avatarUrl: null } },
+    ];
+
+    test('accept/decline expose accessibilityRole="button" and per-peer labels', () => {
+      mockRequests.data = ROWS;
+
+      renderScreen();
+
+      // Each row surfaces a named, button-role Accept and Decline control.
+      expect(screen.getByRole('button', { name: 'Accept message request from Dana Sprint' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Decline message request from Dana Sprint' })).toBeTruthy();
+      // The missing-displayName row falls back to the `User <id4>` descriptor,
+      // proving the fallback name flows through the labels Text-in-Text-safe.
+      expect(screen.getByRole('button', { name: 'Accept message request from User user' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Decline message request from User user' })).toBeTruthy();
+    });
+
+    test('peer name + preview lines truncate with numberOfLines={1}', () => {
+      mockRequests.data = ROWS;
+
+      renderScreen();
+
+      // The peer name line is single-line truncated…
+      const nameNode = screen.getByText('Dana Sprint');
+      expect(nameNode.props.numberOfLines).toBe(1);
+      // …and so is each request-preview line ("wants to send you a message").
+      const previewNodes = screen.getAllByText('wants to send you a message');
+      expect(previewNodes.length).toBe(ROWS.length);
+      previewNodes.forEach((node) => expect(node.props.numberOfLines).toBe(1));
+    });
+
+    test('first Accept tap marks the row pending (accessibilityState.disabled) and blocks a double-tap', () => {
+      mockRequests.data = ROWS;
+
+      renderScreen();
+
+      const accept = screen.getByRole('button', { name: 'Accept message request from Dana Sprint' });
+      const decline = screen.getByRole('button', { name: 'Decline message request from Dana Sprint' });
+
+      // Before any tap, neither control is disabled.
+      expect(accept.props.accessibilityState?.disabled).toBeFalsy();
+      expect(decline.props.accessibilityState?.disabled).toBeFalsy();
+
+      // First Accept tap fires the mutation exactly once and flips the row's
+      // local pending flag → BOTH controls now read accessibilityState.disabled.
+      // Re-query after the state update so we read the latest rendered props.
+      fireEvent.press(accept);
+      expect(mockMutate).toHaveBeenCalledTimes(1);
+      expect(
+        screen.getByRole('button', { name: 'Accept message request from Dana Sprint' })
+          .props.accessibilityState?.disabled,
+      ).toBe(true);
+      expect(
+        screen.getByRole('button', { name: 'Decline message request from Dana Sprint' })
+          .props.accessibilityState?.disabled,
+      ).toBe(true);
+
+      // A second tap (the double-tap we are guarding) is swallowed: the disabled
+      // control does not re-fire the accept mutation.
+      fireEvent.press(screen.getByRole('button', { name: 'Accept message request from Dana Sprint' }));
+      expect(mockMutate).toHaveBeenCalledTimes(1);
+    });
+
+    test('first Decline tap marks the row pending and blocks a double-tap', () => {
+      mockRequests.data = ROWS;
+
+      renderScreen();
+
+      const decline = screen.getByRole('button', { name: 'Decline message request from Dana Sprint' });
+
+      fireEvent.press(decline);
+      expect(mockMutate).toHaveBeenCalledTimes(1);
+      // The pending row disables BOTH the tapped Decline and its sibling Accept.
+      expect(
+        screen.getByRole('button', { name: 'Decline message request from Dana Sprint' })
+          .props.accessibilityState?.disabled,
+      ).toBe(true);
+      expect(
+        screen.getByRole('button', { name: 'Accept message request from Dana Sprint' })
+          .props.accessibilityState?.disabled,
+      ).toBe(true);
+
+      fireEvent.press(screen.getByRole('button', { name: 'Decline message request from Dana Sprint' }));
+      expect(mockMutate).toHaveBeenCalledTimes(1);
+    });
+  });
 });

@@ -28,12 +28,13 @@ export const mealSearchResponseSchema = z.array(z.object({
 const MAX_QUANTITY = 10000;   // servings/grams for one item
 const MAX_CALORIES = 20000;   // kcal for one item
 const MAX_MACRO_GRAMS = 2000; // grams of protein / carbs / fat for one item
+const MAX_FOOD_NAME_LEN = 200; // a single food item's display name (custom or library)
 
 export const logMealBodySchema = z.object({
     mealType: z.enum(['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK']),
     foodItems: z.array(z.object({
         foodId: z.string().optional(), // Could be custom food without ID
-        name: z.string(),
+        name: z.string().min(1).max(MAX_FOOD_NAME_LEN),
         quantity: z.number().min(0.01).max(MAX_QUANTITY),
         calories: z.number().min(0).max(MAX_CALORIES),
         protein: z.number().min(0).max(MAX_MACRO_GRAMS),
