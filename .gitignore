@@ -81,3 +81,7 @@ __pycache__/
 # demo-url content-check cache (populated by networked runs; keep the dir, ignore the data)
 scripts/.cache/demo-urls/*
 !scripts/.cache/demo-urls/.gitkeep
+
+# Root lockfile intentionally untracked so EAS Build uses lenient `npm install`.
+# (Monorepo lock has a react 19.1.0 vs react-dom 19.2.7 mismatch that `npm ci` rejects.)
+/package-lock.json
