@@ -80,8 +80,18 @@ export class MealService {
         return groups.map(g => g.foodGroup).filter(Boolean);
     }
 
-    async logMeal(userId: string, mealType: any, foodItems: any[]) {
-        logger.info(`Logging meal for user: ${userId}, type: ${mealType}`);
+    /**
+     * logMeal
+     *
+     * @param planMealId  OPTIONAL provenance link to a planned protocol slot
+     *   (the circadian "Log this" flow). Additive 4th argument — existing
+     *   3-arg callers compile and behave exactly as before. When provided, it
+     *   is persisted on the MealLog's `foodItems` JSON (no DB column / migration
+     *   is added) and echoed back on the returned object + the published event
+     *   payload so consumers can correlate the log with its plan item.
+     */
+    async logMeal(userId: string, mealType: any, foodItems: any[], planMealId?: string) {
+        logger.info(`Logging meal for user: ${userId}, type: ${mealType}${planMealId ? `, planMealId: ${planMealId}` : ''}`);
 
         let totalCalories = 0;
         let totalProtein = 0;
@@ -98,11 +108,21 @@ export class MealService {
         // Adherence calculation can be delegated or simplified. Default true for now.
         const isAdherent = true;
 
+        // Persist the plan link WITHOUT a schema migration: stamp it into the
+        // existing JSON column as a sibling `_planMealId` key alongside the food
+        // items array. We keep `foodItems` an array when there is no link (so
+        // the stored shape is byte-identical for the common ad-hoc case) and
+        // only switch to the `{ items, _planMealId }` envelope when a link is
+        // present.
+        const storedFoodItems = planMealId
+            ? { items: foodItems, _planMealId: planMealId }
+            : foodItems;
+
         const mealLog = await this.prisma.mealLog.create({
             data: {
                 userId,
                 mealType,
-                foodItems,
+                foodItems: storedFoodItems,
                 totalCalories,
                 totalProtein,
                 totalCarbs,
@@ -125,12 +145,16 @@ export class MealService {
                 totalProtein,
                 totalCarbs,
                 totalFat,
-                mealType
+                mealType,
+                // Only present when this log originated from a planned slot.
+                ...(planMealId ? { planMealId } : {})
             }
         });
 
         logger.info(`Successfully logged meal: ${mealLog.id}`);
-        return mealLog;
+        // Echo the provenance link back to the caller (route -> client) so the
+        // response carries it without persisting a dedicated column.
+        return planMealId ? { ...mealLog, planMealId } : mealLog;
     }
 
     async getMealLogs(userId: string, date?: string, limit: number = 20) {

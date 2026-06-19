@@ -4,6 +4,16 @@ import { AuthorResolver } from './author-resolver';
 
 const logger = createLogger('community.service');
 
+// Typed error so the route layer can map a self-follow attempt to a 400
+// (vs. a generic 500). Carries a stable `code` for assertion in tests.
+export class SelfFollowError extends Error {
+    readonly code = 'self_follow';
+    constructor() {
+        super('You cannot follow yourself');
+        this.name = 'SelfFollowError';
+    }
+}
+
 // ── Level Progression Formula ─────────────────────────────────────────────────
 // XP required to reach level N = 100 * N * (N - 1) / 2
 // Level 1: 0 XP, Level 2: 100 XP, Level 3: 300 XP, Level 4: 600 XP …
@@ -224,6 +234,135 @@ export class CommunityService {
         const level = xpToLevel(score.xp);
         const nextLevelXp = xpForNextLevel(level);
         return { ...score, level, xpForNextLevel: nextLevelXp };
+    }
+
+    /**
+     * Leaderboard rows enriched with the real author identity (displayName +
+     * avatar) resolved from the user-service. UserScore is keyed by userId, so
+     * each row's userId is the authorId we enrich on. Rows whose author cannot
+     * be resolved fall back to a neutral 'Zeitra Member' label — but a
+     * resolvable author always gets its real displayName (no placeholder).
+     */
+    async getLeaderboardWithAuthors(limit: number = 10) {
+        const rows = await this.getLeaderboard(limit);
+
+        // Map UserScore rows onto the { authorId } shape the resolver enriches.
+        const enriched = await this._withAuthors(
+            rows.map((row) => ({ authorId: row.userId, ...row }))
+        );
+
+        return enriched.map((row) => {
+            const author = (row as any).author as
+                | { name?: string | null; avatarUrl?: string | null }
+                | undefined;
+            return {
+                userId: row.userId,
+                xp: row.xp,
+                level: row.level,
+                displayName: author?.name ?? 'Zeitra Member',
+                avatarUrl: author?.avatarUrl ?? null,
+            };
+        });
+    }
+
+    // ── Social Graph (Follow) ──────────────────────────────────────────────────
+
+    /**
+     * Follow `followingId` as `followerId`. Idempotent: re-following is a
+     * no-op (the @@unique([followerId, followingId]) constraint is honoured via
+     * createMany skipDuplicates). Self-follow is rejected with SelfFollowError.
+     */
+    async followUser(followerId: string, followingId: string) {
+        if (followerId === followingId) throw new SelfFollowError();
+
+        await this.prisma.follow.createMany({
+            data: [{ followerId, followingId }],
+            skipDuplicates: true,
+        });
+
+        return { success: true };
+    }
+
+    /** Unfollow `followingId`. Idempotent: deleting a non-existent edge is a no-op. */
+    async unfollowUser(followerId: string, followingId: string) {
+        await this.prisma.follow.deleteMany({
+            where: { followerId, followingId },
+        });
+
+        return { success: true };
+    }
+
+    /**
+     * Social summary of `targetId` from `viewerId`'s perspective:
+     *   isFollowing — does viewer follow target?
+     *   followers   — how many users follow target (following_id = target)
+     *   following   — how many users target follows (follower_id = target)
+     */
+    async getSocial(viewerId: string, targetId: string) {
+        const [viewerEdge, followers, following] = await Promise.all([
+            this.prisma.follow.findUnique({
+                where: { followerId_followingId: { followerId: viewerId, followingId: targetId } },
+            }),
+            this.prisma.follow.count({ where: { followingId: targetId } }),
+            this.prisma.follow.count({ where: { followerId: targetId } }),
+        ]);
+
+        return {
+            isFollowing: !!viewerEdge,
+            followers,
+            following,
+        };
+    }
+
+    /**
+     * Compose a detailed profile honouring the target's privacy setting.
+     *
+     * Always returns the minimal public shape { userId, displayName, avatarUrl,
+     * isPrivate }. If the target is private AND the viewer is NOT an accepted
+     * follower (no Follow row viewer -> target), nothing beyond the minimal
+     * shape is returned. Otherwise the fuller object (incl. xp/level + social
+     * counts) is returned. A Follow row is treated as accepted — following a
+     * private user grants visibility immediately.
+     */
+    async getUserDetailedProfile(viewerId: string, targetId: string) {
+        const author = this.authorResolver
+            ? await this.authorResolver.resolveOne(targetId).catch((err) => {
+                logger.warn({ err, targetId }, 'detailed-profile author resolve failed');
+                return null;
+            })
+            : null;
+
+        const isPrivate = author?.isPrivate ?? false;
+
+        // Minimal shape always returned (name/avatar are public).
+        const minimal = {
+            userId: targetId,
+            displayName: author?.name ?? null,
+            avatarUrl: author?.avatarUrl ?? null,
+            isPrivate,
+        };
+
+        if (isPrivate && viewerId !== targetId) {
+            const edge = await this.prisma.follow.findUnique({
+                where: { followerId_followingId: { followerId: viewerId, followingId: targetId } },
+            });
+            // Private + not an accepted follower -> withhold detailed fields.
+            if (!edge) return minimal;
+        }
+
+        // Visible: own profile, public profile, or an accepted follower.
+        const [score, social] = await Promise.all([
+            this.getUserScore(targetId),
+            this.getSocial(viewerId, targetId),
+        ]);
+
+        return {
+            ...minimal,
+            xp: score.xp,
+            level: score.level,
+            xpForNextLevel: (score as any).xpForNextLevel,
+            ...social,
+        };
     }
 
     // ── Badge System ─────────────────────────────────────────────────────────

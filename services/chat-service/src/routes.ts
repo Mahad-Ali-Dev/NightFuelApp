@@ -1,17 +1,30 @@
 import { FastifyInstance } from 'fastify';
 import '@fastify/websocket';
 import { z } from 'zod';
-import { ChatService } from './chat.service';
+import { ChatService, RequestPendingError } from './chat.service';
 import jwt from 'jsonwebtoken';
 import { sendUnauthorized } from '@nightfuel/config';
 
-// Inbound WebSocket frame schema. senderId is intentionally absent — the
-// sender is derived from the verified JWT, never from the client payload.
-const wsFrameSchema = z.object({
-    type: z.literal('send_message'),
-    conversationId: z.string().uuid(),
-    text: z.string().min(1).max(4000)
-});
+// Inbound WebSocket frame schema — a discriminated union over `type`. senderId is
+// intentionally absent from EVERY variant: the sender is derived from the verified
+// JWT, never from the client payload.
+//   • send_message — persist + deliver a chat message (text bounds preserved).
+//   • typing_start / typing_stop — ephemeral typing relay (no DB write).
+const wsFrameSchema = z.discriminatedUnion('type', [
+    z.object({
+        type: z.literal('send_message'),
+        conversationId: z.string().uuid(),
+        text: z.string().min(1).max(4000),
+    }),
+    z.object({
+        type: z.literal('typing_start'),
+        conversationId: z.string().uuid(),
+    }),
+    z.object({
+        type: z.literal('typing_stop'),
+        conversationId: z.string().uuid(),
+    }),
+]);
 
 // ── WebSocket per-socket hardening constants ─────────────────────────────────
 // MAX_FRAME_BYTES — every inbound frame must be smaller than this BEFORE we
@@ -27,6 +40,28 @@ const TOKEN_REFILL_PER_SEC = 1;
 // Idle close: silent sockets are reaped after 5 minutes with a custom code
 // (4408 — "idle timeout", in the application-defined 4000-4999 close range).
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
+// ── Connected-socket registry ────────────────────────────────────────────────
+// Module-level map from userId -> the set of that user's currently-open sockets
+// (a user may have several: phone + web). Used to fan a `new_message` /
+// `message_read` / typing relay out to the RECIPIENT's live sockets. Entries are
+// added after the 4401 auth gate (under the JWT-verified senderId) and removed on
+// socket 'close'; an emptied Set is deleted so the map can't leak userIds.
+const connectedUsers = new Map<string, Set<any>>();
+
+/** Send a JSON frame to every live socket of `userId` (no-op if none connected). */
+function broadcastToUser(userId: string, frame: unknown): void {
+    const sockets = connectedUsers.get(userId);
+    if (!sockets) return;
+    const payload = JSON.stringify(frame);
+    for (const s of sockets) {
+        try {
+            s.send(payload);
+        } catch {
+            // A dead/half-closed socket must not break the fan-out to siblings.
+        }
+    }
+}
 
 export default async function (fastify: FastifyInstance, opts: { chatService: ChatService, jwtSecret: string }) {
     const { chatService, jwtSecret } = opts;
@@ -87,8 +122,80 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
         const { conversationId } = request.params as any;
         const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
         const { text } = request.body as any;
+
+        // Resolve the conversation so we can enforce the request gate and know the
+        // recipient for delivery + the outbound event.
+        const conv = await resolveConversation(chatService, conversationId);
+
+        try {
+            if (conv) await chatService.assertCanSend(conv, userId);
+        } catch (err) {
+            if (err instanceof RequestPendingError) {
+                return reply.status(409).send({ error: 'request_pending' });
+            }
+            throw err;
+        }
+
         const msg = await chatService.saveMessage(conversationId, userId, text);
+
+        // Real-time delivery + best-effort outbound event to the OTHER participant.
+        if (conv) {
+            const recipientId = conv.participantA === userId ? conv.participantB : conv.participantA;
+            broadcastToUser(recipientId, { type: 'new_message', data: msg });
+            await chatService.emitMessageSent(userId, recipientId, conversationId, text);
+        }
+
         return reply.status(201).send({ data: msg });
+    });
+
+    // ── Mark a conversation read ─────────────────────────────────────────────
+    // Sets isRead + readAt on the peer's unread messages and broadcasts a
+    // `message_read` receipt to the OTHER participant's live sockets.
+    fastify.post('/v1/chat/conversations/:conversationId/read', {
+        schema: { params: z.object({ conversationId: z.string().uuid() }) },
+        preHandler: [(fastify as any).authenticate]
+    }, async (request, reply) => {
+        const { conversationId } = request.params as any;
+        const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
+
+        const conv = await chatService.markConversationRead(conversationId, userId);
+        const otherUserId = conv.participantA === userId ? conv.participantB : conv.participantA;
+        broadcastToUser(otherUserId, { type: 'message_read', conversationId, readerId: userId });
+
+        return reply.send({ ok: true });
+    });
+
+    // ── Message requests (Instagram-DM style) ────────────────────────────────
+
+    // GET /v1/chat/requests — incoming pending requests (someone DMed me).
+    fastify.get('/v1/chat/requests', {
+        preHandler: [(fastify as any).authenticate]
+    }, async (request, reply) => {
+        const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
+        const requests = await chatService.getIncomingRequests(userId);
+        return reply.send({ data: requests });
+    });
+
+    // POST /v1/chat/requests/:conversationId/accept — recipient accepts.
+    fastify.post('/v1/chat/requests/:conversationId/accept', {
+        schema: { params: z.object({ conversationId: z.string().uuid() }) },
+        preHandler: [(fastify as any).authenticate]
+    }, async (request, reply) => {
+        const { conversationId } = request.params as any;
+        const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
+        const conv = await chatService.acceptRequest(conversationId, userId);
+        return reply.send({ data: { id: conv.id, requestState: conv.requestState } });
+    });
+
+    // POST /v1/chat/requests/:conversationId/decline — recipient declines.
+    fastify.post('/v1/chat/requests/:conversationId/decline', {
+        schema: { params: z.object({ conversationId: z.string().uuid() }) },
+        preHandler: [(fastify as any).authenticate]
+    }, async (request, reply) => {
+        const { conversationId } = request.params as any;
+        const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
+        const conv = await chatService.declineRequest(conversationId, userId);
+        return reply.send({ data: { id: conv.id, requestState: conv.requestState } });
     });
 
     // ── Legacy: get message history by conversation ID ──────────────────────
@@ -188,6 +295,24 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
     }, async (request, reply) => {
         const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
         const { message, context = {} } = request.body as any;
+
+        // Daily Ria quota — counted BEFORE persisting or calling the pipeline.
+        // At/over the cap we reply 429 and do NOT persist the user message or
+        // invoke the AI pipeline. The typeof-guard keeps the route resilient if a
+        // ChatService variant doesn't expose checkRiaQuota (in production it always
+        // does); a real ChatService never skips the gate.
+        if (typeof chatService.checkRiaQuota === 'function') {
+            const quota = await chatService.checkRiaQuota(userId);
+            if (!quota.allowed) {
+                return reply.code(429).send({
+                    error: 'ai_quota_exceeded',
+                    limit: quota.limit,
+                    plan: quota.plan,
+                    resetsAt: quota.resetsAt,
+                });
+            }
+        }
+
         const result = await chatService.sendRiaMessage(userId, message, context);
         return reply.send(result);
     });
@@ -210,6 +335,20 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
             socket.close(4401, 'Unauthorized');
             return;
         }
+
+        // Sender comes from the verified token only — any client-supplied senderId
+        // is ignored (and not part of any frame schema).
+        const senderId = wsUser.userId ?? wsUser.id ?? wsUser.sub;
+
+        // ── Register this socket under its verified user ───────────────────
+        // After the 4401 gate so only authenticated sockets ever enter the
+        // delivery registry. A user may hold several sockets (phone + web).
+        let sockets = connectedUsers.get(senderId);
+        if (!sockets) {
+            sockets = new Set();
+            connectedUsers.set(senderId, sockets);
+        }
+        sockets.add(socket);
 
         // ── Per-socket hardening state ─────────────────────────────────────
         // Token bucket — bursts up to TOKEN_BUCKET_MAX, refilled lazily at
@@ -237,6 +376,13 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
             if (idleTimer) {
                 clearTimeout(idleTimer);
                 idleTimer = null;
+            }
+            // Deregister from the delivery map; drop the user's Set entirely once
+            // it is empty so the map never accumulates stale userIds.
+            const set = connectedUsers.get(senderId);
+            if (set) {
+                set.delete(socket);
+                if (set.size === 0) connectedUsers.delete(senderId);
             }
         });
 
@@ -287,22 +433,88 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
                     return;
                 }
 
-                // Sender comes from the verified token only — any client-supplied
-                // senderId is ignored (and not part of the schema).
-                const senderId = wsUser.userId ?? wsUser.id ?? wsUser.sub;
+                const frame = parsed.data;
+
+                // ── Typing relay (no DB) ──────────────────────────────────
+                // Ephemeral presence signal. Resolve the conversation only to
+                // find the recipient, then relay {type,conversationId,userId}
+                // to THEIR sockets — never echoed back to the sender, never
+                // persisted.
+                if (frame.type === 'typing_start' || frame.type === 'typing_stop') {
+                    const conv = await resolveConversation(chatService, frame.conversationId);
+                    if (conv) {
+                        const recipientId = conv.participantA === senderId ? conv.participantB : conv.participantA;
+                        broadcastToUser(recipientId, {
+                            type: frame.type,
+                            conversationId: frame.conversationId,
+                            userId: senderId,
+                        });
+                    }
+                    return;
+                }
+
+                // ── send_message ──────────────────────────────────────────
+                const conv = await resolveConversation(chatService, frame.conversationId);
+
+                // Enforce the request gate; a pending requester's 2nd send is
+                // rejected with a `request_pending` error frame (socket stays open).
+                if (conv) {
+                    try {
+                        await chatService.assertCanSend(conv, senderId);
+                    } catch (e) {
+                        if (e instanceof RequestPendingError) {
+                            socket.send(JSON.stringify({ type: 'error', error: 'request_pending' }));
+                            return;
+                        }
+                        throw e;
+                    }
+                }
+
                 const savedMessage = await chatService.saveMessage(
-                    parsed.data.conversationId,
+                    frame.conversationId,
                     senderId,
-                    parsed.data.text
+                    frame.text
                 );
 
+                // Ack the sender…
                 socket.send(JSON.stringify({
                     type: 'new_message',
                     data: savedMessage
                 }));
+
+                // …then deliver the same frame to the recipient's live sockets and
+                // emit the best-effort outbound event (both no-op for Ria/absent peers).
+                if (conv) {
+                    const recipientId = conv.participantA === senderId ? conv.participantB : conv.participantA;
+                    broadcastToUser(recipientId, { type: 'new_message', data: savedMessage });
+                    await chatService.emitMessageSent(senderId, recipientId, frame.conversationId, frame.text);
+                }
             } catch (err) {
                 fastify.log.error({ err }, 'WebSocket Error');
             }
         });
     });
 };
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+/**
+ * Best-effort conversation lookup for delivery/gate decisions. Reads the raw row
+ * (participants + requestState) through the ChatService's Prisma client. Returns
+ * null if the conversation can't be resolved so delivery degrades to "ack only"
+ * (the message is still persisted) rather than throwing on the hot path. Kept as a
+ * free function so both the REST send handler and the WS handler share one path.
+ */
+async function resolveConversation(
+    chatService: ChatService,
+    conversationId: string,
+): Promise<{ id: string; participantA: string; participantB: string; requestState: string } | null> {
+    try {
+        const prisma = (chatService as any).prisma;
+        if (!prisma?.conversation?.findUnique) return null;
+        const conv = await prisma.conversation.findUnique({ where: { id: conversationId } });
+        return conv ?? null;
+    } catch {
+        return null;
+    }
+}

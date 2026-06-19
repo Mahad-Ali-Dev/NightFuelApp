@@ -80,7 +80,15 @@ export interface LogWorkoutPayload {
 export interface Routine {
   id: string;
   name: string;
-  exercises: Array<{ name: string; sets: number; reps: number }>;
+  /**
+   * `libraryId` is the id of the matched seeded LibraryExercise row, resolved
+   * server-side from the exercise name when the routine was generated (see the
+   * AI routine generator in exercise-service). It is `null` when no catalogue
+   * row matched and `undefined` for older routines created before resolution
+   * existed — additive/optional, so existing callers are unaffected. The
+   * workout screen uses it to render a rich, tappable exercise card.
+   */
+  exercises: Array<{ name: string; sets: number; reps: number; libraryId?: string | null }>;
 }
 
 export interface OneRepMax {

@@ -219,7 +219,7 @@ const start = async (): Promise<void> => {
 
         // Set up Redis event subscribers
         // Each subscriber is internally wrapped in try/catch — see events.ts
-        setupEventSubscribers(eventBus, notificationService, fastify);
+        setupEventSubscribers(eventBus, notificationService, pushService, fastify);
         logger.info('Redis event subscribers active');
 
         // Start HTTP server

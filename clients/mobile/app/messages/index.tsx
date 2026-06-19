@@ -5,8 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Skeleton, EmptyState } from '@/components/ui';
-import { getConversations } from '@/api/chat';
+import { Skeleton, EmptyState, Avatar } from '@/components/ui';
+import { getConversations, type Conversation } from '@/api/chat';
 import { formatDistanceToNow } from 'date-fns';
 import { withAlpha } from '@/theme/utils';
 
@@ -20,34 +20,44 @@ export default function MessagesListScreen() {
         queryFn: getConversations,
     });
 
-    const keyExtractor = useCallback((item: any) => item.id, []);
+    const keyExtractor = useCallback((item: Conversation) => item.id, []);
 
-    const renderItem = useCallback(({ item }: { item: any }) => {
-        // The backend conversation shape varies (created with `targetUserId`), so
-        // resolve the other-participant id defensively — a missing field must never
-        // crash the whole list with `.slice` of undefined.
-        const targetId = String(item?.targetId ?? item?.targetUserId ?? item?.otherUserId ?? item?.userId ?? item?.id ?? '');
-        const label = targetId ? targetId.slice(0, 4) : '—';
+    const renderItem = useCallback(({ item }: { item: Conversation }) => {
+        // Prefer the CONTRACT peer descriptor (GET conversations returns
+        // requestState + peer {userId, displayName, avatarUrl}). Fall back to the
+        // legacy target-id resolution so an older payload shape never crashes the
+        // list with `.slice` of undefined.
+        const anyItem = item as Conversation & Record<string, any>;
+        const peer = item.peer;
+        const targetId = String(peer?.userId ?? anyItem?.targetId ?? anyItem?.targetUserId ?? anyItem?.otherUserId ?? anyItem?.userId ?? item?.id ?? '');
+        const name = peer?.displayName ?? (targetId ? `User ${targetId.slice(0, 4)}` : '—');
+        const isPending = item.requestState === 'pending';
         const updated = item?.updatedAt ? new Date(item.updatedAt) : null;
         const timeAgo = updated && !isNaN(updated.getTime()) ? `${formatDistanceToNow(updated)} ago` : '';
         return (
             <TouchableOpacity
                 activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Open chat with ${name}`}
                 style={[styles.chatRow, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
                 onPress={() => { if (targetId) router.push(`/messages/${targetId}` as any); }}
             >
-                <View style={[styles.avatar, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.3) }]}>
-                    <Ionicons name="person" size={22} color={colors.accent.purple} />
-                </View>
+                <Avatar uri={peer?.avatarUrl ?? undefined} name={peer?.displayName} size={50} borderColor={withAlpha(colors.accent.purple, 0.3)} />
                 <View style={styles.chatInfo}>
-                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>User {label}</Text>
+                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]} numberOfLines={1}>{name}</Text>
                     <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]} numberOfLines={1}>
-                        Tap to view chat history...
+                        {isPending ? 'Message request — tap to review' : 'Tap to view chat history…'}
                     </Text>
                 </View>
-                <Text style={[typography.caption, { color: colors.text.secondary }]}>
-                    {timeAgo}
-                </Text>
+                {isPending ? (
+                    <View style={[styles.requestBadge, { backgroundColor: withAlpha(colors.accent.coral, 0.16), borderColor: withAlpha(colors.accent.coral, 0.4) }]}>
+                        <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: '700', fontSize: 10 }]}>Request</Text>
+                    </View>
+                ) : (
+                    <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                        {timeAgo}
+                    </Text>
+                )}
             </TouchableOpacity>
         );
     }, [colors, typography, router]);
@@ -119,6 +129,6 @@ const styles = StyleSheet.create({
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, height: 64, borderBottomWidth: 1 },
     headerBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     chatRow: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 20, borderWidth: 1, marginBottom: 12 },
-    avatar: { width: 50, height: 50, borderRadius: 25, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     chatInfo: { flex: 1, marginLeft: 16, marginRight: 12 },
+    requestBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1 },
 });

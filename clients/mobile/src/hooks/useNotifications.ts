@@ -8,6 +8,7 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import { apiClient } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
 
@@ -64,6 +65,7 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
 
 export function useNotifications() {
     const { user } = useAuthStore();
+    const router = useRouter();
 
     useEffect(() => {
         if (IS_EXPO_GO || !user) return;
@@ -83,8 +85,20 @@ export function useNotifications() {
         const sub = Notifications.addNotificationResponseReceivedListener((response: any) => {
             const data = response.notification.request.content.data as Record<string, unknown>;
             if (__DEV__) console.warn('[Notifications] Tapped notification:', data);
+
+            // Deep-link a tapped notification to its target screen. Chat-message
+            // pushes carry { conversationId, deepLink: `/messages/<id>` }; fall
+            // back to building the messages route from conversationId. expo-router
+            // routes via the native stack (see react-native-skills:
+            // navigation-native-navigators.md — use native navigators).
+            const deepLink = typeof data?.deepLink === 'string' ? data.deepLink : undefined;
+            const conversationId = typeof data?.conversationId === 'string' ? data.conversationId : undefined;
+            const target = deepLink ?? (conversationId ? `/messages/${conversationId}` : undefined);
+            if (target) {
+                router.push(target as any);
+            }
         });
 
         return () => sub.remove();
-    }, [user?.id]);
+    }, [user?.id, router]);
 }

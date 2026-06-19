@@ -58,7 +58,14 @@ export const updateOnboardingSchema = z.object({
     completed: z.boolean(),
 });
 
+// ── Privacy update ──────────────────────────────────────────────────────────
+// Backing the PATCH /v1/users/me account-visibility toggle. Kept separate from
+// updateProfileSchema so the social public/private contract is the sole owner of
+// the isPrivate field (consumed by community-service & chat-service).
+export const updatePrivacySchema = z.object({ isPrivate: z.boolean().optional() });
+
 // ── Exported inferred types ───────────────────────────────────────────────────
 export type UpdateProfileBody = z.infer<typeof updateProfileSchema>;
 export type UpdatePreferencesBody = z.infer<typeof updatePreferencesSchema>;
 export type UpdateOnboardingBody = z.infer<typeof updateOnboardingSchema>;
+export type UpdatePrivacyBody = z.infer<typeof updatePrivacySchema>;

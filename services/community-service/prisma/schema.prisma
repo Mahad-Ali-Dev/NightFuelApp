@@ -101,3 +101,14 @@ model ChallengeParticipant {
   @@unique([challengeId, userId])
   @@map("challenge_participants")
 }
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+  @@map("follows")
+}

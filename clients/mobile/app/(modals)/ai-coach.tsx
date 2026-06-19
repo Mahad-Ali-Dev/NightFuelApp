@@ -1,9 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TextInput,
-    TouchableOpacity, KeyboardAvoidingView, Platform,
-    ActivityIndicator, Animated,
+    KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
+import Reanimated, {
+    useSharedValue, useDerivedValue, useAnimatedStyle,
+    withRepeat, withTiming, interpolate, Easing, runOnJS,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
@@ -11,7 +15,7 @@ import { shadows } from '@/theme/shadows';
 import { typography as themeTypography } from '@/theme/typography';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { SafeBlurView } from '@/components/SafeBlurView';
+import { GlassCard, CtaButton } from '@/components/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRiaMessages, sendRiaMessage, type RiaMessage } from '@/api/chat';
 import { streamChat } from '@/api/ai';
@@ -33,6 +37,25 @@ export interface Message {
     streaming?: boolean;
 }
 
+/**
+ * The Ria daily-AI-quota signal (SOCIAL/quota contract owned by chat-service).
+ * `POST /v1/chat/ria/send` replies 429 `{ error:'ai_quota_exceeded', limit,
+ * plan, resetsAt }` once the user is at/over their daily cap (counted since UTC
+ * midnight: free 5 / pro 20). The success payload (RiaSendResult) carries no
+ * count, so the live "N left today" indicator is derived client-side from a
+ * per-day local tally reconciled to the authoritative `limit` the moment a 429
+ * arrives; the exhausted state then shows the `resetsAt` window.
+ */
+interface QuotaState {
+    /** Authoritative daily cap once known (from a 429); else the plan default. */
+    limit: number;
+    plan: 'free' | 'pro';
+    /** Next UTC-midnight ISO reset, set from a 429 body. */
+    resetsAt: string | null;
+    /** True after a 429 ai_quota_exceeded until the local UTC day rolls over. */
+    exhausted: boolean;
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_SUGGESTIONS = [
@@ -44,10 +67,61 @@ const DEFAULT_SUGGESTIONS = [
 
 const TYPING_SPEED_MS = 18;
 
+// Plan → default daily Ria cap, mirroring chat-service's AI_FREE_DAILY (5) /
+// AI_PRO_DAILY (20) fallbacks. Used ONLY to render the "N left today" hint
+// before any 429 has taught us the authoritative `limit`; a 429 always wins.
+const PLAN_DEFAULT_LIMIT: Record<QuotaState['plan'], number> = { free: 5, pro: 20 };
+
+// ── Quota helpers (pure — unit-tested in __tests__/screens/ai-coach.quota.test.ts) ─
+
+/** UTC day key (YYYY-MM-DD) — the boundary chat-service counts the quota against. */
+export function utcDayKey(d: Date = new Date()): string {
+    return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Recognise the chat-service daily-quota 429 from a thrown axios error and pull
+ * its typed body. Returns null for any other error so the caller falls through
+ * to the generic "hit a snag" notice. Defensive about shape: only a 429 whose
+ * body `error` is exactly 'ai_quota_exceeded' counts.
+ */
+export function parseQuotaError(error: any): { limit: number; plan: 'free' | 'pro'; resetsAt: string } | null {
+    const status = error?.response?.status;
+    const body = error?.response?.data;
+    if (status !== 429 || !body || body.error !== 'ai_quota_exceeded') return null;
+    const plan: 'free' | 'pro' = body.plan === 'pro' ? 'pro' : 'free';
+    const limit = Number.isFinite(body.limit) ? Number(body.limit) : PLAN_DEFAULT_LIMIT[plan];
+    const resetsAt = typeof body.resetsAt === 'string' ? body.resetsAt : '';
+    return { limit, plan, resetsAt };
+}
+
+/**
+ * Remaining daily Ria messages for the indicator. `limit` is the cap (plan
+ * default until a 429 reconciles it); `usedToday` is the local tally of
+ * user-authored sends since the current UTC day began. Never negative.
+ */
+export function remainingToday(limit: number, usedToday: number): number {
+    return Math.max(0, limit - usedToday);
+}
+
+/**
+ * A short, human reset window from a resetsAt ISO (e.g. "in 3h", "in 12m",
+ * "soon"). Falls back to a generic phrase when the timestamp is missing/past.
+ */
+export function formatResetWindow(resetsAt: string | null, now: Date = new Date()): string {
+    if (!resetsAt) return 'after midnight UTC';
+    const ms = new Date(resetsAt).getTime() - now.getTime();
+    if (!Number.isFinite(ms) || ms <= 0) return 'soon';
+    const mins = Math.ceil(ms / 60000);
+    if (mins < 60) return `in ${mins}m`;
+    const hrs = Math.round(mins / 60);
+    return `in ${hrs}h`;
+}
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function AICoachScreen() {
-    const { colors, typography, spacing } = useTheme();
+    const { colors, typography } = useTheme();
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { user } = useAuth();
@@ -62,7 +136,26 @@ export default function AICoachScreen() {
     // Abort handle for the active stream; called on unmount / new send.
     const streamStopRef = useRef<(() => void) | null>(null);
 
-    // Client-side rate limit (UX guard; ai-pipeline enforces the real limit).
+    // Daily-quota UX state. `usedToday` is the local count of user-authored
+    // sends since the tracked UTC day began; it reconciles to the authoritative
+    // `limit` once a 429 arrives. Rolls over when the UTC day key changes.
+    const [quota, setQuota] = useState<QuotaState>({ limit: PLAN_DEFAULT_LIMIT.free, plan: 'free', resetsAt: null, exhausted: false });
+    const usedTodayRef = useRef<{ day: string; count: number }>({ day: utcDayKey(), count: 0 });
+    const [usedToday, setUsedToday] = useState(0);
+
+    /** Increment today's send tally, rolling the counter on a UTC day change. */
+    const recordSend = useCallback(() => {
+        const today = utcDayKey();
+        if (usedTodayRef.current.day !== today) {
+            usedTodayRef.current = { day: today, count: 0 };
+            // A new UTC day clears any prior exhausted lock.
+            setQuota((q) => (q.exhausted ? { ...q, exhausted: false } : q));
+        }
+        usedTodayRef.current.count += 1;
+        setUsedToday(usedTodayRef.current.count);
+    }, []);
+
+    // Client-side rate limit (UX guard; chat-service enforces the real limit).
     const rateLimit = useRateLimit({ max: 10, windowMs: 60_000 });
 
     // ── Load persistent history from DB ────────────────────────────────────
@@ -83,6 +176,14 @@ export default function AICoachScreen() {
                     timestamp: new Date(m.createdAt),
                 }));
                 setMessages(dbMsgs);
+                // Seed today's tally from history so the indicator is accurate
+                // on reopen: count user-authored messages dated today (UTC).
+                const today = utcDayKey();
+                const sentToday = historyQuery.data.filter(
+                    (m: RiaMessage) => m.sender === 'user' && utcDayKey(new Date(m.createdAt)) === today,
+                ).length;
+                usedTodayRef.current = { day: today, count: sentToday };
+                setUsedToday(sentToday);
             } else {
                 setMessages([{
                     id: 'init',
@@ -110,28 +211,6 @@ export default function AICoachScreen() {
         enabled: !!user,
     });
 
-    // ── Animated dots for typing indicator ─────────────────────────────────
-    const dot1 = useRef(new Animated.Value(0)).current;
-    const dot2 = useRef(new Animated.Value(0)).current;
-    const dot3 = useRef(new Animated.Value(0)).current;
-
-    const startDotAnimation = useCallback(() => {
-        const pulse = (dot: Animated.Value, delay: number) =>
-            Animated.loop(
-                Animated.sequence([
-                    Animated.delay(delay),
-                    Animated.timing(dot, { toValue: 1, duration: 400, useNativeDriver: true }),
-                    Animated.timing(dot, { toValue: 0, duration: 400, useNativeDriver: true }),
-                ])
-            );
-        Animated.parallel([pulse(dot1, 0), pulse(dot2, 200), pulse(dot3, 400)]).start();
-    }, [dot1, dot2, dot3]);
-
-    const stopDotAnimation = useCallback(() => {
-        dot1.stopAnimation(); dot2.stopAnimation(); dot3.stopAnimation();
-        dot1.setValue(0); dot2.setValue(0); dot3.setValue(0);
-    }, [dot1, dot2, dot3]);
-
     // ── Streaming text effect ───────────────────────────────────────────────
     const streamText = useCallback((fullText: string, messageId: string) => {
         let idx = 0;
@@ -151,15 +230,24 @@ export default function AICoachScreen() {
         }, TYPING_SPEED_MS);
     }, []);
 
-    // ── Send message mutation ───────────────────────────────────────────────
+    // ── Send message mutation (non-streaming fallback path) ──────────────────
     const mutation = useMutation({
         mutationFn: (text: string) => sendRiaMessage(text, userStatus
             ? { fatigueScore: userStatus.fatigueScore, adherenceRate: userStatus.adherenceRate }
             : {}
         ),
-        onMutate: () => { startDotAnimation(); },
         onError: (error: any) => {
-            stopDotAnimation();
+            // Daily-quota 429 from chat-service: switch the composer into the
+            // "limit reached — Upgrade" state instead of a generic snag notice.
+            const q = parseQuotaError(error);
+            if (q) {
+                setQuota({ limit: q.limit, plan: q.plan, resetsAt: q.resetsAt, exhausted: true });
+                // Reconcile the local tally to the authoritative cap so the
+                // indicator reads "0 left today" immediately.
+                usedTodayRef.current = { day: utcDayKey(), count: Math.max(usedTodayRef.current.count, q.limit) };
+                setUsedToday(usedTodayRef.current.count);
+                return;
+            }
             const errText = error?.response?.data?.message ?? error?.message ?? 'Something went wrong.';
             setMessages(prev => [...prev, {
                 id: `err-${Date.now()}`,
@@ -169,7 +257,6 @@ export default function AICoachScreen() {
             }]);
         },
         onSuccess: (result) => {
-            stopDotAnimation();
             const aiMsgId = `ai-stream-${Date.now()}`;
             setMessages(prev => [...prev, {
                 id: aiMsgId,
@@ -214,8 +301,8 @@ export default function AICoachScreen() {
         if (streamingBubbleId) {
             setMessages(prev => prev.filter(m => m.id !== streamingBubbleId));
         }
-        // mutation.onMutate starts the dot animation; onSuccess streams the
-        // full reply with the canned typing effect; onError shows the snag.
+        // mutation.onSuccess streams the full reply with the canned typing
+        // effect; onError shows the snag (or flips to the quota state on 429).
         mutation.mutate(safeText);
     }, [mutation]);
 
@@ -225,8 +312,7 @@ export default function AICoachScreen() {
      * so behaviour never regresses.
      */
     const startStream = useCallback((safeText: string) => {
-        // History = conversation so far (exclude transient notices is not
-        // needed; server tolerates the running transcript). Map to role/content.
+        // History = conversation so far. Map to role/content.
         const history = messages.map(m => ({
             role: m.sender === 'ai' ? 'assistant' : 'user',
             content: m.text,
@@ -236,7 +322,7 @@ export default function AICoachScreen() {
         let gotFirstToken = false;
         let settled = false; // guard: only one of done/error/fallback wins
 
-        // Append the empty assistant bubble + start the thinking dots.
+        // Append the empty assistant bubble.
         setMessages(prev => [...prev, {
             id: aiMsgId,
             sender: 'ai',
@@ -245,7 +331,6 @@ export default function AICoachScreen() {
             streaming: true,
         }]);
         setIsStreaming(true);
-        startDotAnimation();
         setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
 
         const stop = streamChat(
@@ -253,12 +338,7 @@ export default function AICoachScreen() {
             {
                 onToken: (delta) => {
                     if (settled) return;
-                    if (!gotFirstToken) {
-                        gotFirstToken = true;
-                        // First token arrived — drop the dots, the bubble now
-                        // shows live text with its own cursor.
-                        stopDotAnimation();
-                    }
+                    if (!gotFirstToken) gotFirstToken = true;
                     setMessages(prev => prev.map(m =>
                         m.id === aiMsgId ? { ...m, text: m.text + delta, streaming: true } : m
                     ));
@@ -267,7 +347,6 @@ export default function AICoachScreen() {
                 onDone: () => {
                     if (settled) return;
                     settled = true;
-                    stopDotAnimation();
                     setIsStreaming(false);
                     streamStopRef.current = null;
                     setMessages(prev => prev.map(m =>
@@ -280,7 +359,6 @@ export default function AICoachScreen() {
                 onError: (_msg, partial) => {
                     if (settled) return;
                     settled = true;
-                    stopDotAnimation();
                     // If we already streamed a usable reply, keep it rather than
                     // discarding the user's tokens; just finalize the bubble.
                     if (gotFirstToken && partial.trim().length > 0) {
@@ -292,18 +370,19 @@ export default function AICoachScreen() {
                         queryClient.invalidateQueries({ queryKey: ['ria-messages'] });
                         return;
                     }
-                    // Nothing usable streamed → transparent fallback.
+                    // Nothing usable streamed → transparent fallback (the fallback
+                    // mutation surfaces a quota 429 as the upgrade state).
                     runFallback(safeText, aiMsgId);
                 },
             },
         );
         streamStopRef.current = stop;
-    }, [messages, user, buildContext, startDotAnimation, stopDotAnimation, queryClient, runFallback]);
+    }, [messages, user, buildContext, queryClient, runFallback]);
 
     const sendMessage = (text: string) => {
         const trimmed = text.trim();
-        // Block while either the stream or the fallback mutation is busy.
-        if (!trimmed || mutation.isPending || isStreaming) return;
+        // Block while the daily quota is exhausted, or either path is busy.
+        if (!trimmed || mutation.isPending || isStreaming || quota.exhausted) return;
 
         // 1. Client-side rate limit — give immediate feedback instead of a
         //    delayed 429 from the server.
@@ -325,6 +404,7 @@ export default function AICoachScreen() {
         }
 
         rateLimit.recordCall();
+        recordSend();
         setInput('');
         // Show what the user typed; send the sanitized text.
         setMessages(prev => [...prev, {
@@ -345,18 +425,33 @@ export default function AICoachScreen() {
     // cursor), the separate dots indicator would be redundant.
     const showThinkingDots = isTyping && !messages.some(m => m.streaming && m.text.length > 0);
 
+    const remaining = remainingToday(quota.limit, usedToday);
+    // Render the "N left today" hint once history has loaded (so the tally is
+    // seeded) and we're not in the exhausted state (which shows its own banner).
+    const showQuotaHint = hasLoaded && !quota.exhausted;
+
+    const sendDisabled = mutation.isPending || isStreaming || !input.trim() || quota.exhausted;
+
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             <StatusBar style="light" translucent backgroundColor="transparent" />
 
-            {/* Glass header — frosts only the bottom edge (clipping View owns the
-                hairline + overflow; SafeBlurView owns the frost). */}
-            <View style={[styles.headerClip, { borderBottomColor: colors.border.default }]}>
-                <SafeBlurView tint="dark" intensity={40}>
+            {/* Glass header — full-bleed GlassCard (radius 0); only the bottom
+                hairline reads on-screen (side hairlines sit at the screen edge).
+                The clipping View adds the explicit bottom divider. */}
+            <View style={[styles.headerClip, { borderBottomColor: colors.border.light }]}>
+                <GlassCard radius={0} intensity={40} tint="dark" style={styles.glassEdge}>
                     <View style={styles.header}>
-                        <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Close" onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                            <Ionicons name="close" size={28} color={colors.text.primary} />
-                        </TouchableOpacity>
+                        <GestureDetector gesture={Gesture.Tap().onEnd(() => { router.back(); })}>
+                            <View
+                                accessibilityRole="button"
+                                accessibilityLabel="Close"
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                style={styles.headerIconBtn}
+                            >
+                                <Ionicons name="close" size={28} color={colors.text.primary} />
+                            </View>
+                        </GestureDetector>
 
                         <View style={styles.headerCenter}>
                             <LinearGradient
@@ -382,9 +477,29 @@ export default function AICoachScreen() {
                             </View>
                         </View>
 
-                        <View style={{ width: 40 }} />
+                        {/* Right slot: the "N left today" quota pill, or a spacer. */}
+                        {showQuotaHint ? (
+                            <View
+                                style={[styles.quotaPill, {
+                                    borderColor: withAlpha(remaining > 0 ? colors.accent.purpleLight : colors.accent.amber, 0.5),
+                                    backgroundColor: withAlpha(remaining > 0 ? colors.accent.purple : colors.accent.amber, 0.14),
+                                }]}
+                                accessibilityRole="text"
+                                accessibilityLabel={`${remaining} AI messages left today`}
+                            >
+                                <Text
+                                    style={[typography.caption, { color: remaining > 0 ? colors.accent.purpleLight : colors.accent.amberLight, fontWeight: '800', fontSize: 11 }]}
+                                    maxFontSizeMultiplier={1.3}
+                                    numberOfLines={1}
+                                >
+                                    {remaining} left today
+                                </Text>
+                            </View>
+                        ) : (
+                            <View style={{ width: 40 }} />
+                        )}
                     </View>
-                </SafeBlurView>
+                </GlassCard>
             </View>
 
             <KeyboardAvoidingView
@@ -397,6 +512,7 @@ export default function AICoachScreen() {
                     contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
                     onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
                     showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
                 >
                     <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginBottom: 24, fontWeight: 'bold' }]}>
                         {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase()}
@@ -404,7 +520,7 @@ export default function AICoachScreen() {
 
                     {historyQuery.isLoading && !hasLoaded && (
                         <View style={{ alignItems: 'center', paddingTop: 40 }}>
-                            <ActivityIndicator color={colors.accent.cyan} />
+                            <ActivityIndicator color={colors.accent.purpleLight} />
                         </View>
                     )}
 
@@ -415,98 +531,219 @@ export default function AICoachScreen() {
                     {/* Typing indicator (hidden once live tokens are streaming) */}
                     {showThinkingDots && (
                         <View style={[styles.thinkingBubble, {
-                            backgroundColor: colors.background.tertiary,
-                            borderColor: withAlpha(colors.accent.purple, 0.2),
-                        }]}>
+                            backgroundColor: colors.background.quaternary,
+                            borderColor: withAlpha(colors.accent.purple, 0.35),
+                        }, shadows.glow(colors.accent.purple), { shadowOpacity: 0.18 }]}>
                             <View style={styles.aiHeader}>
                                 <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', fontSize: 10, letterSpacing: 0.5 }]} maxFontSizeMultiplier={1.3}>RIA</Text>
                             </View>
-                            <View style={styles.dotsRow} importantForAccessibility="no">
-                                {[dot1, dot2, dot3].map((dot, i) => (
-                                    <Animated.View
-                                        key={i}
-                                        style={[styles.typingDot, {
-                                            backgroundColor: colors.text.tertiary,
-                                            opacity: dot,
-                                            transform: [{ translateY: dot.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }],
-                                        }]}
-                                    />
-                                ))}
-                            </View>
+                            <TypingDots color={colors.accent.purpleLight} />
                         </View>
                     )}
 
+                    {/* Daily-limit reached → clean upgrade state (CtaButton). */}
+                    {quota.exhausted && (
+                        <GlassCard radius={20} glow={colors.accent.coral} style={styles.upgradeCard}>
+                            <View style={styles.upgradeInner}>
+                                <View style={[styles.upgradeIcon, { backgroundColor: withAlpha(colors.accent.coral, 0.16) }]}>
+                                    <Ionicons name="flash" size={22} color={colors.accent.coralLight} />
+                                </View>
+                                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 16, fontWeight: '800', marginTop: 12, textAlign: 'center' }]}>
+                                    Daily AI limit reached
+                                </Text>
+                                <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: 6, lineHeight: 20 }]} maxFontSizeMultiplier={1.4}>
+                                    You've used all {quota.limit} of today's {quota.plan === 'pro' ? 'Pro ' : ''}Ria messages. Resets {formatResetWindow(quota.resetsAt)}.
+                                </Text>
+                                <CtaButton
+                                    label="Upgrade for more"
+                                    icon="rocket"
+                                    size="md"
+                                    onPress={() => router.push('/(modals)/premium')}
+                                    accessibilityLabel="Upgrade for more AI messages"
+                                    style={styles.upgradeCta}
+                                />
+                            </View>
+                        </GlassCard>
+                    )}
+
                     {/* Quick Suggestions */}
-                    {messages.length <= 2 && !isTyping && (
+                    {messages.length <= 2 && !isTyping && !quota.exhausted && (
                         <View style={{ marginTop: 24 }}>
                             <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 12, fontWeight: 'bold', letterSpacing: 0.5 }]}>
                                 QUICK QUESTIONS
                             </Text>
                             <View style={styles.suggestionsContainer}>
-                                {DEFAULT_SUGGESTIONS.map((sug, i) => (
-                                    <TouchableOpacity
-                                        key={i}
-                                        activeOpacity={0.85}
-                                        accessibilityRole="button"
-                                        accessibilityLabel={sug}
-                                        onPress={() => sendMessage(sug)}
-                                        style={[styles.suggestionChip, {
-                                            borderColor: withAlpha(colors.accent.cyan, 0.4),
-                                            backgroundColor: withAlpha(colors.accent.cyan, 0.06),
-                                        }]}
-                                    >
-                                        <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: '600' }]} maxFontSizeMultiplier={1.3}>{sug}</Text>
-                                    </TouchableOpacity>
+                                {DEFAULT_SUGGESTIONS.map((sug) => (
+                                    <SuggestionChip key={sug} label={sug} colors={colors} typography={typography} onPress={() => sendMessage(sug)} />
                                 ))}
                             </View>
                         </View>
                     )}
                 </ScrollView>
 
-                {/* Glass input bar — clipping View owns the top hairline + safe-area
-                    pad; SafeBlurView owns the frost. Pinned to the keyboard. */}
+                {/* Glass input bar — full-bleed GlassCard (radius 0); only the top
+                    hairline reads on-screen. The clipping View owns the top
+                    divider + the bottom safe-area pad. Pinned to the keyboard. */}
                 <View style={[styles.inputClip, {
-                    borderTopColor: colors.border.default,
+                    borderTopColor: colors.border.light,
                     paddingBottom: Math.max(insets.bottom, 16),
                 }]}>
-                    <SafeBlurView tint="dark" intensity={40}>
-                        <View style={styles.inputArea}>
-                            <TextInput
-                                style={[styles.textInput, {
-                                    color: colors.text.primary,
-                                    backgroundColor: colors.background.tertiary,
-                                    borderColor: colors.border.default,
-                                }]}
-                                placeholder="Ask Ria about your shift protocol..."
-                                placeholderTextColor={colors.text.tertiary}
-                                value={input}
-                                onChangeText={setInput}
-                                multiline
-                                maxLength={500}
-                                returnKeyType="send"
-                                blurOnSubmit={false}
-                            />
-
-                            <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Send"
-                                accessibilityState={{ disabled: mutation.isPending || isStreaming || !input.trim() }}
-                                style={[styles.sendBtn, {
-                                    backgroundColor: input.trim() ? colors.accent.purple : colors.background.tertiary,
-                                    opacity: (mutation.isPending || isStreaming) ? 0.5 : 1,
-                                }, input.trim() && shadows.glow(colors.accent.purple)]}
-                                onPress={() => sendMessage(input)}
-                                disabled={mutation.isPending || isStreaming || !input.trim()}
-                            >
-                                <Ionicons
-                                    name="arrow-up"
-                                    size={20}
-                                    color={input.trim() ? colors.text.primary : colors.text.tertiary}
+                    <GlassCard radius={0} intensity={40} tint="dark" style={styles.glassEdge}>
+                        {quota.exhausted ? (
+                            // Composer locked: a single clear upgrade CTA replaces the
+                            // input row so it's obvious why sending is unavailable.
+                            <View style={styles.lockedComposer}>
+                                <CtaButton
+                                    label="Daily AI limit reached — Upgrade"
+                                    icon="lock-open"
+                                    size="md"
+                                    onPress={() => router.push('/(modals)/premium')}
+                                    accessibilityLabel="Daily AI limit reached. Upgrade for more messages."
+                                    style={{ flex: 1 }}
                                 />
-                            </TouchableOpacity>
-                        </View>
-                    </SafeBlurView>
+                            </View>
+                        ) : (
+                            <View style={styles.inputArea}>
+                                <TextInput
+                                    style={[styles.textInput, {
+                                        color: colors.text.primary,
+                                        backgroundColor: colors.background.tertiary,
+                                        borderColor: input.trim() ? withAlpha(colors.accent.purple, 0.5) : colors.border.default,
+                                    }]}
+                                    placeholder="Ask Ria about your shift protocol..."
+                                    placeholderTextColor={colors.text.tertiary}
+                                    value={input}
+                                    onChangeText={setInput}
+                                    multiline
+                                    maxLength={500}
+                                    returnKeyType="send"
+                                    blurOnSubmit={false}
+                                    editable={!isTyping}
+                                />
+
+                                <SendButton
+                                    enabled={!sendDisabled}
+                                    busy={isTyping}
+                                    colors={colors}
+                                    onPress={() => sendMessage(input)}
+                                />
+                            </View>
+                        )}
+                    </GlassCard>
                 </View>
             </KeyboardAvoidingView>
         </View>
+    );
+}
+
+// ── Typing dots (glowing, reanimated) ───────────────────────────────────────────
+//
+// One shared clock (`progress`, the ground truth: a 0→1 loop per
+// state-ground-truth) drives all three dots; each DERIVES its opacity + glow
+// scale from the clock plus a phase offset via useDerivedValue
+// (animation-derived-value). We read/write the shared value with .get()/.set()
+// (react-compiler-reanimated-shared-values) and animate only opacity + transform
+// scale (animation-gpu-properties) — never layout props.
+
+function TypingDots({ color }: { color: string }) {
+    const progress = useSharedValue(0);
+    useEffect(() => {
+        progress.set(withRepeat(withTiming(1, { duration: 1000, easing: Easing.linear }), -1, false));
+    }, [progress]);
+    return (
+        <View style={styles.dotsRow} importantForAccessibility="no">
+            <TypingDot progress={progress} phase={0} color={color} />
+            <TypingDot progress={progress} phase={0.33} color={color} />
+            <TypingDot progress={progress} phase={0.66} color={color} />
+        </View>
+    );
+}
+
+function TypingDot({ progress, phase, color }: { progress: ReturnType<typeof useSharedValue<number>>; phase: number; color: string }) {
+    // Triangle wave 0→1→0 across the cycle, offset by the dot's phase.
+    const wave = useDerivedValue(() => {
+        const t = (progress.get() + phase) % 1;
+        return interpolate(t, [0, 0.5, 1], [0, 1, 0]);
+    });
+    const dotStyle = useAnimatedStyle(() => ({
+        // Opacity 0.35 → 1 (visible at rest, full at peak) + a gentle 1 → 1.35
+        // scale so the dot "glows"/pulses (GPU-only: opacity + transform).
+        opacity: interpolate(wave.get(), [0, 1], [0.35, 1]),
+        transform: [{ scale: interpolate(wave.get(), [0, 1], [1, 1.35]) }],
+    }));
+    return (
+        <Reanimated.View style={[styles.typingDot, { backgroundColor: color }, shadows.glow(color), dotStyle]} />
+    );
+}
+
+// ── Suggestion chip (animated press, gesture-driven) ─────────────────────────────
+//
+// Press feedback via GestureDetector + a shared press state (0/1) derived to a
+// scale (animation-gesture-detector-press). runOnJS bridges the tap to onPress.
+
+function SuggestionChip({ label, colors, typography, onPress }: { label: string; colors: any; typography: any; onPress: () => void }) {
+    const pressed = useSharedValue(0);
+    const tap = Gesture.Tap()
+        .onBegin(() => { pressed.set(withTiming(1, { duration: 90 })); })
+        .onFinalize(() => { pressed.set(withTiming(0, { duration: 120 })); })
+        .onEnd(() => { runOnJS(onPress)(); });
+    const animStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: interpolate(pressed.get(), [0, 1], [1, 0.96]) }],
+        opacity: interpolate(pressed.get(), [0, 1], [1, 0.85]),
+    }));
+    return (
+        <GestureDetector gesture={tap}>
+            <Reanimated.View
+                accessibilityRole="button"
+                accessibilityLabel={label}
+                style={[styles.suggestionChip, {
+                    borderColor: withAlpha(colors.accent.purpleLight, 0.55),
+                    backgroundColor: withAlpha(colors.accent.purple, 0.14),
+                }, animStyle]}
+            >
+                <Text style={[typography.caption, { color: colors.text.primary, fontWeight: '700' }]} maxFontSizeMultiplier={1.3}>{label}</Text>
+            </Reanimated.View>
+        </GestureDetector>
+    );
+}
+
+// ── Send button (animated press + clear enabled/disabled state) ──────────────────
+
+function SendButton({ enabled, busy, colors, onPress }: { enabled: boolean; busy: boolean; colors: any; onPress: () => void }) {
+    const pressed = useSharedValue(0);
+    const tap = Gesture.Tap()
+        .enabled(enabled)
+        .onBegin(() => { pressed.set(withTiming(1, { duration: 80 })); })
+        .onFinalize(() => { pressed.set(withTiming(0, { duration: 120 })); })
+        .onEnd(() => { runOnJS(onPress)(); });
+    const animStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: interpolate(pressed.get(), [0, 1], [1, 0.92]) }],
+    }));
+    return (
+        <GestureDetector gesture={tap}>
+            <Reanimated.View
+                accessibilityRole="button"
+                accessibilityLabel="Send"
+                accessibilityState={{ disabled: !enabled }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={[
+                    styles.sendBtn,
+                    {
+                        backgroundColor: enabled ? colors.accent.purple : colors.background.tertiary,
+                        borderWidth: 1,
+                        borderColor: enabled ? withAlpha(colors.accent.purpleLight, 0.6) : colors.border.default,
+                    },
+                    enabled ? shadows.glow(colors.accent.purple) : null,
+                    animStyle,
+                ]}
+            >
+                {busy ? (
+                    <ActivityIndicator size="small" color={colors.text.primary} />
+                ) : (
+                    <Ionicons name="arrow-up" size={20} color={enabled ? colors.text.primary : colors.text.tertiary} />
+                )}
+            </Reanimated.View>
+        </GestureDetector>
     );
 }
 
@@ -528,7 +765,7 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
             {isAI && (
                 <LinearGradient
                     colors={colors.gradients.purple}
-                    style={styles.riaAvatarSmall}
+                    style={[styles.riaAvatarSmall, shadows.glow(colors.accent.purple), { shadowOpacity: 0.25 }]}
                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                 >
                     <Ionicons name="sparkles" size={12} color={colors.text.primary} />
@@ -538,16 +775,18 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
                 styles.messageBubble,
                 isAI
                     ? [styles.aiBubble, {
-                        backgroundColor: colors.background.tertiary,
+                        // Higher-contrast Ria bubble: elevated fill + a brighter
+                        // purple glass hairline + a soft purple glow.
+                        backgroundColor: colors.background.quaternary,
                         borderWidth: 1,
-                        borderColor: withAlpha(colors.accent.purple, 0.2),
-                    }, shadows.glow(colors.accent.purple), { shadowOpacity: 0.12 }]
-                    : [styles.userBubble, { backgroundColor: colors.accent.purple }],
+                        borderColor: withAlpha(colors.accent.purple, 0.38),
+                    }, shadows.glow(colors.accent.purple), { shadowOpacity: 0.18 }]
+                    : [styles.userBubble, { backgroundColor: colors.accent.purple }, shadows.glow(colors.accent.purple), { shadowOpacity: 0.22 }],
             ]}>
                 {isAI && (
                     <View style={styles.aiHeader}>
                         <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', fontSize: 10, letterSpacing: 0.5 }]} maxFontSizeMultiplier={1.3}>RIA</Text>
-                        {msg.streaming && <View style={[styles.streamingDot, { backgroundColor: colors.accent.purpleLight }]} importantForAccessibility="no" />}
+                        {msg.streaming && <StreamingCursorDot color={colors.accent.purpleLight} />}
                     </View>
                 )}
                 <Text style={[typography.body, {
@@ -555,11 +794,11 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
                     lineHeight: 22,
                 }]}>
                     {msg.text}
-                    {msg.streaming && <Text style={{ color: colors.accent.purpleLight }} importantForAccessibility="no">▌</Text>}
+                    {msg.streaming ? <StreamingCursor color={colors.accent.purpleLight} /> : null}
                 </Text>
                 <Text
                     style={[typography.caption, {
-                        color: isAI ? colors.text.tertiary : withAlpha(colors.text.primary, 0.7),
+                        color: isAI ? colors.text.tertiary : withAlpha(colors.text.primary, 0.75),
                         fontSize: 10,
                         marginTop: 6,
                         textAlign: isAI ? 'left' : 'right',
@@ -574,15 +813,55 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
     );
 });
 
+// ── Streaming-cursor pulse (reanimated) ──────────────────────────────────────────
+//
+// A subtle blinking "▌" caret + a small header dot that pulse while tokens are
+// streaming. Both DERIVE opacity from one shared clock (animation-derived-value),
+// use .get()/.set() (react-compiler-reanimated-shared-values), and animate only
+// opacity (+ a tiny scale on the dot) — GPU props only (animation-gpu-properties).
+
+function useBlinkClock() {
+    const clock = useSharedValue(0);
+    useEffect(() => {
+        clock.set(withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.ease) }), -1, true));
+    }, [clock]);
+    return clock;
+}
+
+function StreamingCursor({ color }: { color: string }) {
+    const clock = useBlinkClock();
+    const style = useAnimatedStyle(() => ({ opacity: interpolate(clock.get(), [0, 1], [0.2, 1]) }));
+    return (
+        <Reanimated.Text style={[{ color, fontWeight: '700' }, style]} importantForAccessibility="no">▌</Reanimated.Text>
+    );
+}
+
+function StreamingCursorDot({ color }: { color: string }) {
+    const clock = useBlinkClock();
+    const style = useAnimatedStyle(() => ({
+        opacity: interpolate(clock.get(), [0, 1], [0.3, 1]),
+        transform: [{ scale: interpolate(clock.get(), [0, 1], [0.85, 1.15]) }],
+    }));
+    return (
+        <Reanimated.View style={[styles.streamingDot, { backgroundColor: color }, shadows.glow(color), style]} importantForAccessibility="no" />
+    );
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
     // Clipping wrapper for the frosted header: owns the bottom hairline + radius
-    // clipping so SafeBlurView frosts only the bottom edge (no 4-sided boxing).
+    // clipping so the full-bleed GlassCard frosts only the bottom edge.
     headerClip: {
         overflow: 'hidden',
         borderBottomWidth: 1,
+    },
+    // The GlassCard wrapper, when full-bleed at radius 0, would still draw its own
+    // hairline on all sides; we zero its border so only the clipping View's
+    // explicit top/bottom divider shows (no doubled hairline).
+    glassEdge: {
+        borderWidth: 0,
     },
     header: {
         flexDirection: 'row',
@@ -590,6 +869,12 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingVertical: 12,
+    },
+    headerIconBtn: {
+        width: 40,
+        height: 44,
+        alignItems: 'flex-start',
+        justifyContent: 'center',
     },
     headerCenter: {
         flexDirection: 'row',
@@ -625,6 +910,13 @@ const styles = StyleSheet.create({
         borderRadius: 3,
         marginRight: 5,
     },
+    quotaPill: {
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 12,
+        borderWidth: 1,
+        maxWidth: 96,
+    },
     messageRow: {
         flexDirection: 'row',
         alignItems: 'flex-end',
@@ -644,7 +936,7 @@ const styles = StyleSheet.create({
     aiBubble: { borderBottomLeftRadius: 4 },
     userBubble: { borderBottomRightRadius: 4 },
     // Standalone "thinking" bubble (no live text yet) — mirrors a Ria AI bubble:
-    // bg.tertiary fill, faint purple glass hairline, flattened tail corner.
+    // elevated fill, brighter purple glass hairline, flattened tail corner.
     thinkingBubble: {
         alignSelf: 'flex-start',
         maxWidth: '80%',
@@ -661,13 +953,14 @@ const styles = StyleSheet.create({
     },
     dotsRow: {
         flexDirection: 'row',
-        gap: 5,
+        gap: 6,
         paddingVertical: 4,
+        alignItems: 'center',
     },
     typingDot: {
-        width: 7,
-        height: 7,
-        borderRadius: 3.5,
+        width: 8,
+        height: 8,
+        borderRadius: 4,
     },
     suggestionsContainer: {
         flexDirection: 'row',
@@ -676,12 +969,34 @@ const styles = StyleSheet.create({
     },
     suggestionChip: {
         paddingHorizontal: 14,
-        paddingVertical: 10,
+        paddingVertical: 11,
         borderRadius: 20,
         borderWidth: 1,
+        minHeight: 44,
+        justifyContent: 'center',
+    },
+    // Upgrade card shown inline in the scroll when the daily quota is exhausted.
+    upgradeCard: {
+        marginTop: 8,
+        marginBottom: 8,
+    },
+    upgradeInner: {
+        padding: 20,
+        alignItems: 'center',
+    },
+    upgradeIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    upgradeCta: {
+        marginTop: 16,
+        alignSelf: 'stretch',
     },
     // Clipping wrapper for the frosted input bar: owns the top hairline + the
-    // bottom safe-area pad; SafeBlurView (inside) owns the frost.
+    // bottom safe-area pad; the full-bleed GlassCard (inside) owns the frost.
     inputClip: {
         overflow: 'hidden',
         borderTopWidth: 1,
@@ -692,6 +1007,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
         paddingTop: 12,
         gap: 10,
+    },
+    lockedComposer: {
+        flexDirection: 'row',
+        paddingHorizontal: 12,
+        paddingTop: 12,
     },
     textInput: {
         flex: 1,

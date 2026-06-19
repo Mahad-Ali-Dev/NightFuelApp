@@ -9,7 +9,6 @@ import { getFeed, likePost, getChallenges, Post } from '@/api/community';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Card, Button, Skeleton, EmptyState } from '@/components/ui';
 import { shadows } from '@/theme';
 import { withAlpha } from '@/theme/utils';
@@ -171,22 +170,6 @@ export default function CommunityFeedScreen() {
                     )}
                 </View>
             </ScrollView>
-
-            {/* Fab for Posting */}
-            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Add"
-                style={[styles.fab, shadows.glow(colors.accent.coral)]}
-                onPress={() => router.push('/(modals)/create-post')}
-                activeOpacity={0.9}
-            >
-                <LinearGradient
-                    colors={colors.gradients.coral}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.fabGradient}
-                >
-                    <Ionicons name="add" size={32} color={colors.text.primary} />
-                </LinearGradient>
-            </TouchableOpacity>
         </View>
     );
 }
@@ -280,6 +263,4 @@ const styles = StyleSheet.create({
     postImg: { width: '100%', height: 220, marginBottom: 12 },
     postActions: { flexDirection: 'row', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, gap: 24 },
     actionItem: { flexDirection: 'row', alignItems: 'center' },
-    fab: { position: 'absolute', bottom: 160, right: 20, width: 64, height: 64, borderRadius: 32 },
-    fabGradient: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
 });

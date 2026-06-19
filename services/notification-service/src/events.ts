@@ -12,6 +12,14 @@ import {
 } from '@nightfuel/types';
 import { createLogger } from '@nightfuel/config';
 import { NotificationService } from './notification.service';
+import { PushService } from './push.service';
+
+/** Payload published by chat-service on `chat:message-sent` (a raw string channel, NOT a Channels constant). */
+interface ChatMessageSentPayload {
+    recipientId: string;
+    conversationId: string;
+    textPreview: string;
+}
 
 const logger = createLogger('notification-service:events');
 
@@ -33,6 +41,7 @@ function broadcastToUser(fastify: any, userId: string, notification: any): void 
 export function setupEventSubscribers(
     eventBus: EventBus,
     notificationService: NotificationService,
+    pushService: PushService,
     fastify: any,
 ): void {
     // ── plan:plan-generated → PLAN_READY ─────────────────────────────────────
@@ -224,6 +233,45 @@ export function setupEventSubscribers(
         }
     });
 
+    // ── chat:message-sent → COACH_MESSAGE (recipient) + push ─────────────────
+    // NOTE: 'chat:message-sent' is a raw string channel matching chat-service's
+    // publish — it is NOT a @nightfuel/types Channels constant. The envelope
+    // `userId` is the SENDER; the person we notify is `payload.recipientId`.
+    // Real push delivery additionally requires an EAS dev build + APNs/FCM
+    // credentials (user-gated); this subscriber only wires the plumbing.
+    eventBus.subscribeDurable<ChatMessageSentPayload>({
+        stream: 'chat:message-sent',
+        group: 'notification-service',
+        handler: async (event: NightFuelEvent<ChatMessageSentPayload>) => {
+            const { payload, eventId } = event;
+            const recipientId = payload?.recipientId;
+            const conversationId = payload?.conversationId;
+            if (!recipientId || !conversationId) return;
+            try {
+                const deepLink = `/messages/${conversationId}`;
+                const body = payload.textPreview ?? '';
+                const n = await notificationService.createNotificationIfEnabled({
+                    userId: recipientId,
+                    type: 'COACH_MESSAGE',
+                    title: 'New message',
+                    body,
+                    data: { conversationId, deepLink, eventId },
+                });
+                await pushService.sendToUser(recipientId, {
+                    title: 'New message',
+                    body,
+                    url: deepLink,
+                    data: { conversationId, deepLink },
+                });
+                broadcastToUser(fastify, recipientId, n);
+                logger.info({ recipientId, conversationId }, 'COACH_MESSAGE (chat) notification sent');
+            } catch (err) {
+                logger.error({ err, eventId }, 'Failed to send chat-message notification');
+                throw err;
+            }
+        }
+    });
+
     const subscribedChannels = [
         Channels.Plan.PlanGenerated,
         Channels.Shift.ShiftCreated,
@@ -232,6 +280,7 @@ export function setupEventSubscribers(
         Channels.Sleep.SessionLogged,
         Channels.Progress.StreakUpdated,
         Channels.Progress.DailyUpdated,
+        'chat:message-sent',
     ];
 
     logger.info({ channels: subscribedChannels }, 'notification-service: all event subscribers registered');

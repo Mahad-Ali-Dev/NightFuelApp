@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { CommunityService } from './community.service';
+import { CommunityService, SelfFollowError } from './community.service';
 import jwt from 'jsonwebtoken';
 import { sendUnauthorized } from '@nightfuel/config';
 
@@ -153,15 +153,68 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
         return reply.send(await communityService.updateChallengeProgress(id, userId, progress));
     });
 
-    // Leaderboard
+    // Leaderboard — rows enriched with real displayName/avatar (author-resolved)
     fastify.get('/v1/community/leaderboard', {
         schema: { querystring: z.object({ limit: z.coerce.number().default(10) }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const { limit } = request.query as any;
-        const topUsers = await communityService.getLeaderboard(limit);
+        const topUsers = await communityService.getLeaderboardWithAuthors(limit);
         const me = await communityService.getUserScore((request as any).user?.id || (request as any).user?.userId);
         return reply.send({ leaderboard: topUsers, myScore: me });
+    });
+
+    // ── Social Graph (Follow) Routes ──────────────────────────────────────────
+    // The follower is ALWAYS the authenticated caller (from the JWT); the
+    // :userId path param is the target being followed/queried.
+
+    // POST /v1/community/follow/:userId — idempotent follow; rejects self-follow
+    fastify.post('/v1/community/follow/:userId', {
+        schema: { params: z.object({ userId: z.string() }) },
+        preHandler: [(fastify as any).authenticate]
+    }, async (request, reply) => {
+        const followerId = (request as any).user?.id || (request as any).user?.userId;
+        const { userId: targetId } = request.params as any;
+        try {
+            const result = await communityService.followUser(followerId, targetId);
+            return reply.send(result);
+        } catch (err: any) {
+            if (err instanceof SelfFollowError) {
+                return reply.code(400).send({ error: err.code });
+            }
+            request.log.error({ err }, 'followUser failed');
+            return reply.code(500).send({ error: 'An unexpected error occurred' });
+        }
+    });
+
+    // DELETE /v1/community/follow/:userId — idempotent unfollow
+    fastify.delete('/v1/community/follow/:userId', {
+        schema: { params: z.object({ userId: z.string() }) },
+        preHandler: [(fastify as any).authenticate]
+    }, async (request, reply) => {
+        const followerId = (request as any).user?.id || (request as any).user?.userId;
+        const { userId: targetId } = request.params as any;
+        return reply.send(await communityService.unfollowUser(followerId, targetId));
+    });
+
+    // GET /v1/community/users/:userId/social — { isFollowing, followers, following }
+    fastify.get('/v1/community/users/:userId/social', {
+        schema: { params: z.object({ userId: z.string() }) },
+        preHandler: [(fastify as any).authenticate]
+    }, async (request, reply) => {
+        const viewerId = (request as any).user?.id || (request as any).user?.userId;
+        const { userId: targetId } = request.params as any;
+        return reply.send(await communityService.getSocial(viewerId, targetId));
+    });
+
+    // GET /v1/community/users/:userId/profile — detailed profile (privacy-composed)
+    fastify.get('/v1/community/users/:userId/profile', {
+        schema: { params: z.object({ userId: z.string() }) },
+        preHandler: [(fastify as any).authenticate]
+    }, async (request, reply) => {
+        const viewerId = (request as any).user?.id || (request as any).user?.userId;
+        const { userId: targetId } = request.params as any;
+        return reply.send(await communityService.getUserDetailedProfile(viewerId, targetId));
     });
 
     // ── Badge / Achievement Routes ────────────────────────────────────────────

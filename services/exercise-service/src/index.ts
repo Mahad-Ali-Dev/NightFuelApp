@@ -231,6 +231,12 @@ const routineExerciseSchema = z.object({
     sets: z.number().int().min(0).max(100).optional(),
     reps: z.number().int().min(0).max(1000).optional(),
     weightKg: z.number().min(0).max(1000).optional(),
+    // The id of the matched LibraryExercise row (resolved server-side from the
+    // exercise name in the AI generator below), or null when no catalogue row
+    // matched. Declared so it survives validation/.passthrough() into
+    // createRoutine's JSON `exercises` column and back out via getRoutines —
+    // the mobile workout screen reads it to render a rich, tappable card.
+    libraryId: z.string().nullable().optional(),
 }).passthrough();
 
 const createRoutineSchema = z.object({
@@ -302,6 +308,31 @@ function buildFallbackRoutine(goal: string, level: string, daysPerWeek: number, 
     };
 }
 
+// Resolve a single free-text exercise NAME to a real seeded LibraryExercise row
+// id, so an AI/fallback routine renders the same rich demo/thumbnail cards as
+// the exercise library. Strategy mirrors the library search ranking:
+//   1. case-insensitive EXACT name match (the AI is prompted with catalogue-style
+//      names, so most resolve here);
+//   2. else case-insensitive CONTAINS match (handles minor wording drift, e.g.
+//      "Barbell Bench Press" → seeded "Barbell Bench Press - Medium Grip").
+// Returns the matched row id, or null when nothing matched — the caller keeps
+// the exercise either way (a null id renders a graceful text-only card client-
+// side), so an unknown movement is NEVER dropped from the routine.
+async function resolveLibraryId(name: string): Promise<string | null> {
+    const trimmed = (name ?? '').trim();
+    if (!trimmed) return null;
+    const exact = await prisma.libraryExercise.findFirst({
+        where: { name: { equals: trimmed, mode: 'insensitive' } },
+        select: { id: true },
+    });
+    if (exact) return exact.id;
+    const partial = await prisma.libraryExercise.findFirst({
+        where: { name: { contains: trimmed, mode: 'insensitive' } },
+        select: { id: true },
+    });
+    return partial?.id ?? null;
+}
+
 fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generate', {
     onRequest: [(fastify as any).authenticate],
     schema: { body: generateRoutineSchema },
@@ -350,6 +381,20 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generat
     }
     routineData.title ??= `${goal} routine`;
     routineData.exercises ??= [];
+
+    // Resolve every exercise NAME (from BOTH the AI and the deterministic
+    // fallback path — they converge here) to a real seeded LibraryExercise id so
+    // the workout screen can render thumbnails/demos and deep-link to the
+    // exercise detail. An unmatched name keeps libraryId:null (never dropped).
+    // Sequential awaits keep the per-routine query count tiny (<= ~8 short
+    // indexed lookups) and avoid a connection-pool burst.
+    if (Array.isArray(routineData.exercises)) {
+        for (const ex of routineData.exercises) {
+            if (ex && typeof ex === 'object' && typeof ex.name === 'string') {
+                ex.libraryId = await resolveLibraryId(ex.name);
+            }
+        }
+    }
 
     try {
         const created = await exerciseSvc.createRoutine(userId, routineData);

@@ -11,6 +11,7 @@ jest.mock('@/api/client', () => ({
   apiClient: {
     get: jest.fn(),
     post: jest.fn(),
+    delete: jest.fn(),
   },
 }));
 
@@ -23,12 +24,19 @@ import {
   getPostById,
   getComments,
   getMyBadges,
+  followUser,
+  unfollowUser,
+  getUserSocial,
+  getMessageRequests,
+  acceptRequest,
+  declineRequest,
   type Challenge,
 } from '@/api/community';
 import { apiClient } from '@/api/client';
 
 const mockedGet = apiClient.get as jest.Mock;
 const mockedPost = apiClient.post as jest.Mock;
+const mockedDelete = apiClient.delete as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -197,5 +205,80 @@ describe('getMyBadges', () => {
     const result = await getMyBadges();
 
     expect(result).toEqual([]);
+  });
+});
+
+describe('followUser / unfollowUser', () => {
+  test('followUser POSTs to the follow endpoint (idempotent)', async () => {
+    mockedPost.mockResolvedValueOnce({ data: {} });
+
+    await followUser('u_42');
+
+    expect(mockedPost).toHaveBeenCalledWith('/v1/community/follow/u_42');
+  });
+
+  test('unfollowUser DELETEs the follow endpoint', async () => {
+    mockedDelete.mockResolvedValueOnce({ data: {} });
+
+    await unfollowUser('u_42');
+
+    expect(mockedDelete).toHaveBeenCalledWith('/v1/community/follow/u_42');
+  });
+});
+
+describe('getUserSocial', () => {
+  test('GETs the social endpoint and returns the {isFollowing,followers,following} shape', async () => {
+    mockedGet.mockResolvedValueOnce({ data: { isFollowing: true, followers: 12, following: 5 } });
+
+    const result = await getUserSocial('u_7');
+
+    expect(mockedGet).toHaveBeenCalledWith('/v1/community/users/u_7/social');
+    expect(result).toEqual({ isFollowing: true, followers: 12, following: 5 });
+  });
+
+  test('unwraps a { data: {...} } envelope', async () => {
+    mockedGet.mockResolvedValueOnce({ data: { data: { isFollowing: false, followers: 3, following: 9 } } });
+
+    const result = await getUserSocial('u_7');
+
+    expect(result).toEqual({ isFollowing: false, followers: 3, following: 9 });
+  });
+
+  test('coerces missing/garbage fields to a safe default (0 / false)', async () => {
+    mockedGet.mockResolvedValueOnce({ data: { followers: 'x' } });
+
+    const result = await getUserSocial('u_7');
+
+    expect(result).toEqual({ isFollowing: false, followers: 0, following: 0 });
+  });
+});
+
+describe('message-request delegation (chat-service endpoints)', () => {
+  test('getMessageRequests GETs /v1/chat/requests and unwraps the envelope', async () => {
+    const requests = [
+      { id: 'c_1', userId: 'u_me', targetId: 'u_them', updatedAt: 'x', requestState: 'pending' as const },
+    ];
+    mockedGet.mockResolvedValueOnce({ data: { data: requests } });
+
+    const result = await getMessageRequests();
+
+    expect(mockedGet).toHaveBeenCalledWith('/v1/chat/requests');
+    expect(result).toEqual(requests);
+  });
+
+  test('acceptRequest POSTs to the accept endpoint', async () => {
+    mockedPost.mockResolvedValueOnce({ data: {} });
+
+    await acceptRequest('c_9');
+
+    expect(mockedPost).toHaveBeenCalledWith('/v1/chat/requests/c_9/accept');
+  });
+
+  test('declineRequest POSTs to the decline endpoint', async () => {
+    mockedPost.mockResolvedValueOnce({ data: {} });
+
+    await declineRequest('c_9');
+
+    expect(mockedPost).toHaveBeenCalledWith('/v1/chat/requests/c_9/decline');
   });
 });

@@ -14,8 +14,10 @@
  *     EmptyState renders and its primary CtaButton ("Schedule a shift") deep-
  *     links to '/(tabs)/schedule' (exactly once).
  *   - Test C (populated → AI Protocol): with an active shift, switching to the
- *     "AI Protocol" tab renders the meal timeline; pressing a meal row's "Swap"
- *     pushes the '/(modals)/build-plate' modal.
+ *     "AI Protocol" tab renders the meal timeline; pressing a meal row's
+ *     "Log this" pushes the '/(meals)/log-planned-meal' confirm screen with the
+ *     slot's mealType + serialized plan params (the one-tap plan→meal flow that
+ *     replaced the old data-less "Swap → build-plate" action).
  *
  * Mock conventions mirror the sibling `(tabs)` screen suites
  * (nutrition.errorStates / dashboard.errorStates) and the hoisted-`mockPush`
@@ -203,8 +205,8 @@ describe('CircadianScreen', () => {
     expect(mockPush).toHaveBeenCalledWith('/(tabs)/schedule');
   });
 
-  // ── Test C: populated → AI Protocol tab → meal-swap push ──────────────────
-  test('populated: switching to the AI Protocol tab and pressing a meal Swap pushes /(modals)/build-plate', () => {
+  // ── Test C: populated → AI Protocol tab → "Log this" push ─────────────────
+  test('populated: switching to the AI Protocol tab and pressing a meal "Log this" pushes /(meals)/log-planned-meal with the slot params', () => {
     mockCurrentShift.data = ACTIVE_SHIFT;
     mockCurrentShift.isLoading = false;
 
@@ -220,13 +222,24 @@ describe('CircadianScreen', () => {
     fireEvent.press(screen.getByRole('tab', { name: /AI Protocol/ }));
     expect(screen.getByText("Today's Protocol")).toBeTruthy();
 
-    // Each meal row exposes a "Swap <title>" button. Press the first one and
-    // assert it opens the build-plate modal.
-    const swapButtons = screen.getAllByRole('button', { name: /^Swap / });
-    expect(swapButtons.length).toBeGreaterThan(0);
-    fireEvent.press(swapButtons[0]!);
+    // Each meal row exposes a "Log <title>" button (the one-tap plan→meal CTA
+    // that replaced "Swap"). Press the first one and assert it opens the
+    // log-planned-meal confirm screen, carrying the slot's mealType plus a
+    // serialized `plan` param (macros/foods) so the screen renders prefilled.
+    const logButtons = screen.getAllByRole('button', { name: /^Log / });
+    expect(logButtons.length).toBeGreaterThan(0);
+    fireEvent.press(logButtons[0]!);
 
     expect(mockPush).toHaveBeenCalledTimes(1);
-    expect(mockPush).toHaveBeenCalledWith('/(modals)/build-plate');
+    const arg = mockPush.mock.calls[0]![0] as { pathname: string; params: Record<string, string> };
+    expect(arg.pathname).toBe('/(meals)/log-planned-meal');
+    // The fallback protocol's first meal is the BREAKFAST slot.
+    expect(arg.params.mealType).toBe('BREAKFAST');
+    // `plan` is a JSON string carrying the planned macros + suggested foods.
+    expect(typeof arg.params.plan).toBe('string');
+    expect(() => JSON.parse(arg.params.plan!)).not.toThrow();
+    const parsedPlan = JSON.parse(arg.params.plan!);
+    expect(parsedPlan).toHaveProperty('plannedMacros');
+    expect(parsedPlan).toHaveProperty('suggestedFoods');
   });
 });

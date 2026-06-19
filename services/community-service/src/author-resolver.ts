@@ -8,14 +8,19 @@ export interface Author {
     id: string;
     name: string;
     avatarUrl: string | null;
+    // Privacy flag composed from the user-service public profile. Additive:
+    // defaults to `false` when the upstream field is absent (pre-item-4).
+    isPrivate: boolean;
 }
 
-// Shape returned by user-service GET /v1/users/public/:userId
+// Shape returned by user-service GET /v1/users/public/:userId.
+// `isPrivate` is additive (item 4) — treated as `false` when missing.
 interface PublicProfileResponse {
     id: string;
     displayName?: string | null;
     avatarUrl?: string | null;
     timezone?: string | null;
+    isPrivate?: boolean | null;
 }
 
 interface CacheEntry {
@@ -115,6 +120,18 @@ export class AuthorResolver {
         return enriched;
     }
 
+    /**
+     * Resolve a single user id to its Author (id + name + avatar + isPrivate).
+     * Returns `null` when the id is falsy or the profile cannot be resolved —
+     * the caller decides how to degrade. Used by the privacy composition where
+     * the target user may not appear in any feed batch.
+     */
+    async resolveOne(id: string | null | undefined): Promise<Author | null> {
+        if (!id) return null;
+        const resolved = await this.resolveMany([id]);
+        return resolved.get(id) ?? null;
+    }
+
     // ── Internals ──────────────────────────────────────────────────────────────
 
     private mintInternalToken(): string {
@@ -156,6 +173,7 @@ export class AuthorResolver {
                 id: profile.id ?? id,
                 name: profile.displayName?.trim() || 'User',
                 avatarUrl: profile.avatarUrl ?? null,
+                isPrivate: profile.isPrivate ?? false,
             };
         } catch (err) {
             // Network error, timeout/abort, bad JSON — never throw to the caller.

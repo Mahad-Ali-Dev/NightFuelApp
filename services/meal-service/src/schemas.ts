@@ -39,7 +39,13 @@ export const logMealBodySchema = z.object({
         protein: z.number().min(0).max(MAX_MACRO_GRAMS),
         carbs: z.number().min(0).max(MAX_MACRO_GRAMS),
         fat: z.number().min(0).max(MAX_MACRO_GRAMS)
-    })).min(1, "Must include at least one food item")
+    })).min(1, "Must include at least one food item"),
+    // Optional provenance link: when a meal is logged straight from a planned
+    // protocol slot (the circadian "Log this" flow), the client passes the
+    // originating plan-meal id so the service can persist/echo it. Additive —
+    // existing callers that omit it are unaffected. Bounded to keep an absurd
+    // string out of the foodItems JSON it gets stamped onto.
+    planMealId: z.string().max(200).optional()
 });
 
 export const logMealResponseSchema = z.object({
@@ -51,7 +57,11 @@ export const logMealResponseSchema = z.object({
     totalProtein: z.number(),
     totalCarbs: z.number(),
     totalFat: z.number(),
-    isAdherent: z.boolean()
+    isAdherent: z.boolean(),
+    // Echoed back when the meal was logged from a planned protocol slot, so the
+    // client can correlate the new log with the plan item it came from.
+    // Optional — undefined for ad-hoc (non-plan) logs.
+    planMealId: z.string().optional()
 });
 
 // GET /logs — optional date filter, returns recent meal logs

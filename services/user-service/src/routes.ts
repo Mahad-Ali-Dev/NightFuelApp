@@ -6,6 +6,7 @@ import {
     updateProfileSchema,
     updatePreferencesSchema,
     updateOnboardingSchema,
+    updatePrivacySchema,
 } from './schemas';
 import { z } from 'zod';
 import { UserService } from './user.service';
@@ -91,12 +92,15 @@ export const userRoutes = async (
                     return reply.code(404).send({ error: 'Profile not found' });
                 }
 
-                // Strip sensitive data before sending
+                // Strip sensitive data before sending. isPrivate is part of the
+                // public social contract (community-service composes detailed
+                // profile access from it); everything else here is unchanged.
                 return reply.code(200).send({
                     id: profile.userId,
                     displayName: profile.displayName,
                     avatarUrl: profile.avatarUrl,
-                    timezone: profile.timezone
+                    timezone: profile.timezone,
+                    isPrivate: profile.isPrivate
                 });
             } catch (err: any) {
                 request.log.error(err);
@@ -121,6 +125,38 @@ export const userRoutes = async (
                 if (!userId) return;
 
                 const profile = await service.updateProfile(userId, request.body);
+                return reply.code(200).send(profile);
+            } catch (err: any) {
+                request.log.error(err);
+
+                if (err.message === 'Profile not found') {
+                    // Fixed literal — never echo err.message verbatim. Real error logged above.
+                    return reply.code(404).send({ error: 'Profile not found' });
+                }
+
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── PATCH /v1/users/me ────────────────────────────────────────────────────
+    // Update the authenticated user's account-visibility flag (public/private).
+    // Backs the social public/private contract; keeps PUT /me (full profile)
+    // untouched. Returns the updated profile so callers read back isPrivate.
+    fastify.withTypeProvider<ZodTypeProvider>().patch(
+        '/me',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: {
+                body: updatePrivacySchema,
+            },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const profile = await service.updatePrivacy(userId, request.body);
                 return reply.code(200).send(profile);
             } catch (err: any) {
                 request.log.error(err);

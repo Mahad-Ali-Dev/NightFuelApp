@@ -1,30 +1,71 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Alert, View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import Animated, { useSharedValue, useDerivedValue, useAnimatedStyle, withRepeat, withTiming, interpolate, Easing } from 'react-native-reanimated';
 
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getMessages, sendMessage, startConversation, createSocketConnection } from '@/api/chat';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+    getMessages,
+    startConversation,
+    getConversations,
+    getChatRequests,
+    acceptChatRequest,
+    declineChatRequest,
+    markRead,
+    createSocketConnection,
+    sendMessageOverSocket,
+    emitTyping,
+    type ChatMessage,
+    type RequestState,
+} from '@/api/chat';
 import type { Socket } from 'socket.io-client';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { Skeleton, EmptyState } from '@/components/ui';
-import { withAlpha } from '@/theme/utils';
+import { Skeleton, EmptyState, GlassCard, CtaButton, Avatar } from '@/components/ui';
+import { ChatBubble, type ChatBubbleStatus } from '@/components/chat/ChatBubble';
+import { useAuth } from '@/hooks/useAuth';
+
+// A transcript row as held in the React-Query cache. Extends the server
+// ChatMessage with the client-only optimistic fields. The list is the single
+// ground truth (per react-state-minimize / state-ground-truth) — optimistic
+// sends are UPSERTED here and reconciled by id, never tracked in parallel state.
+interface UIMessage extends ChatMessage {
+    /** Own-bubble delivery state. Absent for peer rows. */
+    status?: ChatBubbleStatus;
+    /** True while this row is a not-yet-acked optimistic local bubble. */
+    optimistic?: boolean;
+}
+
+const TYPING_IDLE_MS = 1500; // fire typing_stop after this much keyboard silence
 
 export default function UnifiedChatScreen() {
     const { colors, typography, shadows } = useTheme();
     const insets = useSafeAreaInsets();
-    const { id: targetId } = useLocalSearchParams<{ id: string }>(); // This could be user ID or conversation ID.
+    const { id: targetId } = useLocalSearchParams<{ id: string }>(); // user ID or conversation ID
     const router = useRouter();
     const queryClient = useQueryClient();
-    const flatListRef = useRef<FlatList>(null);
+    const flatListRef = useRef<FlatList<UIMessage>>(null);
+    const { user } = useAuth();
+    const myUserId = user?.id;
 
     const [inputText, setInputText] = useState('');
     const [socket, setSocket] = useState<Socket | null>(null);
+    const [peerTyping, setPeerTyping] = useState(false);
+    // Whether I (locally) accepted a pending request this session — lets the
+    // composer unlock instantly on Accept without waiting for a refetch round-trip.
+    const [locallyAccepted, setLocallyAccepted] = useState(false);
 
-    // 1. Resolve or start conversation with the target
+    // Idle timer for debounced typing_stop, and a flag for whether we've already
+    // emitted typing_start (so we don't spam a frame on every keystroke). Refs —
+    // these are imperative timers, not render inputs (react-state-minimize).
+    const typingIdleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const typingActiveRef = useRef(false);
+    const peerTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // 1. Resolve or start the conversation with the target.
     const { data: conversation, isLoading: startingConv, isError: convError, refetch: refetchConv } = useQuery({
         queryKey: ['conversation', targetId],
         queryFn: () => startConversation(targetId as string),
@@ -32,126 +73,403 @@ export default function UnifiedChatScreen() {
 
     const conversationId = conversation?.id;
 
-    // 2. Load messages for the resolved conversation
-    const { data: messages, isLoading: loadingMessages, isError: messagesError, refetch: refetchMessages } = useQuery({
+    // 2. Load messages for the resolved conversation.
+    const { data: messages, isLoading: loadingMessages, isError: messagesError, refetch: refetchMessages } = useQuery<UIMessage[]>({
         queryKey: ['messages', conversationId],
-        queryFn: () => getMessages(conversationId!),
+        queryFn: () => getMessages(conversationId!) as Promise<UIMessage[]>,
         enabled: !!conversationId,
     });
 
-    // 3. Mutation for sending sync messages
-    const sendMutation = useMutation({
-        mutationFn: (text: string) => sendMessage(conversationId!, text),
-        onError: (err: any) => { Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Something went wrong'); },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
-        }
+    // 3. Conversation metadata (peer + requestState). GET conversations returns
+    // requestState + the peer {userId, displayName, avatarUrl} per the SOCIAL API
+    // CONTRACT; we pluck this conversation's entry. Light staleTime so it doesn't
+    // refetch on every focus while the chat is open.
+    const { data: conversations } = useQuery({
+        queryKey: ['conversations'],
+        queryFn: getConversations,
+        staleTime: 60 * 1000,
     });
 
-    // 4. Socket.IO Realtime handling
+    // 4. Incoming pending requests — if THIS conversation is here, I am the
+    // recipient (and should see the Accept/Decline banner).
+    const { data: incomingRequests } = useQuery({
+        queryKey: ['chat-requests'],
+        queryFn: getChatRequests,
+        staleTime: 60 * 1000,
+    });
+
+    const meta = useMemo(
+        () => conversations?.find((c) => c.id === conversationId),
+        [conversations, conversationId],
+    );
+    const peer = meta?.peer;
+    const peerUserId = peer?.userId ?? (targetId as string | undefined);
+    const requestState: RequestState = meta?.requestState ?? 'accepted';
+
+    const isRecipientOfRequest = useMemo(
+        () => !!conversationId && !!incomingRequests?.some((r) => r.id === conversationId),
+        [incomingRequests, conversationId],
+    );
+
+    // Derived (not stored): a pending request blocks the composer when I'm the
+    // requester (after my single message) or when I'm the recipient who hasn't
+    // accepted yet. Accept flips `locallyAccepted` for an instant unlock.
+    const isPendingRequest = requestState === 'pending' && !locallyAccepted;
+    const isRequester = isPendingRequest && !isRecipientOfRequest;
+    const isRecipientPending = isPendingRequest && isRecipientOfRequest;
+    // Requester may send EXACTLY ONE message: once any of my messages exist, lock.
+    const requesterHasSent = useMemo(
+        () => isRequester && !!messages?.some((m) => (m.isOwn ?? m.senderId === myUserId)),
+        [isRequester, messages, myUserId],
+    );
+    const composerDisabled = isRecipientPending || requesterHasSent;
+
+    // ── Cache helpers — UPSERT, never refetch (state-ground-truth) ────────────
+    const upsertMessage = useCallback(
+        (incoming: UIMessage) => {
+            if (!conversationId) return;
+            queryClient.setQueryData<UIMessage[]>(['messages', conversationId], (old) => {
+                const list = old ?? [];
+                const idx = list.findIndex((m) => m.id === incoming.id);
+                if (idx === -1) return [...list, incoming];
+                // De-dupe by id: merge so a server row keeps any optimistic status
+                // we don't want to clobber unless the incoming row supplies one.
+                const next = list.slice();
+                next[idx] = { ...list[idx], ...incoming };
+                return next;
+            });
+        },
+        [conversationId, queryClient],
+    );
+
+    // Replace a temp optimistic row (tmpId) with the server row, flipping status.
+    const reconcileSent = useCallback(
+        (tmpId: string, serverMsg: ChatMessage) => {
+            if (!conversationId) return;
+            queryClient.setQueryData<UIMessage[]>(['messages', conversationId], (old) => {
+                const list = old ?? [];
+                // If the server row already arrived by id, drop the temp twin.
+                const withoutTmp = list.filter((m) => m.id !== tmpId);
+                const idx = withoutTmp.findIndex((m) => m.id === serverMsg.id);
+                const reconciled: UIMessage = { ...serverMsg, isOwn: true, status: 'sent', optimistic: false };
+                if (idx === -1) return [...withoutTmp, reconciled];
+                const next = withoutTmp.slice();
+                next[idx] = { ...withoutTmp[idx], ...reconciled };
+                return next;
+            });
+        },
+        [conversationId, queryClient],
+    );
+
+    const markFailed = useCallback(
+        (tmpId: string) => {
+            if (!conversationId) return;
+            queryClient.setQueryData<UIMessage[]>(['messages', conversationId], (old) =>
+                (old ?? []).map((m) => (m.id === tmpId ? { ...m, status: 'failed' as const } : m)),
+            );
+        },
+        [conversationId, queryClient],
+    );
+
+    // Flip own bubbles to 'read' when the peer reads the conversation.
+    const applyReadReceipt = useCallback(() => {
+        if (!conversationId) return;
+        queryClient.setQueryData<UIMessage[]>(['messages', conversationId], (old) =>
+            (old ?? []).map((m) =>
+                (m.isOwn ?? m.senderId === myUserId) && (m.status === 'sent' || m.status === 'sending')
+                    ? { ...m, status: 'read' as const }
+                    : m,
+            ),
+        );
+    }, [conversationId, queryClient, myUserId]);
+
+    // ── Socket.IO realtime handling ───────────────────────────────────────────
     useEffect(() => {
         let activeSocket: Socket | null = null;
+        let cancelled = false;
         if (conversationId) {
-            createSocketConnection().then((s) => {
-                activeSocket = s;
-                setSocket(s);
+            createSocketConnection()
+                .then((s: Socket) => {
+                    if (cancelled) { s.disconnect(); return; }
+                    activeSocket = s;
+                    setSocket(s);
 
-                s.on('connect', () => {
-                    // No need to explicitly join, authentication via header connects us
-                });
+                    // new_message: a server row. OWN-message acks are reconciled by
+                    // the per-send one-shot handler in doSend (temp → real id), so
+                    // here we only UPSERT incoming PEER rows, de-duped by id — NO
+                    // full-list refetch/invalidate. (A duplicate frame for the same
+                    // id is harmless: upsert merges in place.)
+                    s.on('newMessage', (msg: ChatMessage) => {
+                        if (!msg || msg.conversationId !== conversationId) return;
+                        if (msg.senderId === myUserId) return; // own ack handled by doSend
+                        upsertMessage({ ...msg, isOwn: false, optimistic: false });
+                        requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: true }));
+                    });
 
-                s.on('newMessage', (msg: any) => {
-                    // Invalidate query to pull the latest when socket gives a new message
-                    // Or manually append. We'll invalidate for purity.
-                    if (msg.conversationId === conversationId) {
-                        queryClient.invalidateQueries({ queryKey: ['messages', conversationId] });
-                        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-                    }
-                });
-            }).catch(console.error);
+                    s.on('typing_start', (payload: { conversationId?: string; senderId?: string }) => {
+                        if (payload?.conversationId && payload.conversationId !== conversationId) return;
+                        if (payload?.senderId && payload.senderId === myUserId) return; // ignore self
+                        setPeerTyping(true);
+                        // Safety auto-clear in case a stop frame is dropped.
+                        if (peerTypingTimerRef.current) clearTimeout(peerTypingTimerRef.current);
+                        peerTypingTimerRef.current = setTimeout(() => setPeerTyping(false), TYPING_IDLE_MS * 3);
+                    });
+
+                    s.on('typing_stop', (payload: { conversationId?: string; senderId?: string }) => {
+                        if (payload?.conversationId && payload.conversationId !== conversationId) return;
+                        setPeerTyping(false);
+                    });
+
+                    s.on('message_read', (payload: { conversationId?: string }) => {
+                        if (payload?.conversationId && payload.conversationId !== conversationId) return;
+                        applyReadReceipt();
+                    });
+                })
+                .catch(console.error);
         }
 
         return () => {
-            if (activeSocket) {
-                activeSocket.disconnect();
-            }
+            cancelled = true;
+            if (activeSocket) activeSocket.disconnect();
+            if (peerTypingTimerRef.current) { clearTimeout(peerTypingTimerRef.current); peerTypingTimerRef.current = null; }
         };
+    }, [conversationId, myUserId, upsertMessage, applyReadReceipt]);
+
+    // ── Mark read on open / when new peer messages land ───────────────────────
+    // Best-effort: tells the backend (and, via broadcast, the peer) we've read up
+    // to here. We only POST when the LATEST peer message id changes (tracked in a
+    // ref) so an own-message upsert — which mutates `messages` — doesn't re-fire
+    // a redundant read. Fire-and-forget; a failure is non-fatal.
+    const lastReadPeerIdRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (!conversationId || isPendingRequest || !messages?.length) return;
+        let latestPeerId: string | null = null;
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const m = messages[i];
+            if (m && !(m.isOwn ?? m.senderId === myUserId)) { latestPeerId = m.id; break; }
+        }
+        if (latestPeerId && latestPeerId !== lastReadPeerIdRef.current) {
+            lastReadPeerIdRef.current = latestPeerId;
+            markRead(conversationId).catch(() => { /* non-fatal */ });
+        }
+    }, [conversationId, messages, myUserId, isPendingRequest]);
+
+    // ── Typing emit (debounced) ───────────────────────────────────────────────
+    const stopTyping = useCallback(() => {
+        if (typingActiveRef.current && socket && conversationId) {
+            emitTyping(socket, conversationId, false);
+        }
+        typingActiveRef.current = false;
+        if (typingIdleRef.current) { clearTimeout(typingIdleRef.current); typingIdleRef.current = null; }
+    }, [socket, conversationId]);
+
+    const handleChangeText = useCallback(
+        (text: string) => {
+            setInputText(text);
+            if (!socket || !conversationId || composerDisabled) return;
+            if (text.length === 0) { stopTyping(); return; }
+            if (!typingActiveRef.current) {
+                typingActiveRef.current = true;
+                emitTyping(socket, conversationId, true);
+            }
+            // Restart the idle countdown — typing_stop fires after silence.
+            if (typingIdleRef.current) clearTimeout(typingIdleRef.current);
+            typingIdleRef.current = setTimeout(stopTyping, TYPING_IDLE_MS);
+        },
+        [socket, conversationId, composerDisabled, stopTyping],
+    );
+
+    // Clear timers on unmount.
+    useEffect(() => () => { if (typingIdleRef.current) clearTimeout(typingIdleRef.current); }, []);
+
+    // ── Send (optimistic) ─────────────────────────────────────────────────────
+    const doSend = useCallback(
+        (text: string) => {
+            if (!conversationId) return;
+            const tmpId = `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            const optimistic: UIMessage = {
+                id: tmpId,
+                conversationId,
+                senderId: myUserId ?? 'me',
+                text,
+                createdAt: new Date().toISOString(),
+                isOwn: true,
+                status: 'sending',
+                optimistic: true,
+            };
+            upsertMessage(optimistic);
+            requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: true }));
+
+            // Listen once for the server ack to reconcile THIS temp row. The
+            // decorated socket has no `.once`, so we register an `.on` and rely on
+            // id-matching: the first new_message for me after this send reconciles
+            // the most-recent temp. We match by text+sender to the temp we just made.
+            if (socket) {
+                sendMessageOverSocket(socket, conversationId, text);
+                // Reconcile THIS temp row against the server ack. The decorated
+                // socket exposes on/off (no once), so we register a self-detaching
+                // listener that fires on the first own new_message matching this
+                // text — turning {tmpId,'sending'} into {realId,'sent'} and dropping
+                // the temp twin. Matching on text (not just sender) keeps two
+                // in-flight sends from cross-reconciling if acks ever reorder.
+                const ackHandler = (msg: ChatMessage) => {
+                    if (!msg || msg.conversationId !== conversationId) return;
+                    if (msg.senderId !== myUserId || msg.text !== text) return;
+                    reconcileSent(tmpId, msg);
+                    (socket as any).off?.('newMessage', ackHandler);
+                };
+                (socket as any).on('newMessage', ackHandler);
+                // Fallback: if no ack in 10s, flag the bubble as failed (tap-to-retry).
+                setTimeout(() => {
+                    const list = queryClient.getQueryData<UIMessage[]>(['messages', conversationId]);
+                    const stillPending = list?.find((m) => m.id === tmpId && m.status === 'sending');
+                    if (stillPending) {
+                        markFailed(tmpId);
+                        (socket as any).off?.('newMessage', ackHandler);
+                    }
+                }, 10000);
+            } else {
+                markFailed(tmpId);
+            }
+        },
+        [conversationId, myUserId, socket, upsertMessage, reconcileSent, markFailed, queryClient],
+    );
+
+    const handleSend = useCallback(() => {
+        const text = inputText.trim();
+        if (!text || !conversationId || composerDisabled) return;
+        setInputText('');
+        stopTyping();
+        doSend(text);
+    }, [inputText, conversationId, composerDisabled, stopTyping, doSend]);
+
+    const handleRetry = useCallback(
+        (id: string) => {
+            const list = queryClient.getQueryData<UIMessage[]>(['messages', conversationId ?? '']);
+            const failed = list?.find((m) => m.id === id);
+            if (!failed) return;
+            // Drop the failed row and resend its text as a fresh optimistic bubble.
+            queryClient.setQueryData<UIMessage[]>(['messages', conversationId ?? ''], (old) =>
+                (old ?? []).filter((m) => m.id !== id),
+            );
+            doSend(failed.text);
+        },
+        [conversationId, queryClient, doSend],
+    );
+
+    // ── Request accept / decline ──────────────────────────────────────────────
+    const handleAccept = useCallback(async () => {
+        if (!conversationId) return;
+        setLocallyAccepted(true); // instant composer unlock
+        try {
+            await acceptChatRequest(conversationId);
+            queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            queryClient.invalidateQueries({ queryKey: ['chat-requests'] });
+        } catch (err: any) {
+            setLocallyAccepted(false); // roll back the optimistic unlock
+            Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Could not accept the request');
+        }
     }, [conversationId, queryClient]);
 
-
-    const handleSend = () => {
-        if (!inputText.trim() || !conversationId) return;
-        const textToEmit = inputText;
-        setInputText('');
-
-        // Optimistically we could add it to cache, but calling mutation is easy
-        sendMutation.mutate(textToEmit);
-
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    };
-
-    const renderMessage = useCallback(({ item }: { item: any }) => {
-        // Find if it was sent by the current user
-        // The backend returns an `isOwn` boolean for us on GET /messages.
-        // For optimistically sent messages (via WS or mutation), we might need a fallback.
-        const isMe = item.isOwn ?? (item.senderId !== targetId);
-
-        const timeStamp = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-        if (isMe) {
-            return (
-                <View style={[styles.bubbleRow, styles.myRow]}>
-                    <View style={[styles.bubble, shadows.glow(colors.accent.pink)]}>
-                        <LinearGradient
-                            colors={colors.gradients.coral}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
-                        />
-                        <Text style={[typography.body, { color: colors.text.primary, lineHeight: 22 }]}>
-                            {item.text}
-                        </Text>
-                        <Text style={[typography.caption, { color: withAlpha(colors.text.primary, 0.7), fontSize: 10, marginTop: 6, alignSelf: 'flex-end' }]}>
-                            {timeStamp}
-                        </Text>
-                    </View>
-                </View>
-            );
+    const handleDecline = useCallback(async () => {
+        if (!conversationId) return;
+        try {
+            await declineChatRequest(conversationId);
+            queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            queryClient.invalidateQueries({ queryKey: ['chat-requests'] });
+            router.back();
+        } catch (err: any) {
+            Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Could not decline the request');
         }
+    }, [conversationId, queryClient, router]);
 
-        return (
-            <View style={[styles.bubbleRow, styles.theirRow]}>
-                <View style={[styles.bubble, { backgroundColor: colors.background.secondary, borderWidth: 1, borderColor: colors.border.default }]}>
-                    <Text style={[typography.body, { color: colors.text.primary, lineHeight: 22 }]}>
-                        {item.text}
-                    </Text>
-                    <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10, marginTop: 6, alignSelf: 'flex-end' }]}>
-                        {timeStamp}
-                    </Text>
-                </View>
-            </View>
-        );
-    }, [colors, typography, shadows, targetId]);
+    const openPeerProfile = useCallback(() => {
+        if (!peerUserId) return;
+        router.push(`/(community)/userProfile?userId=${peerUserId}` as any);
+    }, [router, peerUserId]);
 
-    const keyExtractor = useCallback((item: any) => item.id, []);
+    // ── List render (hoisted; stable refs — list-performance-* skills) ─────────
+    const renderMessage = useCallback(
+        ({ item }: { item: UIMessage }) => {
+            const isMe = item.isOwn ?? item.senderId === myUserId;
+            const timeStamp = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return (
+                <ChatBubble
+                    id={item.id}
+                    text={item.text}
+                    isOwn={isMe}
+                    timestamp={timeStamp}
+                    status={isMe ? item.status : undefined}
+                    onRetry={handleRetry}
+                />
+            );
+        },
+        [myUserId, handleRetry],
+    );
+
+    const keyExtractor = useCallback((item: UIMessage) => item.id, []);
 
     const isLoading = startingConv || loadingMessages;
     const isError = convError || messagesError;
+    const displayName = peer?.displayName ?? 'Chat';
 
     return (
         <KeyboardAvoidingView style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <StatusBar style="light" />
-            {/* Header */}
+            {/* Header — tappable peer (avatar + name) → userProfile */}
             <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" activeOpacity={0.85} onPress={() => router.back()} style={[styles.headerBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
                     <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
-                <View style={styles.headerCenter}>
-                    {isLoading ? <ActivityIndicator size="small" color={colors.accent.purple} /> : <View style={[styles.onlineDot, { backgroundColor: colors.success }, shadows.glow(colors.success)]} />}
-                    <Text style={[typography.subtitle, { color: colors.text.primary }]}>Chat</Text>
-                </View>
+                <TouchableOpacity
+                    style={styles.headerCenter}
+                    activeOpacity={peerUserId ? 0.7 : 1}
+                    disabled={!peerUserId}
+                    accessibilityRole="button"
+                    accessibilityLabel={peer?.displayName ? `View ${peer.displayName}'s profile` : 'Conversation'}
+                    onPress={openPeerProfile}
+                >
+                    <Avatar uri={peer?.avatarUrl ?? undefined} name={peer?.displayName} size={36} borderColor={colors.border.default} />
+                    <View style={styles.headerText}>
+                        <Text style={[typography.subtitle, { color: colors.text.primary }]} numberOfLines={1}>{displayName}</Text>
+                        {isLoading ? (
+                            <ActivityIndicator size="small" color={colors.accent.purple} />
+                        ) : peerTyping ? (
+                            <Text style={[typography.caption, { color: colors.accent.coral }]}>typing…</Text>
+                        ) : (
+                            <View style={styles.statusRow}>
+                                <View style={[styles.onlineDot, { backgroundColor: colors.success }, shadows.glow(colors.success)]} />
+                                <Text style={[typography.caption, { color: colors.text.secondary }]}>Active</Text>
+                            </View>
+                        )}
+                    </View>
+                </TouchableOpacity>
                 <View style={{ width: 40 }} />
             </View>
+
+            {/* Request banner (recipient) — Accept / Decline in a GlassCard */}
+            {isRecipientPending && !isLoading ? (
+                <GlassCard style={styles.banner} radius={20}>
+                    <View style={styles.bannerInner}>
+                        <Text style={[typography.subhead, { color: colors.text.primary }]}>Message request</Text>
+                        <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: 4 }]}>
+                            {peer?.displayName ? `${peer.displayName} wants to chat with you.` : 'Someone wants to chat with you.'} Accept to reply.
+                        </Text>
+                        <View style={styles.bannerActions}>
+                            <TouchableOpacity
+                                onPress={handleDecline}
+                                accessibilityRole="button"
+                                accessibilityLabel="Decline request"
+                                activeOpacity={0.85}
+                                style={[styles.declineBtn, { borderColor: colors.border.light }]}
+                            >
+                                <Text style={[typography.bodySm, { color: colors.text.secondary, fontWeight: '700' }]}>Decline</Text>
+                            </TouchableOpacity>
+                            <CtaButton label="Accept" icon="checkmark" size="sm" onPress={handleAccept} accessibilityLabel="Accept request" style={styles.acceptBtn} />
+                        </View>
+                    </View>
+                </GlassCard>
+            ) : null}
 
             {/* Messages */}
             {isLoading ? (
@@ -171,60 +489,124 @@ export default function UnifiedChatScreen() {
                     actionLabel="Try Again"
                     onAction={() => (convError ? refetchConv() : refetchMessages())}
                 />
+            ) : !messages || messages.length === 0 ? (
+                <EmptyState
+                    style={{ flex: 1 }}
+                    icon="chatbubbles-outline"
+                    title="No messages yet"
+                    subtitle={isRecipientPending ? 'Accept the request above to start chatting.' : 'Say hello — your first message starts the conversation.'}
+                />
             ) : (
                 <FlatList
                     ref={flatListRef}
-                    data={messages || []}
+                    data={messages}
                     renderItem={renderMessage}
                     keyExtractor={keyExtractor}
-                    contentContainerStyle={{ padding: 20, paddingBottom: 20 }}
+                    contentContainerStyle={{ padding: 20, paddingBottom: 12 }}
                     onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-                    initialNumToRender={10}
+                    initialNumToRender={12}
                     maxToRenderPerBatch={10}
                     windowSize={11}
+                    removeClippedSubviews={Platform.OS === 'android'}
+                    ListFooterComponent={peerTyping ? <TypingRow /> : null}
+                    keyboardShouldPersistTaps="handled"
                 />
             )}
 
-            {/* Input Bar */}
-            <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8, borderTopColor: colors.border.default, backgroundColor: colors.background.primary }]}>
-                <TextInput
-                    style={[styles.textInput, { backgroundColor: colors.background.secondary, color: colors.text.primary, borderColor: colors.border.default }]}
-                    placeholder="Type a message..."
-                    placeholderTextColor={colors.text.tertiary}
-                    value={inputText}
-                    onChangeText={setInputText}
-                    onSubmitEditing={handleSend}
-                    returnKeyType="send"
-                />
-                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Send message"
-                    onPress={handleSend}
-                    style={[styles.sendBtn, inputText.trim() ? shadows.glow(colors.accent.coral) : undefined]}
-                    disabled={!inputText.trim()}
-                    activeOpacity={0.85}
-                >
-                    {inputText.trim() ? (
-                        <LinearGradient
-                            colors={colors.gradients.coral}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
-                            style={styles.sendBtnInner}
-                        >
-                            <Ionicons name="send" size={20} color={colors.text.primary} />
-                        </LinearGradient>
-                    ) : (
-                        <View style={[styles.sendBtnInner, { backgroundColor: colors.background.secondary, borderWidth: 1, borderColor: colors.border.default }]}>
-                            <Ionicons name="send" size={20} color={colors.text.tertiary} />
-                        </View>
-                    )}
-                </TouchableOpacity>
-            </View>
+            {/* Requester locked notice */}
+            {requesterHasSent ? (
+                <View style={[styles.lockNotice, { borderTopColor: colors.border.default, backgroundColor: colors.background.primary, paddingBottom: insets.bottom + 12 }]}>
+                    <Ionicons name="lock-closed-outline" size={16} color={colors.text.tertiary} />
+                    <Text style={[typography.caption, { color: colors.text.tertiary, flex: 1 }]}>
+                        Request sent — they must accept to continue.
+                    </Text>
+                </View>
+            ) : (
+                /* Input Bar */
+                <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8, borderTopColor: colors.border.default, backgroundColor: colors.background.primary }]}>
+                    <TextInput
+                        style={[styles.textInput, { backgroundColor: colors.background.secondary, color: colors.text.primary, borderColor: colors.border.default }]}
+                        placeholder={isRecipientPending ? 'Accept the request to reply…' : 'Type a message…'}
+                        placeholderTextColor={colors.text.tertiary}
+                        value={inputText}
+                        onChangeText={handleChangeText}
+                        onSubmitEditing={handleSend}
+                        editable={!composerDisabled}
+                        returnKeyType="send"
+                        multiline
+                        maxLength={4000}
+                    />
+                    <TouchableOpacity
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Send message"
+                        onPress={handleSend}
+                        style={[styles.sendBtn, inputText.trim() && !composerDisabled ? shadows.glow(colors.accent.coral) : undefined]}
+                        disabled={!inputText.trim() || composerDisabled}
+                        activeOpacity={0.85}
+                    >
+                        {inputText.trim() && !composerDisabled ? (
+                            <LinearGradient
+                                colors={colors.gradients.coral}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.sendBtnInner}
+                            >
+                                <Ionicons name="send" size={20} color={colors.text.primary} />
+                            </LinearGradient>
+                        ) : (
+                            <View style={[styles.sendBtnInner, { backgroundColor: colors.background.secondary, borderWidth: 1, borderColor: colors.border.default }]}>
+                                <Ionicons name="send" size={20} color={colors.text.tertiary} />
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            )}
         </KeyboardAvoidingView>
     );
 }
 
+/**
+ * TypingRow — the lightweight "peer is typing" indicator (three pulsing dots).
+ * The animation is driven by ONE shared value (`progress`, the ground truth: a
+ * 0→1 looping clock per state-ground-truth) and each dot DERIVES its opacity via
+ * useDerivedValue with a phase offset (animation-derived-value). We read/write
+ * the shared value with .get()/.set() for React-Compiler compatibility
+ * (react-compiler-reanimated-shared-values).
+ */
+function TypingRow() {
+    const { colors } = useTheme();
+    const progress = useSharedValue(0);
+
+    useEffect(() => {
+        progress.set(withRepeat(withTiming(1, { duration: 1000, easing: Easing.linear }), -1, false));
+    }, [progress]);
+
+    return (
+        <View style={[styles.row, styles.otherRow]}>
+            <View style={[styles.typingBubble, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                <TypingDot progress={progress} phase={0} color={colors.text.secondary} />
+                <TypingDot progress={progress} phase={0.33} color={colors.text.secondary} />
+                <TypingDot progress={progress} phase={0.66} color={colors.text.secondary} />
+            </View>
+        </View>
+    );
+}
+
+function TypingDot({ progress, phase, color }: { progress: ReturnType<typeof useSharedValue<number>>; phase: number; color: string }) {
+    // Each dot's opacity is DERIVED from the shared clock + its phase offset.
+    const opacity = useDerivedValue(() => {
+        const t = (progress.get() + phase) % 1;
+        // Triangle wave 0.3 → 1 → 0.3 across the cycle.
+        return interpolate(t, [0, 0.5, 1], [0.3, 1, 0.3]);
+    });
+    const dotStyle = useAnimatedStyle(() => ({ opacity: opacity.get() }));
+    return <Animated.View style={[styles.typingDot, { backgroundColor: color }, dotStyle]} />;
+}
+
 function MessageBubbleSkeleton({ align, width }: { align: 'left' | 'right'; width: number | string }) {
     return (
-        <View style={[styles.bubbleRow, align === 'right' ? styles.myRow : styles.theirRow]}>
+        <View style={[styles.row, align === 'right' ? styles.ownRow : styles.otherRow]}>
             <Skeleton width={width as any} height={48} radius={22} />
         </View>
     );
@@ -233,16 +615,25 @@ function MessageBubbleSkeleton({ align, width }: { align: 'left' | 'right'; widt
 const styles = StyleSheet.create({
     container: { flex: 1 },
     skeletonList: { flex: 1, padding: 20 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, height: 64, borderBottomWidth: 1 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, height: 64, borderBottomWidth: 1, gap: 10 },
     headerBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-    headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+    headerText: { flex: 1 },
+    statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     onlineDot: { width: 8, height: 8, borderRadius: 4 },
-    bubbleRow: { marginBottom: 16 },
-    myRow: { alignItems: 'flex-end' },
-    theirRow: { alignItems: 'flex-start' },
-    bubble: { maxWidth: '80%', padding: 14, borderRadius: 22 },
-    inputBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
-    textInput: { flex: 1, borderRadius: 22, paddingHorizontal: 18, paddingVertical: 12, fontSize: 14, borderWidth: 1 },
+    row: { marginBottom: 16 },
+    ownRow: { alignItems: 'flex-end' },
+    otherRow: { alignItems: 'flex-start' },
+    banner: { marginHorizontal: 16, marginTop: 12 },
+    bannerInner: { padding: 16 },
+    bannerActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
+    declineBtn: { flex: 1, height: 40, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    acceptBtn: { flex: 1 },
+    inputBar: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
+    textInput: { flex: 1, borderRadius: 22, paddingHorizontal: 18, paddingVertical: 12, fontSize: 14, borderWidth: 1, maxHeight: 120 },
     sendBtn: { width: 44, height: 44, borderRadius: 22, marginLeft: 10 },
     sendBtnInner: { flex: 1, borderRadius: 22, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+    lockNotice: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 18, paddingTop: 14, borderTopWidth: 1 },
+    typingBubble: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 22, borderWidth: 1, borderBottomLeftRadius: 8 },
+    typingDot: { width: 7, height: 7, borderRadius: 4 },
 });

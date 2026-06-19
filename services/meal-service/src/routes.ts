@@ -86,9 +86,11 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const userId = (request.user as any).id || (request.user as any).userId;
-        const { mealType, foodItems } = request.body;
+        const { mealType, foodItems, planMealId } = request.body;
 
-        const mealLog = await mealService.logMeal(userId, mealType, foodItems);
+        // planMealId is optional (validated by logMealBodySchema); when present
+        // it links this log to the planned protocol slot it was logged from.
+        const mealLog = await mealService.logMeal(userId, mealType, foodItems, planMealId);
         return reply.status(201).send(mealLog as any);
     });
 

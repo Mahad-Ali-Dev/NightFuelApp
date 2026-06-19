@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
@@ -26,6 +26,81 @@ const PROTOCOL_GEN_STEPS = [
     'Finalizing your plan…',
 ];
 
+// ── Plan → meal normalization (module scope = stable, no per-render alloc) ──
+
+type PlannedMacros = { protein?: number; carbs?: number; fat?: number; calories?: number };
+type PlannedFood = { name: string; amount?: string; calories?: number; protein?: number; carbs?: number; fat?: number; imageUrl?: string };
+
+const MEAL_TYPES = ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'] as const;
+type MealType = (typeof MEAL_TYPES)[number];
+
+/** Map a plan slot's title/explicit field to a canonical meal type. */
+function mealTypeFromSlot(item: any): MealType {
+    const explicit = String(item?.mealType ?? '').toUpperCase();
+    if ((MEAL_TYPES as readonly string[]).includes(explicit)) return explicit as MealType;
+    const title = String(item?.title ?? item?.name ?? '').toLowerCase();
+    if (/break|wake|suhoor|anchor|morning/.test(title)) return 'BREAKFAST';
+    if (/lunch|midday|noon/.test(title)) return 'LUNCH';
+    if (/dinner|evening|iftar|supper/.test(title)) return 'DINNER';
+    return 'SNACK';
+}
+
+const toNum = (v: unknown): number | undefined => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+};
+
+/**
+ * Normalize a plan timeline MEAL row into a shape that ALSO carries the four
+ * fields the "Log this" flow consumes (mealType, plannedMacros, suggestedFoods,
+ * planMealId). The plan can arrive in two shapes — a flat timeline row
+ * (`{ macros: '40P / 20C / 15F' }`) or the AI "Nutrition Cart" row
+ * (`{ items: [{ name, calories, protein, ... }] }`) — so we read defensively
+ * and preserve every original key (spread first) for the existing renderer.
+ */
+function normalizePlannedMeal(item: any) {
+    const rawFoods: any[] = Array.isArray(item?.suggestedFoods)
+        ? item.suggestedFoods
+        : Array.isArray(item?.items)
+            ? item.items
+            : Array.isArray(item?.foods)
+                ? item.foods
+                : [];
+
+    const suggestedFoods: PlannedFood[] = rawFoods
+        .filter((f) => f && (f.name || f.title))
+        .map((f) => ({
+            name: String(f.name ?? f.title),
+            amount: f.amount ? String(f.amount) : undefined,
+            calories: toNum(f.calories),
+            protein: toNum(f.protein),
+            carbs: toNum(f.carbs),
+            fat: toNum(f.fat),
+            imageUrl: f.imageUrl ?? f.image ?? undefined,
+        }));
+
+    // Prefer explicit macro fields; else sum the suggested foods; else leave undefined.
+    const sum = (k: keyof PlannedFood) =>
+        suggestedFoods.length
+            ? suggestedFoods.reduce((a, f) => a + (toNum(f[k]) ?? 0), 0)
+            : undefined;
+
+    const plannedMacros: PlannedMacros = {
+        protein: toNum(item?.protein) ?? toNum(item?.plannedMacros?.protein) ?? sum('protein'),
+        carbs: toNum(item?.carbs) ?? toNum(item?.plannedMacros?.carbs) ?? sum('carbs'),
+        fat: toNum(item?.fat) ?? toNum(item?.plannedMacros?.fat) ?? sum('fat'),
+        calories: toNum(item?.calories) ?? toNum(item?.plannedMacros?.calories) ?? sum('calories'),
+    };
+
+    return {
+        ...item,
+        mealType: mealTypeFromSlot(item),
+        plannedMacros,
+        suggestedFoods,
+        planMealId: item?.planMealId ?? item?.id ?? item?.mealId ?? undefined,
+    };
+}
+
 export default function CircadianScreen() {
     const { colors, typography, spacing, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
@@ -44,6 +119,14 @@ export default function CircadianScreen() {
         enabled: !!currentShift,
     });
 
+    // ── Resolved shift type — SINGLE source of truth ────────────────────────
+    // The shift payload has been seen with the type under either `type` (current
+    // contract) or `shiftType` (legacy/engine). Resolve it ONCE here, dual-key,
+    // and derive everything (label, icon, timeline, plan generation) from this
+    // — never re-introduce a single-key read, which previously caused a wrong
+    // label / "No active shift" regression when only `shiftType` was set.
+    const shiftType = (currentShift?.type ?? (currentShift as any)?.shiftType) as string | undefined;
+
     const { data: plan, isPending: isLoadingPlan, mutate: generateAIPlan } = useMutation({
         mutationFn: () => {
             const currentUserId = user?.id ? String(user.id) : 'unknown';
@@ -51,7 +134,7 @@ export default function CircadianScreen() {
                 userId: currentUserId,
                 date: new Date().toISOString().split('T')[0] as string,
                 shiftId: String(currentShift?.id ?? ''),
-                shiftType: (currentShift?.type as string) || 'night',
+                shiftType: shiftType || 'night',
             });
         },
         onError: (error: unknown) => {
@@ -87,20 +170,56 @@ export default function CircadianScreen() {
         };
     }, [currentShift, circadianModel]);
 
-    // Use AI plan data if available, otherwise estimate from shift
+    // Use AI plan data if available, otherwise estimate from shift.
+    //
+    // Every MEAL row is normalized to ALSO carry the four fields the plan->meal
+    // "Log this" flow needs, derived from whatever shape the plan provides:
+    //   • mealType      — BREAKFAST|LUNCH|DINNER|SNACK (mapped from the slot)
+    //   • plannedMacros — the macro summary string shown on the row
+    //   • suggestedFoods — the plan's "Nutrition Cart" items for that meal
+    //   • planMealId    — the originating plan-meal id (when the plan supplies one)
+    // Non-meal rows (workout/action) are passed through untouched.
     const protocol = useMemo(() => {
         if (plan && Array.isArray((plan as any).items)) {
-            return (plan as any).items;
+            return ((plan as any).items as any[]).map((item) =>
+                item?.type === 'meal' ? normalizePlannedMeal(item) : item
+            );
         }
-        // Fallback estimation from shift data
+        // Fallback estimation from shift data. The slot labels/times lean on the
+        // resolved shiftType so a day worker doesn't see night-shift copy.
+        const isDay = shiftType === 'day';
         return [
-            { type: 'meal', title: 'Pre-Shift Protein', time: profileMetrics?.insulinStart || '20:00', macros: '40P / 20C / 15F' },
-            { type: 'workout', title: 'Activation Protocol', time: '21:00', duration: '30m' },
-            { type: 'meal', title: 'Mid-Shift Fuel', time: '01:00', macros: '30P / 40C / 10F' },
-            { type: 'action', title: 'Caffeine Cutoff', time: profileMetrics?.caffeineCutoff || '02:00', note: 'Switch to water/decaf' },
-            { type: 'meal', title: 'Recovery Fast', time: '06:00', macros: 'Fasting Window Starts' },
+            {
+                type: 'meal',
+                title: isDay ? 'Wake Fuel' : 'Pre-Shift Protein',
+                time: profileMetrics?.insulinStart || (isDay ? '07:00' : '20:00'),
+                macros: '40P / 20C / 15F',
+                mealType: 'BREAKFAST',
+                plannedMacros: { protein: 40, carbs: 20, fat: 15 },
+                suggestedFoods: [],
+            },
+            { type: 'workout', title: 'Activation Protocol', time: isDay ? '08:00' : '21:00', duration: '30m' },
+            {
+                type: 'meal',
+                title: isDay ? 'Midday Fuel' : 'Mid-Shift Fuel',
+                time: isDay ? '12:30' : '01:00',
+                macros: '30P / 40C / 10F',
+                mealType: 'LUNCH',
+                plannedMacros: { protein: 30, carbs: 40, fat: 10 },
+                suggestedFoods: [],
+            },
+            { type: 'action', title: 'Caffeine Cutoff', time: profileMetrics?.caffeineCutoff || (isDay ? '14:00' : '02:00'), note: 'Switch to water/decaf' },
+            {
+                type: 'meal',
+                title: isDay ? 'Evening Meal' : 'Recovery Fast',
+                time: isDay ? '18:30' : '06:00',
+                macros: isDay ? '35P / 30C / 15F' : 'Fasting Window Starts',
+                mealType: 'DINNER',
+                plannedMacros: { protein: 35, carbs: 30, fat: 15 },
+                suggestedFoods: [],
+            },
         ];
-    }, [plan, profileMetrics]);
+    }, [plan, profileMetrics, shiftType]);
 
     const entrainmentScore = profileMetrics?.entrainmentScore ?? (circadianModel as any)?.score ?? null;
 
@@ -112,13 +231,38 @@ export default function CircadianScreen() {
         { key: 'temp', accent: colors.accent.coral, icon: 'thermometer' as const, label: 'Peak Temp', value: profileMetrics?.peakTemp || '--:--' },
     ];
 
-    const shiftType = (currentShift?.type ?? (currentShift as any)?.shiftType) as string | undefined;
+    // shiftLabel / shiftIcon derive from the SINGLE resolved `shiftType` above
+    // (dual-key, declared once near the queries) — never a second single-key read.
     const shiftLabel = shiftType
         ? `${shiftType.charAt(0).toUpperCase()}${shiftType.slice(1)} Shift`
         : currentShift
             ? 'Active Shift'
             : 'No active shift';
     const shiftIcon: keyof typeof Ionicons.glyphMap = shiftType === 'day' ? 'sunny' : 'moon';
+
+    // "Log this" → open the prefilled confirm screen for THIS planned meal slot.
+    // Macros + suggested foods are passed as a single JSON query param (router
+    // params are string-only); the new screen JSON.parses it back. useCallback +
+    // a stable factory keep the row handler reference-stable per the list-perf
+    // rules even though this is a small `.map`, not a FlatList.
+    const handleLogPlanned = useCallback(
+        (item: any) => {
+            router.push({
+                pathname: '/(meals)/log-planned-meal',
+                params: {
+                    mealType: mealTypeFromSlot(item),
+                    title: String(item?.title ?? ''),
+                    planMealId: item?.planMealId ? String(item.planMealId) : '',
+                    plan: JSON.stringify({
+                        plannedMacros: item?.plannedMacros ?? null,
+                        suggestedFoods: Array.isArray(item?.suggestedFoods) ? item.suggestedFoods : [],
+                        macros: typeof item?.macros === 'string' ? item.macros : undefined,
+                    }),
+                },
+            } as any);
+        },
+        [router],
+    );
 
     // ── Loading: layout-matched skeleton scaffold (no bare spinner) ──
     if (isLoadingShift) {
@@ -416,13 +560,13 @@ export default function CircadianScreen() {
                                                         <TouchableOpacity
                                                             activeOpacity={0.85}
                                                             accessibilityRole="button"
-                                                            accessibilityLabel={`Swap ${item.title}`}
+                                                            accessibilityLabel={`Log ${item.title}`}
                                                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                                            style={[styles.swapBtn, { backgroundColor: withAlpha(colors.text.primary, 0.06) }]}
-                                                            onPress={() => router.push('/(modals)/build-plate' as any)}
+                                                            style={[styles.swapBtn, { backgroundColor: withAlpha(colors.accent.coral, 0.12) }]}
+                                                            onPress={() => handleLogPlanned(item)}
                                                         >
-                                                            <Ionicons name="swap-horizontal" size={16} color={colors.text.secondary} />
-                                                            <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: spacing.xs }]}>Swap</Text>
+                                                            <Ionicons name="add-circle-outline" size={16} color={colors.accent.coral} />
+                                                            <Text style={[typography.caption, { color: colors.accent.coral, marginLeft: spacing.xs }]}>Log this</Text>
                                                         </TouchableOpacity>
                                                     )}
                                                 </View>

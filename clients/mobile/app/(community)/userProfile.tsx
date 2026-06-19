@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { getPublicProfile } from '@/api/users';
-import { getUserPosts, Post } from '@/api/community';
+import { getUserPosts, getUserSocial, followUser, unfollowUser, Post, UserSocial } from '@/api/community';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,6 +36,41 @@ export default function UserProfileScreen() {
         queryFn: () => getUserPosts(userId || ''),
         enabled: !!userId,
     });
+
+    // Follow-graph state (SOCIAL API CONTRACT): { isFollowing, followers, following }.
+    const { data: social } = useQuery({
+        queryKey: ['user-social', userId],
+        queryFn: () => getUserSocial(userId || ''),
+        enabled: !!userId,
+    });
+
+    // Optimistic override — state is USER INTENT only (react-state-fallback):
+    // `undefined` means "the user hasn't toggled this session", so the displayed
+    // values fall back to the server `social` reactively (a refetch updates them).
+    // Once the user taps, their optimistic choice persists until the next refetch.
+    const [override, setOverride] = useState<{ isFollowing: boolean; followers: number } | undefined>(undefined);
+    const isFollowing = override?.isFollowing ?? social?.isFollowing ?? false;
+    const followers = override?.followers ?? social?.followers ?? 0;
+    const following = social?.following ?? 0;
+
+    const followMutation = useMutation({
+        mutationFn: (next: boolean) => (next ? followUser(userId || '') : unfollowUser(userId || '')),
+        onError: () => {
+            // Roll back to the server truth (drop the optimistic override).
+            setOverride(undefined);
+        },
+    });
+
+    const onToggleFollow = useCallback(() => {
+        const base: UserSocial = social ?? { isFollowing, followers, following };
+        const next = !isFollowing;
+        // Optimistically flip + inc/dec the follower count from the current truth.
+        setOverride({ isFollowing: next, followers: Math.max(0, (base.followers ?? 0) + (next ? 1 : -1)) });
+        followMutation.mutate(next);
+    }, [social, isFollowing, followers, following, followMutation]);
+
+    // Private + not-yet-following → show name/avatar only, lock the rest.
+    const isLocked = !!profile?.isPrivate && !isFollowing;
 
     if (profileLoading) {
         return (
@@ -91,6 +126,8 @@ export default function UserProfileScreen() {
         );
     }
 
+    const displayName = (profile as any).displayName ?? ([(profile as any).firstName, (profile as any).lastName].filter(Boolean).join(' ') || 'Athlete');
+
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             <StatusBar style="light" />
@@ -113,81 +150,114 @@ export default function UserProfileScreen() {
                         )}
                     </View>
 
-                    <Text style={[typography.display, { color: colors.text.primary, marginTop: 16, fontSize: 28 }]}>{(profile as any).displayName ?? ([(profile as any).firstName, (profile as any).lastName].filter(Boolean).join(' ') || 'Zeitra Member')}</Text>
-                    {profile.bio && (
+                    <Text style={[typography.display, { color: colors.text.primary, marginTop: 16, fontSize: 28 }]}>{displayName}</Text>
+                    {!isLocked && profile.bio ? (
                         <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: 8, marginHorizontal: 20 }]}>
                             {profile.bio}
                         </Text>
-                    )}
+                    ) : null}
 
                     <View style={styles.statsRow}>
                         <View style={styles.statBox}>
-                            <Text style={[typography.statSmall, { color: colors.text.primary }]}>{posts?.length || 0}</Text>
+                            <Text style={[typography.statSmall, { color: colors.text.primary }]}>{isLocked ? '—' : (posts?.length || 0)}</Text>
                             <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>Posts</Text>
                         </View>
                         <View style={styles.statBox}>
-                            <Text style={[typography.statSmall, { color: colors.text.primary }]}>{profile?.followersCount || 0}</Text>
+                            <Text style={[typography.statSmall, { color: colors.text.primary }]}>{followers}</Text>
                             <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>Followers</Text>
                         </View>
                         <View style={styles.statBox}>
-                            <Text style={[typography.statSmall, { color: colors.text.primary }]}>{profile?.followingCount || 0}</Text>
+                            <Text style={[typography.statSmall, { color: colors.text.primary }]}>{following}</Text>
                             <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>Following</Text>
                         </View>
                     </View>
 
-                    <CtaButton
-                        label="MESSAGE"
-                        icon="chatbubble-ellipses"
-                        accessibilityLabel="Message this member"
-                        onPress={() => router.push(`/messages/${userId}` as any)}
-                        style={styles.messageBtn}
-                    />
+                    <View style={styles.actionRow}>
+                        <CtaButton
+                            label={isFollowing ? 'FOLLOWING' : 'FOLLOW'}
+                            icon={isFollowing ? 'checkmark' : 'person-add'}
+                            accessibilityLabel={isFollowing ? 'Unfollow this member' : 'Follow this member'}
+                            onPress={onToggleFollow}
+                            style={styles.actionBtn}
+                        />
+                        <CtaButton
+                            label="MESSAGE"
+                            icon="chatbubble-ellipses"
+                            accessibilityLabel="Message this member"
+                            onPress={() => router.push(`/messages/${userId}` as any)}
+                            style={styles.actionBtn}
+                        />
+                    </View>
                 </View>
 
-                {/* Posts */}
-                <View style={{ padding: 20 }}>
-                    <Text style={[typography.h2, { color: colors.text.primary, marginBottom: 16 }]}>Posts</Text>
-
-                    {postsLoading ? (
-                        <View>
-                            {Array.from({ length: 2 }).map((_, i) => (
-                                <Card key={i} variant="glass" style={[styles.postCard, { borderColor: colors.border.default, borderRadius: borderRadius['2xl'] }]}>
-                                    <Skeleton width="100%" height={14} radius={4} />
-                                    <Skeleton width="80%" height={14} radius={4} style={{ marginTop: 8 }} />
-                                    <Skeleton width={100} height={11} radius={4} style={{ marginTop: 16 }} />
-                                </Card>
-                            ))}
+                {/* Posts — or a clean locked state for a private, not-yet-followed account */}
+                {isLocked ? (
+                    <View style={styles.lockedSection}>
+                        <View
+                            style={[
+                                styles.lockCircle,
+                                { backgroundColor: withAlpha(colors.accent.coral, 0.12), borderColor: withAlpha(colors.accent.coral, 0.24) },
+                            ]}
+                        >
+                            <Ionicons name="lock-closed" size={40} color={colors.accent.coral} />
                         </View>
-                    ) : postsError ? (
-                        <EmptyState
-                            icon="cloud-offline-outline"
-                            title="Couldn't load posts"
-                            subtitle="Something went wrong fetching these posts. Check your connection and try again."
-                            actionLabel="Try Again"
-                            onAction={() => refetchPosts()}
+                        <Text style={[typography.h3, { color: colors.text.primary, marginTop: 20, textAlign: 'center' }]}>This account is private</Text>
+                        <Text style={[typography.body, { color: colors.text.secondary, marginTop: 8, textAlign: 'center', maxWidth: 280 }]}>
+                            Follow this member to see their posts and activity.
+                        </Text>
+                        <CtaButton
+                            label={isFollowing ? 'FOLLOWING' : 'FOLLOW'}
+                            icon={isFollowing ? 'checkmark' : 'person-add'}
+                            accessibilityLabel={isFollowing ? 'Unfollow this member' : 'Follow this member'}
+                            onPress={onToggleFollow}
+                            style={styles.lockedFollowBtn}
                         />
-                    ) : posts?.length === 0 ? (
-                        <EmptyState
-                            icon="document-text-outline"
-                            title="No posts yet"
-                            subtitle="This member hasn't shared anything with the community yet."
-                        />
-                    ) : (
-                        posts?.map((post: Post) => (
-                            <Card key={post.id} variant="glass" style={[styles.postCard, { borderColor: colors.border.default, borderRadius: borderRadius['2xl'] }]}>
-                                <Text style={[typography.body, { color: colors.text.secondary, marginBottom: 12, lineHeight: 22 }]}>
-                                    {post.content}
-                                </Text>
-                                {post.imageUrl && (
-                                    <Image source={{ uri: post.imageUrl }} style={[styles.postImg, { borderRadius: borderRadius.lg }]} contentFit="cover" cachePolicy="memory-disk" transition={200} />
-                                )}
-                                <Text style={[typography.caption, { color: colors.text.secondary }]}>
-                                    {formatDistanceToNow(new Date(post.createdAt))} ago
-                                </Text>
-                            </Card>
-                        ))
-                    )}
-                </View>
+                    </View>
+                ) : (
+                    <View style={{ padding: 20 }}>
+                        <Text style={[typography.h2, { color: colors.text.primary, marginBottom: 16 }]}>Posts</Text>
+
+                        {postsLoading ? (
+                            <View>
+                                {Array.from({ length: 2 }).map((_, i) => (
+                                    <Card key={i} variant="glass" style={[styles.postCard, { borderColor: colors.border.default, borderRadius: borderRadius['2xl'] }]}>
+                                        <Skeleton width="100%" height={14} radius={4} />
+                                        <Skeleton width="80%" height={14} radius={4} style={{ marginTop: 8 }} />
+                                        <Skeleton width={100} height={11} radius={4} style={{ marginTop: 16 }} />
+                                    </Card>
+                                ))}
+                            </View>
+                        ) : postsError ? (
+                            <EmptyState
+                                icon="cloud-offline-outline"
+                                title="Couldn't load posts"
+                                subtitle="Something went wrong fetching these posts. Check your connection and try again."
+                                actionLabel="Try Again"
+                                onAction={() => refetchPosts()}
+                            />
+                        ) : posts?.length === 0 ? (
+                            <EmptyState
+                                icon="document-text-outline"
+                                title="No posts yet"
+                                subtitle="This member hasn't shared anything with the community yet."
+                            />
+                        ) : (
+                            posts?.map((post: Post) => (
+                                <Card key={post.id} variant="glass" style={[styles.postCard, { borderColor: colors.border.default, borderRadius: borderRadius['2xl'] }]}>
+                                    <Text style={[typography.body, { color: colors.text.secondary, marginBottom: 12, lineHeight: 22 }]}>
+                                        {post.content}
+                                    </Text>
+                                    {post.imageUrl && (
+                                        <Image source={{ uri: post.imageUrl }} style={[styles.postImg, { borderRadius: borderRadius.lg }]} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                                    )}
+                                    <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                                        {formatDistanceToNow(new Date(post.createdAt))} ago
+                                    </Text>
+                                </Card>
+                            ))
+                        )}
+                    </View>
+                )}
             </ScrollView>
         </View>
     );
@@ -200,7 +270,11 @@ const styles = StyleSheet.create({
     avatarLarge: { width: 80, height: 80, borderRadius: 40, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
     statsRow: { flexDirection: 'row', justifyContent: 'center', gap: 40, marginTop: 24, paddingHorizontal: 20 },
     statBox: { alignItems: 'center' },
-    messageBtn: { marginTop: 24, width: '60%', borderRadius: 24 },
+    actionRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 24, paddingHorizontal: 20 },
+    actionBtn: { flex: 1, maxWidth: 200, borderRadius: 24 },
+    lockedSection: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 },
+    lockCircle: { width: 96, height: 96, borderRadius: 9999, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    lockedFollowBtn: { marginTop: 28, width: '60%', borderRadius: 24 },
     postCard: { padding: 18, marginBottom: 16, borderWidth: 1 },
     postImg: { width: '100%', height: 200, marginBottom: 12 },
 });

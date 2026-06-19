@@ -5,13 +5,18 @@ import { randomUUID } from 'crypto';
 import { createLogger } from '@nightfuel/config';
 import fs from 'fs';
 import path from 'path';
-import { UpdateProfileBody, UpdatePreferencesBody, UpdateOnboardingBody } from './schemas';
+import { UpdateProfileBody, UpdatePreferencesBody, UpdateOnboardingBody, UpdatePrivacyBody } from './schemas';
 import { calculateBMI, calculateBMR, calculateTDEE, calculateAge } from './utils/calculators';
 
 const logger = createLogger('user-service:service');
 
 export interface ProfileWithPreferences extends UserProfile {
     preferences: UserPreferences | null;
+    // Account-visibility flag. Declared here so the service/route layer compiles
+    // against the new column before `prisma generate` regenerates the client from
+    // the schema (the migration + schema.prisma own the runtime column). Once the
+    // client is regenerated this is simply redundant with the generated field.
+    isPrivate: boolean;
 }
 
 // Roles that get a CoachProfile stub automatically
@@ -123,7 +128,10 @@ export class UserService {
             return null;
         }
 
-        return profile as ProfileWithPreferences;
+        // Cast via unknown: the runtime row carries isPrivate (schema + migration
+        // own the column), but the checked-in generated client predates it, so a
+        // direct cast doesn't statically overlap until `prisma generate` re-runs.
+        return profile as unknown as ProfileWithPreferences;
     }
 
     async getStatus(userId: string) {
@@ -190,6 +198,44 @@ export class UserService {
             return profile;
         } catch (err: any) {
             logger.error({ userId, err, data }, 'Failed to upsert user profile');
+            throw err;
+        }
+    }
+
+    /**
+     * Update only the account-visibility flag (public/private profile).
+     * Backs PATCH /v1/users/me — the social public/private contract that
+     * community-service & chat-service compose against.
+     *
+     * Race-safe mirror of updateProfile: only assigns isPrivate when the body
+     * actually carries it (a PATCH may omit it), then writes via a plain
+     * `update`. If the profile row doesn't exist yet (Prisma P2025 — same
+     * registration-event lag window updateProfile guards), we surface the
+     * canonical 'Profile not found' string so the route maps it to the fixed
+     * 404 literal. getProfileWithPreferences selects the full row (incl.
+     * isPrivate), so callers see the persisted value.
+     */
+    async updatePrivacy(userId: string, body: UpdatePrivacyBody): Promise<UserProfile> {
+        const data: Record<string, unknown> = {};
+        if (body.isPrivate !== undefined) data.isPrivate = body.isPrivate;
+
+        try {
+            const profile = await this.prisma.userProfile.update({
+                where: { userId },
+                data,
+            });
+
+            logger.info({ userId }, 'User privacy updated');
+            return profile;
+        } catch (err: any) {
+            // P2025 = "Record to update not found" — translate to the canonical
+            // generic so the route emits its fixed 'Profile not found' literal
+            // (never echo err.message verbatim — see error-redaction suite).
+            if (err?.code === 'P2025') {
+                logger.warn({ userId }, 'Privacy update on missing profile');
+                throw new Error('Profile not found');
+            }
+            logger.error({ userId, err }, 'Failed to update user privacy');
             throw err;
         }
     }

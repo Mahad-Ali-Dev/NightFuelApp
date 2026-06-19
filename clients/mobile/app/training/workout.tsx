@@ -13,13 +13,35 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getActiveSession, logSessionExercise, endSession, startSession, getRoutines } from '@/api/exercises';
+import { getActiveSession, logSessionExercise, endSession, startSession, getRoutines, getById } from '@/api/exercises';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeBlurView } from '@/components/SafeBlurView';
 import { StatusBar } from 'expo-status-bar';
+import { Image } from 'expo-image';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import { withAlpha } from '@/theme/utils';
 import { typography as typo } from '@/theme/typography';
+import { getCuratedDemo, getCuratedDemoFrames } from '@/constants/curatedDemos';
+
+// Bundled neutral placeholder shown when a resolved exercise has no curated
+// thumbnail (no network hit). Reuses the same asset the exercise-detail screen
+// ships, so the look stays consistent across screens.
+const EXERCISE_THUMB_FALLBACK = require('../../assets/images/exercise-detail-fallback.png');
+
+// Resolve a small, cacheable thumbnail SOURCE for an exercise name from the
+// curated demo data (zero network for FEDB frame pairs — they reuse data the
+// app already ships). Returns a `{ uri }` for the first FEDB frame / a gif, or
+// `null` when nothing curated exists so the caller falls back to the bundled
+// placeholder. Pure lookup — safe to call on the render path.
+function curatedThumbSource(name: string): { uri: string } | null {
+    const frames = getCuratedDemoFrames(name);
+    if (frames && frames.length > 0 && typeof frames[0] === 'string' && frames[0].trim()) {
+        return { uri: frames[0] };
+    }
+    const demo = getCuratedDemo(name);
+    if (demo && demo.kind === 'gif' && demo.url.trim()) return { uri: demo.url };
+    return null;
+}
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -40,6 +62,14 @@ interface ExerciseState {
     muscleGroup: string;
     sets: SetData[];
     restSeconds: number;
+    /**
+     * Id of the matched seeded LibraryExercise, when this exercise was seeded
+     * from an AI/saved routine whose names were resolved server-side. Non-null →
+     * the card shows a rich thumbnail/demo + equipment and deep-links to the
+     * exercise detail; null/undefined → a clean text-only card. Optional so
+     * exercises added ad-hoc (browse / paramExercise) stay text-only.
+     */
+    libraryId?: string | null;
 }
 
 interface ActiveWorkoutState {
@@ -56,6 +86,68 @@ function formatTime(totalSeconds: number): string {
     const secs = totalSeconds % 60;
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
+
+// ─── Resolved-exercise rich-card pieces ───────────────────────────────────────
+// Rendered only for an exercise that resolved to a seeded LibraryExercise
+// (libraryId != null). Both pieces are React.memo'd and derive their own data,
+// so toggling a set on another card never re-renders them
+// (list-performance-function-references / list-performance-callbacks).
+const THUMB = 44;
+
+// Leading visual: a curated demo thumbnail (FEDB first-frame / gif — zero
+// network for FEDB, which reuses data the app already ships), falling back to
+// the bundled placeholder. expo-image with memory-disk caching so a scrolled-
+// away card pays no network on return (ui-expo-image, list-performance-images).
+const ResolvedExerciseThumb = React.memo(function ResolvedExerciseThumb({
+    name,
+    libraryId,
+    backgroundColor,
+}: {
+    name: string;
+    libraryId: string;
+    backgroundColor: string;
+}) {
+    const thumbSource = useMemo(() => curatedThumbSource(name), [name]);
+    return (
+        <Image
+            source={thumbSource ?? EXERCISE_THUMB_FALLBACK}
+            placeholder={EXERCISE_THUMB_FALLBACK}
+            // recyclingKey keeps a recycled row from flashing a neighbour's frame.
+            recyclingKey={libraryId}
+            style={{ width: THUMB, height: THUMB, borderRadius: 12, backgroundColor }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+            transition={200}
+            accessibilityIgnoresInvertColors
+        />
+    );
+});
+
+// Equipment subtitle, read from the SAME cached query key the detail screen uses
+// (['exercise-detail', libraryId]) so tapping the card opens a warm detail. Only
+// fires while a resolved card is mounted; renders nothing until/unless equipment
+// is known, so it never shows a blank "Equipment:" stub.
+const ResolvedExerciseEquipment = React.memo(function ResolvedExerciseEquipment({
+    libraryId,
+    style,
+}: {
+    libraryId: string;
+    style: any;
+}) {
+    const { data: detail } = useQuery({
+        queryKey: ['exercise-detail', libraryId],
+        queryFn: () => getById(libraryId),
+        enabled: !!libraryId,
+        staleTime: 5 * 60 * 1000,
+    });
+    const equipment = detail?.equipment?.trim();
+    if (!equipment) return null;
+    return (
+        <Text style={style} numberOfLines={1} ellipsizeMode="tail">
+            {equipment}
+        </Text>
+    );
+});
 
 export default function ActiveWorkoutScreen() {
     const { colors, typography, spacing, borderRadius, shadows } = useTheme();
@@ -182,6 +274,9 @@ export default function ActiveWorkoutScreen() {
                             completed: false,
                         })),
                         restSeconds: DEFAULT_REST_SECONDS,
+                        // Carry the server-resolved catalogue id through so the card
+                        // can render a rich demo/thumbnail + deep-link to detail.
+                        libraryId: ex.libraryId ?? null,
                     }));
                 }
             }
@@ -293,6 +388,14 @@ export default function ActiveWorkoutScreen() {
     }, [showRestTimer, restSeconds]);
 
     // ── Handlers ────────────────────────────────────────────────────────────
+
+    // Single hoisted handler shared by every resolved card (list-performance-
+    // callbacks): the card passes its own libraryId, so we never allocate a new
+    // closure per row on each render. Opens the exercise detail (same route +
+    // cache key the library uses), so the tap lands on a warm screen.
+    const openExerciseDetail = useCallback((libraryId: string) => {
+        if (libraryId) router.push(`/(exercises)/${libraryId}` as any);
+    }, [router]);
 
     const updateSet = (eIdx: number, sIdx: number, field: keyof SetData, value: any) => {
         setExerciseStates(prev => {
@@ -487,10 +590,19 @@ export default function ActiveWorkoutScreen() {
                         const isExpanded = expandedIndex === eIdx;
                         const completedCount = ex.sets.filter(s => s.completed).length;
                         const firstIncompleteIndex = ex.sets.findIndex(s => !s.completed);
+                        // Resolved → seeded LibraryExercise: render the rich, tappable
+                        // card (thumbnail + sets×reps + equipment + deep-link). Null →
+                        // a clean text-only card. Never drops/hides the exercise.
+                        const libraryId = ex.libraryId ?? null;
+                        const isResolved = !!libraryId;
+                        const targetReps = ex.sets[0]?.reps ?? 0;
 
                         return (
                             <Card
-                                key={eIdx}
+                                // Stable key: name + index survives reorder/recycle better
+                                // than a bare index, without assuming names are unique
+                                // within a routine (list-performance-function-references).
+                                key={`${ex.name}-${eIdx}`}
                                 variant="glass"
                                 noPadding
                                 style={{
@@ -503,11 +615,34 @@ export default function ActiveWorkoutScreen() {
                                     style={styles.exHeader}
                                     onPress={() => setExpandedIndex(isExpanded ? -1 : eIdx)}
                                     activeOpacity={0.7}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ expanded: isExpanded }}
+                                    accessibilityLabel={`${ex.name}, ${completedCount} of ${ex.sets.length} sets done`}
                                 >
                                     <View style={styles.exTitleRow}>
-                                        <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.coral, 0.12) }]}>
-                                            <Ionicons name="barbell" size={22} color={colors.accent.coral} />
-                                        </View>
+                                        {isResolved ? (
+                                            // Thumbnail doubles as the deep-link into the
+                                            // exercise detail (>=44pt touch target). Stops
+                                            // propagation so the row's expand toggle and the
+                                            // detail tap don't fight.
+                                            <TouchableOpacity
+                                                accessibilityRole="button"
+                                                accessibilityLabel={`View ${ex.name} details`}
+                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                activeOpacity={0.8}
+                                                onPress={() => openExerciseDetail(libraryId!)}
+                                            >
+                                                <ResolvedExerciseThumb
+                                                    name={ex.name}
+                                                    libraryId={libraryId!}
+                                                    backgroundColor={colors.background.tertiary}
+                                                />
+                                            </TouchableOpacity>
+                                        ) : (
+                                            <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.coral, 0.12) }]}>
+                                                <Ionicons name="barbell" size={22} color={colors.accent.coral} />
+                                            </View>
+                                        )}
                                         <View style={{ flex: 1, marginLeft: spacing.md }}>
                                             <Text
                                                 style={[typography.subhead, { color: colors.text.primary, fontWeight: '600' }]}
@@ -517,9 +652,30 @@ export default function ActiveWorkoutScreen() {
                                                 {ex.name}
                                             </Text>
                                             <Text style={[typography.caption, { color: colors.text.secondary }]}>
-                                                {completedCount}/{ex.sets.length} Sets Done · {ex.muscleGroup}
+                                                {completedCount}/{ex.sets.length} Sets Done
+                                                {isResolved && targetReps > 0
+                                                    ? ` · ${ex.sets.length} × ${targetReps}`
+                                                    : ` · ${ex.muscleGroup}`}
                                             </Text>
+                                            {isResolved ? (
+                                                <ResolvedExerciseEquipment
+                                                    libraryId={libraryId!}
+                                                    style={[typography.caption, { color: colors.text.tertiary, marginTop: 2 }]}
+                                                />
+                                            ) : null}
                                         </View>
+                                        {isResolved ? (
+                                            <TouchableOpacity
+                                                accessibilityRole="button"
+                                                accessibilityLabel={`Open ${ex.name} details`}
+                                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                activeOpacity={0.7}
+                                                onPress={() => openExerciseDetail(libraryId!)}
+                                                style={{ paddingHorizontal: 4 }}
+                                            >
+                                                <Ionicons name="information-circle-outline" size={20} color={colors.accent.cyan} />
+                                            </TouchableOpacity>
+                                        ) : null}
                                         <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={20} color={colors.text.tertiary} />
                                     </View>
                                 </TouchableOpacity>

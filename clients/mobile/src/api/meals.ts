@@ -105,7 +105,11 @@ export const listFoodGroups = async () => {
 };
 
 /** Meal Logging */
-export const logMeal = async (payload: { mealType: string; foodItems: any[] }) => {
+export const logMeal = async (payload: { mealType: string; foodItems: any[]; planMealId?: string }) => {
+  // planMealId is additive: when a meal is logged straight from a planned
+  // protocol slot (the circadian "Log this" flow) the originating plan-meal id
+  // is forwarded so the service can persist/echo it. Existing callers that omit
+  // it send exactly the same body as before.
   const { data } = await apiClient.post<MealLog>('/v1/meals/log', payload);
   return data;
 };
@@ -172,4 +176,4 @@ export const getFasting = async () => {
 };
 
 /** Alias type for hooks */
-export type LogMealPayload = { mealType: string; foodItems: any[] };
+export type LogMealPayload = { mealType: string; foodItems: any[]; planMealId?: string };

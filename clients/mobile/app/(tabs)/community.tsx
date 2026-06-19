@@ -32,7 +32,7 @@ function timeAgo(createdAt?: string): string {
 }
 
 export default function CommunityTab() {
-    const { colors, typography, borderRadius, shadows } = useTheme();
+    const { colors, typography, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -198,21 +198,6 @@ export default function CommunityTab() {
                     )}
                 </View>
             </ScrollView>
-
-            {/* Fab for Posting */}
-            <TouchableOpacity accessibilityRole="button" accessibilityLabel="Create post"
-                style={[styles.fab, { bottom: insets.bottom + 80 }, shadows.glow(colors.accent.coral)]}
-                onPress={() => router.push('/(modals)/create-post' as any)}
-                activeOpacity={0.9}
-            >
-                <LinearGradient
-                    colors={colors.gradients.coral}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                    style={styles.fabGradient}
-                >
-                    <Ionicons name="add" size={32} color={colors.text.primary} />
-                </LinearGradient>
-            </TouchableOpacity>
         </ImageBackground>
     );
 }
@@ -296,6 +281,4 @@ const styles = StyleSheet.create({
     postImg: { width: '100%', height: 220, marginBottom: 12 },
     postActions: { flexDirection: 'row', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, gap: 24 },
     actionItem: { flexDirection: 'row', alignItems: 'center' },
-    fab: { position: 'absolute', right: 20, width: 64, height: 64, borderRadius: 32, overflow: 'hidden' },
-    fabGradient: { flex: 1, width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
 });

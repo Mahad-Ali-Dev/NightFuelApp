@@ -7,17 +7,24 @@ import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyWebsocket from '@fastify/websocket';
+import { RedisEventBus } from '@nightfuel/events';
 import { ChatService } from './chat.service';
 import routes from './routes';
 
 const envSchema = z.object({
     CHAT_PORT: z.string().default('3014'),
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+    REDIS_URL: z.string().url(),
+    // Resolves the caller's plan for the Ria daily-AI quota. Defaulted so a
+    // missing env doesn't fail boot; the service degrades to plan=free if the
+    // subscription-service is unreachable (see chat.service resolvePlan).
+    SUBSCRIPTION_SERVICE_URL: z.string().url().default('http://subscription-service:3015'),
 });
 
 const config = loadConfig(envSchema);
 const logger = createLogger('chat-service');
 const prisma = new PrismaClient();
+const eventBus = new RedisEventBus(config.REDIS_URL);
 
 const fastify = Fastify({ logger: false });
 registerGlobalProcessHandlers(logger);
@@ -62,7 +69,7 @@ fastify.get('/health', async () => {
     return { status: 'ok', service: 'chat-service' };
 });
 
-const chatService = new ChatService(prisma);
+const chatService = new ChatService(prisma, eventBus);
 fastify.register(routes, { chatService, jwtSecret: config.JWT_SECRET });
 
 
@@ -83,6 +90,7 @@ const shutdown = async (signal: string) => {
     logger.info({ signal }, 'Shutdown signal received');
     try {
         await fastify.close();
+        await eventBus.disconnect();
         await prisma.$disconnect();
         logger.info('Graceful shutdown complete');
         process.exit(0);
