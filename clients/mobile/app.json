@@ -103,8 +103,7 @@
           "icon": "./assets/images/notification-icon.png",
           "color": "#FF6B35"
         }
-      ],
-      "./plugins/withIapPlayFlavor"
+      ]
     ],
     "experiments": {
       "typedRoutes": true

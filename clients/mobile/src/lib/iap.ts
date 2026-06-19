@@ -26,28 +26,22 @@
 import { Platform } from 'react-native';
 import { captureException } from '@/lib/sentry';
 
-// react-native-iap import is intentionally typed loosely — its types vary
-// between v12 and v13 and we don't want a single SDK upgrade to redline
-// the whole app. The runtime contract we depend on is stable.
+// IAP is disabled in native builds for now: react-native-iap@12.x does NOT
+// compile against React Native 0.81 (Expo SDK 54) — it references RN APIs
+// (currentActivity, ObjectAlreadyConsumedException) removed/made internal in
+// RN 0.80+. The only fix is react-native-iap v15, which requires the
+// react-native-nitro-modules runtime (a larger migration). Until that
+// migration, getIap() returns null and every function below degrades
+// gracefully — subscriptions fall back to web checkout. The dependency has
+// been removed from package.json so it is never autolinked or compiled.
 //
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-type IapModule = typeof import('react-native-iap');
+// TODO(monetization): migrate to react-native-iap v15 (+ nitro modules) or
+// expo-iap, then restore the lazy require here.
+type IapModule = any;
 let iap: IapModule | null = null;
 
 function getIap(): IapModule | null {
-  if (iap !== null) return iap;
-  try {
-    // Loaded lazily so unit tests + web bundle don't crash on missing
-    // native module.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    iap = require('react-native-iap') as IapModule;
-    return iap;
-  } catch (err) {
-    if (__DEV__) {
-      console.warn('[iap] react-native-iap not available:', err);
-    }
-    return null;
-  }
+  return null;
 }
 
 // ─── Product IDs ──────────────────────────────────────────────────────
