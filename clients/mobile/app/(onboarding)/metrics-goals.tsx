@@ -29,7 +29,11 @@ export default function BiologicalDataScreen() {
 
     const isValidDob = (value: string): boolean => {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-        const parsed = new Date(`${value}T00:00:00`);
+        // Parse at UTC midnight (trailing Z). Without it the string parses at
+        // LOCAL midnight, and the toISOString() round-trip below converts to UTC,
+        // landing on the PREVIOUS day for users ahead of UTC (e.g. GMT+5) — which
+        // made every valid DOB fail and kept Continue disabled.
+        const parsed = new Date(`${value}T00:00:00Z`);
         // Reject impossible dates (e.g. 2020-13-40 -> NaN, 2021-02-29 -> rolls over).
         if (Number.isNaN(parsed.getTime())) return false;
         if (value !== parsed.toISOString().slice(0, 10)) return false;
