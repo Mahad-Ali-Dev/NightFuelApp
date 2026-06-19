@@ -1265,16 +1265,46 @@ export const MOCK_RECIPES: SeedRecipe[] = [
     },
 ];
 
-async function seed() {
+/**
+ * Pure, I/O-free decision helper for the idempotent seeder.
+ *
+ * Given the result of a guard-by-title lookup, decide whether the upcoming
+ * write is an UPDATE (a recipe with this title already exists) or a CREATE
+ * (no row matched). Kept side-effect-free so it can be unit-tested directly
+ * without a Prisma client or a DB connection — the seed() loop wires the real
+ * I/O around it.
+ */
+export function planRecipeWrite(existing: { id: string } | null): 'create' | 'update' {
+    return existing ? 'update' : 'create';
+}
+
+export async function seed() {
     console.log('Seeding recipes...');
     for (const recipe of MOCK_RECIPES) {
-        await prisma.recipe.create({
-            data: {
-                ...recipe,
-                ingredients: recipe.ingredients,
-                instructions: recipe.instructions
-            }
+        // Guard by EXACT title (no `mode: 'insensitive'`). Recipe has no
+        // @unique on `title`, so a bare `upsert` would need a migration (which
+        // is user-gated). Instead we look up the existing row and branch:
+        // re-running the seeder updates the matched row in place rather than
+        // inserting a duplicate, so a second full pass yields zero net new rows.
+        const existing = await prisma.recipe.findFirst({
+            where: { title: recipe.title },
+            select: { id: true },
         });
+
+        // The write payload carries ONLY valid Recipe columns — the exact same
+        // keys the original create() used (the spread of the SeedRecipe plus the
+        // two JSON columns), so nothing extra is ever handed to Prisma.
+        const data = {
+            ...recipe,
+            ingredients: recipe.ingredients,
+            instructions: recipe.instructions,
+        };
+
+        if (planRecipeWrite(existing) === 'update') {
+            await prisma.recipe.update({ where: { id: existing!.id }, data });
+        } else {
+            await prisma.recipe.create({ data });
+        }
     }
     console.log('Seeding complete.');
 }

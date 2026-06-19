@@ -107,14 +107,40 @@ export default function MessageRequestsScreen() {
                     ))}
                 </View>
             ) : isError ? (
-                <EmptyState
-                    icon="cloud-offline-outline"
-                    title="Couldn't load requests"
-                    subtitle="Something went wrong fetching your message requests. Check your connection and try again."
-                    actionLabel="Try Again"
-                    onAction={() => refetch()}
-                    style={{ flex: 1 }}
-                />
+                // Honest error surface: an explicit retry CtaButton (not an
+                // EmptyState text button) so the recovery action is the same
+                // coral primitive used everywhere else, and it is a11y-labelled.
+                // The CtaButton's onPress is the query's refetch — and only that.
+                <View style={styles.stateWrap}>
+                    <GlassCard style={styles.stateCard}>
+                        <View style={styles.stateInner}>
+                            <View
+                                style={[
+                                    styles.stateIconCircle,
+                                    {
+                                        backgroundColor: withAlpha(colors.accent.coral, 0.12),
+                                        borderColor: withAlpha(colors.accent.coral, 0.24),
+                                    },
+                                ]}
+                            >
+                                <Ionicons name="cloud-offline-outline" size={36} color={colors.accent.coral} />
+                            </View>
+                            <Text style={[typography.h3, { color: colors.text.primary, textAlign: 'center', marginTop: 16 }]}>
+                                Couldn't load requests
+                            </Text>
+                            <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: 8 }]}>
+                                Something went wrong fetching your message requests. Check your connection and try again.
+                            </Text>
+                            <CtaButton
+                                label="Try Again"
+                                icon="refresh"
+                                accessibilityLabel="Retry loading your message requests"
+                                onPress={() => refetch()}
+                                style={styles.stateRetryBtn}
+                            />
+                        </View>
+                    </GlassCard>
+                </View>
             ) : !requests || requests.length === 0 ? (
                 <EmptyState
                     icon="mail-open-outline"
@@ -161,7 +187,17 @@ const RequestRow = React.memo(function RequestRow({ item, onAccept, onDecline }:
     return (
         <GlassCard style={styles.rowCard}>
             <View style={styles.rowInner}>
-                <View style={styles.rowTop}>
+                {/* The non-interactive identity block is one a11y node so a screen
+                    reader announces "<name>, wants to send you a message" as a
+                    single summary, then moves to the Decline / Accept buttons
+                    (kept as their own focusable controls — we never set
+                    `accessible` on a container that holds those buttons). */}
+                <View
+                    style={styles.rowTop}
+                    accessible
+                    accessibilityRole="summary"
+                    accessibilityLabel={`${name}, wants to send you a message`}
+                >
                     <Avatar uri={peer?.avatarUrl ?? undefined} name={peer?.displayName} size={48} borderColor={withAlpha(colors.accent.purple, 0.3)} />
                     <View style={styles.rowInfo}>
                         <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]} numberOfLines={1}>{name}</Text>
@@ -219,6 +255,12 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, height: 64, borderBottomWidth: 1 },
     headerBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    // Centered error surface (honest retry state).
+    stateWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+    stateCard: { width: '100%', maxWidth: 420 },
+    stateInner: { padding: 24, alignItems: 'center' },
+    stateIconCircle: { width: 72, height: 72, borderRadius: 9999, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    stateRetryBtn: { marginTop: 24, minWidth: 160, borderRadius: 14 },
     rowCard: { marginBottom: 12 },
     rowInner: { padding: 16 },
     rowTop: { flexDirection: 'row', alignItems: 'center' },

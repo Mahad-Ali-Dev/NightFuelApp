@@ -15,10 +15,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { generateRoutineWithAI, type GenerateRoutinePayload } from '@/api/exercises';
+import { parseAiQuotaError, type AiQuotaError } from '@/api/ai';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
-import { GeneratingSteps } from '@/components/ui';
+import { GeneratingSteps, CtaButton } from '@/components/ui';
 import { getErrorMessage } from '@/utils/validation';
 
 // Staged status lines shown while Coach Ria builds the routine (10–30s).
@@ -60,6 +61,18 @@ const EQUIPMENT_OPTIONS = [
     { key: 'Kettlebell',     icon: 'ellipse-outline' },
 ];
 
+// Human-readable "resets" line for the daily-limit upgrade block. Renders a
+// short local clock time ("Resets at 6:00 AM") when `resetsAt` is a parseable
+// ISO timestamp, else a sensible fallback so the block never shows a raw date
+// or "Invalid Date".
+function formatResetsAt(resetsAt: string): string {
+    if (!resetsAt) return 'Resets at midnight UTC';
+    const when = new Date(resetsAt);
+    if (Number.isNaN(when.getTime())) return 'Resets at midnight UTC';
+    const time = when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return `Resets at ${time}`;
+}
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 
 export default function AIWorkoutPlannerScreen() {
@@ -73,7 +86,12 @@ export default function AIWorkoutPlannerScreen() {
     const [days, setDays]           = useState(3);
     const [focusAreas, setFocus]    = useState<string[]>([]);
     const [equipment, setEquipment] = useState('Full Gym');
+    // Mutually-exclusive failure ground truth: a non-quota failure sets
+    // `genError` (the existing retryable inline notice); a 429 daily-limit 429
+    // sets `quota` (the distinct upgrade state). Exactly one is ever non-null —
+    // the display is derived from whichever it is, never both.
     const [genError, setGenError]   = useState<string | null>(null);
+    const [quota, setQuota]         = useState<AiQuotaError | null>(null);
 
     const selectedGoal = GOALS.find(g => g.key === goal)!;
 
@@ -81,6 +99,7 @@ export default function AIWorkoutPlannerScreen() {
         mutationFn: () => generateRoutineWithAI({ goal, level, daysPerWeek: days, focusAreas, equipment }),
         onSuccess: (routine) => {
             setGenError(null);
+            setQuota(null);
             qc.invalidateQueries({ queryKey: ['routines'] });
             qc.invalidateQueries({ queryKey: ['workout-routines'] });
             Alert.alert(
@@ -90,12 +109,22 @@ export default function AIWorkoutPlannerScreen() {
             );
         },
         onError: (err: unknown) => {
-            setGenError(getErrorMessage(err));
+            // A 429 daily-AI-limit 429 flips into the distinct upgrade state;
+            // anything else keeps the existing retryable inline error path.
+            const q = parseAiQuotaError(err);
+            if (q) {
+                setQuota(q);
+                setGenError(null);
+            } else {
+                setQuota(null);
+                setGenError(getErrorMessage(err));
+            }
         },
     });
 
-    // Clear any prior error and kick off generation (used by CTA + Try Again).
+    // Clear any prior error/quota and kick off generation (used by CTA + Try Again).
     const runGenerate = () => {
+        setQuota(null);
         setGenError(null);
         generateMutation.mutate();
     };
@@ -323,6 +352,35 @@ export default function AIWorkoutPlannerScreen() {
 
             {/* Generate CTA */}
             <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+                {/* Daily-AI-limit 429 → distinct upgrade state (NOT the retryable
+                    error). Mutually exclusive with `genError`; the Upgrade action
+                    is the shared CtaButton routing to the premium modal. */}
+                {!!quota && !generateMutation.isPending && (
+                    <View
+                        style={[s.errorCard, { backgroundColor: withAlpha(colors.accent.coral, 0.08), borderColor: withAlpha(colors.accent.coral, 0.35) }]}
+                        accessibilityRole="alert"
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                            <Ionicons name="flash-outline" size={20} color={colors.accent.coral} style={{ marginTop: 1 }} />
+                            <View style={{ flex: 1, marginLeft: 10 }}>
+                                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>
+                                    Daily AI limit reached
+                                </Text>
+                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2, lineHeight: 18 }]}>
+                                    {`You've used all ${quota.limit} of your ${quota.plan === 'pro' ? 'Pro' : 'free'} daily AI plans. ${formatResetsAt(quota.resetsAt)}.`}
+                                </Text>
+                            </View>
+                        </View>
+                        <CtaButton
+                            label="Upgrade"
+                            icon="sparkles"
+                            size="sm"
+                            onPress={() => router.push('/(modals)/premium')}
+                            accessibilityLabel="Upgrade to remove the daily AI limit"
+                            style={{ alignSelf: 'flex-start', marginTop: 12 }}
+                        />
+                    </View>
+                )}
                 {/* Persistent, retryable inline error — survives until a retry succeeds. */}
                 {!!genError && !generateMutation.isPending && (
                     <View

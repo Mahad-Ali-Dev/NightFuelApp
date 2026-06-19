@@ -71,6 +71,48 @@ function isServiceUnavailable(err: unknown): boolean {
   return status >= 502 && status <= 504;
 }
 
+/** Parsed shape of the shared AI daily-quota 429 contract. */
+export interface AiQuotaError {
+  /** Authoritative daily cap for the caller's tier. */
+  limit: number;
+  /** Resolved plan tier (mirrors chat-service's free/pro tiers). */
+  plan: 'free' | 'pro';
+  /** ISO timestamp the quota window resets at ('' when the body omits it). */
+  resetsAt: string;
+}
+
+// Plan → default daily cap, mirroring chat-service's AI_FREE_DAILY (5) /
+// AI_PRO_DAILY (20) fallbacks. Used ONLY when a 429 body omits an explicit
+// `limit`; an explicit numeric `limit` always wins. Kept in lock-step with the
+// identical table behind ai-coach's parseQuotaError so both quota surfaces
+// resolve the tier the same way the chat-service Ria quota does.
+const AI_PLAN_DEFAULT_LIMIT: Record<AiQuotaError['plan'], number> = { free: 5, pro: 20 };
+
+/**
+ * Parse the shared "daily AI limit reached" 429 emitted by the AI/chat
+ * services — `429 { error: 'ai_quota_exceeded', limit, plan, resetsAt }` — out
+ * of any caught error. Returns the typed quota object so a caller can flip into
+ * a distinct upgrade state, or `null` for ANY other error (network, 5xx, a
+ * non-quota 4xx, a 429 with a different `error` code) so the caller falls
+ * through to its generic error handling.
+ *
+ * Pure: no I/O, no new dependency. Defensive about shape — only a 429 whose
+ * body `error` is exactly 'ai_quota_exceeded' counts; `limit` is coerced to a
+ * finite Number (else the plan default), `plan` defaults to 'free', and
+ * `resetsAt` is normalised to a string.
+ */
+export function parseAiQuotaError(err: unknown): AiQuotaError | null {
+  const ax = err as AxiosError<{ error?: string; limit?: unknown; plan?: unknown; resetsAt?: unknown }>;
+  if (!ax?.response || ax.response.status !== 429) return null;
+  const body = ax.response.data;
+  if (!body || body.error !== 'ai_quota_exceeded') return null;
+
+  const plan: AiQuotaError['plan'] = body.plan === 'pro' ? 'pro' : 'free';
+  const limit = Number.isFinite(body.limit) ? Number(body.limit) : AI_PLAN_DEFAULT_LIMIT[plan];
+  const resetsAt = typeof body.resetsAt === 'string' ? body.resetsAt : '';
+  return { limit, plan, resetsAt };
+}
+
 // ---------------------------------------------------------------------------
 // Endpoints
 // ---------------------------------------------------------------------------

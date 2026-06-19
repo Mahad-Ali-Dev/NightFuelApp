@@ -586,6 +586,69 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Frankenstein Squat': 'Frankenstein_Squat',
   'Chair Squat': 'Chair_Squat',
   'Calf Press': 'Calf_Press',
+
+  // ── Widened FEDB-backed tranche #7 (data-only, zero new fetch) ───────────────
+  // A further slice of distinct catalogue movements. Every KEY below is NEW —
+  // absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries above (tranches #1-#6),
+  // YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos() admits each one as
+  // kind:'fedb_frames', verified:false (precedence: an already-set name is skipped).
+  // Every slug VALUE was machine-verified to be present in BOTH FEDB_SLUGS
+  // (exerciseDemos.ts) AND __tests__/fixtures/fedb-catalog-slugs.json (the shipped
+  // 873-slug catalogue), and each is a fresh slug dir not already referenced by an
+  // earlier tranche — so every entry resolves to an ordered 2-frame [0.jpg, 1.jpg]
+  // HTTPS pair via fedbPair() with NO new HTTP call. Strictly additive: the
+  // kind:'youtube'-only sync guard (scripts/check-demo-maps-in-sync.js) and
+  // pendingHumanReviewIds.json (YouTube ids only) are both untouched, so
+  // check-demo-maps-in-sync stays green.
+
+  // Chest / press — barbell / dumbbell / machine / bodyweight variants
+  'Pushups Close and Wide Hand Positions': 'Pushups_Close_and_Wide_Hand_Positions',
+  'One Arm Dumbbell Bench Press': 'One_Arm_Dumbbell_Bench_Press',
+  'Decline Smith Press': 'Decline_Smith_Press',
+  'Incline Push-Up Depth Jump': 'Incline_Push-Up_Depth_Jump',
+  'Around The Worlds': 'Around_The_Worlds',
+  // Shoulders / delts
+  'Dumbbell Lying Rear Lateral Raise': 'Dumbbell_Lying_Rear_Lateral_Raise',
+  'Bent Over Dumbbell Rear Delt Raise With Head On Bench': 'Bent_Over_Dumbbell_Rear_Delt_Raise_With_Head_On_Bench',
+  // Back / rows / climbs
+  'Bent Over Two-Arm Long Bar Row': 'Bent_Over_Two-Arm_Long_Bar_Row',
+  'Rope Climb': 'Rope_Climb',
+  // Biceps
+  'Alternate Hammer Curl': 'Alternate_Hammer_Curl',
+  'Barbell Curls Lying Against An Incline': 'Barbell_Curls_Lying_Against_An_Incline',
+  'Seated Dumbbell Inner Biceps Curl': 'Seated_Dumbbell_Inner_Biceps_Curl',
+  // Triceps
+  'Triceps Overhead Extension with Rope': 'Triceps_Overhead_Extension_with_Rope',
+  'Cable Incline Triceps Extension': 'Cable_Incline_Triceps_Extension',
+  'Dip Machine': 'Dip_Machine',
+  // Legs / glutes / hamstrings
+  'Dumbbell Squat To A Bench': 'Dumbbell_Squat_To_A_Bench',
+  'Smith Single-Leg Split Squat': 'Smith_Single-Leg_Split_Squat',
+  'Wide Stance Stiff Legs': 'Wide_Stance_Stiff_Legs',
+  'Seated Band Hamstring Curl': 'Seated_Band_Hamstring_Curl',
+  'Standing Hip Circles': 'Standing_Hip_Circles',
+  // Core / obliques
+  'Seated Barbell Twist': 'Seated_Barbell_Twist',
+  'Barbell Side Bend': 'Barbell_Side_Bend',
+  'Cable Judo Flip': 'Cable_Judo_Flip',
+  'Decline Reverse Crunch': 'Decline_Reverse_Crunch',
+  'Otis-Up': 'Otis-Up',
+  'Toe Touchers': 'Toe_Touchers',
+  'Seated Flat Bench Leg Pull-In': 'Seated_Flat_Bench_Leg_Pull-In',
+  'Crunch - Hands Overhead': 'Crunch_-_Hands_Overhead',
+  'Crunch - Legs On Exercise Ball': 'Crunch_-_Legs_On_Exercise_Ball',
+  // Olympic / power
+  'Hang Clean': 'Hang_Clean',
+  'Power Clean': 'Power_Clean',
+  'Clean and Press': 'Clean_and_Press',
+  'Clean and Jerk': 'Clean_and_Jerk',
+  'Hang Snatch': 'Hang_Snatch',
+  'Power Snatch': 'Power_Snatch',
+  // Kettlebell
+  'Double Kettlebell Snatch': 'Double_Kettlebell_Snatch',
+  'Kettlebell Pirate Ships': 'Kettlebell_Pirate_Ships',
+  'One-Arm Kettlebell Clean': 'One-Arm_Kettlebell_Clean',
+  'One-Arm Kettlebell Snatch': 'One-Arm_Kettlebell_Snatch',
 };
 
 /**
@@ -637,6 +700,17 @@ const GIF_PENDING: Readonly<Record<string, string>> = {
   'Burpees': 'https://upload.wikimedia.org/wikipedia/commons/d/df/Burpee.gif',
   'High Knee': 'https://upload.wikimedia.org/wikipedia/commons/4/4e/High_knees.gif',
   'Situp': 'https://upload.wikimedia.org/wikipedia/commons/a/a1/Sit-up_on_the_bench_draw_%28animated%29.gif',
+  // Additional common spelling/locale variants, each on a DISTINCT alias key the
+  // maps above don't claim. To avoid any dead-link risk these REUSE the exact
+  // Commons file URLs already proven in the shipped tranche above (same clip,
+  // different searchable name) rather than introducing new, unverified CDN paths.
+  // Still verified:false — a human should confirm the alias maps to the right
+  // movement before any future flip. Folded in by the same precedence rule, so a
+  // name already claimed by an earlier map is skipped, never overwritten.
+  'Press Up': 'https://upload.wikimedia.org/wikipedia/commons/8/8f/Pushups.gif',
+  'Bodyweight Squats': 'https://upload.wikimedia.org/wikipedia/commons/e/e6/Squats.gif',
+  'Sit Up': 'https://upload.wikimedia.org/wikipedia/commons/a/a1/Sit-up_on_the_bench_draw_%28animated%29.gif',
+  'Burpee (CrossFit)': 'https://upload.wikimedia.org/wikipedia/commons/d/df/Burpee.gif',
 };
 
 // ---------------------------------------------------------------------------

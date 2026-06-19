@@ -1,0 +1,213 @@
+/**
+ * devices.test.tsx
+ *
+ * Screen-level coverage for the Connected Devices screen —
+ * `app/(settings)/devices.tsx`.
+ *
+ * The screen lists the three supported health sources off the health-sync seam
+ * (`@/lib/healthSync`), each as a GlassCard row with a Connect <CtaButton> and a
+ * Sync-now affordance. The DEFAULT adapter shipped in Expo Go is a no-op: its
+ * `connect()` / `syncNow()` resolve (never throw) to a `{ status: 'unavailable',
+ * reason }` result whose reason explains a native dev build is required. The
+ * screen MUST surface that reason verbatim and MUST NEVER fake a "Connected"
+ * state.
+ *
+ * This suite mocks `@/lib/healthSync` so the adapter is a controllable spy
+ * resolving the honest unavailable result, and asserts:
+ *   1. a light render lists all three sources, each with Connect + "Never synced"
+ *      + a Sync-now control, and shows no fabricated "Connected" status;
+ *   2. pressing Connect surfaces the honest "requires a native dev build"
+ *      message — and never a fake success;
+ *   3. pressing Sync now drives the same honest path via `syncNow()`.
+ *
+ * The real `@/lib/healthSync.types` (pure type + const declarations, zero native
+ * deps) is left un-mocked so the source labels are exercised for real. Mock
+ * conventions (icon → text, gradient → passthrough View, deterministic insets)
+ * mirror the sibling screen suites (dashboard.cta / aiPlanner).
+ */
+
+// ── jest.mock hoisting block (runs ABOVE the imports) ────────────────────────
+
+// The honest unavailable reason the no-op adapter returns. Must contain the
+// phrase the UI shows and this suite asserts ("requires a native dev build").
+const MOCK_UNAVAILABLE_REASON =
+    'Health sync requires a native dev build — it is unavailable in Expo Go.';
+
+// Controllable adapter spies. `connect` / `syncNow` default to the honest
+// unavailable result; a test may override per case. `lastSyncedAt` → null so
+// every row renders "Never synced". `getStatus` → 'unavailable' (ground truth).
+// Returns are annotated where a union is needed (no `jest.fn<…>` generic, which
+// differs across jest type versions — annotate the callback instead).
+const mockConnect = jest.fn(
+    async (): Promise<import('@/lib/healthSync.types').HealthSyncResult> => ({
+        status: 'unavailable',
+        reason: MOCK_UNAVAILABLE_REASON,
+    }),
+);
+const mockSyncNow = jest.fn(
+    async (): Promise<import('@/lib/healthSync.types').HealthSyncResult> => ({
+        status: 'unavailable',
+        reason: MOCK_UNAVAILABLE_REASON,
+    }),
+);
+const mockLastSyncedAt = jest.fn((): string | null => null);
+const mockGetStatus = jest.fn((): string => 'unavailable');
+const mockDisconnect = jest.fn(async (): Promise<void> => undefined);
+
+const mockAdapter = {
+    connect: mockConnect,
+    disconnect: mockDisconnect,
+    getStatus: mockGetStatus,
+    syncNow: mockSyncNow,
+    lastSyncedAt: mockLastSyncedAt,
+};
+
+// Mock the health-sync seam: the screen imports `getHealthSyncAdapter` +
+// `SUPPORTED_HEALTH_SOURCES` from here. We provide the real three sources and
+// the controllable adapter. (`mock`-prefixed holders satisfy babel-plugin-jest
+// -hoist's closure rule.)
+jest.mock('@/lib/healthSync', () => ({
+    getHealthSyncAdapter: () => mockAdapter,
+    SUPPORTED_HEALTH_SOURCES: ['apple_health', 'google_fit', 'generic_ble'] as const,
+    NOOP_UNAVAILABLE_REASON: MOCK_UNAVAILABLE_REASON,
+}));
+
+// expo-router: a benign router; `back` is the only control this screen calls.
+jest.mock('expo-router', () => ({
+    useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
+}));
+
+// Decorative glyphs → plain <Text> surfacing the icon name so they are inert
+// and never collide with assertable copy.
+jest.mock('@expo/vector-icons', () => {
+    const { Text: RNText } = require('react-native');
+    return { Ionicons: ({ name }: { name?: string }) => <RNText>{`icon:${name ?? ''}`}</RNText> };
+});
+
+// expo-linear-gradient ships a native module — replace <LinearGradient> with a
+// passthrough View so the REAL CtaButton primitive mounts on the jest renderer.
+jest.mock('expo-linear-gradient', () => {
+    const RN = require('react-native');
+    return { LinearGradient: (props: any) => <RN.View {...props} /> };
+});
+
+// Deterministic insets so the screen lays out without the native provider.
+jest.mock('react-native-safe-area-context', () => ({
+    useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
+}));
+
+jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
+
+// ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
+import React from 'react';
+import { render, fireEvent, screen, waitFor } from '@testing-library/react-native';
+import {
+    ThemeContext,
+    getThemeColors,
+    typography,
+    spacing,
+    borderRadius,
+    shadows,
+} from '@/theme';
+import ConnectedDevicesScreen from '../../app/(settings)/devices';
+
+function renderScreen() {
+    return render(
+        <ThemeContext.Provider
+            value={{ scheme: 'dark', colors: getThemeColors('dark'), typography, spacing, borderRadius, shadows }}
+        >
+            <ConnectedDevicesScreen />
+        </ThemeContext.Provider>,
+    );
+}
+
+beforeEach(() => {
+    jest.clearAllMocks();
+    // Restore the honest defaults after clearAllMocks wipes implementations.
+    mockConnect.mockImplementation(async () => ({ status: 'unavailable', reason: MOCK_UNAVAILABLE_REASON }));
+    mockSyncNow.mockImplementation(async () => ({ status: 'unavailable', reason: MOCK_UNAVAILABLE_REASON }));
+    mockLastSyncedAt.mockImplementation(() => null);
+    mockGetStatus.mockImplementation(() => 'unavailable');
+});
+
+describe('Connected Devices screen', () => {
+    it('lists the three supported sources, each with Connect + a never-synced state + Sync now', () => {
+        renderScreen();
+
+        // All three sources are listed by their canonical labels.
+        expect(screen.getByText('Apple Health')).toBeTruthy();
+        expect(screen.getByText('Google Fit')).toBeTruthy();
+        expect(screen.getByText('Bluetooth Device')).toBeTruthy();
+
+        // Each row exposes a Connect CtaButton (pinned by its stable testID,
+        // which CtaButton forwards to its root Pressable) and a Sync-now control.
+        expect(screen.getByTestId('connect-apple_health')).toBeTruthy();
+        expect(screen.getByTestId('connect-google_fit')).toBeTruthy();
+        expect(screen.getByTestId('connect-generic_ble')).toBeTruthy();
+        expect(screen.getByTestId('sync-apple_health')).toBeTruthy();
+        expect(screen.getByTestId('sync-google_fit')).toBeTruthy();
+        expect(screen.getByTestId('sync-generic_ble')).toBeTruthy();
+
+        // last-synced derives from the adapter (null → "Never synced") on each row.
+        expect(screen.getAllByText('Never synced')).toHaveLength(3);
+        expect(mockLastSyncedAt).toHaveBeenCalled();
+
+        // No fabricated "Connected" status anywhere (the header title is the
+        // distinct string "Connected Devices", not a bare "Connected").
+        expect(screen.queryByText('Connected')).toBeNull();
+        // The honest reason has not yet been triggered (no attempt made).
+        expect(screen.queryByText(MOCK_UNAVAILABLE_REASON)).toBeNull();
+    });
+
+    it('exposes an accessible Connect control and Sync control per source', () => {
+        renderScreen();
+
+        // Every actionable control carries an explicit accessibilityLabel.
+        expect(screen.getByLabelText('Connect Apple Health')).toBeTruthy();
+        expect(screen.getByLabelText('Connect Google Fit')).toBeTruthy();
+        expect(screen.getByLabelText('Connect Bluetooth Device')).toBeTruthy();
+        expect(screen.getByLabelText('Sync Apple Health now')).toBeTruthy();
+        expect(screen.getByLabelText('Go back')).toBeTruthy();
+    });
+
+    it('on Connect resolving unavailable, surfaces the honest "requires a native dev build" message — never a fake success', async () => {
+        renderScreen();
+
+        fireEvent.press(screen.getByTestId('connect-apple_health'));
+
+        // The adapter's honest reason is shown verbatim.
+        await waitFor(() => expect(screen.getByText(MOCK_UNAVAILABLE_REASON)).toBeTruthy());
+        expect(screen.getByText(/requires a native dev build/i)).toBeTruthy();
+        expect(mockConnect).toHaveBeenCalledTimes(1);
+
+        // It NEVER claims a connection succeeded.
+        expect(screen.queryByText('Connected')).toBeNull();
+        expect(screen.queryByText(/connected!?$/i)).toBeNull();
+    });
+
+    it('on Sync now resolving unavailable, drives syncNow() and surfaces the same honest message', async () => {
+        renderScreen();
+
+        fireEvent.press(screen.getByTestId('sync-google_fit'));
+
+        await waitFor(() => expect(screen.getByText(MOCK_UNAVAILABLE_REASON)).toBeTruthy());
+        expect(mockSyncNow).toHaveBeenCalledTimes(1);
+        // Connect was NOT called by a Sync-now press.
+        expect(mockConnect).not.toHaveBeenCalled();
+        expect(screen.queryByText('Connected')).toBeNull();
+    });
+
+    it('does not fabricate a success even when the adapter reports unavailable without a reason', async () => {
+        // A future adapter could omit `reason`; the screen must still NOT claim
+        // success — it shows a safe fallback sentence instead.
+        mockConnect.mockImplementation(async () => ({ status: 'unavailable' }));
+
+        renderScreen();
+        fireEvent.press(screen.getByTestId('connect-generic_ble'));
+
+        await waitFor(() =>
+            expect(screen.getByText('This source is unavailable on the current build.')).toBeTruthy(),
+        );
+        expect(screen.queryByText('Connected')).toBeNull();
+    });
+});

@@ -247,7 +247,7 @@ export default function UserProfileScreen() {
                                     <Text style={[typography.body, { color: colors.text.secondary, marginBottom: 12, lineHeight: 22 }]}>
                                         {post.content}
                                     </Text>
-                                    {post.imageUrl && (
+                                    {!!post.imageUrl && (
                                         <Image source={{ uri: post.imageUrl }} style={[styles.postImg, { borderRadius: borderRadius.lg }]} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                                     )}
                                     <Text style={[typography.caption, { color: colors.text.secondary }]}>

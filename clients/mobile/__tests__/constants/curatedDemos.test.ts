@@ -565,3 +565,135 @@ describe('CURATED_DEMOS — FEDB-backed tranche #5 (data-only additions)', () =>
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// (i) The "tranche #7" FEDB-backed additions resolve to a real catalogue slug
+// ---------------------------------------------------------------------------
+//
+// Same contract as tranches #4/#5: DATA-ONLY additions that reuse FEDB slugs
+// already shipped in exerciseDemos.ts (no new HTTP fetch). This block pins a
+// representative slice of the NEW tranche-#7 keys explicitly AND cross-checks
+// that the slug directory both frames point at is a real entry in the 873-slug
+// FEDB catalogue fixture (__tests__/fixtures/fedb-catalog-slugs.json) — i.e. the
+// demo will actually load, not 404. Each ships kind:'fedb_frames', verified:false.
+describe('CURATED_DEMOS — FEDB-backed tranche #7 (data-only additions)', () => {
+  // A representative slice spanning chest, shoulders, back, biceps, triceps,
+  // legs, core, Olympic lifts and kettlebell.
+  const TRANCHE_7_NAMES = [
+    'Pushups Close and Wide Hand Positions',
+    'One Arm Dumbbell Bench Press',
+    'Dumbbell Lying Rear Lateral Raise',
+    'Bent Over Two-Arm Long Bar Row',
+    'Alternate Hammer Curl',
+    'Triceps Overhead Extension with Rope',
+    'Dumbbell Squat To A Bench',
+    'Seated Barbell Twist',
+    'Otis-Up',
+    'Power Clean',
+    'Clean and Jerk',
+    'One-Arm Kettlebell Snatch',
+  ] as const;
+
+  // Per-frame shape with the slug dir captured (group 1) and frame index (group 2).
+  const FEDB_FRAME_RE =
+    /^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\/main\/exercises\/([^/]+)\/([01])\.jpg$/;
+
+  // The authoritative 873-slug FEDB catalogue fixture — every tranche-#7 slug
+  // MUST be present here (and therefore in FEDB_SLUGS, the same set), so the
+  // frame URLs resolve to real images.
+  const CATALOG_SLUGS: ReadonlySet<string> = (() => {
+    const fixturePath = path.resolve(__dirname, '../fixtures/fedb-catalog-slugs.json');
+    const raw = fs.readFileSync(fixturePath, 'utf8');
+    const parsed = JSON.parse(raw) as Array<{ slug: string }>;
+    expect(Array.isArray(parsed)).toBe(true);
+    return new Set(parsed.map((e) => e.slug));
+  })();
+
+  test('the catalogue fixture loaded a healthy set of slugs', () => {
+    // Sanity: guards against a refactor that empties the fixture and makes the
+    // membership checks below vacuously pass.
+    expect(CATALOG_SLUGS.size).toBeGreaterThanOrEqual(800);
+  });
+
+  test.each(TRANCHE_7_NAMES)('getCuratedDemo(%j) is a verified:false kind:"fedb_frames" entry', (name) => {
+    const demo = getCuratedDemo(name);
+    expect(demo).not.toBeNull();
+    expect(demo!.kind).toBe('fedb_frames');
+    expect(demo!.verified).toBe(false);
+    expect(demo!.url).toMatch(FEDB_FRAME_PAIR_RE);
+  });
+
+  test.each(TRANCHE_7_NAMES)(
+    'getCuratedDemoFrames(%j) is an ordered 2-element HTTPS [0.jpg, 1.jpg] pair on a real catalogue slug',
+    (name) => {
+      const frames = getCuratedDemoFrames(name);
+      expect(frames).not.toBeNull();
+      expect(frames!.length).toBe(2);
+
+      const m0 = FEDB_FRAME_RE.exec(frames![0]!);
+      const m1 = FEDB_FRAME_RE.exec(frames![1]!);
+      expect(m0).not.toBeNull();
+      expect(m1).not.toBeNull();
+      // Both HTTPS (ATS-safe).
+      expect(frames![0]!.startsWith('https://')).toBe(true);
+      expect(frames![1]!.startsWith('https://')).toBe(true);
+      // Ordered start (0) → end (1).
+      expect(m0![2]).toBe('0');
+      expect(m1![2]).toBe('1');
+      // A genuine start/end pair: both frames share ONE slug directory…
+      expect(m0![1]).toBe(m1![1]);
+      // …and that slug is a real entry in the shipped FEDB catalogue (so the
+      // demo loads rather than 404s).
+      expect(CATALOG_SLUGS.has(m0![1]!)).toBe(true);
+    },
+  );
+
+  test.each(TRANCHE_7_NAMES)('getCuratedDemoVerified(%j) === false (renders the "Unreviewed" chip)', (name) => {
+    expect(getCuratedDemoVerified(name)).toBe(false);
+  });
+
+  test('no tranche-#7 name is a YouTube/gif entry (each is a pure fedb_frames addition)', () => {
+    for (const name of TRANCHE_7_NAMES) {
+      const demo = getCuratedDemo(name);
+      expect(demo).not.toBeNull();
+      // Never silently landed on a grandfathered YouTube key or a gif alias.
+      expect(demo!.kind).toBe('fedb_frames');
+      expect(getCuratedDemoFrames(name)).not.toBeNull();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// (j) The widened GIF_PENDING alias additions (kind:'gif', verified:false)
+// ---------------------------------------------------------------------------
+//
+// A few extra common spelling/locale variants mapped to the SAME proven Commons
+// clip URLs already shipped in the original GIF tranche (no new CDN path, so no
+// dead-link risk), each on a DISTINCT alias key the grandfathered/FEDB maps do
+// not claim. <ExerciseDemo/> renders kind:'gif' as a PLAYING demo, and
+// verified:false keeps the "Unreviewed" chip until a human eyeballs each alias.
+// They live OUTSIDE the GRANDFATHERED block, so the cross-package sync guard and
+// pendingHumanReviewIds.json (YouTube ids only) both ignore them.
+describe('CURATED_DEMOS — widened GIF_PENDING alias tranche', () => {
+  const NEW_GIF_NAMES = ['Press Up', 'Bodyweight Squats', 'Sit Up', 'Burpee (CrossFit)'] as const;
+
+  test.each(NEW_GIF_NAMES)('getCuratedDemo(%j) returns a verified:false kind:"gif" entry', (name) => {
+    const demo = getCuratedDemo(name);
+    expect(demo).not.toBeNull();
+    expect(demo!.kind).toBe('gif');
+    expect(demo!.verified).toBe(false);
+    expect(demo!.url).toMatch(GIF_URL_RE);
+  });
+
+  test.each(NEW_GIF_NAMES)('getCuratedDemoFrames(%j) is null — a gif is not a frame pair', (name) => {
+    expect(getCuratedDemoFrames(name)).toBeNull();
+  });
+
+  test.each(NEW_GIF_NAMES)('getCuratedDemoVerified(%j) === false (renders the "Unreviewed" chip)', (name) => {
+    expect(getCuratedDemoVerified(name)).toBe(false);
+  });
+
+  test('resolution is case-insensitive / whitespace-trimmed for the new gif aliases', () => {
+    expect(getCuratedDemo('  PRESS up ')).toEqual(getCuratedDemo('Press Up'));
+  });
+});

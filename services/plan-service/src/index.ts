@@ -18,6 +18,13 @@ const envSchema = z.object({
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     AI_PIPELINE_URL: z.string().url(),
     USER_SERVICE_URL: z.string().url(),
+    // Resolves the caller's plan for the AI daily-generation quota on
+    // POST /v1/plans/generate. Defaulted so a missing env doesn't fail boot;
+    // the route degrades to plan=free if the subscription-service is
+    // unreachable. routes.ts reads process.env.SUBSCRIPTION_SERVICE_URL
+    // directly (mirroring chat-service), so this entry just validates/defaults
+    // the value at boot — no other index.ts wiring is required.
+    SUBSCRIPTION_SERVICE_URL: z.string().url().default('http://subscription-service:3015'),
     STATE_SERVICE_URL: z.string().url(),
     DECISION_ENGINE_URL: z.string().url(),
     MEAL_SERVICE_URL: z.string().url(),

@@ -7,7 +7,7 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized } from '@nightfuel/config';
+import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized, assertWithinDailyLimit, AI_LIMITS, AI_QUOTA_EXCEEDED } from '@nightfuel/config';
 import { z } from 'zod';
 import { ExerciseService } from './exercise.service';
 // fetchExerciseById now used internally by ExerciseService.getLibraryExerciseById
@@ -17,6 +17,11 @@ const envSchema = z.object({
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     REDIS_URL: z.string().url(),
     AI_PIPELINE_URL: z.string().url().default('http://localhost:3010'),
+    // Resolves the caller's plan for the AI-routine-generator daily quota.
+    // Defaulted so a missing env doesn't fail boot; the service degrades to
+    // plan=free if the subscription-service is unreachable (mirrors
+    // chat-service resolvePlan).
+    SUBSCRIPTION_SERVICE_URL: z.string().url().default('http://subscription-service:3015'),
 });
 
 const config = loadConfig(envSchema);
@@ -333,12 +338,68 @@ async function resolveLibraryId(name: string): Promise<string | null> {
     return partial?.id ?? null;
 }
 
+// Resolve the caller's plan from the subscription-service, mirroring
+// chat.service.resolvePlan EXACTLY so the AI-routine quota uses the same tier
+// signal as the Ria quota. tier 'FREE' -> 'free', anything else -> 'pro'.
+// No JWT_SECRET / unreachable / slow (>3s) / non-OK / throw -> 'free' (the
+// safer, lower limit). The internal token is minted with the already-registered
+// @fastify/jwt instance — no new dependency — and carries BOTH userId and sub so
+// subscription-service /v1/subscriptions/me (which derives its subject from the
+// token) resolves the TARGET user rather than a service principal.
+async function resolvePlan(userId: string): Promise<'free' | 'pro'> {
+    // No secret -> cannot mint an internal token -> default to the safer free plan.
+    if (!config.JWT_SECRET) return 'free';
+
+    const url = `${config.SUBSCRIPTION_SERVICE_URL}/v1/subscriptions/me`;
+    const token = (fastify as any).jwt.sign({ userId, sub: userId }, { expiresIn: '60s' });
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    try {
+        const res = await fetch(url, {
+            method: 'GET',
+            headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+            signal: controller.signal,
+        });
+        if (!res.ok) {
+            logger.debug({ userId, status: res.status }, 'Subscription lookup non-OK; defaulting plan=free');
+            return 'free';
+        }
+        const sub = (await res.json()) as { tier?: string };
+        return (sub.tier ?? 'FREE').toUpperCase() === 'FREE' ? 'free' : 'pro';
+    } catch (err) {
+        logger.warn({ err, userId }, 'Failed to resolve subscription tier; defaulting plan=free');
+        return 'free';
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generate', {
     onRequest: [(fastify as any).authenticate],
     schema: { body: generateRoutineSchema },
 }, async (request, reply) => {
     const userId = (request.user as any).userId ?? (request.user as any).id;
     const { goal, level, daysPerWeek, focusAreas, equipment } = request.body;
+
+    // ── Daily AI quota — gated BEFORE the AI-pipeline fetch / any createRoutine ──
+    // This is the ONLY AI-routine creation path, and WorkoutRoutine has NO
+    // aiGenerated flag this sprint, so ALL of a user's routines created since UTC
+    // midnight count toward the per-plan `generations` quota (no DB column to add
+    // here). At/over the cap we reply 429 and DO NOT call the AI pipeline or
+    // createRoutine. Plan tier is resolved the same way the chat-service Ria quota
+    // does; an unreachable subscription-service degrades to the safer free limit.
+    const plan = await resolvePlan(userId);
+    const now = new Date();
+    const startOfUtcDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const usedToday = await prisma.workoutRoutine.count({
+        where: { userId, createdAt: { gte: startOfUtcDay } },
+    });
+    const limit = AI_LIMITS[plan].generations;
+    const q = assertWithinDailyLimit({ usedToday, limit, now });
+    if (!q.allowed) {
+        return reply.code(429).send({ error: AI_QUOTA_EXCEEDED, limit, plan, resetsAt: q.resetsAt });
+    }
 
     // Build a structured prompt for the AI pipeline
     const prompt = [
