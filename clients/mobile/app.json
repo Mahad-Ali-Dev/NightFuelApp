@@ -17,6 +17,8 @@
       "bundleIdentifier": "com.zeitra.app",
       "associatedDomains": [
         "applinks:zeitra.app",
+        "applinks:www.zeitra.app",
+        "applinks:zeitra.app",
         "applinks:www.zeitra.app"
       ],
       "infoPlist": {
@@ -41,11 +43,44 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "zeitra.app" },
-            { "scheme": "https", "host": "www.zeitra.app" }
+            {
+              "scheme": "https",
+              "host": "zeitra.app"
+            },
+            {
+              "scheme": "https",
+              "host": "www.zeitra.app"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "zeitra.app"
+            },
+            {
+              "scheme": "https",
+              "host": "www.zeitra.app"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
+      ],
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -72,6 +107,18 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7a5e14b1-cbca-4b66-938b-dac339705833"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/7a5e14b1-cbca-4b66-938b-dac339705833"
     }
   }
 }
