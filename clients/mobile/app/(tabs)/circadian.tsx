@@ -123,6 +123,47 @@ function normalizePlannedMeal(item: any) {
     };
 }
 
+/**
+ * Render a plan meal's `macros` OBJECT ({protein,carbs,fat,calories}) as the
+ * compact "40P / 20C / 15F" string the timeline row + the log-planned-meal
+ * `macrosText` consume. The plan-service returns macros as an object (see
+ * api/plans.ts PlanMeal.macros), NOT a pre-formatted string, so we format here.
+ * Returns '' when no finite macro is present (the row then shows no subtitle).
+ */
+function macrosToText(macros: any): string {
+    const p = toNum(macros?.protein);
+    const c = toNum(macros?.carbs);
+    const f = toNum(macros?.fat);
+    const parts: string[] = [];
+    if (p !== undefined) parts.push(`${Math.round(p)}P`);
+    if (c !== undefined) parts.push(`${Math.round(c)}C`);
+    if (f !== undefined) parts.push(`${Math.round(f)}F`);
+    return parts.join(' / ');
+}
+
+/**
+ * Adapt ONE plan-service meal (the real wire shape from POST /v1/plans/generate,
+ * normalized by api/plans.ts → { time, label, description, macros:{...} }) into
+ * the internal timeline-row shape the renderer + normalizePlannedMeal + the
+ * "Log this" → log-planned-meal flow already speak:
+ *   • type   'meal'  — every plan-service row IS a meal (no workout/action rows)
+ *   • title  ← label — the slot title (drives mealTypeFromSlot + the row header)
+ *   • note   ← description — the row subtitle copy
+ *   • macros ← formatted string from the macros object (row subtitle + target)
+ * The macros OBJECT is preserved under `plannedMacros` so normalizePlannedMeal
+ * reads the real numbers (protein/carbs/fat/calories) for the log flow.
+ */
+function planMealToRow(meal: any) {
+    return {
+        type: 'meal' as const,
+        time: meal?.time,
+        title: meal?.label ?? meal?.title ?? '',
+        note: meal?.description,
+        macros: macrosToText(meal?.macros),
+        plannedMacros: meal?.macros ?? undefined,
+    };
+}
+
 export default function CircadianScreen() {
     const { colors, typography, spacing, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
@@ -168,7 +209,12 @@ export default function CircadianScreen() {
             generatePlan({
                 date: new Date().toISOString().split('T')[0] as string,
                 circadianProfile: circadianModel ?? undefined,
-                shiftId: String(currentShift?.id ?? ''),
+                // Send `undefined` (NOT '') when there is no shift: the server
+                // validates shiftId with z.string().uuid().optional(), so an
+                // empty string fails the uuid() check → 400. Omitting the key
+                // hits the .optional() branch instead. Mirrors planner.tsx,
+                // which passes shiftQ.data?.id directly.
+                shiftId: currentShift?.id ? String(currentShift.id) : undefined,
                 shiftType: shiftType || 'night',
             }),
         onMutate: () => {
@@ -252,23 +298,28 @@ export default function CircadianScreen() {
     // never generated a plan saw an invented meal/workout timeline with tappable
     // "Log this" buttons that pushed made-up macros into the meal log — the
     // fabricated-timeline / no-honest-empty-state anti-pattern. We now surface
-    // ONLY what the AI actually returned: when `plan.items` is a NON-EMPTY array
-    // we map it; otherwise the timeline is empty and the render shows the honest
-    // "No protocol yet" EmptyState (state-ground-truth — never fabricate on the
-    // empty branch).
+    // ONLY what the AI actually returned.
     //
-    // Every MEAL row is normalized to ALSO carry the four fields the plan->meal
-    // "Log this" flow needs, derived from whatever shape the plan provides:
+    // CONTRACT: the plan-service (POST /v1/plans/generate, normalized in
+    // api/plans.ts) returns the day plan as `plan.meals` — an array of
+    // { time, label, description, macros:{protein,carbs,fat,calories} } — and
+    // NEVER `plan.items`. Reading `.items` therefore always saw `undefined`, so
+    // the timeline was permanently empty even on a successful generation. We read
+    // the field that actually exists (`plan.meals`, same as usePlan.ts) and adapt
+    // each meal (planMealToRow) into the internal row shape the renderer speaks;
+    // when `meals` is empty/absent the timeline is empty and the render shows the
+    // honest "No protocol yet" EmptyState (state-ground-truth — never fabricate).
+    //
+    // Every row is then normalized to ALSO carry the four fields the plan->meal
+    // "Log this" flow needs, derived from the meal's real shape:
     //   • mealType      — BREAKFAST|LUNCH|DINNER|SNACK (mapped from the slot)
-    //   • plannedMacros — the macro summary string shown on the row
-    //   • suggestedFoods — the plan's "Nutrition Cart" items for that meal
+    //   • plannedMacros — the meal's macros object (real protein/carbs/fat/cals)
+    //   • suggestedFoods — the plan's itemized foods for that meal (if any)
     //   • planMealId    — the originating plan-meal id (when the plan supplies one)
-    // Non-meal rows (workout/action) are passed through untouched.
     const protocol = useMemo(() => {
-        if (plan && Array.isArray((plan as any).items) && (plan as any).items.length > 0) {
-            return ((plan as any).items as any[]).map((item) =>
-                item?.type === 'meal' ? normalizePlannedMeal(item) : item
-            );
+        const meals = Array.isArray((plan as any)?.meals) ? ((plan as any).meals as any[]) : [];
+        if (meals.length > 0) {
+            return meals.map((meal) => normalizePlannedMeal(planMealToRow(meal)));
         }
         // No real plan → no rows. The render branches to the honest EmptyState
         // (a single CTA wired to generateAIPlan); it never invents a timeline.
@@ -277,8 +328,9 @@ export default function CircadianScreen() {
 
     // Whether the AI returned a real, non-empty plan. Drives the honest no-plan
     // EmptyState (the timeline maps `protocol`, which is empty unless this is
-    // true) — derived from the SAME ground-truth `plan`, never stored as state.
-    const hasRealPlan = Array.isArray((plan as any)?.items) && (plan as any).items.length > 0;
+    // true) — derived from the SAME ground-truth `plan.meals`, never stored as
+    // state. Reads `.meals` (the real field), not the phantom `.items`.
+    const hasRealPlan = Array.isArray((plan as any)?.meals) && (plan as any).meals.length > 0;
 
     // Resolved entrainment score — SINGLE source of truth, typed (no `as any`).
     // `profileMetrics.entrainmentScore` already folds in the model's score in its
@@ -703,7 +755,9 @@ export default function CircadianScreen() {
                                                     <View style={{ flex: 1 }}>
                                                         <Text style={[typography.subhead, { color: colors.text.primary }]}>{item.title}</Text>
                                                         <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.xxs }]}>
-                                                            {item.type === 'meal' ? item.macros : item.type === 'workout' ? item.duration : item.note}
+                                                            {item.type === 'meal'
+                                                                ? (item.macros || item.note || '')
+                                                                : item.type === 'workout' ? item.duration : item.note}
                                                         </Text>
                                                     </View>
                                                     {item.type === 'meal' && (

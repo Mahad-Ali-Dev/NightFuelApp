@@ -19,12 +19,12 @@ const log = createLogger('iap-validator');
 // ─────────────────────────────────────────────────────────────────────
 
 const PRODUCT_ID_TO_TIER: Record<string, 'PRO' | 'PREMIUM' | 'ENTERPRISE'> = {
-  'com.nightfuel.app.pro.monthly': 'PRO',
-  'com.nightfuel.app.pro.yearly': 'PRO',
-  'com.nightfuel.app.premium.monthly': 'PREMIUM',
-  'com.nightfuel.app.premium.yearly': 'PREMIUM',
-  'com.nightfuel.app.enterprise.monthly': 'ENTERPRISE',
-  'com.nightfuel.app.enterprise.yearly': 'ENTERPRISE',
+  'com.zeitra.app.pro.monthly': 'PRO',
+  'com.zeitra.app.pro.yearly': 'PRO',
+  'com.zeitra.app.premium.monthly': 'PREMIUM',
+  'com.zeitra.app.premium.yearly': 'PREMIUM',
+  'com.zeitra.app.enterprise.monthly': 'ENTERPRISE',
+  'com.zeitra.app.enterprise.yearly': 'ENTERPRISE',
 };
 
 export function productIdToTier(
@@ -187,7 +187,7 @@ function parseAppleResponse(resp: AppleVerifyResponse): ValidationResult {
  *      service-account JSON) — DO NOT commit the JSON file
  *   5. Replace this stub with a call to:
  *        google.androidpublisher('v3').purchases.subscriptionsv2.get({
- *          packageName: 'com.nightfuel.app',
+ *          packageName: 'com.zeitra.app',
  *          token: purchaseToken,
  *        });
  *   6. Translate the response to a ValidationResult

@@ -26,20 +26,29 @@ const { width } = Dimensions.get('window');
 // pre-check — the server stays the source of truth.
 export const HEIGHT_CM_MAX = 300;
 export const WEIGHT_KG_MAX = 600;
-// Body-fat is a percentage, so (0, 100]. Tape measurements are circumferences in
-// cm — bounded generously (no human body part exceeds 300cm), mirroring the
-// WEIGHT_KG_MAX style: an honest pre-check, with the server as source of truth.
-export const BODY_FAT_PCT_MAX = 100;
+// Body-fat is a percentage. The progress-service POST /v1/progress/metrics bounds
+// it at z.number().min(1).max(70) (services/progress-service/src/routes.ts), so a
+// value below 1 or above 70 gets a server 400. Mirror that EXACT range here as an
+// honest pre-check — server stays the source of truth. Tape measurements are
+// circumferences in cm, bounded generously (no human body part exceeds 300cm).
+export const BODY_FAT_PCT_MIN = 1;
+export const BODY_FAT_PCT_MAX = 70;
 export const MEASUREMENT_CM_MAX = 300;
 
 // Validate an OPTIONAL numeric field (empty string = "not provided" = valid, since
-// the server marks both fields .optional()). When provided it must parse to a finite
-// number in (0, max]. Returns inline validation copy, or null when valid.
-export function validateMeasurement(raw: string, max: number, label: string): string | null {
+// the server marks every field .optional()). When provided it must parse to a finite
+// number in [min, max]. `min` defaults to a strictly-positive lower edge (> 0) for
+// the weight/cm fields whose server bound is `.positive()`; body fat passes
+// `BODY_FAT_PCT_MIN` (= 1) to mirror its `.min(1)` server bound. Returns inline
+// validation copy, or null when valid.
+export function validateMeasurement(raw: string, max: number, label: string, min = 0): string | null {
     if (raw.trim() === '') return null; // optional — omitting it is fine
     const n = parseFloat(raw);
     if (!Number.isFinite(n) || n <= 0) {
         return `Enter a valid ${label} greater than 0.`;
+    }
+    if (n < min) {
+        return `${label} must be at least ${min}.`;
     }
     if (n > max) {
         return `${label} must be ${max} or less.`;
@@ -128,7 +137,7 @@ export default function BodyMetricsScreen() {
     // Save control so we never fire a body-metrics PATCH the API will 400 — a
     // non-numeric entry (parseFloat → NaN) or out-of-range value blocks the save.
     const weightError = validateMeasurement(weight, WEIGHT_KG_MAX, 'weight');
-    const bodyFatError = validateMeasurement(bodyFat, BODY_FAT_PCT_MAX, 'body fat %');
+    const bodyFatError = validateMeasurement(bodyFat, BODY_FAT_PCT_MAX, 'body fat %', BODY_FAT_PCT_MIN);
     const chestError = validateMeasurement(chest, MEASUREMENT_CM_MAX, 'chest');
     const armError = validateMeasurement(arm, MEASUREMENT_CM_MAX, 'arms');
     const waistError = validateMeasurement(waist, MEASUREMENT_CM_MAX, 'waist');

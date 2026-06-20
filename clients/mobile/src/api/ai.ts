@@ -22,14 +22,34 @@ export interface AiChatResponse {
 }
 
 export interface MealSwapPayload {
+  /** Required by the server (`SwapPayload.userId`) — used for rate-limiting. */
+  userId: string;
   meal_to_swap: Record<string, unknown>;
-  preferences: Record<string, unknown>;
+  /**
+   * Server binds this to `GoalPreferences`, whose only required field is
+   * `primaryGoal` (e.g. 'WEIGHT_LOSS'); the rest default server-side.
+   */
+  preferences: { primaryGoal: string } & Record<string, unknown>;
   provider?: string;
 }
 
+export interface MealSwapAlternativeItem {
+  name: string;
+  amount: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export interface MealSwapAlternative {
+  name: string;
+  recommendation: string;
+  items: MealSwapAlternativeItem[];
+}
+
 export interface MealSwapResponse {
-  swappedMeal: Record<string, unknown>;
-  reasoning: string;
+  alternatives: MealSwapAlternative[];
 }
 
 export interface MealScorePayload {
@@ -40,8 +60,8 @@ export interface MealScorePayload {
 
 export interface MealScoreResponse {
   score: number;
-  breakdown: Record<string, number>;
-  feedback: string;
+  rationale: string;
+  quick_fix: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -116,13 +136,6 @@ export function parseAiQuotaError(err: unknown): AiQuotaError | null {
 // ---------------------------------------------------------------------------
 // Endpoints
 // ---------------------------------------------------------------------------
-
-export async function getWeeklyAudit() {
-  const { data } = await apiClient.get('/v1/ai/weekly-audit', {
-    timeout: AI_TIMEOUTS.weeklyAudit,
-  });
-  return data;
-}
 
 export async function generatePlan(payload: {
   userId: string;
@@ -427,8 +440,8 @@ export async function scoreMeal(payload: MealScorePayload): Promise<MealScoreRes
     if (isServiceUnavailable(err)) {
       return {
         score: 0,
-        breakdown: {},
-        feedback: "Score unavailable right now. Your meal was logged successfully.",
+        rationale: "Score unavailable right now. Your meal was logged successfully.",
+        quick_fix: '',
       };
     }
     throw err;

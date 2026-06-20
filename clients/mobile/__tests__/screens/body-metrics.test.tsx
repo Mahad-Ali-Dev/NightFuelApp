@@ -150,7 +150,11 @@ import {
   borderRadius,
   shadows,
 } from '@/theme';
-import BodyMetricsScreen from '../../app/(performance)/body-metrics';
+import BodyMetricsScreen, {
+  validateMeasurement,
+  BODY_FAT_PCT_MIN,
+  BODY_FAT_PCT_MAX,
+} from '../../app/(performance)/body-metrics';
 
 function renderScreen() {
   return render(
@@ -325,5 +329,67 @@ describe('BodyMetricsScreen — loading / empty / error / loaded states + a11y',
     expect(
       screen.getByLabelText('Save snapshot').props.accessibilityState,
     ).toMatchObject({ disabled: true });
+  });
+
+  // ── Test H: body-fat ABOVE the server max (70) is rejected ───────────────────
+  // Regression for the param-bound drift: BODY_FAT_PCT_MAX used to be 100, but the
+  // progress-service bounds bodyFatPct at .min(1).max(70). A value in (70, 100]
+  // (e.g. 85) sailed past the client pre-check and only died on the server with a
+  // 400. Now it surfaces an inline error and disables Save.
+  test('validation: a body-fat % above the server max (70) disables Save with an inline error', () => {
+    mockHistory.data = [];
+    renderScreen();
+
+    fireEvent.changeText(screen.getByLabelText('Body Fat %'), '85');
+
+    expect(screen.getByText('body fat % must be 70 or less.')).toBeTruthy();
+    expect(
+      screen.getByLabelText('Save snapshot').props.accessibilityState,
+    ).toMatchObject({ disabled: true });
+  });
+
+  // ── Test I: body-fat BELOW the server min (1) is rejected ────────────────────
+  // The server bound is .min(1): a positive-but-tiny value like 0.5 is valid by the
+  // old (0, max] rule yet 400s server-side. The aligned client now rejects [<1] too.
+  test('validation: a body-fat % below the server min (1) disables Save with an inline error', () => {
+    mockHistory.data = [];
+    renderScreen();
+
+    fireEvent.changeText(screen.getByLabelText('Body Fat %'), '0.5');
+
+    expect(screen.getByText('body fat % must be at least 1.')).toBeTruthy();
+    expect(
+      screen.getByLabelText('Save snapshot').props.accessibilityState,
+    ).toMatchObject({ disabled: true });
+  });
+
+  // ── Test J: validateMeasurement pins the EXACT body-fat [1, 70] window ────────
+  // Direct unit assertions on the exported pure validator (mirrors the repo's
+  // export-the-validator-and-test-it convention). Locks the client window to the
+  // server's .min(1).max(70) so a future bound drift fails loudly here.
+  test('validateMeasurement: body fat is accepted on [1, 70] and rejected just outside it', () => {
+    expect(BODY_FAT_PCT_MIN).toBe(1);
+    expect(BODY_FAT_PCT_MAX).toBe(70);
+
+    // Empty = "not provided" = valid (the field is optional server-side).
+    expect(validateMeasurement('', BODY_FAT_PCT_MAX, 'body fat %', BODY_FAT_PCT_MIN)).toBeNull();
+
+    // Inclusive edges are valid.
+    expect(validateMeasurement('1', BODY_FAT_PCT_MAX, 'body fat %', BODY_FAT_PCT_MIN)).toBeNull();
+    expect(validateMeasurement('70', BODY_FAT_PCT_MAX, 'body fat %', BODY_FAT_PCT_MIN)).toBeNull();
+    expect(validateMeasurement('15.2', BODY_FAT_PCT_MAX, 'body fat %', BODY_FAT_PCT_MIN)).toBeNull();
+
+    // Just outside each edge is rejected with honest copy.
+    expect(validateMeasurement('0.9', BODY_FAT_PCT_MAX, 'body fat %', BODY_FAT_PCT_MIN)).toBe(
+      'body fat % must be at least 1.',
+    );
+    expect(validateMeasurement('70.1', BODY_FAT_PCT_MAX, 'body fat %', BODY_FAT_PCT_MIN)).toBe(
+      'body fat % must be 70 or less.',
+    );
+
+    // A non-numeric entry (parseFloat → NaN) is still rejected first.
+    expect(validateMeasurement('abc', BODY_FAT_PCT_MAX, 'body fat %', BODY_FAT_PCT_MIN)).toBe(
+      'Enter a valid body fat % greater than 0.',
+    );
   });
 });

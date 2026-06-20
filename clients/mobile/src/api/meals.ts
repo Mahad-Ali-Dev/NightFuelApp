@@ -64,7 +64,7 @@ export interface FastingLog {
   endedAt?: string;
   targetHours: number;
   actualHours?: number;
-  status: 'ACTIVE' | 'COMPLETED';
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
 }
 
 /** Maps backend FastingLog (startTime/endTime) to mobile FastingLog (startedAt/endedAt) */

@@ -74,16 +74,19 @@ function isoDateOffset(days: number, now: Date = new Date()): string {
  * List the signed-in user's shifts.
  *
  * The backend GET `/v1/shifts` (services/shift-service/src/routes.ts) requires
- * `start`/`end` `YYYY-MM-DD` bounds (Zod-validated), so we pass a wide window
- * — roughly a year either side of today — which is ample for a shift-link
- * picker without an unbounded scan. `userId` is ignored by the server (it uses
- * the JWT), so it is never sent. The kind is persisted under `shiftType`;
- * mirror getCurrent's normalisation onto `type` so callers read one field. A
- * non-array body degrades to `[]` rather than throwing.
+ * `start`/`end` `YYYY-MM-DD` bounds (Zod-validated) AND caps the whole-day span
+ * at MAX_QUERY_RANGE_DAYS (366, @nightfuel/config range-bounds), rejecting a
+ * wider window with 400. So we pass roughly half a year either side of today
+ * (-182..+183 = 365 whole days, inside the 366 cap) — still ample for a
+ * shift-link picker and for the dashboard NextShiftCard, which only needs the
+ * near future — without an unbounded scan. `userId` is ignored by the server
+ * (it uses the JWT), so it is never sent. The kind is persisted under
+ * `shiftType`; mirror getCurrent's normalisation onto `type` so callers read
+ * one field. A non-array body degrades to `[]` rather than throwing.
  */
 export async function list(): Promise<Shift[]> {
   const { data } = await apiClient.get<any[]>('/v1/shifts', {
-    params: { start: isoDateOffset(-366), end: isoDateOffset(366) },
+    params: { start: isoDateOffset(-182), end: isoDateOffset(183) },
   });
   return Array.isArray(data)
     ? data.map((s) => ({ ...s, type: s.type ?? s.shiftType }) as Shift)

@@ -27,7 +27,7 @@ jest.mock('@/lib/sentry', () => ({
   captureException: jest.fn(),
 }));
 
-import { chat, scoreMeal, streamChat } from '@/api/ai';
+import { chat, scoreMeal, streamChat, swapMeal } from '@/api/ai';
 import { apiClient, getAccessToken, resolveApiUrl } from '@/api/client';
 import { captureException } from '@/lib/sentry';
 import { AI_FALLBACK_CHAT_REPLY, AI_TIMEOUTS } from '@/lib/aiSafety';
@@ -474,8 +474,9 @@ describe('scoreMeal()', () => {
   const scorePayload = { userId: 'u_1', meal: {}, preferences: {} };
 
   test('returns the server score on success', async () => {
+    // Server contract: ai-pipeline /meal-score returns { score, rationale, quick_fix }.
     mockedPost.mockResolvedValueOnce({
-      data: { score: 87, breakdown: { timing: 40 }, feedback: 'Great.' },
+      data: { score: 87, rationale: 'Great.', quick_fix: 'Add veg.' },
     });
 
     const result = await scoreMeal(scorePayload);
@@ -486,6 +487,8 @@ describe('scoreMeal()', () => {
       { timeout: AI_TIMEOUTS.mealScore },
     );
     expect(result.score).toBe(87);
+    expect(result.rationale).toBe('Great.');
+    expect(result.quick_fix).toBe('Add veg.');
   });
 
   test('returns a neutral score (not a throw) on a 502', async () => {
@@ -494,8 +497,8 @@ describe('scoreMeal()', () => {
     const result = await scoreMeal(scorePayload);
 
     expect(result.score).toBe(0);
-    expect(result.breakdown).toEqual({});
-    expect(result.feedback).toContain('logged successfully');
+    expect(result.quick_fix).toBe('');
+    expect(result.rationale).toContain('logged successfully');
   });
 
   test('still throws on a 4xx', async () => {
@@ -503,5 +506,57 @@ describe('scoreMeal()', () => {
     mockedPost.mockRejectedValueOnce(err);
 
     await expect(scoreMeal(scorePayload)).rejects.toBe(err);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// swapMeal() — sends the server-required userId + preferences.primaryGoal,
+// and returns the { alternatives: [...] } contract.
+// ---------------------------------------------------------------------------
+
+describe('swapMeal()', () => {
+  const swapPayload = {
+    userId: 'u_1',
+    meal_to_swap: { name: 'Oatmeal' },
+    preferences: { primaryGoal: 'WEIGHT_LOSS' },
+  };
+
+  test('posts userId + preferences and returns the alternatives list', async () => {
+    // Server contract: ai-pipeline /meal-swap returns { alternatives: [...] }.
+    mockedPost.mockResolvedValueOnce({
+      data: {
+        alternatives: [
+          {
+            name: 'Greek Yogurt Bowl',
+            recommendation: 'Higher protein, same calories.',
+            items: [
+              { name: 'Greek yogurt', amount: '200g', calories: 130, protein: 20, carbs: 8, fat: 0 },
+            ],
+          },
+        ],
+      },
+    });
+
+    const result = await swapMeal(swapPayload);
+
+    // userId must be in the body the server binds to SwapPayload.userId, and
+    // preferences must carry primaryGoal (the only GoalPreferences-required field).
+    expect(mockedPost).toHaveBeenCalledWith(
+      '/v1/ai/meal-swap',
+      swapPayload,
+      { timeout: AI_TIMEOUTS.mealSwap },
+    );
+    const sentBody = mockedPost.mock.calls[0][1];
+    expect(sentBody.userId).toBe('u_1');
+    expect(sentBody.preferences.primaryGoal).toBe('WEIGHT_LOSS');
+    expect(result.alternatives[0].name).toBe('Greek Yogurt Bowl');
+    expect(result.alternatives[0].items[0].protein).toBe(20);
+  });
+
+  test('propagates errors (no outage fallback for swaps)', async () => {
+    const err = { response: { status: 502 } };
+    mockedPost.mockRejectedValueOnce(err);
+
+    await expect(swapMeal(swapPayload)).rejects.toBe(err);
   });
 });

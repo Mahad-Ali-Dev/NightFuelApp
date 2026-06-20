@@ -2,9 +2,10 @@
  * Tests for src/api/community.ts.
  *
  * Focus: updateChallengeProgress() sends a { progress } body and tolerates a
- * missing success flag; plus the success-flag unwrap (likePost/joinChallenge),
- * the data.data / array-fallback readers (getPostById/getComments), and the
- * Array.isArray guards on the badge endpoints.
+ * missing success flag; likePost/joinChallenge treat any 2xx as success (the
+ * routes return a row, not a { success } flag); the data.data / array-fallback
+ * readers (getPostById/getComments); and the Array.isArray guards on the badge
+ * endpoints.
  */
 
 jest.mock('@/api/client', () => ({
@@ -74,8 +75,10 @@ describe('updateChallengeProgress', () => {
 });
 
 describe('joinChallenge', () => {
-  test('POSTs to the join endpoint and returns data.success', async () => {
-    mockedPost.mockResolvedValueOnce({ data: { success: true } });
+  // The join route returns the ChallengeParticipant row (no `success` field),
+  // so any 2xx (no throw) is treated as success.
+  test('POSTs to the join endpoint and returns true on a 2xx', async () => {
+    mockedPost.mockResolvedValueOnce({ data: { id: 'cp_1', challengeId: 'ch_9', userId: 'u_1', progress: 0 } });
 
     const ok = await joinChallenge('ch_9');
 
@@ -84,16 +87,30 @@ describe('joinChallenge', () => {
     );
     expect(ok).toBe(true);
   });
+
+  test('returns true even when the body has no success field', async () => {
+    mockedPost.mockResolvedValueOnce({ data: {} });
+
+    await expect(joinChallenge('ch_9')).resolves.toBe(true);
+  });
 });
 
 describe('likePost', () => {
-  test('POSTs to the like endpoint and returns data.success', async () => {
-    mockedPost.mockResolvedValueOnce({ data: { success: false } });
+  // The like route returns the updated Post row (no `success` field), so any
+  // 2xx (no throw) is treated as success.
+  test('POSTs to the like endpoint and returns true on a 2xx', async () => {
+    mockedPost.mockResolvedValueOnce({ data: { id: 'post_3', likes: 4 } });
 
     const ok = await likePost('post_3');
 
     expect(mockedPost).toHaveBeenCalledWith('/v1/community/post/post_3/like');
-    expect(ok).toBe(false);
+    expect(ok).toBe(true);
+  });
+
+  test('returns true even when the body has no success field', async () => {
+    mockedPost.mockResolvedValueOnce({ data: {} });
+
+    await expect(likePost('post_3')).resolves.toBe(true);
   });
 });
 

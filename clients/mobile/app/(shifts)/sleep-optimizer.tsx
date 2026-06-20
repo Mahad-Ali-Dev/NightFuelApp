@@ -11,6 +11,7 @@ import { getAnalytics, log } from '@/api/sleep';
 import { getCurrent } from '@/api/shifts';
 import { invalidateSleep } from '@/utils/invalidateSleep';
 import { computeLightPlan } from '@/lib/lightPlan';
+import { computeAnchorSleep } from '@/lib/circadian/anchorSleep';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -92,6 +93,31 @@ export default function SleepOptimizerScreen() {
         }
     }
 
+    // ── Recommended sleep block (guarded) ─────────────────────────────────────
+    // The "Recommended Sleep Block" window is the fixed 4h core anchor derived
+    // LOCALLY from the user's current shift via the shared, pure
+    // `computeAnchorSleep` (src/lib/circadian/anchorSleep.ts) — the SAME source
+    // the home dashboard's AnchorSleepCard renders, so the two stay in lockstep.
+    // It is NOT read off GET /v1/sleep/analytics: the server's getAnalytics never
+    // returns an `anchorSleepWindow` (it returns qualityScore / avgDuration /
+    // avgQuality / sessionsLogged / circadianAlignment / chartData / summary
+    // only), so the old `analytics?.anchorSleepWindow` was a phantom field that
+    // left this card permanently "—". Guarded exactly like `lightPlan`:
+    // `computeAnchorSleep` re-throws on a malformed ISO, so the try/catch
+    // collapses any throw to `null` and the card falls back to an honest "—"
+    // (no shift, malformed shift, or a throw) — never a NaN window, never a crash.
+    let anchorSleep: ReturnType<typeof computeAnchorSleep> | null = null;
+    if (shift) {
+        try {
+            anchorSleep = computeAnchorSleep(shift);
+        } catch {
+            anchorSleep = null;
+        }
+    }
+    const anchorSleepWindow = anchorSleep
+        ? `${formatLightTime(anchorSleep.anchor.start)} – ${formatLightTime(anchorSleep.anchor.end)}`
+        : '—';
+
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             <StatusBar style="light" />
@@ -164,22 +190,19 @@ export default function SleepOptimizerScreen() {
                     {/* Recommendations */}
                     <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.lg }]}>Recommended Windows</Text>
 
-                    {/* Recommended Sleep Block — this row surfaces the BACKEND
-                        analytics window (`analytics?.anchorSleepWindow`, an
-                        analytics-derived recommendation) and is deliberately
-                        DISTINCT from the home dashboard's "Anchor sleep (4h core)"
-                        card (src/components/home/AnchorSleepCard.tsx), which renders
-                        the engine's fixed 4h core block from the shared, pure
-                        `computeAnchorSleep` (src/lib/circadian/anchorSleep.ts). To
-                        avoid presenting this analytics window AS that same fixed 4h
-                        anchor, the label/subtitle here read as analytics-derived
-                        ("Recommended Sleep Block" / "your logged + recommended sleep
-                        analytics") rather than reusing the "anchor sleep" /
-                        "core block" wording. The displayed VALUE stays the backend's
-                        `anchorSleepWindow` (contract unchanged); a future sprint
-                        could reconcile the two by routing this row through the same
-                        `computeAnchorSleep` block, but that is intentionally out of
-                        scope here to avoid backend/mock contention. */}
+                    {/* Recommended Sleep Block — the fixed 4h core anchor derived
+                        LOCALLY from the user's current shift via the shared, pure
+                        `computeAnchorSleep` (src/lib/circadian/anchorSleep.ts),
+                        the SAME source the home dashboard's "Anchor sleep (4h core)"
+                        card (src/components/home/AnchorSleepCard.tsx) renders — so
+                        the two stay in lockstep. The displayed value is the guarded
+                        `anchorSleepWindow` computed above (an honest "—" when there
+                        is no usable shift), NOT a `GET /v1/sleep/analytics` field:
+                        the server's getAnalytics never returns an `anchorSleepWindow`
+                        (qualityScore / avgDuration / avgQuality / sessionsLogged /
+                        circadianAlignment / chartData / summary only), so the old
+                        `analytics?.anchorSleepWindow` was a phantom read that left
+                        this card permanently "—". */}
                     <GlassCard style={[styles.windowCard, { borderColor: withAlpha(colors.accent.purple, 0.25) }]}>
                         <View style={styles.windowHeader}>
                             <View style={[styles.windowIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.28), borderWidth: 1 }]}>
@@ -187,11 +210,21 @@ export default function SleepOptimizerScreen() {
                             </View>
                             <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: spacing.md }]}>Recommended Sleep Block</Text>
                             <View style={{ flex: 1 }} />
-                            <Text style={[typography.statTiny, { color: colors.accent.cyan }]}>{analytics?.anchorSleepWindow ?? '—'}</Text>
+                            <Text style={[typography.statTiny, { color: colors.accent.cyan }]}>{anchorSleepWindow}</Text>
                         </View>
-                        <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>Derived from your logged + recommended sleep analytics. Keep the room dark and avoid light on the way home.</Text>
+                        <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>A fixed 4h core block anchored to your post-shift recovery window. Keep the room dark and avoid light on the way home.</Text>
                     </GlassCard>
 
+                    {/* Pre-Shift Nap — general guidance only. There is NO client
+                        source that derives a specific pre-shift nap window (the
+                        shared circadian libs model the POST-shift recovery anchor /
+                        light plan, not a prophylactic pre-shift nap), and the server
+                        never returns one either — getAnalytics has no
+                        `preShiftNapWindow`, so the old `analytics?.preShiftNapWindow`
+                        was a phantom read that always resolved to "—". Rather than
+                        fabricate a window from a new, unbacked magic offset, this
+                        row carries an honest "—" with the duration guidance moved
+                        into the copy, so it never claims a computed window exists. */}
                     <GlassCard style={[styles.windowCard, { borderColor: withAlpha(colors.accent.amber, 0.25) }]}>
                         <View style={styles.windowHeader}>
                             <View style={[styles.windowIcon, { backgroundColor: withAlpha(colors.accent.amber, 0.14), borderColor: withAlpha(colors.accent.amber, 0.28), borderWidth: 1 }]}>
@@ -199,9 +232,9 @@ export default function SleepOptimizerScreen() {
                             </View>
                             <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: spacing.md }]}>Pre-Shift Nap</Text>
                             <View style={{ flex: 1 }} />
-                            <Text style={[typography.statTiny, { color: colors.accent.amber }]}>{analytics?.preShiftNapWindow ?? '—'}</Text>
+                            <Text style={[typography.statTiny, { color: colors.accent.amber }]}>—</Text>
                         </View>
-                        <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>90-minute cycle to top off cognitive alertness before shift.</Text>
+                        <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>Aim for a 90-minute cycle before your shift to top off cognitive alertness.</Text>
                     </GlassCard>
 
                     {/* Light timing — a seek→avoid light-exposure PLAN derived from

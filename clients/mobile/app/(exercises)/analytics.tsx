@@ -55,16 +55,19 @@ export default function ExerciseAnalyticsScreen() {
         })).slice(-15);
     }, [analyticsQuery.data]);
 
-    const muscleDistribution = useMemo(() => {
-        // Real distribution aggregated from logged 1RM records by muscle group.
-        // No synthetic placeholder — when empty the UI shows an EmptyState instead.
-        const muscles: Record<string, number> = {};
+    const exerciseDistribution = useMemo(() => {
+        // Real distribution aggregated from logged 1RM records by exercise name.
+        // The 1RM response (OneRepMax) carries exerciseName but NO muscleGroup, so
+        // we bucket by the field the server actually returns — aggregating by a
+        // missing field would collapse every record into a single fake slice. No
+        // synthetic placeholder — when empty the UI shows an EmptyState instead.
+        const counts: Record<string, number> = {};
         (oneRmQuery.data ?? []).forEach(item => {
-            const m = (item as any).muscleGroup || 'Other';
-            muscles[m] = (muscles[m] || 0) + 1;
+            const name = item.exerciseName?.trim() || 'Unnamed';
+            counts[name] = (counts[name] || 0) + 1;
         });
 
-        return Object.entries(muscles).map(([text, value], i) => ({
+        return Object.entries(counts).map(([text, value], i) => ({
             value,
             text,
             color: [colors.accent.coral, colors.accent.cyan, colors.accent.purple, colors.accent.amber][i % 4],
@@ -217,10 +220,10 @@ export default function ExerciseAnalyticsScreen() {
                 <View style={{ paddingHorizontal: 20, marginTop: 24 }}>
                     <View style={[styles.card, { backgroundColor: colors.background.secondary, borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}>
                         <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginBottom: 20 }]}>Volume Distribution</Text>
-                        {muscleDistribution.length > 0 ? (
+                        {exerciseDistribution.length > 0 ? (
                             <View style={styles.pieRow}>
                                 <PieChart
-                                    data={muscleDistribution}
+                                    data={exerciseDistribution}
                                     donut
                                     showText
                                     textColor="#FFF"
@@ -230,7 +233,7 @@ export default function ExerciseAnalyticsScreen() {
                                     focusOnPress
                                 />
                                 <View style={styles.legend}>
-                                    {muscleDistribution.map((item, idx) => (
+                                    {exerciseDistribution.map((item, idx) => (
                                         <View key={idx} style={styles.legendItem}>
                                             <View style={[styles.legendDot, { backgroundColor: item.color }]} />
                                             <Text style={[typography.caption, { color: colors.text.secondary }]}>{item.text}</Text>
@@ -242,7 +245,7 @@ export default function ExerciseAnalyticsScreen() {
                             <EmptyState
                                 icon="pie-chart-outline"
                                 title="No volume data yet"
-                                subtitle="Log lifts in the 1RM calculator to see how your training volume is distributed across muscle groups."
+                                subtitle="Log lifts in the 1RM calculator to see how your training volume is distributed across exercises."
                             />
                         )}
                     </View>

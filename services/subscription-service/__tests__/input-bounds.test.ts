@@ -78,10 +78,10 @@ const USER_ID = '7c3f9a1c-dead-beef-cafe-0123456789ab';
 // A real, mapped product ID (mirrors PRODUCT_ID_TO_TIER in src/iap-validator.ts
 // and clients/mobile/src/lib/iap.ts). Well-formed AND known → passes the
 // productId short-circuit so the validator mock is reached.
-const KNOWN_PRODUCT_ID = 'com.nightfuel.app.pro.monthly';
+const KNOWN_PRODUCT_ID = 'com.zeitra.app.pro.monthly';
 // A well-formed but UNKNOWN SKU — non-empty (so it clears minLength) yet maps to
 // no tier, driving the product_id_mismatch 400 BEFORE any Apple/Google call.
-const UNKNOWN_PRODUCT_ID = 'com.nightfuel.app.bogus.lifetime';
+const UNKNOWN_PRODUCT_ID = 'com.zeitra.app.bogus.lifetime';
 
 // Minimal valid Subscription-shaped object the mocked upgradeTier resolves with.
 // Only `id` is read by the route (for the tier-updated event); the rest mirror

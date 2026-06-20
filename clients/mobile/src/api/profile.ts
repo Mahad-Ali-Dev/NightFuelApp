@@ -2,25 +2,45 @@ import { apiClient } from './client';
 import { User } from '@/store/authStore';
 
 export interface UserProfile extends User {
-    aboutMe?: string;
-    occupation?: string;
+    // The user-service profile row carries displayName/avatarUrl/timezone (see
+    // services/user-service/prisma/schema.prisma → model UserProfile). There is
+    // NO aboutMe/occupation column on that row — the editor used to send them and
+    // falsely claim they saved, so they are intentionally absent here.
     timezone?: string;
     avatarUrl: string | null;
     preferences?: UserPreferences;
     status?: UserStatus;
 }
 
+// Shape PUT /v1/users/me actually accepts (server: updateProfileSchema in
+// services/user-service/src/schemas.ts). Deliberately decoupled from the GET
+// response (UserProfile, whose `name` is the authStore mirror of the server's
+// `displayName`): the server reads `displayName`, so the editor must send that
+// key — sending `name` silently no-ops.
+export interface UpdateProfileInput {
+    displayName?: string;
+    avatarUrl?: string | null;
+    dateOfBirth?: string | null;
+    heightCm?: number | null;
+    weightKg?: number | null;
+    biologicalSex?: 'MALE' | 'FEMALE' | 'OTHER' | 'PREFER_NOT_TO_SAY' | null;
+    timezone?: string;
+    region?: 'us' | 'eu' | 'ap';
+}
+
+// Mirrors the columns GET /v1/users/me/preferences actually returns
+// (services/user-service/prisma/schema.prisma → model UserPreferences). Fields
+// the client used to read but that have NO backing column — dietaryType (server:
+// dietaryPreference), wakeTime/sleepTime/workStartTime/workEndTime (server:
+// sleepWindowStart/sleepWindowEnd only), sleepTargetHours, and
+// dislikedIngredients/medications/supplements — were removed so the screen can't
+// claim to persist something the server drops.
 export interface UserPreferences {
-    dietaryType: string;
+    dietaryPreference: string;
+    sleepWindowStart: string | null;
+    sleepWindowEnd: string | null;
     allergies: string[];
-    dislikedIngredients: string[];
-    medications: string[];
-    supplements: string[];
-    sleepTargetHours: number;
-    wakeTime: string;
-    sleepTime: string;
-    workStartTime: string;
-    workEndTime: string;
+    healthConditions: string[];
 }
 
 export interface UserStatus {
@@ -39,7 +59,7 @@ export const getMyProfile = async (): Promise<UserProfile> => {
     return data;
 };
 
-export const updateProfile = async (updates: Partial<UserProfile>): Promise<UserProfile> => {
+export const updateProfile = async (updates: UpdateProfileInput): Promise<UserProfile> => {
     const { data } = await apiClient.put('/v1/users/me', updates);
     return data;
 };

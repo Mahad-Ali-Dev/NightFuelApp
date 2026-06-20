@@ -29,13 +29,32 @@ export interface NutritionPlan {
   createdAt: string;
 }
 
+export interface ProtocolParameters {
+  calories: number;
+  protein_g: number;
+  volume_modifier: number;
+  deload?: boolean;
+  training_split?: string;
+}
+
 export interface MealProtocol {
   id: string;
   name: string;
   description: string;
-  rules: any;
+  parameters: ProtocolParameters;
   isPublic: boolean;
   creatorId?: string;
+}
+
+/**
+ * Payload accepted by POST /v1/plans/protocols (createProtocolSchema).
+ * `name` + `parameters` are required; `description`/`isPublic` are optional.
+ */
+export interface CreateProtocolPayload {
+  name: string;
+  description?: string;
+  parameters: ProtocolParameters;
+  isPublic?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -110,12 +129,12 @@ export const getProtocols = async () => {
   return data;
 };
 
-export const createProtocol = async (payload: Partial<MealProtocol>) => {
+export const createProtocol = async (payload: CreateProtocolPayload) => {
   const { data } = await apiClient.post<MealProtocol>('/v1/plans/protocols', payload);
   return data;
 };
 
-export const updateProtocol = async (id: string, payload: Partial<MealProtocol>) => {
+export const updateProtocol = async (id: string, payload: Partial<CreateProtocolPayload>) => {
   const { data } = await apiClient.patch<MealProtocol>(`/v1/plans/protocols/${id}`, payload);
   return data;
 };

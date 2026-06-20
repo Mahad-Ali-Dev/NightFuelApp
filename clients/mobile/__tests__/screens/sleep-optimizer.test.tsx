@@ -34,17 +34,26 @@
  * would manufacture a brand CTA where the screen has none, so the source is not
  * modified by the coverage item this suite belongs to.)
  *
- * A copy-coherence test pins the first "Recommended Windows" row. That row
- * surfaces the BACKEND analytics window (`analytics?.anchorSleepWindow`) and is
- * deliberately DISTINCT from the home dashboard's "Anchor sleep (4h core)" card
- * (src/components/home/AnchorSleepCard.tsx), which renders the engine's fixed 4h
- * core block from the shared `computeAnchorSleep` (src/lib/circadian/anchorSleep.ts).
- * To stop this analytics row reading as that same fixed 4h anchor, its copy was
- * clarified to "Recommended Sleep Block" (analytics-derived wording), no longer
- * the "Anchor Sleep" / "total darkness required" framing. This test asserts the
- * clarified label renders, the stale "Anchor Sleep" label does NOT, and the
- * displayed VALUE is still the backend's `anchorSleepWindow` verbatim (the
- * backend/mock analytics contract is unchanged — copy-only clarification).
+ * A "Recommended Windows" group of tests pins the two recommendation rows after
+ * the contract-drift fix:
+ *
+ *   - "Recommended Sleep Block": previously read a PHANTOM analytics field
+ *     (`analytics?.anchorSleepWindow`) the server's getAnalytics never returns
+ *     (qualityScore / avgDuration / avgQuality / sessionsLogged /
+ *     circadianAlignment / chartData / summary only) → the card was permanently
+ *     "—". It now derives the fixed 4h core window LOCALLY from the current shift
+ *     via the shared, pure `computeAnchorSleep` (src/lib/circadian/anchorSleep.ts)
+ *     — the SAME source the dashboard AnchorSleepCard renders. The tests assert:
+ *     with a shift the row prints the computeAnchorSleep window (matched against
+ *     the real instants, timezone-portable), that window is INDEPENDENT of any
+ *     analytics field (a DECOY `anchorSleepWindow` in the payload must NOT surface
+ *     — proving the phantom read is gone), with no shift it degrades to an honest
+ *     "—", and the stale "Anchor Sleep" label is absent.
+ *   - "Pre-Shift Nap": has NO source — client or server (getAnalytics has no
+ *     `preShiftNapWindow`; the circadian libs model only the post-shift recovery
+ *     anchor / light plan) — so it renders an honest "—" with the 90-minute
+ *     guidance moved into its body copy, never claiming a computed window, even
+ *     when a shift is present.
  *
  * Mock conventions mirror the sibling screen suites (circadian / shift-detail /
  * dashboard.shiftTransition): `@tanstack/react-query` is stubbed and branches on
@@ -163,6 +172,12 @@ import {
 // dependency-free (only ./shiftTransition), so importing it pulls in no native
 // modules.
 import { computeLightPlan } from '@/lib/lightPlan';
+// The REAL pure anchor-sleep math — the "Recommended Sleep Block" window now
+// derives LOCALLY from the current shift via this shared helper (the SAME source
+// the dashboard AnchorSleepCard uses), NOT from a `GET /v1/sleep/analytics` field
+// (getAnalytics never returns an `anchorSleepWindow`). Imported so the expected
+// window is derived from the SAME instants the screen renders, timezone-portable.
+import { computeAnchorSleep } from '@/lib/circadian/anchorSleep';
 import SleepOptimizerScreen from '../../app/(shifts)/sleep-optimizer';
 
 /**
@@ -398,36 +413,91 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
     expect(mockMutate).toHaveBeenCalledTimes(1);
   });
 
-  // ── Copy coherence: the analytics "Recommended Sleep Block" row ───────────
-  // The first "Recommended Windows" row is driven by the BACKEND analytics
-  // window (`analytics?.anchorSleepWindow`) and is intentionally distinct from
-  // the home dashboard's "Anchor sleep (4h core)" card (which renders the shared
-  // computeAnchorSleep fixed 4h block). This test pins the clarified copy so the
-  // row can't silently regress to claiming it IS that shared anchor block, while
-  // proving the backend/mock contract is untouched: the row still prints the
-  // analytics window value verbatim.
-  test('analytics row reads as "Recommended Sleep Block" (analytics-derived), prints the backend window verbatim, and no longer claims to be the shared "Anchor Sleep" 4h block', () => {
-    // A distinctive backend window so we can assert it is displayed UNCHANGED —
-    // the contract is the value the row prints, not its surrounding copy.
+  // ── "Recommended Sleep Block" row: derived locally from computeAnchorSleep ──
+  // The first "Recommended Windows" row previously read a PHANTOM analytics field
+  // (`analytics?.anchorSleepWindow`) that the server's getAnalytics never returns
+  // (qualityScore / avgDuration / avgQuality / sessionsLogged / circadianAlignment
+  // / chartData / summary only) — so the card was permanently "—". The fix derives
+  // the 4h core window LOCALLY from the current shift via the shared, pure
+  // `computeAnchorSleep` (the SAME source the dashboard AnchorSleepCard renders).
+  // This test pins the new contract: with a shift the row prints the
+  // computeAnchorSleep window, the value is INDEPENDENT of any analytics field
+  // (a stray `anchorSleepWindow` in the payload must NOT change it — proving the
+  // phantom read is gone), and the row no longer claims to be the "Anchor Sleep"
+  // card itself.
+  test('"Recommended Sleep Block" row prints the computeAnchorSleep window from the current shift, independent of any analytics field', () => {
+    mockShiftState.data = ACTIVE_SHIFT;
+    mockShiftState.isLoading = false;
+    // A DECOY phantom field in the analytics payload: the screen must IGNORE it
+    // (it is no longer read) — the displayed window comes from computeAnchorSleep,
+    // not this value. If the old `analytics?.anchorSleepWindow` read regressed in,
+    // this decoy would surface and the computed window would be absent.
     mockAnalyticsState.data = {
       qualityScore: 80,
       summary: 'Looking good.',
-      anchorSleepWindow: '2:00 PM – 6:00 PM',
+      anchorSleepWindow: 'DECOY 2:00 PM – 6:00 PM',
     };
+
+    // Derive the expectation from the REAL pure compute against the SAME shift, so
+    // the matched instants are correct whatever the runner's tz is.
+    const anchor = computeAnchorSleep(ACTIVE_SHIFT).anchor;
 
     renderScreen();
 
-    // The clarified, analytics-derived label renders…
+    // The label renders…
     expect(screen.getByText('Recommended Sleep Block')).toBeTruthy();
-    // …and the row prints the BACKEND analytics window VERBATIM — proving the
-    // backend/mock analytics contract (`analytics?.anchorSleepWindow` stays the
-    // displayed value) is unchanged by this copy-only clarification.
-    expect(screen.getByText('2:00 PM – 6:00 PM')).toBeTruthy();
+    // …and the row prints the window from computeAnchorSleep's actual instants.
+    // Matched CONTAINS-both-endpoints (windowMatcher) so a separator/whitespace
+    // copy tweak can't regress this while a wrong/NaN instant still would.
+    expect(screen.getByText(windowMatcher(anchor))).toBeTruthy();
+    // The DECOY phantom analytics window must NOT appear — proving the row no
+    // longer reads `analytics?.anchorSleepWindow` (the contract-drift bug).
+    expect(screen.queryByText(/DECOY/)).toBeNull();
 
     // The stale "Anchor Sleep" label — which collided with the home dashboard's
-    // fixed-4h-core "Anchor sleep" card — must NOT be present on this analytics
-    // row anymore (the coherence guard). The home card owns the "anchor sleep"
-    // / "core block" wording; this analytics row no longer claims it.
+    // fixed-4h-core "Anchor sleep" card — must NOT be present on this row.
     expect(screen.queryByText('Anchor Sleep')).toBeNull();
+  });
+
+  // ── No shift → "Recommended Sleep Block" degrades to an honest "—" ────────
+  // computeAnchorSleep needs a shift; with none the screen's guard collapses the
+  // window to an honest "—" (it never fabricates a window, and it no longer reads
+  // a phantom analytics field that would also have been "—").
+  test('no shift: "Recommended Sleep Block" shows an honest "—" (no fabricated window)', () => {
+    mockShiftState.data = null;
+    mockShiftState.isLoading = false;
+    mockAnalyticsState.data = { qualityScore: 80, summary: 'Looking good.' };
+
+    renderScreen();
+
+    // The label is present, and an em-dash placeholder accompanies it (the row
+    // never invents a clock window without a shift). "—" appears for both the
+    // Recommended Sleep Block and Pre-Shift Nap rows, so assert at least one.
+    expect(screen.getByText('Recommended Sleep Block')).toBeTruthy();
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1);
+  });
+
+  // ── Pre-Shift Nap: honest "—" (no client/backend source), guidance in copy ─
+  // There is NO source — client or server — for a specific pre-shift nap window
+  // (getAnalytics has no `preShiftNapWindow`; the circadian libs model only the
+  // post-shift recovery anchor / light plan). The row must therefore show an
+  // honest "—" and carry the 90-minute guidance in its body copy, never claiming
+  // a computed window — even when a shift IS present (so it can't be confused with
+  // a derivable window like the Recommended Sleep Block).
+  test('Pre-Shift Nap renders an honest "—" with guidance copy, even with a current shift', () => {
+    mockShiftState.data = ACTIVE_SHIFT;
+    mockShiftState.isLoading = false;
+    mockAnalyticsState.data = { qualityScore: 80, summary: 'Looking good.' };
+
+    renderScreen();
+
+    // The Pre-Shift Nap label + its guidance copy render (the 90-minute cycle
+    // rationale now lives in the body, not as a fake window value).
+    expect(screen.getByText('Pre-Shift Nap')).toBeTruthy();
+    expect(screen.getByText(/90-minute cycle/i)).toBeTruthy();
+    // With a shift present the Recommended Sleep Block row resolves to a real
+    // computed window (not "—"), so any "—" still in the tree is the Pre-Shift
+    // Nap's honest placeholder — assert it is present.
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1);
   });
 });

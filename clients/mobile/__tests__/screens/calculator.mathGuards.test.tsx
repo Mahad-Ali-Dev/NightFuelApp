@@ -20,19 +20,27 @@
  *
  * The save action also no longer uses a modal alert dialog: the success / failure
  * UX is an inline, accessibilityRole="alert" surface driven by the mutation's own
- * state, with a Retry (error) that re-fires the same mutation. The primary SAVE is
- * the shared CtaButton and stays present + pressable in every state.
+ * state, with a Retry (error) that re-fires the same mutation. The SAVE is ALSO
+ * guarded against the server's POST /v1/exercises/1rm body schema, which requires
+ * weightKg AND estimated1RMKg to be z.number().positive() (a 0 → 400): the shared
+ * CtaButton is `disabled` (accessibilityState.disabled + a swallowed press) and the
+ * onPress short-circuits whenever w <= 0 || estimated1RM <= 0, with an inline hint.
+ * So the button is present + pressable only when the estimate is positive.
  *
  * This suite feeds the AT-RISK reps and asserts the OUTPUTS stay finite/clamped,
- * the CtaButton stays present + pressable, the inline error surface renders (no
- * modal alert dialog) with a working Retry, and a normal rep count renders the
- * SAME rounded numbers as before:
+ * the SAVE fires ONLY for a positive estimate (and is guarded off — never POSTing a
+ * 0 — at a clamped/blank one), the inline error surface renders (no modal alert
+ * dialog) with a working Retry, and a normal rep count renders the SAME rounded
+ * numbers as before:
  *
  *   1. reps=37 (Brzycki/Lander denominator hits 0) → no 'Infinity'/'NaN' anywhere
- *      in the numeral or the zone rows; every shown kg is finite & >= 0; the SAVE
- *      CtaButton is present and pressable (its press fires the mutation).
- *   2. reps=40 (> 37 → denominator negative) → same: no 'Infinity'/'NaN'/negative
- *      leaks, values finite & >= 0, CtaButton present + pressable.
+ *      in the numeral or the zone rows; every shown kg is finite & >= 0; with the
+ *      ACTIVE formula on a positive estimate (Lander, 4058) the SAVE CtaButton is
+ *      enabled and its press fires the mutation.
+ *   2. reps=40 (> 37 → denominator negative) → same finite/clamped outputs, and with
+ *      the active estimate clamped to 0 the SAVE is GUARDED OFF: the CtaButton reports
+ *      accessibilityState.disabled, the inline hint shows, and the press never fires.
+ *   2b. a blank WEIGHT (w <= 0) likewise guards the SAVE off regardless of reps.
  *   3. a simulated save FAILURE → the inline accessibilityRole="alert" surface
  *      renders the verbatim error copy (NOT a modal alert dialog), and its Retry
  *      re-invokes saveMutation.mutate().
@@ -234,16 +242,19 @@ describe('CalculatorScreen — 1RM divide-by-zero guards + inline save surface',
     expectNumeral(4058);
     expectAllKgFiniteNonNegative();
 
-    // The primary SAVE is the shared CtaButton — present and pressable in this
-    // state. Pressing it fires the real mutation (proves it's wired, not inert).
+    // The primary SAVE is the shared CtaButton. The ACTIVE formula here is Lander
+    // (estimated1RM=4058, weight=100) → both halves of the save guard pass, so the
+    // button is ENABLED and pressing it fires the real mutation (proves it's wired,
+    // not inert, when the estimate is positive).
     const saveCta = screen.getByLabelText('Save to records');
     expect(saveCta).toBeTruthy();
+    expect(saveCta.props.accessibilityState?.disabled).toBe(false);
     fireEvent.press(saveCta);
     expect(mockMutate).toHaveBeenCalledTimes(1);
   });
 
   // ── 2: reps=40 (> 37 → denominator negative) → no Infinity/NaN/negative leak ──
-  test('reps=40 (>37) never renders Infinity/NaN/negative; values finite >= 0; CtaButton present + pressable', () => {
+  test('reps=40 (>37) never renders Infinity/NaN/negative; values finite >= 0; SAVE is guarded off at estimate=0', () => {
     renderScreen();
     setInputs('100', '40');
 
@@ -258,10 +269,31 @@ describe('CalculatorScreen — 1RM divide-by-zero guards + inline save surface',
     const values = expectAllKgFiniteNonNegative();
     expect(values.every((v) => v >= 0)).toBe(true);
 
+    // With the active estimate clamped to 0, the SAVE is GUARDED OFF: the server's
+    // POST /v1/exercises/1rm body schema rejects a non-positive estimated1RMKg with
+    // a 400, so the CtaButton reports accessibilityState.disabled and pressing it is
+    // a no-op (the disabled Pressable swallows the press AND the onPress short-
+    // circuits) — the mutation never fires. The inline hint explains why.
     const saveCta = screen.getByLabelText('Save to records');
     expect(saveCta).toBeTruthy();
+    expect(saveCta.props.accessibilityState?.disabled).toBe(true);
+    expect(screen.getByText('Enter a weight and reps that give a 1RM above 0 to save.')).toBeTruthy();
     fireEvent.press(saveCta);
-    expect(mockMutate).toHaveBeenCalledTimes(1);
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  // ── 2b: blank WEIGHT (w <= 0) also guards the SAVE off even with valid reps ───
+  test('a blank weight guards the SAVE off (w <= 0) regardless of a valid estimate', () => {
+    renderScreen();
+    // Valid reps, but clear the weight → w = parseFloat('') || 0 = 0. Epley with
+    // w=0 yields an estimate of 0 too, so BOTH halves of the guard (w > 0 &&
+    // estimated1RM > 0) fail — the server's positive() weightKg would 400.
+    setInputs('', '5');
+
+    const saveCta = screen.getByLabelText('Save to records');
+    expect(saveCta.props.accessibilityState?.disabled).toBe(true);
+    fireEvent.press(saveCta);
+    expect(mockMutate).not.toHaveBeenCalled();
   });
 
   // ── 3: a simulated save FAILURE renders the inline role="alert" surface + Retry ─

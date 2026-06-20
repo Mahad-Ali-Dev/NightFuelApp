@@ -30,7 +30,7 @@ const sampleNotification: Notification = {
   type: 'PLAN_READY',
   title: 'Your plan is ready',
   body: 'Tap to view tonight’s plan.',
-  read: false,
+  isRead: false,
   createdAt: '2026-06-13T22:00:00.000Z',
 };
 
@@ -57,17 +57,31 @@ describe('getAll', () => {
 
     expect(result).toEqual([]);
   });
+
+  test('surfaces the server `isRead` field (not `read`) on each notification', async () => {
+    // The notification-service serialises the read flag as `isRead`
+    // (notificationResponseSchema). getAll() passes the row through verbatim, so
+    // the read state must be reachable via `isRead` — guards against the field
+    // silently reverting to `read`, which would always read back undefined.
+    mockedGet.mockResolvedValueOnce({
+      data: { data: [{ ...sampleNotification, isRead: true }], count: 1 },
+    });
+
+    const [n] = await getAll();
+
+    expect(n.isRead).toBe(true);
+  });
 });
 
 describe('markRead', () => {
   test('PUTs to the /{id}/read path and returns the updated notification', async () => {
-    const updated = { ...sampleNotification, read: true };
+    const updated = { ...sampleNotification, isRead: true };
     mockedPut.mockResolvedValueOnce({ data: updated });
 
     const result = await markRead('n_1');
 
     expect(mockedPut).toHaveBeenCalledWith('/v1/notifications/n_1/read');
-    expect(result.read).toBe(true);
+    expect(result.isRead).toBe(true);
   });
 
   test('interpolates arbitrary ids into the URL path', async () => {

@@ -104,9 +104,10 @@ const mockCircadianModel: { data: any } = { data: undefined };
 // onError (parseAiQuotaError → setQuota/setGenError) runs against `err`.
 // `data` is the RESOLVED plan the screen reads as `plan` (the useMutation
 // result's `data`). The screen renders the AI Protocol timeline ONLY when
-// `plan.items` is a non-empty array — there is no fabricated fallback — so the
-// populated case must supply a real plan here (mirrors a generated plan landing
-// in the mutation cache). Left undefined ⇒ the honest "No protocol yet" empty state.
+// `plan.meals` is a non-empty array — there is no fabricated fallback — so the
+// populated case must supply a real plan here (the plan-service `meals` wire
+// shape, normalized in api/plans.ts; the screen never reads `plan.items`). Left
+// undefined ⇒ the honest "No protocol yet" empty state.
 type MutationOutcome = { mode: 'idle' | 'error' | 'success'; err?: unknown; data?: unknown };
 const mockMutation: MutationOutcome = { mode: 'idle' };
 
@@ -220,23 +221,27 @@ const ACTIVE_SHIFT = {
   endTime: '2026-06-14T06:00:00.000Z',
 };
 
-// A REAL AI plan as the screen consumes it: `plan.items` is a non-empty array of
-// timeline rows. The first row is a meal whose slot resolves to BREAKFAST and
-// which carries plannedMacros + suggestedFoods, so normalizePlannedMeal yields a
-// row the "Log <title>" CTA serializes into the log-planned-meal params. (There
-// is no fabricated fallback timeline anymore; the populated case must be real.)
+// A REAL AI plan as the screen consumes it: `plan.meals` is a non-empty array of
+// the plan-service wire shape (api/plans.ts PlanMeal: { time, label, description,
+// macros:{...} }). The first meal's label "Pre-Shift Breakfast" resolves to the
+// BREAKFAST slot (break/morning regex in mealTypeFromSlot), and its macros object
+// feeds normalizePlannedMeal so the "Log <title>" CTA serializes plannedMacros +
+// suggestedFoods into the log-planned-meal params. The screen never reads
+// `plan.items`; there is no fabricated fallback timeline.
 const PLAN_WITH_BREAKFAST = {
-  items: [
+  meals: [
     {
-      type: 'meal',
-      title: 'Pre-Shift Protein',
-      mealType: 'BREAKFAST',
       time: '20:00',
-      macros: '40P / 20C / 15F',
-      plannedMacros: { protein: 40, carbs: 20, fat: 15 },
-      suggestedFoods: [{ name: 'Greek yogurt', protein: 20, carbs: 8, fat: 5 }],
+      label: 'Pre-Shift Breakfast',
+      description: 'Slow-digesting protein before the shift',
+      macros: { protein: 40, carbs: 20, fat: 15, calories: 415 },
     },
-    { type: 'workout', title: 'Activation Protocol', time: '21:00', duration: '30m' },
+    {
+      time: '00:30',
+      label: 'Midnight Dinner',
+      description: 'Lean protein + veg',
+      macros: { protein: 35, carbs: 30, fat: 12, calories: 368 },
+    },
   ],
 };
 

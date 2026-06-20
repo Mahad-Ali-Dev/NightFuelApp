@@ -55,8 +55,10 @@ export const createPost = async (content: string, imageUrl?: string): Promise<Po
 };
 
 export const likePost = async (postId: string): Promise<boolean> => {
-  const { data } = await apiClient.post(`/v1/community/post/${postId}/like`);
-  return data.success;
+  // The like route returns the updated Post row (no `success` field), so a
+  // `data.success` read is always undefined. Treat any 2xx (no throw) as success.
+  await apiClient.post(`/v1/community/post/${postId}/like`);
+  return true;
 };
 
 export const addComment = async (postId: string, text: string): Promise<Comment> => {
@@ -75,8 +77,10 @@ export const getChallenges = async (): Promise<Challenge[]> => {
 };
 
 export const joinChallenge = async (challengeId: string): Promise<boolean> => {
-  const { data } = await apiClient.post(`/v1/community/challenges/${challengeId}/join`);
-  return data.success;
+  // The join route returns the ChallengeParticipant row (no `success` field), so a
+  // `data.success` read is always undefined. Treat any 2xx (no throw) as success.
+  await apiClient.post(`/v1/community/challenges/${challengeId}/join`);
+  return true;
 };
 
 /** Log incremental progress toward a challenge (e.g. steps walked, workouts done) */

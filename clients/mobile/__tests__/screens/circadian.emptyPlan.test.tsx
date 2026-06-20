@@ -17,15 +17,21 @@
  * unchanged.
  *
  * This suite pins both branches (the acceptance for the work-item):
- *   (a) active shift + plan undefined/empty `items` + isLoadingPlan false + no
+ *   (a) active shift + plan undefined/empty `meals` + isLoadingPlan false + no
  *       quota / no genError → the "No protocol yet" EmptyState is present, there
  *       are ZERO "Log this" buttons, and pressing the EmptyState CTA calls the
  *       screen's `generateAIPlan` mutation EXACTLY once.
- *   (b) a real plan (non-empty `items`) → the timeline rows render and a meal
+ *   (b) a real plan (non-empty `meals`) → the timeline rows render and a meal
  *       row's "Log this" still pushes '/(meals)/log-planned-meal' with the slot
  *       params (the one-tap plan→meal flow is preserved).
  *
- * The case (a)-empty variant (plan present but `items: []`) is also pinned so the
+ * The plan-service returns the day plan as `plan.meals` (an array of
+ * { time, label, description, macros:{...} }, normalized in api/plans.ts) — NEVER
+ * `plan.items`. These mocks therefore present the REAL `meals` shape the screen
+ * consumes; a mock that returned `items` would assert a contract the server never
+ * produces.
+ *
+ * The case (a)-empty variant (plan present but `meals: []`) is also pinned so the
  * `>0` length guard — not merely "plan absent" — is what gates the EmptyState.
  *
  * Additive + verify-only: NEW test file only; the screen is exercised through its
@@ -238,9 +244,9 @@ describe('CircadianScreen — honest "No protocol yet" empty state', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  // ── (a′) plan present but EMPTY items → still the EmptyState (length>0 gate) ─
-  test('plan present but with empty items array still shows the EmptyState (the >0 length gate, not mere absence)', () => {
-    mockMutation.data = { items: [] };
+  // ── (a′) plan present but EMPTY meals → still the EmptyState (length>0 gate) ─
+  test('plan present but with empty meals array still shows the EmptyState (the >0 length gate, not mere absence)', () => {
+    mockMutation.data = { meals: [] };
 
     renderScreen();
     gotoProtocolTab();
@@ -250,12 +256,14 @@ describe('CircadianScreen — honest "No protocol yet" empty state', () => {
   });
 
   // ── (b) real plan → timeline renders + "Log this" pushes log-planned-meal ───
-  test('real plan (non-empty items): the timeline rows render and a meal "Log this" pushes /(meals)/log-planned-meal with the slot params', () => {
-    // A real AI plan with a recognizable meal row + a workout row.
+  test('real plan (non-empty meals): the timeline rows render and a meal "Log this" pushes /(meals)/log-planned-meal with the slot params', () => {
+    // A real AI plan in the wire shape the plan-service returns (api/plans.ts
+    // PlanMeal): { time, label, description, macros:{...} }. "Wake Fuel" maps to
+    // the BREAKFAST slot via the wake/morning regex in mealTypeFromSlot.
     mockMutation.data = {
-      items: [
-        { type: 'meal', title: 'Generated Wake Fuel', time: '07:00', macros: '40P / 20C / 15F' },
-        { type: 'workout', title: 'Activation Protocol', time: '08:00', duration: '30m' },
+      meals: [
+        { time: '07:00', label: 'Generated Wake Fuel', description: 'Protein + slow carbs', macros: { protein: 40, carbs: 20, fat: 15, calories: 415 } },
+        { time: '12:00', label: 'Midday Lunch', description: 'Balanced plate', macros: { protein: 35, carbs: 45, fat: 18, calories: 482 } },
       ],
     };
 

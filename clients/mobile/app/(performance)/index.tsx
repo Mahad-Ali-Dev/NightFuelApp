@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getToday, getWeeklyStats, TodayProgress } from '@/api/progress';
+import { deriveTodayScore } from '@/hooks/useProgress';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Card } from '@/components/ui/Card';
 import { Skeleton, SkeletonCard, EmptyState, GlassCard } from '@/components/ui';
@@ -40,7 +41,10 @@ export default function DailyReportScreen() {
     const progress = todayQuery.data;
     const weekly = weeklyQuery.data;
 
-    const score = progress?.score || 0;
+    // GET /v1/progress/today returns NO `score` field (see dailyProgressResponseSchema);
+    // derive it on the client from the calorie + protein adherence the response DOES
+    // carry, so the hero ring shows a real value + honest color instead of always 0/coral.
+    const score = deriveTodayScore(progress);
     const scoreColor = score > 80 ? colors.success : score > 50 ? colors.warning : colors.accent.coral;
 
     const NAV_ITEMS = [

@@ -47,19 +47,20 @@ export default function EditProfileScreen() {
 
     // Note: useState initialises once on first render (before query resolves).
     // useEffect below syncs form state once the profile data arrives.
+    // Only the fields the server actually persists are edited here: the display
+    // name (server: displayName) and the avatar (server: avatarUrl). aboutMe /
+    // occupation have no backing column, so they are no longer collected.
     const [form, setForm] = useState({
         name: '',
-        aboutMe: '',
-        occupation: '',
         avatarUrl: '',
     });
 
     useEffect(() => {
         if (profile) {
             setForm({
-                name:        profile.name        ?? '',
-                aboutMe:     profile.aboutMe      ?? '',
-                occupation:  profile.occupation   ?? '',
+                // The profile row exposes the name as `displayName`; fall back to
+                // `name` (the authStore User mirror) before empty.
+                name:        (profile as any).displayName ?? profile.name ?? '',
                 avatarUrl:   profile.avatarUrl    ?? '',
             });
         }
@@ -87,7 +88,16 @@ export default function EditProfileScreen() {
         // Guard the mutation itself too: even if a control somehow fires while
         // invalid, never send a PUT the server will reject.
         if (saveDisabled) return;
-        updateMutation.mutate(form);
+        // Send ONLY the fields the user-service updateProfileSchema accepts.
+        // The server reads `displayName`, not `name` — sending `name` silently
+        // no-ops (the rename never persisted, yet the success toast still fired).
+        const payload: { displayName: string; avatarUrl?: string } = {
+            displayName: form.name.trim(),
+        };
+        // avatarUrl is z.string().url() on the server — an empty string 400s.
+        // Only include it when the user actually has/picked one.
+        if (form.avatarUrl) payload.avatarUrl = form.avatarUrl;
+        updateMutation.mutate(payload);
     };
 
     const handlePickImage = async () => {
@@ -119,15 +129,11 @@ export default function EditProfileScreen() {
                         <Skeleton width={120} height={14} radius={borderRadius.sm} style={{ marginTop: 16 }} />
                     </View>
                     <View style={styles.form}>
-                        {[0, 1].map((i) => (
-                            <View key={i}>
-                                <Skeleton width={120} height={12} radius={borderRadius.sm} style={{ marginBottom: 10 }} />
-                                <Skeleton width="100%" height={56} radius={borderRadius.xl} />
-                            </View>
-                        ))}
+                        {/* Single placeholder — the editor now has one persisted
+                            field (DISPLAY NAME); aboutMe/occupation were removed. */}
                         <View>
                             <Skeleton width={120} height={12} radius={borderRadius.sm} style={{ marginBottom: 10 }} />
-                            <Skeleton width="100%" height={120} radius={borderRadius.xl} />
+                            <Skeleton width="100%" height={56} radius={borderRadius.xl} />
                         </View>
                     </View>
                     <Skeleton width="100%" height={60} radius={borderRadius.xl} style={{ marginTop: 40 }} />
@@ -184,20 +190,6 @@ export default function EditProfileScreen() {
                         onChangeText={(t: string) => setForm(p => ({ ...p, name: t }))}
                         placeholder="Your full name"
                         error={nameError}
-                    />
-                    <InputGroup
-                        label="PROFESSION"
-                        value={form.occupation}
-                        onChangeText={(t: string) => setForm(p => ({ ...p, occupation: t }))}
-                        placeholder="e.g. Trauma Surgeon, Shift Lead"
-                    />
-                    <InputGroup
-                        label="ABOUT ME"
-                        value={form.aboutMe}
-                        onChangeText={(t: string) => setForm(p => ({ ...p, aboutMe: t }))}
-                        placeholder="Tell the community about yourself..."
-                        multiline
-                        numberOfLines={4}
                     />
                 </View>
 

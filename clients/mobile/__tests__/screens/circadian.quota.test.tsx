@@ -182,11 +182,13 @@ describe('CircadianScreen — daily-AI-limit upgrade state', () => {
 
   // ── (2) success → timeline renders, no upgrade/error ──────────────────────
   it('on success renders the protocol timeline with neither the upgrade nor the error block', async () => {
-    // Resolve an AI plan carrying a recognizable meal row in `items`.
+    // Resolve an AI plan in the plan-service wire shape (api/plans.ts PlanMeal:
+    // { time, label, description, macros:{...} }). The screen reads `plan.meals`,
+    // never `plan.items`, so the timeline row is keyed off `label`.
     mockGenerate.mockResolvedValue({
-      items: [
-        { type: 'meal', title: 'Generated Wake Fuel', time: '07:00', macros: '40P / 20C / 15F' },
-        { type: 'workout', title: 'Activation Protocol', time: '08:00', duration: '30m' },
+      meals: [
+        { time: '07:00', label: 'Generated Wake Fuel', description: 'Protein + slow carbs', macros: { protein: 40, carbs: 20, fat: 15, calories: 415 } },
+        { time: '12:00', label: 'Midday Lunch', description: 'Balanced plate', macros: { protein: 35, carbs: 45, fat: 18, calories: 482 } },
       ],
     });
 

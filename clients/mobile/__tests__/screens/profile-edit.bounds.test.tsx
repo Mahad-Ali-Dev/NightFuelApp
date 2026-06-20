@@ -233,10 +233,12 @@ describe('EditProfileScreen — displayName bounds mirror (2..64) + accessible v
     // No validation alert in the valid state.
     expect(screen.queryByRole('alert')).toBeNull();
 
-    // Pressing the bottom Save fires the mutation exactly once with the form.
+    // Pressing the bottom Save fires the mutation exactly once with the payload
+    // the server actually accepts: `displayName` (NOT `name` — that key is dropped
+    // by updateProfileSchema, which is why the rename used to silently no-op).
     fireEvent.press(bottomSave);
     expect(mockMutate).toHaveBeenCalledTimes(1);
-    expect(mockMutate.mock.calls[0][0]).toMatchObject({ name: value });
+    expect(mockMutate.mock.calls[0][0]).toMatchObject({ displayName: value });
   });
 
   test('client displayName bounds equal the user-service schema bounds (2..64)', () => {

@@ -10,15 +10,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPreferences, updatePreferences, UserPreferences } from '@/api/profile';
-import { Button, Card, DateTimeField, Input, Skeleton } from '@/components/ui';
+import { Button, Card, DateTimeField, Skeleton } from '@/components/ui';
 
-const DIETARY_OPTIONS = ['Classic', 'Keto', 'Vegan', 'Vegetarian', 'Pescatarian', 'Paleo'];
+// Server dietaryPreference enum (services/user-service/src/schemas.ts →
+// updatePreferencesSchema). The screen writes these literal values so a tap
+// actually persists; NONE doubles as the "no preference" / cleared state.
+const DIETARY_OPTIONS = ['NONE', 'ANY', 'VEGETARIAN', 'VEGAN', 'PESCATARIAN', 'KETO', 'PALEO', 'HALAL', 'KOSHER'] as const;
 
-type EditableTimeField = 'wakeTime' | 'sleepTime' | 'workStartTime' | 'workEndTime';
-type EditableHoursField = 'sleepTargetHours';
-type EditTarget =
-    | { kind: 'time'; field: EditableTimeField; label: string }
-    | { kind: 'hours'; field: EditableHoursField; label: string };
+// Only the sleep-window fields the server actually stores are editable here
+// (server: sleepWindowStart / sleepWindowEnd). The old wakeTime / sleepTime /
+// workStartTime / workEndTime / sleepTargetHours had no backing column.
+type EditableTimeField = 'sleepWindowStart' | 'sleepWindowEnd';
+type EditTarget = { kind: 'time'; field: EditableTimeField; label: string };
 
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
@@ -46,9 +49,7 @@ export default function PreferencesScreen() {
             setPrefs({
                 ...initialPrefs,
                 allergies: initialPrefs.allergies ?? [],
-                dislikedIngredients: initialPrefs.dislikedIngredients ?? [],
-                medications: initialPrefs.medications ?? [],
-                supplements: initialPrefs.supplements ?? [],
+                healthConditions: initialPrefs.healthConditions ?? [],
             });
         }
     }, [initialPrefs]);
@@ -93,17 +94,18 @@ export default function PreferencesScreen() {
         );
     }
 
-    // Bug fix #4: tapping the already-selected diet clears it instead of being a dead tap.
+    // Tapping the already-selected diet clears it back to the server's NONE
+    // sentinel (not '' — that isn't a valid dietaryPreference enum value, so the
+    // full-object Save would 400).
     const toggleDiet = (diet: string) => {
-        setPrefs(prev => prev ? ({ ...prev, dietaryType: prev.dietaryType === diet ? '' : diet }) : null);
+        setPrefs(prev => prev ? ({ ...prev, dietaryPreference: prev.dietaryPreference === diet ? 'NONE' : diet }) : null);
     };
 
     const openEdit = (target: EditTarget) => {
         if (!prefs) return;
-        const current = target.kind === 'hours'
-            ? String(prefs.sleepTargetHours)
-            : prefs[target.field];
-        setEditValue(current ?? '');
+        // sleepWindowStart / sleepWindowEnd are nullable on the server; seed the
+        // editor with '' when unset so the time field starts empty.
+        setEditValue(prefs[target.field] ?? '');
         setEditError('');
         setEditing(target);
     };
@@ -117,20 +119,13 @@ export default function PreferencesScreen() {
     const saveEdit = () => {
         if (!editing || !prefs) return;
         const value = editValue.trim();
-        if (editing.kind === 'time') {
-            if (!TIME_RE.test(value)) {
-                setEditError('Use 24-hour HH:MM (e.g. 07:30)');
-                return;
-            }
-            setPrefs({ ...prefs, [editing.field]: value });
-        } else {
-            const n = Number(value);
-            if (!Number.isFinite(n) || n < 1 || n > 24) {
-                setEditError('Enter hours between 1 and 24');
-                return;
-            }
-            setPrefs({ ...prefs, sleepTargetHours: n });
+        // Both editable fields are HH:MM sleep-window times (server regex
+        // /^\d{2}:\d{2}$/). The stricter 24-hour TIME_RE is a superset guard.
+        if (!TIME_RE.test(value)) {
+            setEditError('Use 24-hour HH:MM (e.g. 07:30)');
+            return;
         }
+        setPrefs({ ...prefs, [editing.field]: value });
         closeEdit();
     };
 
@@ -179,29 +174,14 @@ export default function PreferencesScreen() {
                     </View>
                     <Card variant="glass" style={[styles.prefCard, { borderColor: colors.border.default }]}>
                         <TimeRow
-                            label="Sleep Target"
-                            value={`${prefs.sleepTargetHours}h`}
-                            onEdit={() => openEdit({ kind: 'hours', field: 'sleepTargetHours', label: 'Sleep Target (hours)' })}
+                            label="Sleep Window Start"
+                            value={prefs.sleepWindowStart ?? '—'}
+                            onEdit={() => openEdit({ kind: 'time', field: 'sleepWindowStart', label: 'Sleep Window Start' })}
                         />
                         <TimeRow
-                            label="Typical Wake Time"
-                            value={prefs.wakeTime}
-                            onEdit={() => openEdit({ kind: 'time', field: 'wakeTime', label: 'Typical Wake Time' })}
-                        />
-                        <TimeRow
-                            label="Typical Sleep Time"
-                            value={prefs.sleepTime}
-                            onEdit={() => openEdit({ kind: 'time', field: 'sleepTime', label: 'Typical Sleep Time' })}
-                        />
-                        <TimeRow
-                            label="Current Shift Start"
-                            value={prefs.workStartTime}
-                            onEdit={() => openEdit({ kind: 'time', field: 'workStartTime', label: 'Current Shift Start' })}
-                        />
-                        <TimeRow
-                            label="Current Shift End"
-                            value={prefs.workEndTime}
-                            onEdit={() => openEdit({ kind: 'time', field: 'workEndTime', label: 'Current Shift End' })}
+                            label="Sleep Window End"
+                            value={prefs.sleepWindowEnd ?? '—'}
+                            onEdit={() => openEdit({ kind: 'time', field: 'sleepWindowEnd', label: 'Sleep Window End' })}
                             isLast
                         />
                     </Card>
@@ -214,24 +194,27 @@ export default function PreferencesScreen() {
                         <Text style={[typography.overline, { color: colors.accent.emerald, marginLeft: 12 }]}>METABOLIC PREFERENCES</Text>
                     </View>
 
-                    <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 12 }]}>DIETARY TYPE</Text>
+                    <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 12 }]}>DIETARY PREFERENCE</Text>
                     <View style={styles.grid}>
-                        {DIETARY_OPTIONS.map(diet => (
-                            <TouchableOpacity
-                                key={diet}
-                                accessibilityRole="button"
-                                accessibilityState={{ selected: prefs.dietaryType === diet }}
-                                style={[
-                                    styles.dietBtn,
-                                    prefs.dietaryType === diet && shadows.glow(colors.accent.emerald),
-                                    { backgroundColor: prefs.dietaryType === diet ? colors.accent.emerald : colors.background.secondary, borderColor: prefs.dietaryType === diet ? colors.accent.emerald : colors.border.default }
-                                ]}
-                                onPress={() => toggleDiet(diet)}
-                                activeOpacity={0.85}
-                            >
-                                <Text style={[typography.captionMedium, { color: prefs.dietaryType === diet ? colors.text.primary : colors.text.secondary, fontWeight: 'bold' }]}>{diet.toUpperCase()}</Text>
-                            </TouchableOpacity>
-                        ))}
+                        {DIETARY_OPTIONS.map(diet => {
+                            const selected = prefs.dietaryPreference === diet;
+                            return (
+                                <TouchableOpacity
+                                    key={diet}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected }}
+                                    style={[
+                                        styles.dietBtn,
+                                        selected && shadows.glow(colors.accent.emerald),
+                                        { backgroundColor: selected ? colors.accent.emerald : colors.background.secondary, borderColor: selected ? colors.accent.emerald : colors.border.default }
+                                    ]}
+                                    onPress={() => toggleDiet(diet)}
+                                    activeOpacity={0.85}
+                                >
+                                    <Text style={[typography.captionMedium, { color: selected ? colors.text.primary : colors.text.secondary, fontWeight: 'bold' }]}>{diet}</Text>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
 
                     <View style={{ marginTop: 28 }}>
@@ -284,24 +267,12 @@ export default function PreferencesScreen() {
                         <Text style={[typography.subhead, { color: colors.text.primary, marginBottom: 16, fontWeight: 'bold' }]}>
                             {editing?.label}
                         </Text>
-                        {editing?.kind === 'time' ? (
-                            <DateTimeField
-                                mode="time"
-                                value={editValue}
-                                onChange={(t) => { setEditValue(t); if (editError) setEditError(''); }}
-                                error={editError || undefined}
-                            />
-                        ) : (
-                            <Input
-                                value={editValue}
-                                onChangeText={(t) => { setEditValue(t); if (editError) setEditError(''); }}
-                                placeholder="Hours"
-                                keyboardType="numeric"
-                                autoFocus
-                                error={editError || undefined}
-                                maxLength={4}
-                            />
-                        )}
+                        <DateTimeField
+                            mode="time"
+                            value={editValue}
+                            onChange={(t) => { setEditValue(t); if (editError) setEditError(''); }}
+                            error={editError || undefined}
+                        />
                         <View style={styles.modalActions}>
                             <TouchableOpacity accessibilityRole="button" onPress={closeEdit} style={[styles.modalBtn, { borderColor: colors.border.default }]} activeOpacity={0.85}>
                                 <Text style={[typography.body, { color: colors.text.secondary, fontWeight: '600' }]}>Cancel</Text>

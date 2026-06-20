@@ -179,7 +179,17 @@ describe('DailyReportScreen — Performance Hub nav grid', () => {
   beforeEach(() => {
     // Loaded by default (today resolved, not loading/error) so the nav grid is
     // reached. Each test overrides the branch it needs.
-    mockTodayState.data = { score: 72, hydrationActual: 1200, proteinActual: 150, lightExposureCompleted: true };
+    //
+    // GET /v1/progress/today returns NO `score` field; the hero ring's value is
+    // DERIVED on the client (deriveTodayScore) from the calorie + protein adherence
+    // the response actually carries. This fixture pins a deterministic derivation:
+    //   calories 1800/2000 = 0.90, protein 150/150 = 1.00 → mean 0.95 → 95.
+    mockTodayState.data = {
+      caloriesActual: 1800, caloriesTarget: 2000,
+      proteinActual: 150, proteinTarget: 150,
+      isAdherent: true, fatigueScore: 20,
+      hydrationActual: 1200, lightExposureCompleted: true,
+    };
     mockTodayState.isLoading = false;
     mockTodayState.isError = false;
     mockWeeklyState.data = { avgScore: 70, streakDays: 3, avgHydration: 2000, daysLogged: 5 };
@@ -197,13 +207,14 @@ describe('DailyReportScreen — Performance Hub nav grid', () => {
     expect(screen.getByText('Performance Hub')).toBeTruthy();
 
     // The score card (the hero LinearGradient surface): its "Great Job!" heading,
-    // the "PERF SCORE" ring caption, and the numeric score (72) from the resolved
-    // ['today-progress'] all render — pinning that the loaded ScrollView's first
-    // surface mounted (the CircularProgress ring is stubbed to a passthrough, so
-    // the score TEXT is the stable marker here, not the decorative ring).
+    // the "PERF SCORE" ring caption, and the DERIVED numeric score (95, from the
+    // fixture's calorie+protein adherence — the response carries no `score` field)
+    // all render — pinning that the loaded ScrollView's first surface mounted (the
+    // CircularProgress ring is stubbed to a passthrough, so the score TEXT is the
+    // stable marker here, not the decorative ring).
     expect(screen.getByText('Great Job!')).toBeTruthy();
     expect(screen.getByText('PERF SCORE')).toBeTruthy();
-    expect(screen.getByText('72')).toBeTruthy();
+    expect(screen.getByText('95')).toBeTruthy();
 
     // The GlassCard nav tiles — assert every NAV_ITEMS label is present.
     for (const label of NAV_LABELS) {

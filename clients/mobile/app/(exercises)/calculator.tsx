@@ -77,6 +77,13 @@ export default function CalculatorScreen() {
 
     const estimated1RM = results[activeFormula];
 
+    // The server's POST /v1/exercises/1rm schema requires weightKg AND
+    // estimated1RMKg to be z.number().positive() — a 0 is rejected with a 400.
+    // estimated1RM collapses to 0 whenever `safe` clamps a non-finite/negative
+    // formula output (Brzycki/Lander at reps >= 37), and w is 0 for a blank
+    // weight, so guard the SAVE on both: a non-positive value can never be POSTed.
+    const canSave = w > 0 && estimated1RM > 0;
+
     const saveMutation = useMutation({
         mutationFn: () => logOneRepMax({
             exerciseName: exerciseName || 'Bench Press',
@@ -212,10 +219,27 @@ export default function CalculatorScreen() {
                         icon="trophy"
                         size="lg"
                         loading={saveMutation.isPending}
+                        disabled={!canSave}
                         accessibilityLabel="Save to records"
-                        onPress={() => saveMutation.mutate()}
+                        // Guard the mutation itself too (not just the disabled
+                        // Pressable): a non-positive weight/estimate would 400 on
+                        // the server's z.number().positive() body schema.
+                        onPress={() => { if (canSave) saveMutation.mutate(); }}
                         style={[styles.saveBtn, { borderRadius: borderRadius.xl, marginTop: 24 }]}
                     />
+
+                    {/* Inline hint when the SAVE is guarded off — explains why the
+                        button is disabled (a non-positive weight or estimate the
+                        server's positive() body schema would reject). Ternary-null
+                        per rendering-no-falsy-and. */}
+                    {!canSave ? (
+                        <Text
+                            accessibilityLiveRegion="polite"
+                            style={[typography.caption, { color: colors.accent.amber, textAlign: 'center', marginTop: spacing.sm }]}
+                        >
+                            Enter a weight and reps that give a 1RM above 0 to save.
+                        </Text>
+                    ) : null}
 
                     {/* Save status — an inline, accessible surface driven by the
                         mutation's own state (no modal alert dialog). The error

@@ -179,6 +179,12 @@ export class NotificationService {
                 ...(body.mealReminderEnabled !== undefined && {
                     mealReminderEnabled: body.mealReminderEnabled,
                 }),
+                ...(body.workoutReminderEnabled !== undefined && {
+                    workoutReminderEnabled: body.workoutReminderEnabled,
+                }),
+                ...(body.sleepReminderEnabled !== undefined && {
+                    sleepReminderEnabled: body.sleepReminderEnabled,
+                }),
                 ...(body.shiftAlertEnabled !== undefined && {
                     shiftAlertEnabled: body.shiftAlertEnabled,
                 }),
@@ -187,6 +193,15 @@ export class NotificationService {
                 }),
                 ...(body.adherenceAlertEnabled !== undefined && {
                     adherenceAlertEnabled: body.adherenceAlertEnabled,
+                }),
+                ...(body.streakUpdateEnabled !== undefined && {
+                    streakUpdateEnabled: body.streakUpdateEnabled,
+                }),
+                ...(body.weeklyReportEnabled !== undefined && {
+                    weeklyReportEnabled: body.weeklyReportEnabled,
+                }),
+                ...(body.coachMessageEnabled !== undefined && {
+                    coachMessageEnabled: body.coachMessageEnabled,
                 }),
                 ...(body.quietHoursStart !== undefined && {
                     quietHoursStart: body.quietHoursStart,
