@@ -37,6 +37,16 @@ const MEAL_TYPE_LABEL: Record<string, string> = {
 };
 const mealTypeLabel = (t?: string) => MEAL_TYPE_LABEL[String(t || '').toUpperCase()] || 'Meal';
 
+// Coerce any value to a finite number, mapping undefined / null / NaN / ±Infinity
+// → 0. The macro reads come from logged meals whose stored totals can be missing
+// OR NaN (a bad parse upstream). A bare `(x || 0)` catches undefined but lets NaN
+// through, and NaN poisons every downstream sum, the "kcal left" numeral, and the
+// ring fraction fed to the shared CircularProgress (which is NOT clamped here —
+// `NaN <= 1` is false there, so a NaN fraction would skip its own clamp). Funnel
+// every addend / ratio operand through this so the dashboard only ever computes
+// on finite numbers.
+const finiteNum = (n: unknown): number => (typeof n === 'number' && Number.isFinite(n) ? n : 0);
+
 export default function NutritionHubScreen() {
     const { colors, typography, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
@@ -105,11 +115,13 @@ export default function NutritionHubScreen() {
             fat: progress?.fatTarget || 70,
         };
 
+        // finiteNum (not `|| 0`) on each addend so a NaN total in any log can't
+        // poison the running sums — see the helper's note.
         const consumed = logs.reduce((acc, log) => ({
-            calories: acc.calories + (log.totalCalories || 0),
-            protein: acc.protein + (log.totalProtein || 0),
-            carbs: acc.carbs + (log.totalCarbs || 0),
-            fat: acc.fat + (log.totalFat || 0),
+            calories: acc.calories + finiteNum(log.totalCalories),
+            protein: acc.protein + finiteNum(log.totalProtein),
+            carbs: acc.carbs + finiteNum(log.totalCarbs),
+            fat: acc.fat + finiteNum(log.totalFat),
         }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
         return { target, consumed };
@@ -196,10 +208,15 @@ export default function NutritionHubScreen() {
                         style={[styles.mainCircle, shadows.glow(colors.accent.emerald)]}
                         accessible
                         accessibilityRole="image"
-                        accessibilityLabel={`${Math.max(0, stats.target.calories - stats.consumed.calories)} kcal left of ${stats.target.calories}`}
+                        accessibilityLabel={`${Math.max(0, stats.target.calories - finiteNum(stats.consumed.calories))} kcal left of ${stats.target.calories}`}
                     >
                         <CircularProgress
-                            progress={stats.target.calories > 0 ? stats.consumed.calories / stats.target.calories : 0}
+                            // Clamp the fraction to 0..1 HERE (CircularProgress is
+                            // shared by 7 screens and must stay untouched). An
+                            // over-target day (consumed > target) would otherwise
+                            // push a >1 fraction in; finiteNum also keeps a NaN
+                            // consumed from becoming a NaN fraction.
+                            progress={stats.target.calories > 0 ? Math.min(1, Math.max(0, finiteNum(stats.consumed.calories) / stats.target.calories)) : 0}
                             size={180}
                             strokeWidth={12}
                             color={colors.accent.emerald}
@@ -211,7 +228,7 @@ export default function NutritionHubScreen() {
                                 maxFontSizeMultiplier={1.3}
                                 allowFontScaling
                             >
-                                {Math.max(0, stats.target.calories - stats.consumed.calories)}
+                                {Math.max(0, stats.target.calories - finiteNum(stats.consumed.calories))}
                             </Text>
                             <Text style={[typography.overline, { color: colors.text.secondary }]}>KCAL LEFT</Text>
                         </View>
@@ -219,7 +236,7 @@ export default function NutritionHubScreen() {
 
                     {/* At-a-glance + screen-reader friendly consumed/target line. */}
                     <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 18 }]}>
-                        {`consumed ${Math.round(stats.consumed.calories)} / target ${stats.target.calories} kcal`}
+                        {`consumed ${Math.round(finiteNum(stats.consumed.calories))} / target ${stats.target.calories} kcal`}
                     </Text>
 
                     <View style={styles.macroGrid}>
@@ -482,7 +499,13 @@ export default function NutritionHubScreen() {
 
 const MacroItem = React.memo(function MacroItem({ label, current, target, color, unit }: any) {
     const { colors, typography, borderRadius } = useTheme();
-    const progress = target > 0 ? Math.min(1, current / target) : 0;
+    // Coerce both operands to finite numbers (a NaN macro from a bad log would
+    // otherwise yield a NaN ratio → a NaN bar width). Clamp to 0..1 so an
+    // over-target macro can't overflow the track and a negative can't render a
+    // negative width. Reuse the coerced values for the numeric labels too.
+    const safeCurrent = finiteNum(current);
+    const safeTarget = finiteNum(target);
+    const progress = safeTarget > 0 ? Math.min(1, Math.max(0, safeCurrent / safeTarget)) : 0;
 
     return (
         <View style={styles.macroItem}>
@@ -493,10 +516,10 @@ const MacroItem = React.memo(function MacroItem({ label, current, target, color,
             <View
                 style={styles.macroLabelRow}
                 accessible
-                accessibilityLabel={`${label}: ${Math.round(current)} of ${target} grams`}
+                accessibilityLabel={`${label}: ${Math.round(safeCurrent)} of ${Math.round(safeTarget)} grams`}
             >
                 <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: 'bold' }]}>{label.toUpperCase()}</Text>
-                <Text style={[typography.caption, { color: colors.text.primary }]}>{Math.round(current)}{unit} / {target}{unit}</Text>
+                <Text style={[typography.caption, { color: colors.text.primary }]}>{Math.round(safeCurrent)}{unit} / {Math.round(safeTarget)}{unit}</Text>
             </View>
             <View style={[styles.barBg, { backgroundColor: colors.background.tertiary, borderRadius: 4 }]}>
                 <View style={[styles.barFill, { width: `${progress * 100}%`, backgroundColor: color, borderRadius: 4 }]} />

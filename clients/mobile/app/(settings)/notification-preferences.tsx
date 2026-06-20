@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-    View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity,
+    View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Pressable,
     ActivityIndicator, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -17,7 +17,7 @@ import {
 import { withAlpha } from '@/theme/utils';
 import { colors as palette } from '@/theme/colors';
 import { spacing, borderRadius as br } from '@/theme/spacing';
-import { EmptyState, Skeleton } from '@/components/ui';
+import { EmptyState, Skeleton, GlassCard } from '@/components/ui';
 
 // ── Preference Categories ─────────────────────────────────────────────────────
 
@@ -124,6 +124,13 @@ export default function NotificationPreferencesScreen() {
 
     const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
     const [hasChanges, setHasChanges] = useState(false);
+    // Outcome of the LAST save attempt — null = idle (no banner), 'success' /
+    // 'error' = show the inline status surface. This is genuine state (the real
+    // result of the mutation), not a derived visual; the banner JSX is derived
+    // from it. We surface save feedback INLINE (a GlassCard the screen reader
+    // announces via role="alert" + a polite live region) instead of Alert.alert,
+    // matching the inline-notice pattern used by devices.tsx / circadian.tsx.
+    const [saveStatus, setSaveStatus] = useState<null | 'success' | 'error'>(null);
     // Local UI state — Quiet Hours section expand/collapse
     const [quietHoursExpanded, setQuietHoursExpanded] = useState(true);
 
@@ -142,10 +149,10 @@ export default function NotificationPreferencesScreen() {
         mutationFn: (p: Partial<NotificationPreferences>) => saveNotificationPreferences(p),
         onSuccess: () => {
             setHasChanges(false);
-            Alert.alert('Saved', 'Your notification preferences have been updated.');
+            setSaveStatus('success');
         },
         onError: () => {
-            Alert.alert('Error', 'Failed to save preferences. Please try again.');
+            setSaveStatus('error');
         },
     });
 
@@ -156,7 +163,12 @@ export default function NotificationPreferencesScreen() {
     };
 
     const handleSave = () => {
-        if (prefs) saveMutation.mutate(prefs);
+        if (!prefs) return;
+        // Reset the inline banner so a fresh attempt starts clean — the next
+        // onSuccess/onError sets it again. (A retry from the error banner also
+        // routes through here, clearing the stale 'error' before re-saving.)
+        setSaveStatus(null);
+        saveMutation.mutate(prefs);
     };
 
     // Group items by category. PREFERENCE_ITEMS is a module-level constant, so
@@ -238,6 +250,97 @@ export default function NotificationPreferencesScreen() {
                         Customize which alerts you receive. Critical shift and health alerts may still appear when disabled.
                     </Text>
                 </View>
+
+                {/* Inline save-feedback status surface (replaces the old
+                    Alert.alert on the save path). Rendered with an explicit
+                    ternary-null per rules/rendering-no-falsy-and.md — saveStatus
+                    is null | 'success' | 'error', never a falsy 0/"" that could
+                    leak into the JSX tree. As a GlassCard from @/components/ui (no
+                    inline glass), it carries accessibilityRole="alert" + a polite
+                    live region so a screen reader announces the result as a
+                    status. The error variant offers a working Retry that
+                    re-invokes handleSave. */}
+                {saveStatus === 'success' ? (
+                    <GlassCard radius={br.lg} style={styles.statusCard} testID="save-status-success">
+                        <View style={styles.statusRow}>
+                            {/* The a11y alert semantics live on this inner View
+                                (NOT the GlassCard, which only forwards
+                                style/radius/testID), mirroring devices.tsx: ONE
+                                accessible node — icon + copy — that a screen reader
+                                announces as a polite live region, its label the
+                                verbatim visible copy. The Dismiss control is a
+                                SIBLING (not a child) so it stays independently
+                                focusable rather than being collapsed into the
+                                alert. */}
+                            <View
+                                style={styles.statusContent}
+                                accessible
+                                accessibilityRole="alert"
+                                accessibilityLiveRegion="polite"
+                                accessibilityLabel="Saved. Your notification preferences have been updated."
+                            >
+                                <Ionicons name="checkmark-circle" size={20} color={colors.accent.emerald} />
+                                <Text style={[typography.subhead, styles.statusText, { color: colors.text.primary }]}>
+                                    Saved. Your notification preferences have been updated.
+                                </Text>
+                            </View>
+                            <Pressable
+                                onPress={() => setSaveStatus(null)}
+                                accessibilityRole="button"
+                                accessibilityLabel="Dismiss"
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                style={styles.statusDismiss}
+                                testID="save-status-dismiss"
+                            >
+                                <Ionicons name="close" size={18} color={colors.text.tertiary} />
+                            </Pressable>
+                        </View>
+                    </GlassCard>
+                ) : null}
+
+                {saveStatus === 'error' ? (
+                    <GlassCard radius={br.lg} style={styles.statusCard} testID="save-status-error">
+                        <View style={styles.statusRow}>
+                            {/* a11y alert semantics on the inner content View (see
+                                the success variant above). The Retry Pressable is a
+                                SIBLING and re-invokes handleSave — the genuine save
+                                path — never a fabricated success. */}
+                            <View
+                                style={styles.statusContent}
+                                accessible
+                                accessibilityRole="alert"
+                                accessibilityLiveRegion="polite"
+                                accessibilityLabel="Save failed. Try again."
+                            >
+                                <Ionicons name="alert-circle" size={20} color={colors.accent.coral} />
+                                <Text style={[typography.subhead, styles.statusText, { color: colors.text.primary }]}>
+                                    Save failed
+                                </Text>
+                            </View>
+                            <Pressable
+                                onPress={handleSave}
+                                disabled={saveMutation.isPending}
+                                accessibilityRole="button"
+                                accessibilityLabel="Try again"
+                                accessibilityState={{ disabled: saveMutation.isPending, busy: saveMutation.isPending }}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                style={({ pressed }) => [
+                                    styles.retryBtn,
+                                    {
+                                        borderColor: withAlpha(colors.accent.coral, 0.4),
+                                        backgroundColor: withAlpha(colors.accent.coral, pressed ? 0.16 : 0.08),
+                                    },
+                                ]}
+                                testID="save-status-retry"
+                            >
+                                <Ionicons name="refresh-outline" size={15} color={colors.accent.coral} />
+                                <Text style={[typography.caption, styles.retryLabel, { color: colors.accent.coral }]}>
+                                    Try again
+                                </Text>
+                            </Pressable>
+                        </View>
+                    </GlassCard>
+                ) : null}
 
                 {/* Category Groups */}
                 {Object.entries(categories).map(([category, items]) => (
@@ -462,6 +565,47 @@ const styles = StyleSheet.create({
         padding: spacing.lg,
         borderRadius: 14,
         borderWidth: 1,
+    },
+    // Inline save-feedback surface (GlassCard wrapper margins; the GlassCard owns
+    // the frosted fill + hairline border + radius).
+    statusCard: {
+        marginHorizontal: spacing.xl,
+        marginTop: spacing.lg,
+    },
+    statusRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: spacing.lg,
+    },
+    // The announced alert content (icon + copy). Flexes to fill the row so the
+    // trailing Dismiss/Retry sibling sits flush right.
+    statusContent: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    statusText: {
+        flex: 1,
+        marginLeft: spacing.md,
+        fontWeight: '600',
+        lineHeight: 19,
+    },
+    statusDismiss: {
+        marginLeft: spacing.sm,
+        padding: spacing.xs,
+    },
+    retryBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+        marginLeft: spacing.sm,
+        minHeight: 44,
+        paddingHorizontal: spacing.lg,
+        borderRadius: br.lg,
+        borderWidth: 1,
+    },
+    retryLabel: {
+        fontWeight: '700',
     },
     section: {
         marginHorizontal: spacing.xl,

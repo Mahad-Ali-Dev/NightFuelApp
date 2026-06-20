@@ -1183,6 +1183,63 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Upward Stretch': 'Upward_Stretch',
   'Groiners': 'Groiners',
   'Inchworm': 'Inchworm',
+
+  // ── Widened FEDB-backed tranche #19 (data-only, zero new fetch) ──────────────
+  // A further slice of distinct catalogue movements — this tranche leans into the
+  // cardio/conditioning machines, self-myofascial-release (SMR) foam-rolling,
+  // seated/standing flexibility stretches, Olympic-from-blocks barbell pulls and
+  // single-arm kettlebell jerk/snatch accessory work the earlier tranches still
+  // under-covered. Every KEY below is NEW — absent from GRANDFATHERED, the
+  // FEDB_BACKED_SLUGS entries above (tranches #1-#18), YOUTUBE_PENDING and
+  // GIF_PENDING — so buildCuratedDemos() admits each one as kind:'fedb_frames',
+  // verified:false (precedence: an already-set name is skipped).
+  // Every slug VALUE was machine-verified to be present in BOTH FEDB_SLUGS
+  // (exerciseDemos.ts) AND __tests__/fixtures/fedb-catalog-slugs.json (the shipped
+  // 873-slug catalogue), and each is a fresh slug dir not already referenced by an
+  // earlier tranche — so every entry resolves to an ordered 2-frame [0.jpg, 1.jpg]
+  // HTTPS pair via fedbPair() with NO new HTTP call. Strictly additive: the
+  // kind:'youtube'-only sync guard (scripts/check-demo-maps-in-sync.js) and
+  // pendingHumanReviewIds.json (YouTube ids only) are both untouched, so
+  // check-demo-maps-in-sync stays green. A 200-ok URL is NOT a movement review, so
+  // nothing here is verified:true — that remains a human-gated step.
+
+  // Cardio / conditioning machines
+  'Stationary Bike': 'Bicycling_Stationary',
+  'Elliptical Trainer': 'Elliptical_Trainer',
+  'Rowing Machine': 'Rowing_Stationary',
+  'Stair Stepper': 'Step_Mill',
+  'Treadmill Running': 'Running_Treadmill',
+  'Treadmill Walking': 'Walking_Treadmill',
+  'Treadmill Jogging': 'Jogging_Treadmill',
+  'Stairmaster Climb': 'Stairmaster',
+  'Skipping Rope': 'Rope_Jumping',
+  // Self-myofascial release (foam rolling / SMR)
+  'Foam Roll Lower Back': 'Lower_Back-SMR',
+  'Foam Roll Peroneals': 'Peroneals-SMR',
+  'Foam Roll Piriformis': 'Piriformis-SMR',
+  'Foam Roll Rhomboids': 'Rhomboids-SMR',
+  'Foam Roll Anterior Tibialis': 'Anterior_Tibialis-SMR',
+  'Foam Roll Brachialis': 'Brachialis-SMR',
+  'Foam Roll Iliotibial Tract': 'Iliotibial_Tract-SMR',
+  // Seated / standing flexibility stretches
+  'Childs Pose': 'Childs_Pose',
+  'Knee To Chest Stretch': 'Hug_Knees_To_Chest',
+  'Standing Pelvic Tilt': 'Standing_Pelvic_Tilt',
+  'Overhead Reach Stretch': 'Overhead_Stretch',
+  'Seated Overhead Stretch': 'Seated_Overhead_Stretch',
+  'Standing Soleus And Achilles Stretch': 'Standing_Soleus_And_Achilles_Stretch',
+  'Torso Rotation Stretch': 'Torso_Rotation',
+  'Shoulder Circles': 'Shoulder_Circles',
+  // Olympic-from-blocks barbell pulls
+  'Clean From Blocks': 'Clean_from_Blocks',
+  'Snatch From Blocks': 'Snatch_from_Blocks',
+  'Power Clean From Blocks': 'Power_Clean_from_Blocks',
+  'Power Snatch From Blocks': 'Power_Snatch_from_Blocks',
+  // Kettlebell jerk / snatch accessory
+  'One-Arm Kettlebell Jerk': 'One-Arm_Kettlebell_Jerk',
+  'One-Arm Kettlebell Split Jerk': 'One-Arm_Kettlebell_Split_Jerk',
+  'One-Arm Kettlebell Split Snatch': 'One-Arm_Kettlebell_Split_Snatch',
+  'One-Arm Kettlebell Clean and Jerk': 'One-Arm_Kettlebell_Clean_and_Jerk',
 };
 
 /**

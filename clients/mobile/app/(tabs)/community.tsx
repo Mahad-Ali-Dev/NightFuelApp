@@ -31,6 +31,15 @@ function timeAgo(createdAt?: string): string {
     return `${formatDistanceToNow(d)} ago`;
 }
 
+/** Render-safe non-negative counter. A missing/NaN/negative count — from an
+ * in-flight optimistic write or a partial backend payload — must NOT leak
+ * 'NaN'/'undefined'/a negative number into a row, so any non-finite or
+ * non-positive value clamps to 0 (positive values floor to a whole count).
+ * Module-scope (hoisted), NOT a per-row closure, so the memoized PostItem /
+ * challenge-card callbacks keep a stable identity (list-performance-callbacks). */
+const safeCount = (n: unknown): number =>
+    typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+
 /**
  * Honest loading scaffold for the feed — a few PostItem-shaped placeholders
  * (avatar circle + name/time lines, body lines, and an image block) instead of
@@ -191,7 +200,7 @@ export default function CommunityTab() {
                 key={chall.id}
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel={`${chall.title}, ${chall.participants} participating`}
+                accessibilityLabel={`${chall.title}, ${safeCount(chall.participants)} participating`}
                 style={{ width: 160 }}
                 onPress={() => router.push('/(community)/challenges' as any)}
             >
@@ -201,7 +210,7 @@ export default function CommunityTab() {
                             <Ionicons name="flash" size={20} color={colors.accent.emerald} />
                         </View>
                         <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 12 }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{chall.title}</Text>
-                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]} maxFontSizeMultiplier={1.4}>{chall.participants} participating</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]} maxFontSizeMultiplier={1.4}>{safeCount(chall.participants)} participating</Text>
                     </View>
                 </GlassCard>
             </TouchableOpacity>
@@ -357,6 +366,13 @@ const PostItem = React.memo(function PostItem({ post, onLike, onComment, onPress
     // returns a `likedByMe` field and the Post type gains it. Do NOT invent a
     // field access here (would break tsc).
     const liked = false;
+    // Clamp the rendered counters ONCE per row (safeCount): a missing/NaN/negative
+    // count — e.g. from an in-flight optimistic write or a partial backend payload —
+    // must surface as 0, never 'NaN'/'undefined'/a negative. Reused for both the
+    // visible <Text> and the screen-reader label so they stay identical (and the
+    // label pluralizes off the SAME clamped value).
+    const likeCount = safeCount(post.likes);
+    const commentCount = safeCount(post.commentsCount);
     return (
         <GlassCard intensity={40} style={{ marginBottom: 16 }}>
             <View style={{ padding: 16 }}>
@@ -389,13 +405,13 @@ const PostItem = React.memo(function PostItem({ post, onLike, onComment, onPress
                 ) : null}
 
                 <View style={[styles.postActions, { borderTopColor: colors.border.default }]}>
-                    <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button" accessibilityState={{ selected: liked }} accessibilityLabel={`Like, ${post.likes} ${post.likes === 1 ? 'like' : 'likes'}`} style={styles.actionItem} onPress={onLike}>
+                    <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button" accessibilityState={{ selected: liked }} accessibilityLabel={`Like, ${likeCount} ${likeCount === 1 ? 'like' : 'likes'}`} style={styles.actionItem} onPress={onLike}>
                         <Ionicons name={liked ? 'heart' : 'heart-outline'} size={20} color={liked ? colors.accent.coral : colors.text.secondary} />
-                        <Text style={[typography.caption, { color: liked ? colors.accent.coral : colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]} maxFontSizeMultiplier={1.4}>{post.likes}</Text>
+                        <Text style={[typography.caption, { color: liked ? colors.accent.coral : colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]} maxFontSizeMultiplier={1.4}>{likeCount}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`Comment, ${post.commentsCount} ${post.commentsCount === 1 ? 'comment' : 'comments'}`} style={styles.actionItem} onPress={onComment}>
+                    <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`Comment, ${commentCount} ${commentCount === 1 ? 'comment' : 'comments'}`} style={styles.actionItem} onPress={onComment}>
                         <Ionicons name="chatbubble-outline" size={18} color={colors.text.secondary} />
-                        <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]} maxFontSizeMultiplier={1.4}>{post.commentsCount}</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]} maxFontSizeMultiplier={1.4}>{commentCount}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Share"
                         style={styles.actionItem}

@@ -52,6 +52,21 @@ function rollWindow(
     return { samples, mean };
 }
 
+/**
+ * Clamp a numeric score into [lo, hi] (default the 0..10 scale these state
+ * fields use). A non-number / NaN / Infinity returns `undefined` so the caller
+ * can SKIP the field on update (leaving the column untouched) or fall back to a
+ * sane default on create — a poisoned value can never be persisted verbatim.
+ */
+const clampScore = (n: unknown, lo = 0, hi = 10): number | undefined => {
+    if (typeof n !== 'number' || !Number.isFinite(n)) return undefined;
+    return Math.min(hi, Math.max(lo, n));
+};
+
+/** Pass through a finite number; map anything non-finite (NaN/Infinity/non-number) to undefined. */
+const finiteOrUndef = (n: unknown): number | undefined =>
+    (typeof n === 'number' && Number.isFinite(n) ? n : undefined);
+
 export class StateMaterializer {
     constructor(private prisma: PrismaClient) { }
 
@@ -98,17 +113,38 @@ export class StateMaterializer {
         const { userId, payload } = event;
         logger.info({ userId, sleepSessionId: payload.sleepSessionId }, 'Processing sleep log event');
 
+        // Guard the inbound score/disturbance values before they touch numeric
+        // state. A NaN/Infinity/non-number quality collapses to undefined (skip
+        // on update / default on create); disturbances must be finite to drive
+        // the fatigue direction (a non-finite count is treated as "not >3").
+        const quality = clampScore(payload.quality);
+        const disturbances = finiteOrUndef(payload.disturbances) ?? 0;
+        const moreFatigued = disturbances > 3;
+
+        // Fatigue is a bounded 0..10 score. The previous unbounded
+        // {increment:1}/{decrement:1} let it drift arbitrarily far outside that
+        // range over many events. Per-user events are processed sequentially by
+        // the stream consumer group (see handleMealLogged), so a read → clamp →
+        // write of the absolute next value is race-safe and keeps it in 0..10.
+        const existing = await this.prisma.userState.findUnique({
+            where: { userId },
+            select: { fatigueLevel: true },
+        });
+        const currentFatigue = clampScore(existing?.fatigueLevel) ?? 3.0;
+        const nextFatigue = clampScore(currentFatigue + (moreFatigued ? 1 : -1)) ?? currentFatigue;
+
         await this.prisma.userState.upsert({
             where: { userId },
             create: {
                 userId,
-                avgSleepQuality: payload.quality ?? 7.0,
-                fatigueLevel: (payload.disturbances ?? 0) > 3 ? 7.0 : 3.0,
+                avgSleepQuality: quality ?? 7.0,
+                fatigueLevel: moreFatigued ? 7.0 : 3.0,
                 lastEventId: event.eventId
             },
             update: {
-                avgSleepQuality: payload.quality ?? undefined,
-                fatigueLevel: (payload.disturbances ?? 0) > 3 ? { increment: 1 } : { decrement: 1 },
+                // undefined → Prisma skips the field, leaving the column intact.
+                avgSleepQuality: quality,
+                fatigueLevel: nextFatigue,
                 lastEventId: event.eventId,
                 lastProcessedAt: new Date()
             }
@@ -117,17 +153,23 @@ export class StateMaterializer {
 
     async handleMetricsLogged(event: NightFuelEvent<BodyMetricsLoggedPayload>) {
         const { userId, payload } = event;
-        if (!payload.weightKg) return;
+
+        // Skip the write entirely unless weight is a finite number inside a
+        // physiologically plausible range — a NaN/Infinity/negative/absurd
+        // weight must never be persisted (the old `if (!payload.weightKg)`
+        // falsy check let NaN/Infinity/negative values straight through).
+        const weightKg = finiteOrUndef(payload.weightKg);
+        if (weightKg === undefined || weightKg < 20 || weightKg > 500) return;
 
         await this.prisma.userState.upsert({
             where: { userId },
             create: {
                 userId,
-                currentWeightKg: payload.weightKg,
+                currentWeightKg: weightKg,
                 lastEventId: event.eventId
             },
             update: {
-                currentWeightKg: payload.weightKg,
+                currentWeightKg: weightKg,
                 lastEventId: event.eventId,
                 lastProcessedAt: new Date()
             }
@@ -137,17 +179,24 @@ export class StateMaterializer {
     async handlePlanGenerated(event: NightFuelEvent<PlanGeneratedPayload>) {
         const { userId, payload } = event;
 
+        // Coerce both daily targets to finite numbers; skip the write if either
+        // is non-finite (NaN/Infinity/non-number) so a poisoned plan can never
+        // overwrite the persisted targets with a wild value.
+        const calorieTarget = finiteOrUndef(payload.calorieTarget);
+        const proteinTargetG = finiteOrUndef(payload.proteinTargetG);
+        if (calorieTarget === undefined || proteinTargetG === undefined) return;
+
         await this.prisma.userState.upsert({
             where: { userId },
             create: {
                 userId,
-                currentCalorieTarget: payload.calorieTarget,
-                currentProteinTargetG: payload.proteinTargetG,
+                currentCalorieTarget: calorieTarget,
+                currentProteinTargetG: proteinTargetG,
                 lastEventId: event.eventId
             },
             update: {
-                currentCalorieTarget: payload.calorieTarget,
-                currentProteinTargetG: payload.proteinTargetG,
+                currentCalorieTarget: calorieTarget,
+                currentProteinTargetG: proteinTargetG,
                 lastEventId: event.eventId,
                 lastProcessedAt: new Date()
             }

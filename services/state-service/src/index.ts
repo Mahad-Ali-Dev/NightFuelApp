@@ -36,14 +36,24 @@ fastify.get('/health', async () => {
     return { status: 'ok', service: 'state-service' };
 });
 
-fastify.get('/v1/state/:userId', async (request, reply) => {
-    const { userId } = request.params as { userId: string };
-    const state = await prisma.userState.findUnique({ where: { userId } });
-    if (!state) {
-        return reply.status(404).send({ error: 'User state not found' });
-    }
-    return state;
-});
+fastify.get(
+    '/v1/state/:userId',
+    {
+        // Bound the path param BEFORE it reaches Prisma: an empty or oversized
+        // userId now 400s via the registered shared error handler instead of
+        // hitting an unbounded findUnique. 64 chars comfortably covers a UUID
+        // / cuid while rejecting absurd inputs.
+        schema: { params: z.object({ userId: z.string().min(1).max(64) }) },
+    },
+    async (request, reply) => {
+        const { userId } = request.params as { userId: string };
+        const state = await prisma.userState.findUnique({ where: { userId } });
+        if (!state) {
+            return reply.status(404).send({ error: 'User state not found' });
+        }
+        return state;
+    },
+);
 
 
 const start = async () => {
@@ -57,7 +67,9 @@ const start = async () => {
         await fastify.listen({ port: parseInt(config.STATE_PORT), host: '0.0.0.0' });
         logger.info(`State Service running on port ${config.STATE_PORT}`);
     } catch (err) {
-        logger.error(err);
+        // Log only the message, never the raw error object — a thrown
+        // connection error can carry the DB/Redis connection string.
+        logger.error({ err: err instanceof Error ? err.message : 'unknown' }, 'startup failed');
         process.exit(1);
     }
 };
@@ -71,7 +83,8 @@ const shutdown = async (signal: string) => {
         logger.info('Graceful shutdown complete');
         process.exit(0);
     } catch (err) {
-        logger.error(err, 'Error during shutdown');
+        // Same redaction rationale as start(): never dump the raw error object.
+        logger.error({ err: err instanceof Error ? err.message : 'unknown' }, 'Error during shutdown');
         process.exit(1);
     }
 };

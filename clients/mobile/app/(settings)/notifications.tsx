@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, FlatList, Platform } from 'react-native';
+import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Platform } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

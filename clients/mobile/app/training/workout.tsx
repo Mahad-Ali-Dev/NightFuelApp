@@ -89,9 +89,24 @@ interface ActiveWorkoutState {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+// Coerce an UNTRUSTED number to a finite value at or above `min` (default 0),
+// else `min`. The set/timer math below sums kg/reps that originate from a
+// restored AsyncStorage snapshot (JSON.parse) or a server payload — a malformed
+// entry can carry a NaN/Infinity/negative the bare `|| 0` does NOT catch (NaN is
+// falsy-ish only via `||`, but `NaN * 0` is still NaN, and `Math.max()` of an
+// empty list is -Infinity), which would surface as a "NaN"/"-Infinity" summary
+// or a negative timer. Routing every at-risk number through this keeps the
+// summary/volume/timer math finite and clamped without changing any well-formed
+// (already-finite, in-range) value — behaviour-identical for a normal workout.
+const finite = (n: unknown, min = 0): number =>
+    typeof n === 'number' && Number.isFinite(n) && n >= min ? n : min;
+
 function formatTime(totalSeconds: number): string {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
+    // Defend the display formatter: a NaN/negative would render "NaN:NaN" or a
+    // negative clock. Clamp to a finite, non-negative whole second first.
+    const safe = Math.max(0, Math.floor(finite(totalSeconds)));
+    const mins = Math.floor(safe / 60);
+    const secs = safe % 60;
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
@@ -499,10 +514,18 @@ export default function ActiveWorkoutScreen() {
         const finalElapsed = elapsedSeconds;
 
         // Real session metrics for the summary screen (replaces hardcoded values).
-        const totalVolume = Math.round(exerciseStates.reduce((acc, ex) =>
-            acc + ex.sets.filter(s => s.completed).reduce((a, s) => a + (s.kg || 0) * (s.reps || 0), 0), 0));
-        const totalKcal = Math.round((finalElapsed / 60) * 6); // ≈6 kcal/min for resistance training
-        const summaryParams = { elapsed: String(finalElapsed), volume: String(totalVolume), kcal: String(totalKcal) };
+        // Each set's kg/reps is run through `finite` (not the old bare `|| 0`,
+        // which lets a NaN through `NaN * 0`), and the rounded total is itself
+        // clamped finite/>=0 so a garbled restored set can never surface a
+        // "NaN"/"-Infinity" volume on the summary. A well-formed set is unchanged
+        // (finite(50)*finite(10) === 500), so a normal workout's volume is identical.
+        const totalVolume = Math.max(0, finite(Math.round(exerciseStates.reduce((acc, ex) =>
+            acc + ex.sets.filter(s => s.completed).reduce((a, s) => a + finite(s.kg) * finite(s.reps), 0), 0))));
+        const totalKcal = Math.max(0, finite(Math.round((finite(finalElapsed) / 60) * 6))); // ≈6 kcal/min for resistance training
+        // Clamp the forwarded elapsed too (same guard as volume/kcal) so a garbled
+        // restored startedAt can't push a negative/NaN seconds onto the summary
+        // route. finite(finalElapsed) === finalElapsed for a normal session.
+        const summaryParams = { elapsed: String(Math.max(0, finite(finalElapsed))), volume: String(totalVolume), kcal: String(totalKcal) };
 
         setShowConfetti(true);
 
@@ -526,8 +549,18 @@ export default function ActiveWorkoutScreen() {
                     await logSessionExercise(sessionId, {
                         exerciseName: ex.name,
                         sets: completedSets.length,
-                        reps: Math.round(completedSets.reduce((a,s)=>a+s.reps,0)/completedSets.length),
-                        weightKg: Math.max(...completedSets.map(s=>s.kg)),
+                        // avg reps: each rep run through `finite`, divided by a
+                        // floor-of-1 denominator so even if the length===0 guard
+                        // above were ever bypassed this can't divide by zero / yield
+                        // NaN. For a normal list (length>=1) Math.max(1, n) === n, so
+                        // the mean is identical to today.
+                        reps: Math.round(completedSets.reduce((a, s) => a + finite(s.reps), 0) / Math.max(1, completedSets.length)),
+                        // max weight via a guarded reduce seeded at 0 instead of
+                        // `Math.max(...map(s=>s.kg))`: an empty/garbled list yields 0,
+                        // not -Infinity (Math.max() of [] is -Infinity). finite()
+                        // also drops any NaN/negative kg. Identical to today for a
+                        // well-formed list of non-negative weights.
+                        weightKg: completedSets.reduce((m, s) => Math.max(m, finite(s.kg)), 0),
                         durationSecs: 0
                     });
                 } catch (e) {

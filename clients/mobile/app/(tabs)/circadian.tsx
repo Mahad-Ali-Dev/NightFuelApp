@@ -246,7 +246,16 @@ export default function CircadianScreen() {
         }
     }, [currentShift, circadianModel]);
 
-    // Use AI plan data if available, otherwise estimate from shift.
+    // Real AI plan ONLY — there is NO fabricated fallback timeline. Previously
+    // this returned a hardcoded 5-row Wake/Activation/Mid/Caffeine/Recovery
+    // estimate whenever the real `plan` was absent, which meant a user who had
+    // never generated a plan saw an invented meal/workout timeline with tappable
+    // "Log this" buttons that pushed made-up macros into the meal log — the
+    // fabricated-timeline / no-honest-empty-state anti-pattern. We now surface
+    // ONLY what the AI actually returned: when `plan.items` is a NON-EMPTY array
+    // we map it; otherwise the timeline is empty and the render shows the honest
+    // "No protocol yet" EmptyState (state-ground-truth — never fabricate on the
+    // empty branch).
     //
     // Every MEAL row is normalized to ALSO carry the four fields the plan->meal
     // "Log this" flow needs, derived from whatever shape the plan provides:
@@ -256,46 +265,20 @@ export default function CircadianScreen() {
     //   • planMealId    — the originating plan-meal id (when the plan supplies one)
     // Non-meal rows (workout/action) are passed through untouched.
     const protocol = useMemo(() => {
-        if (plan && Array.isArray((plan as any).items)) {
+        if (plan && Array.isArray((plan as any).items) && (plan as any).items.length > 0) {
             return ((plan as any).items as any[]).map((item) =>
                 item?.type === 'meal' ? normalizePlannedMeal(item) : item
             );
         }
-        // Fallback estimation from shift data. The slot labels/times lean on the
-        // resolved shiftType so a day worker doesn't see night-shift copy.
-        const isDay = shiftType === 'day';
-        return [
-            {
-                type: 'meal',
-                title: isDay ? 'Wake Fuel' : 'Pre-Shift Protein',
-                time: profileMetrics?.insulinStart || (isDay ? '07:00' : '20:00'),
-                macros: '40P / 20C / 15F',
-                mealType: 'BREAKFAST',
-                plannedMacros: { protein: 40, carbs: 20, fat: 15 },
-                suggestedFoods: [],
-            },
-            { type: 'workout', title: 'Activation Protocol', time: isDay ? '08:00' : '21:00', duration: '30m' },
-            {
-                type: 'meal',
-                title: isDay ? 'Midday Fuel' : 'Mid-Shift Fuel',
-                time: isDay ? '12:30' : '01:00',
-                macros: '30P / 40C / 10F',
-                mealType: 'LUNCH',
-                plannedMacros: { protein: 30, carbs: 40, fat: 10 },
-                suggestedFoods: [],
-            },
-            { type: 'action', title: 'Caffeine Cutoff', time: profileMetrics?.caffeineCutoff || (isDay ? '14:00' : '02:00'), note: 'Switch to water/decaf' },
-            {
-                type: 'meal',
-                title: isDay ? 'Evening Meal' : 'Recovery Fast',
-                time: isDay ? '18:30' : '06:00',
-                macros: isDay ? '35P / 30C / 15F' : 'Fasting Window Starts',
-                mealType: 'DINNER',
-                plannedMacros: { protein: 35, carbs: 30, fat: 15 },
-                suggestedFoods: [],
-            },
-        ];
-    }, [plan, profileMetrics, shiftType]);
+        // No real plan → no rows. The render branches to the honest EmptyState
+        // (a single CTA wired to generateAIPlan); it never invents a timeline.
+        return [] as any[];
+    }, [plan]);
+
+    // Whether the AI returned a real, non-empty plan. Drives the honest no-plan
+    // EmptyState (the timeline maps `protocol`, which is empty unless this is
+    // true) — derived from the SAME ground-truth `plan`, never stored as state.
+    const hasRealPlan = Array.isArray((plan as any)?.items) && (plan as any).items.length > 0;
 
     // Resolved entrainment score — SINGLE source of truth, typed (no `as any`).
     // `profileMetrics.entrainmentScore` already folds in the model's score in its
@@ -671,6 +654,22 @@ export default function CircadianScreen() {
                                     </View>
                                 ))}
                             </View>
+                        ) : !hasRealPlan && !quota && !genError ? (
+                            /* Honest zero-data state: the AI has not produced a
+                               plan yet, so we show NOTHING fabricated — just the
+                               EmptyState with ONE CTA wired to the EXISTING
+                               generateAIPlan mutation (no inline coral CTA; the
+                               EmptyState action renders the sanctioned Button
+                               primitive). Mutually exclusive with the loader and
+                               with the quota/genError notices above. Ternary-null,
+                               not `&&` (rendering-no-falsy-and). */
+                            <EmptyState
+                                icon="sparkles-outline"
+                                title="No protocol yet"
+                                subtitle="Generate today's circadian-timed meal & training plan."
+                                actionLabel="Generate protocol"
+                                onAction={() => generateAIPlan()}
+                            />
                         ) : (
                             <View>
                                 {protocol.map((item: any, idx: number) => {

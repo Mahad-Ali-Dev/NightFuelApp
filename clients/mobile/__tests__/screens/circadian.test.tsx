@@ -102,7 +102,12 @@ const mockCircadianModel: { data: any } = { data: undefined };
 // never (re)generate). `mode:'error'` → mutate runs onMutate then onError(err).
 // `mode:'success'` → mutate runs onMutate then onSuccess. The screen's REAL
 // onError (parseAiQuotaError → setQuota/setGenError) runs against `err`.
-type MutationOutcome = { mode: 'idle' | 'error' | 'success'; err?: unknown };
+// `data` is the RESOLVED plan the screen reads as `plan` (the useMutation
+// result's `data`). The screen renders the AI Protocol timeline ONLY when
+// `plan.items` is a non-empty array — there is no fabricated fallback — so the
+// populated case must supply a real plan here (mirrors a generated plan landing
+// in the mutation cache). Left undefined ⇒ the honest "No protocol yet" empty state.
+type MutationOutcome = { mode: 'idle' | 'error' | 'success'; err?: unknown; data?: unknown };
 const mockMutation: MutationOutcome = { mode: 'idle' };
 
 // react-query: branch on queryKey[0]. ['current-shift'] / ['circadian-model']
@@ -121,7 +126,7 @@ jest.mock('@tanstack/react-query', () => ({
     return { data: undefined, isLoading: false };
   },
   useMutation: (config: any) => ({
-    data: undefined,
+    data: mockMutation.data,
     isPending: false,
     mutate: () => {
       config?.onMutate?.();
@@ -215,6 +220,26 @@ const ACTIVE_SHIFT = {
   endTime: '2026-06-14T06:00:00.000Z',
 };
 
+// A REAL AI plan as the screen consumes it: `plan.items` is a non-empty array of
+// timeline rows. The first row is a meal whose slot resolves to BREAKFAST and
+// which carries plannedMacros + suggestedFoods, so normalizePlannedMeal yields a
+// row the "Log <title>" CTA serializes into the log-planned-meal params. (There
+// is no fabricated fallback timeline anymore; the populated case must be real.)
+const PLAN_WITH_BREAKFAST = {
+  items: [
+    {
+      type: 'meal',
+      title: 'Pre-Shift Protein',
+      mealType: 'BREAKFAST',
+      time: '20:00',
+      macros: '40P / 20C / 15F',
+      plannedMacros: { protein: 40, carbs: 20, fat: 15 },
+      suggestedFoods: [{ name: 'Greek yogurt', protein: 20, carbs: 8, fat: 5 }],
+    },
+    { type: 'workout', title: 'Activation Protocol', time: '21:00', duration: '30m' },
+  ],
+};
+
 let alertSpy: jest.SpyInstance;
 
 describe('CircadianScreen', () => {
@@ -224,6 +249,7 @@ describe('CircadianScreen', () => {
     mockCircadianModel.data = undefined;
     mockMutation.mode = 'idle';
     mockMutation.err = undefined;
+    mockMutation.data = undefined;
     mockPush.mockClear();
     // The shipped UX replaced a destructive Alert with inline GlassCard notices;
     // spy so the quota/error tests can assert Alert.alert is NEVER raised.
@@ -279,6 +305,11 @@ describe('CircadianScreen', () => {
   test('populated: switching to the AI Protocol tab and pressing a meal "Log this" pushes /(meals)/log-planned-meal with the slot params', () => {
     mockCurrentShift.data = ACTIVE_SHIFT;
     mockCurrentShift.isLoading = false;
+    // A REAL generated plan (the screen has NO fabricated fallback — see
+    // PLAN_WITH_BREAKFAST). Its first meal is a BREAKFAST slot, so the timeline's
+    // first "Log" button carries mealType BREAKFAST. Without this the protocol
+    // tab honestly renders the "No protocol yet" empty state.
+    mockMutation.data = PLAN_WITH_BREAKFAST;
 
     renderScreen();
 
@@ -288,7 +319,7 @@ describe('CircadianScreen', () => {
     expect(screen.getByText('Biological Windows')).toBeTruthy();
 
     // Switch to the "AI Protocol" tab (accessibilityRole="tab", named by its
-    // child text). The fallback protocol then renders its meal timeline.
+    // child text). With a real non-empty plan present, its meal timeline renders.
     fireEvent.press(screen.getByRole('tab', { name: /AI Protocol/ }));
     expect(screen.getByText("Today's Protocol")).toBeTruthy();
 
@@ -303,7 +334,7 @@ describe('CircadianScreen', () => {
     expect(mockPush).toHaveBeenCalledTimes(1);
     const arg = mockPush.mock.calls[0]![0] as { pathname: string; params: Record<string, string> };
     expect(arg.pathname).toBe('/(meals)/log-planned-meal');
-    // The fallback protocol's first meal is the BREAKFAST slot.
+    // The plan's first meal is the BREAKFAST slot.
     expect(arg.params.mealType).toBe('BREAKFAST');
     // `plan` is a JSON string carrying the planned macros + suggested foods.
     expect(typeof arg.params.plan).toBe('string');

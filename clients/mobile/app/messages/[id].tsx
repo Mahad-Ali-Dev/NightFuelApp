@@ -41,6 +41,18 @@ interface UIMessage extends ChatMessage {
 
 const TYPING_IDLE_MS = 1500; // fire typing_stop after this much keyboard silence
 
+/**
+ * Format a bubble's createdAt to a short local time, hoisted to module scope so
+ * it isn't re-created per render (js-hoist-intl). GUARDED: a missing or malformed
+ * ISO string yields '' (never 'Invalid Date'), so a bad row degrades to a blank
+ * timestamp rather than leaking the literal string into the bubble.
+ */
+const formatBubbleTime = (iso: string): string => {
+    const d = new Date(iso);
+    if (!iso || Number.isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
 export default function UnifiedChatScreen() {
     const { colors, typography, shadows } = useTheme();
     const insets = useSafeAreaInsets();
@@ -104,6 +116,10 @@ export default function UnifiedChatScreen() {
     );
     const peer = meta?.peer;
     const peerUserId = peer?.userId ?? (targetId as string | undefined);
+    // Stable peer-name primitive — used both for the speaker-qualified bubble a11y
+    // label and the typing-indicator live-region label, so renderMessage can depend
+    // on a string (not the `peer` object identity).
+    const peerName = peer?.displayName;
     const requestState: RequestState = meta?.requestState ?? 'accepted';
 
     const isRecipientOfRequest = useMemo(
@@ -392,7 +408,11 @@ export default function UnifiedChatScreen() {
     const renderMessage = useCallback(
         ({ item }: { item: UIMessage }) => {
             const isMe = item.isOwn ?? item.senderId === myUserId;
-            const timeStamp = new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const timeStamp = formatBubbleTime(item.createdAt);
+            // Speaker-qualified label so a screen reader can tell 'You' from the
+            // peer (Coach Ria) — passed as a single primitive so the memoized
+            // bubble's stable-ref contract holds (list-performance-inline-objects).
+            const speaker = isMe ? 'You' : (peerName ?? 'Coach Ria');
             return (
                 <ChatBubble
                     id={item.id}
@@ -401,17 +421,20 @@ export default function UnifiedChatScreen() {
                     timestamp={timeStamp}
                     status={isMe ? item.status : undefined}
                     onRetry={handleRetry}
+                    accessibilityLabel={`${speaker}: ${item.text}`}
                 />
             );
         },
-        [myUserId, handleRetry],
+        [myUserId, handleRetry, peerName],
     );
 
     const keyExtractor = useCallback((item: UIMessage) => item.id, []);
 
     const isLoading = startingConv || loadingMessages;
     const isError = convError || messagesError;
-    const displayName = peer?.displayName ?? 'Chat';
+    const displayName = peerName ?? 'Chat';
+    // The peer's spoken name for the typing live-region (Coach Ria in the AI thread).
+    const typingSpeaker = peerName ?? 'Coach Ria';
 
     return (
         <KeyboardAvoidingView style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -435,7 +458,13 @@ export default function UnifiedChatScreen() {
                         {isLoading ? (
                             <ActivityIndicator size="small" color={colors.accent.purple} />
                         ) : peerTyping ? (
-                            <Text style={[typography.caption, { color: colors.accent.coral }]}>typing…</Text>
+                            <Text
+                                style={[typography.caption, { color: colors.accent.coral }]}
+                                accessibilityLiveRegion="polite"
+                                accessibilityLabel={`${typingSpeaker} is typing`}
+                            >
+                                typing…
+                            </Text>
                         ) : (
                             <View style={styles.statusRow}>
                                 <View style={[styles.onlineDot, { backgroundColor: colors.success }, shadows.glow(colors.success)]} />
@@ -508,7 +537,7 @@ export default function UnifiedChatScreen() {
                     maxToRenderPerBatch={10}
                     windowSize={11}
                     removeClippedSubviews={Platform.OS === 'android'}
-                    ListFooterComponent={peerTyping ? <TypingRow /> : null}
+                    ListFooterComponent={peerTyping ? <TypingRow speaker={typingSpeaker} /> : null}
                     keyboardShouldPersistTaps="handled"
                 />
             )}
@@ -589,8 +618,12 @@ export default function UnifiedChatScreen() {
  * useDerivedValue with a phase offset (animation-derived-value). We read/write
  * the shared value with .get()/.set() for React-Compiler compatibility
  * (react-compiler-reanimated-shared-values).
+ *
+ * Lives in a POLITE live region with a descriptive label so a screen reader
+ * announces "<speaker> is typing" without yanking focus — the three dots alone
+ * are purely decorative and would otherwise be silent.
  */
-function TypingRow() {
+function TypingRow({ speaker = 'Coach Ria' }: { speaker?: string }) {
     const { colors } = useTheme();
     const progress = useSharedValue(0);
 
@@ -599,7 +632,11 @@ function TypingRow() {
     }, [progress]);
 
     return (
-        <View style={[styles.row, styles.otherRow]}>
+        <View
+            style={[styles.row, styles.otherRow]}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel={`${speaker} is typing`}
+        >
             <View style={[styles.typingBubble, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
                 <TypingDot progress={progress} phase={0} color={colors.text.secondary} />
                 <TypingDot progress={progress} phase={0.33} color={colors.text.secondary} />

@@ -41,6 +41,13 @@ export interface ChatBubbleProps {
   onRetry?: (id: string) => void;
   /** This row's id — forwarded to onRetry so the list keeps ONE callback. */
   id?: string;
+  /**
+   * Speaker-qualified screen-reader label for the bubble body (e.g.
+   * "You: Hey there" / "Coach Ria: How are you?"). Lets a screen reader tell who
+   * said what. Optional: when omitted the body falls back to announcing its `text`,
+   * so existing non-Ria callers (and the snapshot tests) stay unaffected.
+   */
+  accessibilityLabel?: string;
 }
 
 /** Map a delivery status to its trailing tick glyph + tint (own bubbles only). */
@@ -81,8 +88,11 @@ function StatusTick({ status }: { status: ChatBubbleStatus }) {
   );
 }
 
-function ChatBubbleComponent({ text, isOwn, timestamp, senderName, status, onRetry, id }: ChatBubbleProps) {
+function ChatBubbleComponent({ text, isOwn, timestamp, senderName, status, onRetry, id, accessibilityLabel }: ChatBubbleProps) {
   const { colors, typography, shadows } = useTheme();
+  // Announce the speaker-qualified label when supplied; otherwise fall back to the
+  // raw message text so existing callers (and tests) keep their prior a11y output.
+  const bodyA11yLabel = accessibilityLabel ?? text;
 
   if (isOwn) {
     const failed = status === 'failed';
@@ -93,6 +103,8 @@ function ChatBubbleComponent({ text, isOwn, timestamp, senderName, status, onRet
         // (allowed by check-no-inline-cta). On send-failure we dim it so the
         // red alert tick + tap-to-retry affordance reads clearly.
         style={[styles.bubble, styles.ownBubble, shadows.glow(colors.accent.pink), (failed || sending) && styles.dim]}
+        accessibilityRole="text"
+        accessibilityLabel={bodyA11yLabel}
       >
         <LinearGradient
           colors={colors.gradients.coral}
@@ -130,7 +142,11 @@ function ChatBubbleComponent({ text, isOwn, timestamp, senderName, status, onRet
 
   return (
     <View style={[styles.row, styles.otherRow]}>
-      <View style={[styles.bubble, styles.otherBubble, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+      <View
+        style={[styles.bubble, styles.otherBubble, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
+        accessibilityRole="text"
+        accessibilityLabel={bodyA11yLabel}
+      >
         {senderName ? (
           <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: '700', marginBottom: 4 }]}>
             {senderName}

@@ -39,6 +39,21 @@ const formatSessionWhen = (iso: string): string => {
     });
     return `${date} · ${time}`;
 };
+
+/**
+ * Short HH:MM label for an active shift's `startTime` / `endTime` ISO, in the
+ * device's LOCAL timezone. Defined ONCE at module scope (js-hoist-intl) so the
+ * three timeline renders below — the start–end header plus the "Shift Starts" /
+ * "Shift Ends" nodes — share one helper rather than each constructing a
+ * per-render formatter. Returns a neutral '--:--' sentinel for an empty or
+ * unparseable value so a slot never renders the literal 'Invalid Date'
+ * (rendering-no-falsy-and: a string sentinel, never a bare falsy value).
+ */
+const formatShiftTime = (iso: string): string => {
+    const d = new Date(iso);
+    if (!iso || Number.isNaN(d.getTime())) return '--:--';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -214,7 +229,7 @@ export default function ShiftCalendarScreen() {
                                         <Text style={[typography.overline, { color: colors.accent.coral, marginBottom: spacing.xxs }]}>Active Shift</Text>
                                         <Text style={[typography.h3, { color: colors.text.primary, textTransform: 'capitalize' }]}>{currentShift.type}</Text>
                                         <Text style={[typography.statTiny, { color: colors.text.secondary, marginTop: spacing.xs }]}>
-                                            {new Date(currentShift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(currentShift.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            {formatShiftTime(currentShift.startTime)} - {formatShiftTime(currentShift.endTime)}
                                         </Text>
                                     </View>
                                     <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Edit" onPress={() => router.push('/(modals)/log-shift' as any)} style={[styles.editBtn, { backgroundColor: withAlpha(colors.text.primary, 0.06), borderColor: colors.border.default, borderWidth: 1 }]}>
@@ -237,7 +252,7 @@ export default function ShiftCalendarScreen() {
                                         </View>
                                         <Text style={[typography.bodySm, { color: colors.text.primary, marginLeft: spacing.md }]}>Shift Starts</Text>
                                         <View style={{ flex: 1 }} />
-                                        <Text style={[typography.statTiny, { color: colors.accent.cyan, fontSize: 14 }]}>{new Date(currentShift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                                        <Text style={[typography.statTiny, { color: colors.accent.cyan, fontSize: 14 }]}>{formatShiftTime(currentShift.startTime)}</Text>
                                     </View>
                                     <View style={styles.timelineNode}>
                                         <View style={[styles.timelineDot, { backgroundColor: withAlpha(colors.accent.purple, 0.16), borderColor: withAlpha(colors.accent.purple, 0.3), borderWidth: 1 }]}>
@@ -245,7 +260,7 @@ export default function ShiftCalendarScreen() {
                                         </View>
                                         <Text style={[typography.bodySm, { color: colors.text.primary, marginLeft: spacing.md }]}>Shift Ends</Text>
                                         <View style={{ flex: 1 }} />
-                                        <Text style={[typography.statTiny, { color: colors.accent.purple, fontSize: 14 }]}>{new Date(currentShift.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text>
+                                        <Text style={[typography.statTiny, { color: colors.accent.purple, fontSize: 14 }]}>{formatShiftTime(currentShift.endTime)}</Text>
                                     </View>
                                 </View>
                             </Card>

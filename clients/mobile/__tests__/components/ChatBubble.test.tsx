@@ -161,6 +161,43 @@ describe('ChatBubble', () => {
     });
   });
 
+  // ── (b2) speaker-qualified body accessibilityLabel (the new optional prop) ──────
+  describe('speaker-qualified bubble body accessibilityLabel', () => {
+    test('own bubble: forwards the speaker-qualified label onto the bubble body', () => {
+      // The screen passes `${speaker}: ${text}` ("You: …") so a screen reader can
+      // attribute the message — assert that exact label rides the body.
+      renderWithTheme(
+        <ChatBubble text="hey there" isOwn timestamp="9:41 AM" status="sent" accessibilityLabel="You: hey there" />,
+      );
+      expect(screen.getByLabelText('You: hey there')).toBeTruthy();
+      // The visible message text still renders inside the bubble.
+      expect(screen.getByText('hey there')).toBeTruthy();
+    });
+
+    test('peer bubble: forwards the speaker-qualified label onto the bubble body', () => {
+      renderWithTheme(
+        <ChatBubble text="how are you?" isOwn={false} timestamp="9:40 AM" accessibilityLabel="Coach Ria: how are you?" />,
+      );
+      expect(screen.getByLabelText('Coach Ria: how are you?')).toBeTruthy();
+      expect(screen.getByText('how are you?')).toBeTruthy();
+    });
+
+    test('BACKWARD-COMPAT: omitting accessibilityLabel falls back to the raw message text', () => {
+      // Existing non-Ria callers pass no label — the body must still announce its
+      // text so the bubble is never silent to a screen reader.
+      renderWithTheme(<ChatBubble text="plain row" isOwn timestamp="9:41 AM" status="sent" />);
+      // The fallback label IS the message text (own bubble).
+      expect(screen.getByLabelText('plain row')).toBeTruthy();
+      expect(screen.getByText('plain row')).toBeTruthy();
+    });
+
+    test('BACKWARD-COMPAT: a peer bubble without a label falls back to its text', () => {
+      renderWithTheme(<ChatBubble text="peer plain" isOwn={false} timestamp="9:40 AM" />);
+      expect(screen.getByLabelText('peer plain')).toBeTruthy();
+      expect(screen.getByText('peer plain')).toBeTruthy();
+    });
+  });
+
   // ── (c) failed-own retry affordance ────────────────────────────────────────────
   describe('failed own bubble retry affordance', () => {
     test("exposes role=button 'Message failed to send. Tap to retry.' and fires onRetry once with the exact id", () => {
