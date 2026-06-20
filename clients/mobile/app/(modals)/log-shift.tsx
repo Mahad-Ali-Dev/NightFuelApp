@@ -73,6 +73,12 @@ export default function LogShiftModal() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['current-shift'] });
             queryClient.invalidateQueries({ queryKey: ['shifts'] });
+            // The dashboard NextShiftCard countdown reads a separate key
+            // (['shifts-upcoming'] — app/(tabs)/index.tsx) off api/shifts.list,
+            // not ['shifts']. Without this it stays stale until refocus/staleTime
+            // after saving a new upcoming shift. A refetch of an already-fresh
+            // list is a harmless no-op.
+            queryClient.invalidateQueries({ queryKey: ['shifts-upcoming'] });
             router.back();
         },
         onError: (err) => {

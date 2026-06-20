@@ -43,6 +43,7 @@ import { withAlpha } from '@/theme/utils';
 import { GlassCard, CtaButton, Skeleton, EmptyState } from '@/components/ui';
 import { logMeal, searchFoods, FoodItem } from '@/api/meals';
 import { getErrorMessage } from '@/utils/validation';
+import { invalidateMealAndProgress } from '@/utils/invalidateMealAndProgress';
 
 // ── Param-decode types (the planned slot the circadian screen serialized) ──
 
@@ -204,8 +205,12 @@ export default function LogPlannedMealScreen() {
             return logMeal({ mealType, foodItems, ...(planMealId ? { planMealId } : {}) });
         },
         onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['meal-logs'] });
-            qc.invalidateQueries({ queryKey: ['daily-progress'] });
+            // Route through the shared helper so logging a planned meal refreshes
+            // BOTH calorie/macro rings: ['daily-progress'] (the Nutrition tab) and
+            // ['today-progress'] (the dashboard). The old inline pair invalidated
+            // only ['meal-logs'] + ['daily-progress'], leaving the dashboard ring
+            // stale — the split-brain this helper exists to prevent.
+            invalidateMealAndProgress(qc);
             router.back();
         },
         onError: (err: unknown) => Alert.alert('Error', getErrorMessage(err)),

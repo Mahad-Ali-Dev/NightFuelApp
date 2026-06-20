@@ -52,7 +52,9 @@ const mockSession = {
 
 // react-query is fully stubbed: a synchronous switch on queryKey[0]. The
 // ['exercise-last-sets', …] history query returns {} (no cross-session history)
-// — irrelevant to the wiring under test.
+// — irrelevant to the wiring under test. useQueryClient is a benign stub whose
+// invalidateQueries we capture so the Finish test can assert the cache flush.
+const mockInvalidateQueries = jest.fn();
 jest.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     const key = queryKey[0];
@@ -64,19 +66,26 @@ jest.mock('@tanstack/react-query', () => ({
     }
     return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
   },
+  useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 
-// Imports must resolve; useQuery is fully stubbed so these are never called.
+// Imports must resolve; useQuery is fully stubbed so the read hooks are never
+// called. logSessionExercise/endSession ARE invoked by the Finish handler under
+// test, so they resolve to undefined and we assert the calls below.
 jest.mock('@/api/exercises', () => ({
   getActiveSession: jest.fn(),
   getLastSet: jest.fn(),
+  logSessionExercise: jest.fn().mockResolvedValue(undefined),
+  endSession: jest.fn().mockResolvedValue(undefined),
 }));
 
-// Capture router.push so we can assert "Add Exercise" performs a real navigation
-// (never a silent no-op handler).
+// Capture router.push (Add Exercise navigation) and router.replace (the Finish
+// handler's navigation to the completion summary) — both must be real, never a
+// silent no-op / bare back().
 const mockPush = jest.fn();
+const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace, back: jest.fn() }),
 }));
 
 // Decorative glyphs → plain text so labels/roles stay assertable.
@@ -125,6 +134,13 @@ beforeEach(() => {
   jest.useFakeTimers();
   jest.setSystemTime(new Date(2026, 5, 17, 20, 0, 0));
   mockPush.mockClear();
+  mockReplace.mockClear();
+  mockInvalidateQueries.mockClear();
+  // Clear call data but KEEP the mockResolvedValue implementations registered
+  // on the api module (mockClear, not mockReset).
+  const api = require('@/api/exercises');
+  api.logSessionExercise.mockClear();
+  api.endSession.mockClear();
 });
 
 afterEach(() => {
@@ -258,5 +274,75 @@ describe('Active Workout — Add controls are functional (no silent no-ops)', ()
 
     expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith('/(exercises)');
+  });
+});
+
+// The capstone for THIS change: "Finish" must PERSIST the logged sets and route
+// to the completion summary, NOT silently `router.back()` and discard them.
+// Before this fix the button called a bare back() that never touched
+// logSessionExercise/endSession and never navigated to /training/complete, so
+// every logged set was lost — and no test asserted what Finish did, which is why
+// it slipped. This pins persist → endSession → invalidate → summary.
+describe('Active Workout — Finish persists then navigates to the summary', () => {
+  test('Finish persists logged sets and navigates to the summary', async () => {
+    renderScreen();
+
+    // Enter real numbers on the first seeded set row, then complete it so it is
+    // counted as a logged (done) set. (The labels come straight from the row's
+    // weight/reps TextInputs + the "Complete set" checkmark.)
+    fireEvent.changeText(screen.getByLabelText('Weight (kg), set 1'), '50');
+    fireEvent.changeText(screen.getByLabelText('Reps, set 1'), '10');
+    fireEvent.press(screen.getAllByLabelText('Complete set')[0]);
+
+    // Tap Finish (the shared <Button/> maps its title to the Pressable onPress).
+    // handleFinish is async: it awaits Promise.all(logSessionExercise…) THEN
+    // endSession — a multi-step await chain, each step re-queuing a microtask. We
+    // drain the microtask queue across several turns (one `await Promise.resolve()`
+    // only advances one `await`) so every step settles before we assert.
+    await act(async () => {
+      fireEvent.press(screen.getByText('Finish'));
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+    });
+
+    const api = require('@/api/exercises');
+
+    // The completed exercise was logged via logSessionExercise with the session
+    // id and finite numeric payload derived from the entered set (50kg × 10 reps).
+    expect(api.logSessionExercise).toHaveBeenCalledTimes(1);
+    const [loggedSessionId, payload] = api.logSessionExercise.mock.calls[0];
+    expect(loggedSessionId).toBe(mockSession.id);
+    expect(payload).toEqual(
+      expect.objectContaining({
+        exerciseName: 'Bench Press',
+        sets: 1,
+        reps: 10,
+        weightKg: 50,
+        durationSecs: 0,
+      }),
+    );
+
+    // The session was ended with the same session id …
+    expect(api.endSession).toHaveBeenCalledTimes(1);
+    expect(api.endSession).toHaveBeenCalledWith(mockSession.id);
+
+    // … the active-session + exercise-history caches were invalidated …
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['active-session'] });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['exercises', 'history'] });
+
+    // … and we navigated to the completion summary via router.replace (NOT back)
+    // with finite numeric-string params (no NaN / -Infinity).
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    const [replaceArg] = mockReplace.mock.calls[0];
+    expect(replaceArg.pathname).toBe('/training/complete');
+    const { elapsed, volume, kcal } = replaceArg.params;
+    // volume = 50 × 10 = 500; elapsed/kcal are finite non-negative strings.
+    expect(volume).toBe('500');
+    for (const v of [elapsed, volume, kcal]) {
+      expect(typeof v).toBe('string');
+      expect(Number.isFinite(Number(v))).toBe(true);
+      expect(Number(v)).toBeGreaterThanOrEqual(0);
+    }
   });
 });

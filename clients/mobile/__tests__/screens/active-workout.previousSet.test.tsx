@@ -75,11 +75,20 @@ jest.mock('@tanstack/react-query', () => ({
     }
     return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
   },
+  // The screen's Finish handler now grabs a query client to invalidate the
+  // active-session / exercise-history caches after persisting. These render
+  // tests never press Finish, so a benign stub whose invalidateQueries is a
+  // no-op jest.fn is enough for the hook to resolve at mount.
+  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 
 jest.mock('@/api/exercises', () => ({
   getActiveSession: jest.fn(),
   getLastSet: jest.fn(),
+  // Finish-time persistence helpers — never invoked by these mount-only render
+  // tests (Finish is not pressed), present purely so the import resolves.
+  logSessionExercise: jest.fn(),
+  endSession: jest.fn(),
 }));
 
 jest.mock('expo-router', () => ({

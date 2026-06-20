@@ -30,7 +30,7 @@ import {
 import { validateReceipt } from '@/api/iap';
 import { captureException } from '@/lib/sentry';
 import { BiometricGate } from '@/components/BiometricGate';
-import { Skeleton } from '@/components/ui';
+import { Skeleton, GlassCard, CtaButton } from '@/components/ui';
 
 const { width } = Dimensions.get('window');
 
@@ -110,13 +110,17 @@ const TIERS: TierUI[] = [
     },
 ];
 
-function SubscriptionScreenContent() {
+// Exported (additive — the default export below still wraps this in
+// BiometricGate) so screen tests can mount the content directly, without the
+// biometric gate's async capability check standing between the test and the
+// loading / error / loaded states it asserts.
+export function SubscriptionScreenContent() {
     const { colors, typography, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
 
-    const { data: sub, isLoading } = useQuery({
+    const { data: sub, isLoading, isError, refetch } = useQuery({
         queryKey: ['subscription-status'],
         queryFn: getStatus,
     });
@@ -313,6 +317,43 @@ function SubscriptionScreenContent() {
                         <Skeleton width="100%" height={72} radius={borderRadius.xl} style={{ marginTop: spacing.md }} />
                     </View>
                 </ScrollView>
+            ) : isError ? (
+                // HONEST error surface: getStatus failed, so we DON'T know the
+                // user's tier. Defaulting activeTierId to 'free' here would render
+                // the plan grid with Free as the "CURRENT PLAN" even for a paying
+                // Pro/Premium member and could nudge a re-purchase — so instead we
+                // show a retry surface (the same coral CtaButton + GlassCard recipe
+                // as the requests inbox) wired to the query's refetch, and only that.
+                <View style={styles.stateWrap}>
+                    <GlassCard style={styles.stateCard}>
+                        <View style={styles.stateInner}>
+                            <View
+                                style={[
+                                    styles.stateIconCircle,
+                                    {
+                                        backgroundColor: withAlpha(colors.accent.coral, 0.12),
+                                        borderColor: withAlpha(colors.accent.coral, 0.24),
+                                    },
+                                ]}
+                            >
+                                <Ionicons name="cloud-offline-outline" size={36} color={colors.accent.coral} />
+                            </View>
+                            <Text style={[typography.h3, { color: colors.text.primary, textAlign: 'center', marginTop: 16 }]}>
+                                Couldn't load your subscription
+                            </Text>
+                            <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: 8 }]}>
+                                We couldn't check your plan status. Check your connection and try again.
+                            </Text>
+                            <CtaButton
+                                label="Try Again"
+                                icon="refresh"
+                                accessibilityLabel="Retry loading your subscription status"
+                                onPress={() => refetch()}
+                                style={styles.stateRetryBtn}
+                            />
+                        </View>
+                    </GlassCard>
+                </View>
             ) : (
                 <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
                     <View style={styles.heroTextContainer}>
@@ -498,6 +539,12 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderBottomWidth: 1 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    // Centered honest-error retry surface (mirrors (community)/requests.tsx).
+    stateWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
+    stateCard: { width: '100%', maxWidth: 420 },
+    stateInner: { padding: 24, alignItems: 'center' },
+    stateIconCircle: { width: 72, height: 72, borderRadius: 9999, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    stateRetryBtn: { marginTop: 24, minWidth: 160, borderRadius: 14 },
     heroTextContainer: { paddingHorizontal: spacing['3xl'], paddingTop: spacing.xl, paddingBottom: spacing['3xl'] },
     tierCard: { padding: spacing['2xl'], marginRight: spacing.lg, minHeight: 450, display: 'flex' },
     badgeTop: { alignSelf: 'flex-start', paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: br.full, marginBottom: spacing.lg },

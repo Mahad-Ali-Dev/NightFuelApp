@@ -89,4 +89,18 @@ describe('parseAiQuotaError', () => {
     // A 429 with no body at all is also not the quota contract.
     expect(parseAiQuotaError({ response: { status: 429 } })).toBeNull();
   });
+
+  test('returns null for the ai-pipeline retryAfterSeconds 429 (not the shared quota contract)', () => {
+    // The ai-pipeline helpers in src/api/ai.ts (ai.generatePlan / swapMeal /
+    // scoreMeal — the /v1/ai/* endpoints) emit a DIFFERENT 429 shape on rate
+    // limit: { error: 'Rate limit exceeded', retryAfterSeconds } (documented at
+    // app/(tabs)/circadian.tsx:163). That is NOT the shared daily-quota contract
+    // { error:'ai_quota_exceeded', limit, plan, resetsAt } parsed into the typed
+    // result above, so it must INTENTIONALLY fall through to null rather than
+    // flip the caller into the Upgrade state. Pins that the two shapes stay
+    // distinguished by name, so a future regression that conflated them is caught.
+    expect(
+      parseAiQuotaError({ response: { status: 429, data: { error: 'Rate limit exceeded', retryAfterSeconds: 30 } } }),
+    ).toBeNull();
+  });
 });

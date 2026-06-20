@@ -13,6 +13,7 @@ import { withAlpha } from '@/theme/utils';
 import { borderRadius } from '@/theme/spacing';
 import { GlassCard, Skeleton, EmptyState, CtaButton } from '@/components/ui';
 import { getErrorMessage } from '@/utils/validation';
+import { invalidateMealAndProgress } from '@/utils/invalidateMealAndProgress';
 const MT = [
     { id:'BREAKFAST', label:'Breakfast', img:require('../../assets/images/meal-breakfast.png'), color:'#F59E0B' },
     { id:'LUNCH', label:'Lunch', img:require('../../assets/images/meal-lunch.png'), color:'#2ECC71' },
@@ -61,7 +62,12 @@ export default function LogMealScreen() {
     const searchQ = useQuery({ queryKey:['meal-search',sq], queryFn:()=>searchFoods({q:sq,limit:20}), enabled:sq.length>2 });
     const logM = useMutation({
         mutationFn:(payload:any)=>logMeal(payload),
-        onSuccess:()=>{ qc.invalidateQueries({queryKey:['meal-logs']}); qc.invalidateQueries({queryKey:['daily-progress']}); router.push('/(tabs)/nutrition' as any); },
+        // Route success invalidation through the shared helper so BOTH calorie
+        // rings refresh: the Nutrition tab's ['daily-progress'] AND the dashboard's
+        // ['today-progress'] (plus the ['meal-logs'] list) — see
+        // invalidateMealAndProgress. Logging here previously refreshed only the
+        // nutrition ring, leaving the dashboard ring stale (the split-brain).
+        onSuccess:()=>{ invalidateMealAndProgress(qc); router.push('/(tabs)/nutrition' as any); },
         onError:(err:any)=>Alert.alert('Error', getErrorMessage(err)),
     });
     const totals = useMemo(()=>plate.reduce((a,i)=>{const q=qtyForMath(i.qty);return {calories:a.calories+safeNum(i.calories)*q,protein:a.protein+safeNum(i.protein)*q,carbs:a.carbs+safeNum(i.carbs)*q,fat:a.fat+safeNum(i.fat)*q};},{calories:0,protein:0,carbs:0,fat:0}),[plate]);

@@ -12,6 +12,7 @@ import { Card } from '@/components/ui/Card';
 import { Skeleton, EmptyState } from '@/components/ui';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { searchFoods, logMeal } from '@/api/meals';
+import { invalidateMealAndProgress } from '@/utils/invalidateMealAndProgress';
 
 const MEAL_TYPES = [
     { key: 'BREAKFAST', label: 'Breakfast' },
@@ -51,8 +52,10 @@ export default function BuildPlateScreen() {
             })),
         }),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['meal-logs'] });
-            queryClient.invalidateQueries({ queryKey: ['today-progress'] });
+            // Route through the shared helper so a plate logged here refreshes
+            // BOTH calorie rings — the dashboard's ['today-progress'] AND the
+            // Nutrition tab's ['daily-progress'] — not just the dashboard.
+            invalidateMealAndProgress(queryClient);
             router.back();
         },
         onError: (err: any) => {

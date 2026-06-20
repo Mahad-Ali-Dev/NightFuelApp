@@ -13,6 +13,7 @@ import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { borderRadius } from '@/theme/spacing';
 import { Skeleton, EmptyState, CtaButton, GlassCard } from '@/components/ui';
+import { invalidateMealAndProgress } from '@/utils/invalidateMealAndProgress';
 // Bundled Aurora dark-glass placeholder so the browse tiles never depend on an
 // external host (no 404 / rate-limit). '@/*' resolves to ./src, so the asset is
 // required by relative path (same pattern as the exercise fallbacks). The
@@ -43,7 +44,13 @@ export default function FoodEncyclopediaScreen() {
     });
     const logM = useMutation({
         mutationFn:(item:FoodItem)=>{ const q=Math.max(parseFloat(qty)||0,0.01); return logMeal({mealType,foodItems:[{foodId:item.id,name:item.name,quantity:q,calories:item.calories*q,protein:item.protein*q,carbs:item.carbs*q,fat:item.fat*q}]}); },
-        onSuccess:()=>{ qc.invalidateQueries({queryKey:['meal-logs']}); setServingModal(null); router.push('/(tabs)/nutrition' as any); },
+        // Route success invalidation through the shared helper so BOTH calorie
+        // rings refresh: the Nutrition tab's ['daily-progress'] AND the dashboard's
+        // ['today-progress'] (plus the ['meal-logs'] list) — see
+        // invalidateMealAndProgress. Logging from the encyclopedia previously
+        // invalidated ONLY ['meal-logs'], leaving NEITHER ring fresh (the worst
+        // split-brain case).
+        onSuccess:()=>{ invalidateMealAndProgress(qc); setServingModal(null); router.push('/(tabs)/nutrition' as any); },
         onError:(err:any)=>Alert.alert('Error', err?.response?.data?.message??'Failed to log meal.'),
     });
     const results = (searchR.data??[]) as FoodItem[];

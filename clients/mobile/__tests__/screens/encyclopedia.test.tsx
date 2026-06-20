@@ -28,6 +28,12 @@
  *     logM.mutate with the pressed FoodItem, and the captured mutationFn forwards
  *     the built payload (mealType + a single quantity-scaled foodItems line) to
  *     the mocked logMeal.
+ *   - SUCCESS → BOTH rings refresh: the captured onSuccess routes through the
+ *     shared invalidateMealAndProgress(qc) helper (kept REAL), so a successful log
+ *     invalidates ['meal-logs'] + ['daily-progress'] (the Nutrition tab ring) AND
+ *     ['today-progress'] (the dashboard ring) — pinning the split-brain fix (the
+ *     old inline call invalidated ONLY ['meal-logs'], leaving NEITHER ring fresh)
+ *     — then closes the serving modal and navigates to the nutrition tab.
  *
  * Mock conventions mirror the sibling `(meals)` suites (recipes.test /
  * log-meal.test):
@@ -38,7 +44,10 @@
  *     useMutation captures the screen's `mutationFn` into a holder so a test can
  *     invoke the real payload builder and inspect what it forwards to the (mocked)
  *     logMeal; isPending is fixed false so the CTA renders its label, not a
- *     spinner; useQueryClient is a no-op invalidate stub.
+ *     spinner. useMutation also captures `onSuccess` so the success test can drive
+ *     the cache-invalidation + modal-close + navigation path. useQueryClient
+ *     returns a shared `invalidateQueries` spy so that test can assert the exact
+ *     set of keys the shared invalidateMealAndProgress helper (kept REAL) fires.
  *   - `@/api/meals` is mocked so the real axios client never loads; `logMeal` is
  *     the spy under assertion (searchFoods exists only to satisfy the import
  *     graph — useQuery is fully stubbed).
@@ -70,7 +79,15 @@ jest.mock('expo-router', () => ({
 type QState = { data: any; isLoading: boolean; isError: boolean };
 const mockSearch: QState = { data: undefined, isLoading: false, isError: false };
 const mockMutationFn: { current: null | ((payload?: unknown) => unknown) } = { current: null };
+// Capture the mutation's onSuccess so a test can drive the success path and
+// observe the cache invalidation + modal-close + navigation it performs.
+const mockOnSuccess: { current: null | ((data?: unknown) => unknown) } = { current: null };
 const mockMutate = jest.fn();
+// A stable invalidateQueries spy shared by every useQueryClient() call in a
+// render, so a test can assert the exact set of query keys the success handler
+// invalidates (via the shared invalidateMealAndProgress helper, kept REAL).
+const mockInvalidateQueries = jest.fn();
+const mockQueryClient = { invalidateQueries: mockInvalidateQueries };
 jest.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     const key = queryKey[0];
@@ -84,11 +101,12 @@ jest.mock('@tanstack/react-query', () => ({
     }
     return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
   },
-  useMutation: ({ mutationFn }: { mutationFn: (payload?: unknown) => unknown }) => {
+  useMutation: ({ mutationFn, onSuccess }: { mutationFn: (payload?: unknown) => unknown; onSuccess?: (data?: unknown) => unknown }) => {
     mockMutationFn.current = mutationFn;
+    mockOnSuccess.current = onSuccess ?? null;
     return { mutate: mockMutate, isPending: false };
   },
-  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
+  useQueryClient: () => mockQueryClient,
 }));
 
 // api/meals — logMeal is the spy under assertion; searchFoods exists only so the
@@ -146,7 +164,7 @@ jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
-import { render, fireEvent, screen } from '@testing-library/react-native';
+import { render, fireEvent, screen, act } from '@testing-library/react-native';
 import {
   ThemeContext,
   getThemeColors,
@@ -184,7 +202,9 @@ describe('FoodEncyclopediaScreen — food browser', () => {
     mockBack.mockClear();
     mockMutate.mockClear();
     mockLogMeal.mockClear();
+    mockInvalidateQueries.mockClear();
     mockMutationFn.current = null;
+    mockOnSuccess.current = null;
     mockSearch.data = undefined;
     mockSearch.isLoading = false;
     mockSearch.isError = false;
@@ -290,5 +310,49 @@ describe('FoodEncyclopediaScreen — food browser', () => {
     expect(payload.foodItems[0]!.quantity).toBe(1);
     expect(payload.foodItems[0]!.calories).toBe(220);
     expect(payload.foodItems[0]!.protein).toBe(40);
+  });
+
+  // ── SUCCESS: a meal logged from the encyclopedia refreshes BOTH rings ───────
+  // The onSuccess handler routes through the shared invalidateMealAndProgress(qc)
+  // helper (kept REAL), so a successful log invalidates the per-day meal list AND
+  // BOTH calorie rings: ['daily-progress'] (the Nutrition tab) and
+  // ['today-progress'] (the dashboard). This pins the split-brain fix — logging
+  // from the encyclopedia previously invalidated ONLY ['meal-logs'], leaving
+  // NEITHER ring fresh — and that success still closes the serving modal and
+  // navigates to the nutrition tab.
+  test('success: invalidates meal-logs + BOTH progress rings (daily-progress & today-progress), closes the modal then navigates', () => {
+    mockSearch.data = SEARCH_FOODS;
+
+    renderScreen();
+
+    // Open the serving modal so we can prove success closes it.
+    fireEvent.changeText(screen.getByPlaceholderText('Search food encyclopedia...'), 'chick');
+    fireEvent.press(screen.getByLabelText('Grilled Chicken'));
+    expect(screen.getByText('Add to Plate')).toBeTruthy();
+
+    // The screen registered an onSuccess via useMutation.
+    expect(mockOnSuccess.current).toBeTruthy();
+
+    // Drive the success path (as react-query would after logMeal resolves).
+    // Wrapped in act() because onSuccess flips the serving-modal state to null.
+    act(() => {
+      mockOnSuccess.current!({ id: 'log-1' });
+    });
+
+    // It refreshed all three keys through the shared helper, in particular BOTH
+    // rings — the Nutrition tab's and the dashboard's — neither of which the old
+    // lone ['meal-logs'] invalidation touched.
+    const invalidatedKeys = mockInvalidateQueries.mock.calls.map((c) => c[0].queryKey);
+    expect(invalidatedKeys).toEqual(
+      expect.arrayContaining([['meal-logs'], ['daily-progress'], ['today-progress']]),
+    );
+    // The two ring keys specifically — the ones the old inline call dropped.
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['daily-progress'] });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['today-progress'] });
+
+    // Success closes the serving modal…
+    expect(screen.queryByText('Add to Plate')).toBeNull();
+    // …and routes the user to the nutrition tab.
+    expect(mockPush).toHaveBeenCalledWith('/(tabs)/nutrition');
   });
 });

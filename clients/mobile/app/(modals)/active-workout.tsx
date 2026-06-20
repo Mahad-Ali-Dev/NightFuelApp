@@ -11,8 +11,8 @@ import { Skeleton, EmptyState } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { typography as themeTypography } from '@/theme/typography';
-import { useQuery } from '@tanstack/react-query';
-import { getActiveSession, getLastSet, LastSet, SessionExercise } from '@/api/exercises';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getActiveSession, getLastSet, logSessionExercise, endSession, LastSet, SessionExercise } from '@/api/exercises';
 import { ExerciseDemo } from '@/components/exercise/ExerciseDemo';
 import { RestTimer } from '@/components/workout/RestTimer';
 import { SetLogger } from '@/components/workout/SetLogger';
@@ -77,6 +77,16 @@ function resolveDemoInputs(name: string): DemoInputs {
 
 type LocalSet = { weight: string; reps: string; done: boolean };
 type LocalExercise = { id: string; name: string; sets: number; targetReps: string; loggedSets: LocalSet[] };
+
+// Coerce an UNTRUSTED number to a finite value at or above `min` (default 0),
+// else `min`. THIS screen's set model carries weight/reps as free-text strings
+// (LocalSet.weight/reps), so the finish-time logging + summary math run
+// `Number(s.weight)` through here: a blank/garbled field is NaN, and a guarded
+// reduce seeded at 0 avoids `Math.max()`-of-empty → -Infinity. Mirrors the same
+// helper app/training/workout.tsx uses so the modal's Finish produces the SAME
+// finite/clamped totals as the routed twin — never a "NaN"/"-Infinity" summary.
+const finite = (n: unknown, min = 0): number =>
+    typeof n === 'number' && Number.isFinite(n) && n >= min ? n : min;
 
 function sessionToLocal(se: SessionExercise, idx: number): LocalExercise {
     return {
@@ -248,6 +258,7 @@ export default function ActiveWorkoutScreen() {
     const { colors, typography, spacing } = useTheme();
     const router = useRouter();
     const insets = useSafeAreaInsets();
+    const queryClient = useQueryClient();
 
     const [timer, setTimer] = useState(0);
     // Rest state as GROUND TRUTH (state-ground-truth): `restActive` is whether a
@@ -379,6 +390,95 @@ export default function ActiveWorkoutScreen() {
         startRest();
     };
 
+    // Persist the workout then navigate to the summary. Mirrors the routed twin
+    // app/training/workout.tsx `handleEnd`, mapped to THIS screen's model:
+    // exercises[].loggedSets (LocalSet = { weight:string, reps:string, done:boolean }).
+    // The bare `router.back()` this button used to call silently DISCARDED every
+    // logged set; now each completed exercise is logged via logSessionExercise,
+    // the session is ended, the active-session + exercise-history caches are
+    // invalidated, and we `router.replace` (not back) to the completion summary
+    // with finite-guarded totals.
+    const handleFinish = async () => {
+        // Snapshot the in-render state (this handler is recreated each render with
+        // fresh `exercises`/`timer`, matching how toggleSet reads its snapshot).
+        const finishedExercises = exercises;
+        const finalElapsed = timer;
+
+        // Real session metrics for the summary screen. Each free-text weight/reps
+        // is parsed via Number() then run through `finite` (NaN/negatives → 0), and
+        // the rounded total is itself clamped finite/>=0 — so a blank/garbled field
+        // can never surface a "NaN"/"-Infinity" volume. Same shape as workout.tsx.
+        const elapsed = String(Math.max(0, finite(finalElapsed)));
+        const volume = String(
+            Math.max(
+                0,
+                finite(
+                    Math.round(
+                        finishedExercises.reduce(
+                            (acc, ex) =>
+                                acc +
+                                ex.loggedSets
+                                    .filter(s => s.done)
+                                    .reduce((a, s) => a + finite(Number(s.weight)) * finite(Number(s.reps)), 0),
+                            0,
+                        ),
+                    ),
+                ),
+            ),
+        );
+        const kcal = String(Math.max(0, finite(Math.round((finite(finalElapsed) / 60) * 6)))); // ≈6 kcal/min for resistance training
+        const summaryParams = { elapsed, volume, kcal };
+
+        const sessionId = session?.id;
+
+        // No active session id (e.g. session never loaded): skip the api calls but
+        // still navigate to the summary so a finished workout never dead-ends.
+        if (sessionId) {
+            // Log each exercise that has at least one completed set. Each call has
+            // its OWN try/catch so a single failure never aborts the rest (matching
+            // workout.tsx). SetLogger-appended rows are already-validated; the
+            // checkmark-completed rows are parsed defensively through finite().
+            const logPromises = finishedExercises.map(async (ex) => {
+                const completedSets = ex.loggedSets.filter(s => s.done);
+                if (completedSets.length === 0) return;
+                try {
+                    await logSessionExercise(sessionId, {
+                        exerciseName: ex.name,
+                        sets: completedSets.length,
+                        // avg reps over a floor-of-1 denominator so this can never
+                        // divide by zero / yield NaN even if the guard above were
+                        // bypassed.
+                        reps: Math.round(
+                            completedSets.reduce((a, s) => a + finite(Number(s.reps)), 0) /
+                                Math.max(1, completedSets.length),
+                        ),
+                        // max weight via a guarded reduce seeded at 0 (not
+                        // Math.max(...) which is -Infinity for an empty list).
+                        weightKg: completedSets.reduce((m, s) => Math.max(m, finite(Number(s.weight))), 0),
+                        durationSecs: 0,
+                    });
+                } catch (e) {
+                    console.warn(`Failed to log exercise ${ex.name}:`, e);
+                }
+            });
+
+            await Promise.all(logPromises);
+
+            try {
+                await endSession(sessionId);
+            } catch (e) {
+                console.error('Failed to end workout session on backend:', e);
+            }
+
+            // Same keys workout.tsx invalidates: the active-session query and the
+            // exercise-history list, so the next read reflects the just-ended session.
+            queryClient.invalidateQueries({ queryKey: ['active-session'] });
+            queryClient.invalidateQueries({ queryKey: ['exercises', 'history'] });
+        }
+
+        router.replace({ pathname: '/training/complete', params: summaryParams });
+    };
+
     const formatTime = (secs: number) => {
         const m = Math.floor(secs / 60).toString().padStart(2, '0');
         const s = (secs % 60).toString().padStart(2, '0');
@@ -397,7 +497,7 @@ export default function ActiveWorkoutScreen() {
                         <Text style={[typography.caption, { color: colors.text.secondary }]}>• Hypertrophy</Text>
                     </View>
                 </View>
-                <Button title="Finish" onPress={() => router.back()} size="sm" style={{ paddingHorizontal: 16 }} />
+                <Button title="Finish" onPress={handleFinish} size="sm" style={{ paddingHorizontal: 16 }} />
             </View>
 
             {/* Rest banner — the per-second countdown + MM:SS are owned by the
