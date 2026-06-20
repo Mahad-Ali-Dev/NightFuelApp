@@ -37,8 +37,16 @@ export default function PostDetailScreen() {
         enabled: !!postId,
     });
 
-    // Fetch real comments
-    const { data: comments = [], refetch: refetchComments } = useQuery({
+    // Fetch real comments. We pull isLoading/isError too so the comments section
+    // has the same honest three-state treatment as the post itself — otherwise a
+    // still-loading or failed getComments() silently falls through to the
+    // "No comments yet" empty state, dressing an error up as an honest empty thread.
+    const {
+        data: comments = [],
+        isLoading: commentsLoading,
+        isError: commentsError,
+        refetch: refetchComments,
+    } = useQuery({
         queryKey: ['post-comments', postId],
         queryFn: () => getComments(postId),
         enabled: !!postId,
@@ -166,7 +174,33 @@ export default function PostDetailScreen() {
                 {/* Comments List */}
                 <View style={[styles.commentsSection, { backgroundColor: colors.background.secondary, borderTopColor: colors.border.default }]}>
                     <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 20 }]}>COMMENTS</Text>
-                    {comments.length === 0 ? (
+                    {/* Mutually-exclusive comments states (ternary-null only, never `x && …`
+                        — an empty comment list / 0 count is falsy-renderable):
+                        loading → comment-row skeletons; error → retryable EmptyState (NOT
+                        the "No comments yet" copy); resolved-empty → "No comments yet";
+                        else → the real comment rows. */}
+                    {commentsLoading ? (
+                        <View accessibilityRole="progressbar" accessibilityLabel="Loading comments">
+                            {[0, 1, 2].map((i) => (
+                                <View key={i} style={[styles.commentItem, { borderBottomColor: colors.border.default }]}>
+                                    <Skeleton width={32} height={32} radius={16} />
+                                    <View style={{ flex: 1, marginLeft: 12 }}>
+                                        <Skeleton width={120} height={12} radius={4} />
+                                        <Skeleton width="80%" height={14} radius={4} style={{ marginTop: 8 }} />
+                                    </View>
+                                </View>
+                            ))}
+                        </View>
+                    ) : commentsError ? (
+                        <EmptyState
+                            icon="cloud-offline-outline"
+                            title="Couldn't load comments"
+                            subtitle="Something went wrong fetching the replies. Check your connection and try again."
+                            actionLabel="Try Again"
+                            onAction={() => refetchComments()}
+                            style={styles.emptyComments}
+                        />
+                    ) : comments.length === 0 ? (
                         <EmptyState
                             icon="chatbubble-ellipses-outline"
                             title="No comments yet"

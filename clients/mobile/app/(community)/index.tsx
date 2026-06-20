@@ -31,7 +31,7 @@ export default function CommunityFeedScreen() {
         queryFn: () => getFeed(20),
     });
 
-    const { data: challenges } = useQuery({
+    const { data: challenges, isLoading: challengesLoading, isError: challengesError } = useQuery({
         queryKey: ['community-challenges'],
         queryFn: getChallenges,
     });
@@ -79,12 +79,41 @@ export default function CommunityFeedScreen() {
                 contentContainerStyle={{ paddingBottom: 120 }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.cyan} />}
             >
-                {/* Active Challenges Strip */}
-                {challenges && challenges.length > 0 && (
+                {/* Active Challenges Strip — honest three-state.
+                    rendering-no-falsy-and: a ternary-null chain (NOT `{x && …}`),
+                    so a falsy `challenges` (undefined while fetching) never leaks a
+                    raw value outside a <Text>. The three branches are mutually
+                    exclusive:
+                      • challengesLoading → a horizontal row of challenge-card
+                        Skeletons (so a slow challenges query reads as "loading",
+                        not as "no challenges");
+                      • a populated array → the real strip;
+                      • else (empty, errored, or still-undefined) → null. This is a
+                        SECONDARY strip, so a quietly-absent section is honest — we
+                        never fabricate challenge cards on empty/error. */}
+                {challengesLoading && !challengesError ? (
                     <View style={styles.challengeSection}>
                         <View style={styles.sectionHeader}>
                             <Text style={[typography.overline, { color: colors.text.secondary }]}>ACTIVE CHALLENGES</Text>
-                            <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="See all challenges" onPress={() => router.push('/(community)/challenges')}>
+                        </View>
+                        <ScrollView
+                            horizontal
+                            scrollEnabled={false}
+                            showsHorizontalScrollIndicator={false}
+                            accessibilityRole="progressbar"
+                            accessibilityLabel="Loading challenges"
+                            contentContainerStyle={{ gap: 12, paddingHorizontal: 20 }}
+                        >
+                            {Array.from({ length: 2 }).map((_, i) => (
+                                <ChallengeSkeleton key={i} />
+                            ))}
+                        </ScrollView>
+                    </View>
+                ) : challenges && challenges.length > 0 ? (
+                    <View style={styles.challengeSection}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={[typography.overline, { color: colors.text.secondary }]}>ACTIVE CHALLENGES</Text>
+                            <TouchableOpacity hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="See all challenges" onPress={() => router.push('/(community)/challenges')}>
                                 <Text style={[typography.overline, { color: colors.accent.cyan }]}>SEE ALL</Text>
                             </TouchableOpacity>
                         </View>
@@ -107,7 +136,7 @@ export default function CommunityFeedScreen() {
                             ))}
                         </ScrollView>
                     </View>
-                )}
+                ) : null}
 
                 {/* Create Post Action */}
                 <TouchableOpacity
@@ -248,6 +277,25 @@ function PostSkeleton() {
                 </View>
             </View>
         </GlassCard>
+    );
+}
+
+/**
+ * Loading placeholder for ONE Active-Challenges card. Mirrors the `challCard`
+ * box (width 160 / padding 18 / 2xl radius) so the skeleton row occupies the
+ * same footprint as the real strip — the section doesn't jump when the
+ * challenges query resolves. Built from the shared Skeleton primitive + theme
+ * tokens (no hardcoded hex, no fabricated content): a round icon placeholder
+ * then a title + subtitle line, matching the card's icon + two-text layout.
+ */
+function ChallengeSkeleton() {
+    const { colors, borderRadius } = useTheme();
+    return (
+        <View style={[styles.challCard, { backgroundColor: colors.background.tertiary, borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}>
+            <Skeleton width={44} height={44} radius={22} />
+            <Skeleton width="80%" height={14} radius={4} style={{ marginTop: 14 }} />
+            <Skeleton width="55%" height={11} radius={4} style={{ marginTop: 6 }} />
+        </View>
     );
 }
 

@@ -17,6 +17,53 @@ import { formatDistanceToNow } from 'date-fns';
 
 const { width } = Dimensions.get('window');
 
+// LIST-PERFORMANCE — one memoized post row at module scope.
+//
+// react-native-skills applied:
+//   • list-performance-item-memo / Pass Primitives: the row takes ONLY primitives
+//     (id/content/imageUrl/createdAt) + ONE stable callback `onOpen`, so React.memo's
+//     shallow compare is effective and the row skips re-render when its post is
+//     unchanged (e.g. while the parent re-renders for a follow toggle).
+//   • list-performance-callbacks / list-performance-function-references: the parent
+//     passes a SINGLE hoisted `onOpen` instance to every row (no new closure per row
+//     per render); the row re-binds it to its own id via a local useCallback keyed on
+//     [onOpen, id].
+//   • list-performance-inline-objects: theme-derived style is read via useTheme INSIDE
+//     the memoized row (not passed down as a churning prop), and static layout lives in
+//     the hoisted StyleSheet — the parent allocates no per-row style/object.
+//
+// Rendered output is byte-identical to the previous inline `posts.map(...)` Card; the
+// only behavioural addition is the row tap → onOpen(id) (the canonical post-open nav,
+// matching app/(community)/index.tsx's `router.push('/(community)/${post.id}')`).
+type PostRowProps = {
+    id: string;
+    content: string;
+    imageUrl?: string;
+    createdAt: string;
+    onOpen: (postId: string) => void;
+};
+
+const PostRow = React.memo(function PostRow({ id, content, imageUrl, createdAt, onOpen }: PostRowProps) {
+    const { colors, typography, borderRadius } = useTheme();
+    const handlePress = useCallback(() => onOpen(id), [onOpen, id]);
+
+    return (
+        <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" onPress={handlePress}>
+            <Card variant="glass" style={[styles.postCard, { borderColor: colors.border.default, borderRadius: borderRadius['2xl'] }]}>
+                <Text style={[typography.body, { color: colors.text.secondary, marginBottom: 12, lineHeight: 22 }]}>
+                    {content}
+                </Text>
+                {!!imageUrl && (
+                    <Image source={{ uri: imageUrl }} style={[styles.postImg, { borderRadius: borderRadius.lg }]} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                )}
+                <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                    {formatDistanceToNow(new Date(createdAt))} ago
+                </Text>
+            </Card>
+        </TouchableOpacity>
+    );
+});
+
 export default function UserProfileScreen() {
     const { userId } = useLocalSearchParams<{ userId: string }>();
     const { colors, typography, borderRadius } = useTheme();
@@ -68,6 +115,14 @@ export default function UserProfileScreen() {
         setOverride({ isFollowing: next, followers: Math.max(0, (base.followers ?? 0) + (next ? 1 : -1)) });
         followMutation.mutate(next);
     }, [social, isFollowing, followers, following, followMutation]);
+
+    // ONE hoisted press handler shared by every PostRow (list-performance-callbacks /
+    // list-performance-function-references): rows invoke onOpen(post.id) — no new
+    // closure is allocated per row per render. Opens the post detail at the canonical
+    // /(community)/<id> route (same target as the community feed's comment tap).
+    const openPost = useCallback((postId: string) => {
+        router.push(`/(community)/${postId}` as any);
+    }, [router]);
 
     // Private + not-yet-following → show name/avatar only, lock the rest.
     const isLocked = !!profile?.isPrivate && !isFollowing;
@@ -242,18 +297,18 @@ export default function UserProfileScreen() {
                                 subtitle="This member hasn't shared anything with the community yet."
                             />
                         ) : (
+                            // Stable key=post.id (NOT array index — list-performance-item-memo);
+                            // pass only primitives + the single hoisted `openPost` so React.memo
+                            // can skip unchanged rows. No per-row object/style is allocated here.
                             posts?.map((post: Post) => (
-                                <Card key={post.id} variant="glass" style={[styles.postCard, { borderColor: colors.border.default, borderRadius: borderRadius['2xl'] }]}>
-                                    <Text style={[typography.body, { color: colors.text.secondary, marginBottom: 12, lineHeight: 22 }]}>
-                                        {post.content}
-                                    </Text>
-                                    {!!post.imageUrl && (
-                                        <Image source={{ uri: post.imageUrl }} style={[styles.postImg, { borderRadius: borderRadius.lg }]} contentFit="cover" cachePolicy="memory-disk" transition={200} />
-                                    )}
-                                    <Text style={[typography.caption, { color: colors.text.secondary }]}>
-                                        {formatDistanceToNow(new Date(post.createdAt))} ago
-                                    </Text>
-                                </Card>
+                                <PostRow
+                                    key={post.id}
+                                    id={post.id}
+                                    content={post.content}
+                                    imageUrl={post.imageUrl}
+                                    createdAt={post.createdAt}
+                                    onOpen={openPost}
+                                />
                             ))
                         )}
                     </View>

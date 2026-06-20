@@ -18,7 +18,14 @@
  *      + a Sync-now control, and shows no fabricated "Connected" status;
  *   2. pressing Connect surfaces the honest "requires a native dev build"
  *      message — and never a fake success;
- *   3. pressing Sync now drives the same honest path via `syncNow()`.
+ *   3. pressing Sync now drives the same honest path via `syncNow()`;
+ *   4. the Connect + Sync controls are reachable by accessibility ROLE + NAME
+ *      (descriptive accessibilityLabels), carry an honest disabled:false state +
+ *      hint, and meet the 44pt touch-target minimum;
+ *   5. the honest reason renders inside an `accessibilityRole="alert"` notice via
+ *      the ternary-null guard (no alert before an attempt → no falsy leak);
+ *   6. after an unavailable attempt the controls ANNOUNCE the unavailable state
+ *      through their accessible names while never claiming "Connected".
  *
  * The real `@/lib/healthSync.types` (pure type + const declarations, zero native
  * deps) is left un-mocked so the source labels are exercised for real. Mock
@@ -100,6 +107,7 @@ jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import {
     ThemeContext,
@@ -119,6 +127,19 @@ function renderScreen() {
             <ConnectedDevicesScreen />
         </ThemeContext.Provider>,
     );
+}
+
+/**
+ * Flatten a node's `style` to a single object regardless of shape. A
+ * TouchableOpacity's style is a (possibly nested) array; the CtaButton root
+ * Pressable's style is a FUNCTION `({ pressed }) => StyleProp` — so we call it
+ * with the resting (`pressed: false`) state first, then flatten. This lets a
+ * single helper assert the resolved 44pt touch target on BOTH the Connect
+ * Pressable and the Sync TouchableOpacity.
+ */
+function flattenStyle(style: unknown): Record<string, unknown> {
+    const resolved = typeof style === 'function' ? (style as (s: { pressed: boolean }) => unknown)({ pressed: false }) : style;
+    return StyleSheet.flatten(resolved as never) ?? {};
 }
 
 beforeEach(() => {
@@ -209,5 +230,72 @@ describe('Connected Devices screen', () => {
             expect(screen.getByText('This source is unavailable on the current build.')).toBeTruthy(),
         );
         expect(screen.queryByText('Connected')).toBeNull();
+    });
+
+    // ── Added: a11y-robustness coverage (extends the suite, does not collide) ──
+
+    it('exposes the Connect + Sync controls by role with descriptive names that meet the 44pt touch target', () => {
+        renderScreen();
+
+        // Both affordances are reachable by accessibility ROLE + NAME (the
+        // accessible name comes from the explicit accessibilityLabel), not just
+        // by testID — a real screen-reader user can find them.
+        const connect = screen.getByRole('button', { name: 'Connect Apple Health' });
+        const sync = screen.getByRole('button', { name: 'Sync Apple Health now' });
+
+        // The same nodes are the stable testID handles the screen documents.
+        expect(connect).toBe(screen.getByTestId('connect-apple_health'));
+        expect(sync).toBe(screen.getByTestId('sync-apple_health'));
+
+        // The Sync control carries an explicit hint + an HONEST (never faked)
+        // disabled:false state — it stays pressable so a tap surfaces the reason.
+        expect(sync.props.accessibilityHint).toMatch(/sync/i);
+        expect(sync.props.accessibilityState).toMatchObject({ disabled: false });
+
+        // Both resolved touch targets meet the 44pt minimum. The Connect node is
+        // the CtaButton root Pressable (function style, resolved at rest); the
+        // Sync node is a TouchableOpacity (array style). connectBtn forwards
+        // minHeight:44 over sm's intrinsic 40, and syncBtn declares minHeight:44.
+        expect(flattenStyle(connect.props.style).minHeight).toBe(44);
+        expect(flattenStyle(sync.props.style).minHeight).toBe(44);
+    });
+
+    it('renders the honest reason inside an accessibilityRole="alert" notice on an unavailable Connect', async () => {
+        renderScreen();
+
+        // No alert before any attempt — the ternary-null guard renders nothing,
+        // so an absent message can never leak a falsy node into the tree.
+        expect(screen.queryByRole('alert')).toBeNull();
+
+        fireEvent.press(screen.getByTestId('connect-apple_health'));
+
+        // After the unavailable result the reason surfaces inside an alert region
+        // (announced by a screen reader), carrying the verbatim adapter reason.
+        const alert = await screen.findByRole('alert');
+        expect(alert).toBeTruthy();
+        expect(screen.getByText(MOCK_UNAVAILABLE_REASON)).toBeTruthy();
+        // Exactly one row surfaced a notice (the one we pressed), not all three.
+        expect(screen.getAllByRole('alert')).toHaveLength(1);
+    });
+
+    it('after an unavailable attempt the controls announce the honest unavailable state — never a fake "Connected"', async () => {
+        renderScreen();
+
+        fireEvent.press(screen.getByTestId('sync-generic_ble'));
+        await waitFor(() => expect(screen.getByText(MOCK_UNAVAILABLE_REASON)).toBeTruthy());
+
+        // The pressed row's controls now ANNOUNCE the unavailable result via
+        // their accessible names (honest a11y), while the unpressed rows keep
+        // their plain names — and nothing anywhere claims "Connected".
+        expect(screen.getByRole('button', { name: 'Sync Bluetooth Device now, currently unavailable' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Connect Bluetooth Device, currently unavailable' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Sync Apple Health now' })).toBeTruthy();
+        // The Sync control is still honestly NOT disabled (re-pressable).
+        expect(
+            screen.getByRole('button', { name: 'Sync Bluetooth Device now, currently unavailable' }).props
+                .accessibilityState,
+        ).toMatchObject({ disabled: false });
+        expect(screen.queryByText('Connected')).toBeNull();
+        expect(screen.queryByText(/connected!?$/i)).toBeNull();
     });
 });

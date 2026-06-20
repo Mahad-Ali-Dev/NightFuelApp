@@ -447,6 +447,43 @@ export default function ActiveWorkoutScreen() {
         });
     };
 
+    // ── In-row set edits PERSISTED to ground truth ────────────────────────────
+    // The SetLogger renders one row per ex.sets entry (it is seeded from ALL
+    // planned sets, so row i === exerciseStates[eIdx].sets[i]). These three
+    // immutable dispatch updaters (react-state-dispatcher) close the former
+    // display-only divergence: a DONE-toggle / reps-or-kg edit / remove in the
+    // logger now reaches exerciseStates[eIdx].sets — the SAME source the header
+    // `${completedCount}/${ex.sets.length} Sets Done`, the 5s AsyncStorage
+    // snapshot, and handleEnd's completed-set logging all read. No new counter is
+    // introduced (state-ground-truth): completed stays a per-set flag.
+
+    // Patch one set's fields (used by an in-row reps/kg edit). The edited set is
+    // also marked completed — an explicit edit of a logged set means it stands.
+    const updateSet = (eIdx: number, sIdx: number, patch: Partial<SetData>) =>
+        setExerciseStates((prev) =>
+            prev.map((ex, i) =>
+                i !== eIdx ? ex : { ...ex, sets: ex.sets.map((s, j) => (j !== sIdx ? s : { ...s, ...patch })) },
+            ),
+        );
+
+    // Flip one set's completed flag (used by the per-set DONE toggle).
+    const toggleSetDone = (eIdx: number, sIdx: number) =>
+        setExerciseStates((prev) =>
+            prev.map((ex, i) =>
+                i !== eIdx
+                    ? ex
+                    : { ...ex, sets: ex.sets.map((s, j) => (j !== sIdx ? s : { ...s, completed: !s.completed })) },
+            ),
+        );
+
+    // Drop one set entirely (used by the per-set remove). Re-indexing is fine:
+    // the SetLogger re-seeds only once, so its rows + ex.sets stay aligned by the
+    // same immutable filter on the next render.
+    const removeSetAt = (eIdx: number, sIdx: number) =>
+        setExerciseStates((prev) =>
+            prev.map((ex, i) => (i !== eIdx ? ex : { ...ex, sets: ex.sets.filter((_, j) => j !== sIdx) })),
+        );
+
     const handleEnd = async () => {
         // Immediately mark as finished to stop persistence & timers
         setIsFinished(true);
@@ -771,24 +808,38 @@ export default function ActiveWorkoutScreen() {
                                         <SetLogger
                                             exerciseName={ex.name}
                                             targetSets={ex.sets.length}
-                                            // Seed from the COMPLETED planned sets so a
-                                            // resumed session opens at N / M (not 0 / M)
-                                            // and the SetLogger count agrees with the
-                                            // header's `${completedCount}/${ex.sets.length}
-                                            // Sets Done`. Purely visual — initialSets does
-                                            // NOT call onLogSet, so handleEnd's volume
-                                            // (computed from ex.sets[].completed) still
-                                            // counts each restored set exactly once.
-                                            initialSets={ex.sets
-                                                .filter((s) => s.completed)
-                                                .map((s) => ({ reps: s.reps, weightKg: s.kg, completed: true }))}
+                                            // Seed from ALL planned sets carrying their REAL
+                                            // completed flag, so SetLogger row i maps 1:1 to
+                                            // ex.sets[i] — the index the persist callbacks
+                                            // below pass straight through to ex.sets. A
+                                            // resumed session still opens at N / M (the
+                                            // already-completed sets keep completed:true) and
+                                            // the SetLogger count agrees with the header's
+                                            // `${completedCount}/${ex.sets.length} Sets Done`.
+                                            // Purely visual — initialSets does NOT call
+                                            // onLogSet, so handleEnd's volume (computed from
+                                            // ex.sets[].completed) still counts each set once.
+                                            initialSets={ex.sets.map((s) => ({
+                                                reps: s.reps,
+                                                weightKg: s.kg,
+                                                completed: s.completed,
+                                            }))}
                                             // Routed-screen in-place affordances: per-set
                                             // DONE toggle + editable KG/REPS + add/remove.
                                             // The input-row add still flows through logSet
-                                            // (rest-trigger + ex.sets advance) unchanged.
+                                            // (rest-trigger + ex.sets advance) unchanged, and
+                                            // the three persist callbacks below mirror each
+                                            // in-row mutation to exerciseStates[eIdx].sets so
+                                            // the header count, the AsyncStorage snapshot, and
+                                            // finish-time logging stop diverging from the UI.
                                             allowEdit
                                             allowAddRemove
                                             onLogSet={(data) => logSet(eIdx, data)}
+                                            onToggleDone={(idx) => toggleSetDone(eIdx, idx)}
+                                            onEditSet={(idx, v) =>
+                                                updateSet(eIdx, idx, { reps: v.reps, kg: v.weightKg, completed: true })
+                                            }
+                                            onRemoveSet={(idx) => removeSetAt(eIdx, idx)}
                                         />
                                     </View>
                                 ) : null}

@@ -25,6 +25,18 @@ import { TAB_BAR_H } from './_layout';
 // — same module-scope require pattern as (tabs)/training.tsx.
 const HERO_NUTRITION = require('../../assets/images/hero-nutrition.png');
 
+// Human-readable label for a MealLog's `mealType` enum. Mirrors the same map in
+// (meals)/log-planned-meal.tsx — kept local here because that lives in a screen
+// module (not a shared util we can import) and this item may only edit this
+// file. Unknown / missing types fall back to a friendly default.
+const MEAL_TYPE_LABEL: Record<string, string> = {
+    BREAKFAST: 'Breakfast',
+    LUNCH: 'Lunch',
+    DINNER: 'Dinner',
+    SNACK: 'Snack',
+};
+const mealTypeLabel = (t?: string) => MEAL_TYPE_LABEL[String(t || '').toUpperCase()] || 'Meal';
+
 export default function NutritionHubScreen() {
     const { colors, typography, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
@@ -108,6 +120,10 @@ export default function NutritionHubScreen() {
     const openLibrary = useCallback(() => router.push('/(meals)/encyclopedia' as any), [router]);
     const openRecipes = useCallback(() => router.push('/(meals)/recipes' as any), [router]);
     const openGrocery = useCallback(() => router.push('/(meals)/grocery' as any), [router]);
+    // Shared by the header history button affordance and the Today's Meals
+    // empty-state CTA — both route to the log-meal flow. Stable so the memoized
+    // EmptyState below doesn't re-render on unrelated parent updates.
+    const openLogMeal = useCallback(() => router.push('/(meals)/log-meal' as any), [router]);
 
     return (
         <ImageBackground
@@ -145,7 +161,7 @@ export default function NutritionHubScreen() {
                     <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="View log"
                         activeOpacity={0.85}
                         style={[styles.historyBtn, { backgroundColor: colors.background.secondary, borderWidth: 1, borderColor: colors.border.default }, shadows.sm]}
-                        onPress={() => router.push('/(meals)/log-meal' as any)}
+                        onPress={openLogMeal}
                     >
                         <Ionicons name="receipt-outline" size={22} color={colors.text.primary} />
                     </TouchableOpacity>
@@ -213,6 +229,79 @@ export default function NutritionHubScreen() {
                     </View>
                 </GlassCard>
                 )}
+
+                {/* Today's Meals — the day's REAL logged meals (logsQuery), with
+                    honest loading / error+retry / empty states. Mutually
+                    exclusive ternary-null branches (rendering-no-falsy-and); no
+                    fabricated rows or macros on the non-filled paths. The day
+                    totals reuse the existing stats.consumed (no duplicate
+                    reduce; react-state-minimize). */}
+                <View style={[styles.section, { marginTop: 28 }]}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={[typography.heading, { color: colors.text.primary }]}>Today's Meals</Text>
+                    </View>
+
+                    {logsQuery.isLoading ? (
+                        <GlassCard radius={borderRadius.xl} testID="logged-meals-loading">
+                            <View style={styles.loggedList}>
+                                {[0, 1, 2].map((i) => (
+                                    <Skeleton key={i} width="100%" height={28} radius={borderRadius.md} />
+                                ))}
+                            </View>
+                        </GlassCard>
+                    ) : logsQuery.isError ? (
+                        // Distinct, retryable error — never falls through to the
+                        // empty "log your first meal" CTA. Retry is SCOPED to the
+                        // logs query (logsRefetch), the only read this list needs.
+                        <GlassCard radius={borderRadius.xl} testID="logged-meals-error">
+                            <EmptyState
+                                icon="cloud-offline-outline"
+                                title="Couldn't load today's meals"
+                                subtitle="Check your connection and try again."
+                                actionLabel="Retry"
+                                onAction={logsRefetch}
+                            />
+                        </GlassCard>
+                    ) : logs.length === 0 ? (
+                        // Genuinely empty day — a real CTA that routes to the
+                        // log-meal flow (EmptyState's own action button, NOT a
+                        // manufactured coral CTA). No fabricated rows / totals.
+                        <GlassCard radius={borderRadius.xl} testID="logged-meals-empty">
+                            <EmptyState
+                                icon="restaurant-outline"
+                                title="No meals logged yet"
+                                subtitle="Log your first meal to track today's macros."
+                                actionLabel="Log a Meal"
+                                onAction={openLogMeal}
+                            />
+                        </GlassCard>
+                    ) : (
+                        <GlassCard radius={borderRadius.xl} testID="logged-meals-filled">
+                            <View style={styles.loggedList}>
+                                {logs.map((log: any, i: number) => (
+                                    <LoggedMealRow
+                                        key={log?.id ?? i}
+                                        label={mealTypeLabel(log?.mealType)}
+                                        calories={log?.totalCalories || 0}
+                                        protein={log?.totalProtein || 0}
+                                    />
+                                ))}
+                                {/* Day totals — the EXISTING stats.consumed (no
+                                    duplicate reduce, no invented numbers). */}
+                                <View
+                                    style={[styles.loggedTotalRow, { borderTopColor: colors.border.default }]}
+                                    accessible
+                                    accessibilityLabel={`Day total: ${Math.round(stats.consumed.calories)} kcal, ${Math.round(stats.consumed.protein)} grams protein`}
+                                >
+                                    <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: 'bold' }]}>TOTAL</Text>
+                                    <Text style={[typography.caption, { color: colors.text.primary }]}>
+                                        {Math.round(stats.consumed.calories)} kcal · {Math.round(stats.consumed.protein)}g protein
+                                    </Text>
+                                </View>
+                            </View>
+                        </GlassCard>
+                    )}
+                </View>
 
                 {/* Quick Tools */}
                 <Text style={[typography.overline, { color: colors.text.secondary, marginHorizontal: 20, marginTop: 28, marginBottom: 12 }]}>
@@ -416,6 +505,28 @@ const MacroItem = React.memo(function MacroItem({ label, current, target, color,
     );
 });
 
+// One row in the Today's Meals list. Memoized (mirrors MacroItem / ToolCard) so
+// re-rendering the parent on unrelated query updates doesn't re-render every
+// logged row. Shows the meal type label + its REAL per-log macros
+// (log.totalCalories / log.totalProtein) — no fabricated numbers. The label +
+// numeric live in one `accessible` View so a screen reader announces a single
+// coherent statement.
+const LoggedMealRow = React.memo(function LoggedMealRow({ label, calories, protein }: any) {
+    const { colors, typography } = useTheme();
+    return (
+        <View
+            style={styles.loggedRow}
+            accessible
+            accessibilityLabel={`${label}: ${Math.round(calories)} kilocalories, ${Math.round(protein)} grams protein`}
+        >
+            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]} numberOfLines={1}>{label}</Text>
+            <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                {Math.round(calories)} kcal · {Math.round(protein)}g
+            </Text>
+        </View>
+    );
+});
+
 const ToolCard = React.memo(function ToolCard({ icon, title, color, onPress }: any) {
     const { colors, typography, borderRadius } = useTheme();
     return (
@@ -459,6 +570,9 @@ const styles = StyleSheet.create({
     emptyPlanIcon: { width: 60, height: 60, borderRadius: 30, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     emptyPlanCta: { marginTop: 16, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
     planList: { gap: 12 },
+    loggedList: { padding: 18, gap: 12 },
+    loggedRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    loggedTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, marginTop: 2, borderTopWidth: StyleSheet.hairlineWidth },
     mealCard: { flexDirection: 'row', alignItems: 'center', padding: 16 },
     mealTime: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
     fastCard: { padding: 20 },

@@ -14,6 +14,8 @@ import routes from '../src/routes';
  *   - GET  /v1/community/feed      query.cursor   z.string().max(200).optional()
  *   - POST /v1/community/badges/award body.userId   z.string().min(1).max(200)
  *   - POST /v1/community/badges/award body.badgeKey z.string().min(1).max(120)
+ *   - GET  /v1/community/user/:id/posts query.limit z.coerce.number().int().min(1).max(100).default(20)
+ *   - GET  /v1/community/leaderboard    query.limit z.coerce.number().int().min(1).max(100).default(10)
  *
  * Every request below carries a VALID Bearer token, so the auth gate is open and
  * any 400 originates from the zod body schema, NOT from auth. A real UUID is used
@@ -42,6 +44,7 @@ function buildMockService() {
         joinChallenge: jest.fn().mockResolvedValue({ id: 'participant-1' }),
         updateChallengeProgress: jest.fn().mockResolvedValue({ id: 'participant-1' }),
         getLeaderboard: jest.fn().mockResolvedValue([]),
+        getLeaderboardWithAuthors: jest.fn().mockResolvedValue([]),
         getUserScore: jest.fn().mockResolvedValue({ userId: 'u', xp: 0, level: 1, xpForNextLevel: 100 }),
         getBadgeCatalog: jest.fn().mockResolvedValue([]),
         getUserBadges: jest.fn().mockResolvedValue([]),
@@ -380,6 +383,132 @@ describe('community-service input bounds (valid token, schema-lock)', () => {
             expect(svc.awardBadgeByKey).toHaveBeenCalledTimes(1);
             expect(svc.awardBadgeByKey).toHaveBeenCalledWith(userId, 'first_post');
             expect(res.json()).toEqual({ awarded: true, badgeKey: 'first_post' });
+        });
+    });
+
+    // ── GET /v1/community/user/:id/posts — limit .int().min(1).max(100).default(20) ─
+    // A plain string :id is used ('me' resolves to the authed user), so the params
+    // schema is never the thing that fails — any 400 here is the new limit bound.
+    describe('GET /v1/community/user/:id/posts limit bound (int, 1..100, default 20)', () => {
+        it('limit omitted -> not 400 and getUserPosts receives the default 20', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/user/me/posts',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).not.toBe(400);
+            expect(svc.getUserPosts).toHaveBeenCalledTimes(1);
+            // Default page size is preserved: second positional arg is 20.
+            expect(svc.getUserPosts).toHaveBeenCalledWith(expect.anything(), 20);
+        });
+
+        it('limit=101 (above max) -> 400 and getUserPosts NOT called', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/user/me/posts?limit=101',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.getUserPosts).not.toHaveBeenCalled();
+        });
+
+        it('limit=999999999 (far above max) -> 400 and getUserPosts NOT called', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/user/me/posts?limit=999999999',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.getUserPosts).not.toHaveBeenCalled();
+        });
+
+        it('limit=100 (at the boundary) -> not 400 (reaches service with 100)', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/user/me/posts?limit=100',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).not.toBe(400);
+            expect(svc.getUserPosts).toHaveBeenCalledTimes(1);
+            expect(svc.getUserPosts).toHaveBeenCalledWith(expect.anything(), 100);
+        });
+
+        it('limit=0 (below min) -> 400 and getUserPosts NOT called', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/user/me/posts?limit=0',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.getUserPosts).not.toHaveBeenCalled();
+        });
+    });
+
+    // ── GET /v1/community/leaderboard — limit .int().min(1).max(100).default(10) ──
+    // The route calls getLeaderboardWithAuthors(limit) + getUserScore(...); we
+    // assert against getLeaderboardWithAuthors (the limit-bearing call).
+    describe('GET /v1/community/leaderboard limit bound (int, 1..100, default 10)', () => {
+        it('limit omitted -> not 400 and getLeaderboardWithAuthors receives the default 10', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/leaderboard',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).not.toBe(400);
+            expect(svc.getLeaderboardWithAuthors).toHaveBeenCalledTimes(1);
+            // Default page size is preserved: first positional arg is 10.
+            expect(svc.getLeaderboardWithAuthors).toHaveBeenCalledWith(10);
+        });
+
+        it('limit=101 (above max) -> 400 and getLeaderboardWithAuthors NOT called', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/leaderboard?limit=101',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.getLeaderboardWithAuthors).not.toHaveBeenCalled();
+        });
+
+        it('limit=999999999 (far above max) -> 400 and getLeaderboardWithAuthors NOT called', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/leaderboard?limit=999999999',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.getLeaderboardWithAuthors).not.toHaveBeenCalled();
+        });
+
+        it('limit=100 (at the boundary) -> not 400 (reaches service with 100)', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/leaderboard?limit=100',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).not.toBe(400);
+            expect(svc.getLeaderboardWithAuthors).toHaveBeenCalledTimes(1);
+            expect(svc.getLeaderboardWithAuthors).toHaveBeenCalledWith(100);
+        });
+
+        it('limit=0 (below min) -> 400 and getLeaderboardWithAuthors NOT called', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/leaderboard?limit=0',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.getLeaderboardWithAuthors).not.toHaveBeenCalled();
         });
     });
 });

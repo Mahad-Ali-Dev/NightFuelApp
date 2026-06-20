@@ -41,6 +41,26 @@ interface SetLoggerProps {
      * can be appended.
      */
     allowAddRemove?: boolean;
+    /**
+     * Parent notifications that mirror the in-row affordances to the OWNER's set
+     * model (the workout screen's `exerciseStates[eIdx].sets`). All ADDITIVE and
+     * default undefined: the modal's read-only usage (which passes none of them)
+     * is byte-for-byte unaffected, and a re-render never re-seeds (the seed is a
+     * one-time lazy init). The local `loggedSets` stays the visual ground truth
+     * for THIS card; these callbacks let the parent persist the SAME edit so the
+     * header count, the AsyncStorage snapshot, and finish-time logging stop
+     * diverging from what the user sees.
+     *
+     * Each fires AFTER the matching local mutation, keyed by the row index (which
+     * maps 1:1 to the parent's sets when the parent seeds `initialSets` from ALL
+     * planned sets). `onEditSet` fires ONLY for a value that passed the SAME
+     * `validateSet` guard (never on junk), so the parent never receives a NaN /
+     * non-positive number — the single numeric entry point is preserved for both
+     * the add path and the in-row edit.
+     */
+    onToggleDone?: (index: number) => void;
+    onEditSet?: (index: number, value: { reps: number; weightKg: number }) => void;
+    onRemoveSet?: (index: number) => void;
 }
 
 /**
@@ -65,6 +85,9 @@ export function SetLogger({
     initialSets,
     allowEdit = false,
     allowAddRemove = false,
+    onToggleDone,
+    onEditSet,
+    onRemoveSet,
 }: SetLoggerProps) {
     const [reps, setReps] = useState('');
     const [weight, setWeight] = useState('');
@@ -96,28 +119,39 @@ export function SetLogger({
     // The edited field's draft text is combined with the row's other current
     // value; junk → the row is left untouched (immutable .map, never in-place —
     // react-state-dispatcher). No onLogSet here: editing an already-counted set
-    // must not re-increment the parent's set count.
+    // must not re-increment the parent's set count. When the edit is VALID we
+    // also notify the owner via onEditSet so the parent's persisted set value
+    // tracks the visible one; junk fires NEITHER onEditSet nor onLogSet, so
+    // validateSet stays the single numeric entry point for both add and edit.
     const commitEdit = (index: number, field: 'reps' | 'weightKg', text: string) => {
-        setLoggedSets((prev) => {
-            const row = prev[index];
-            if (!row) return prev;
-            const repsStr = field === 'reps' ? text : String(row.reps);
-            const weightStr = field === 'weightKg' ? text : String(row.weightKg);
-            const valid = validateSet(repsStr, weightStr);
-            if (!valid) return prev;
-            return prev.map((s, i) => (i === index ? { ...s, ...valid } : s));
-        });
+        // Validate against the row's CURRENT value before touching state, so the
+        // parent notification stays a pure side effect outside the setState
+        // updater (the updater itself remains a pure transform).
+        const row = loggedSets[index];
+        if (!row) return;
+        const repsStr = field === 'reps' ? text : String(row.reps);
+        const weightStr = field === 'weightKg' ? text : String(row.weightKg);
+        const valid = validateSet(repsStr, weightStr);
+        if (!valid) return; // junk → row untouched, no onEditSet, no onLogSet
+        setLoggedSets((prev) => prev.map((s, i) => (i === index ? { ...s, ...valid } : s)));
+        onEditSet?.(index, valid);
     };
 
     // Toggle one set's DONE flag. Immutable .map (react-state-dispatcher); the
-    // derived count updates from the flags.
+    // derived count updates from the flags. Mirror the toggle to the owner so the
+    // parent's persisted `completed` (and its header count / finish-time volume)
+    // tracks the same flip.
     const toggleDone = (index: number) => {
         setLoggedSets((prev) => prev.map((s, i) => (i === index ? { ...s, completed: !s.completed } : s)));
+        onToggleDone?.(index);
     };
 
-    // Remove one logged set (immutable filter).
+    // Remove one logged set (immutable filter). Mirror the removal to the owner so
+    // the dropped set leaves the parent's persisted sets too (count + finish-time
+    // logging reflect the drop).
     const removeSet = (index: number) => {
         setLoggedSets((prev) => prev.filter((_, i) => i !== index));
+        onRemoveSet?.(index);
     };
 
     // The input row is the add path. It shows while below target; with

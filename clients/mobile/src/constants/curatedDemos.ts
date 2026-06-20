@@ -1129,6 +1129,60 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Kettlebell Figure 8': 'Kettlebell_Figure_8',
   'Kettlebell Hang Clean': 'Kettlebell_Hang_Clean',
   'One-Arm Kettlebell Floor Press': 'One-Arm_Kettlebell_Floor_Press',
+
+  // ── Widened FEDB-backed tranche #18 (data-only, zero new fetch) ──────────────
+  // A further slice of distinct catalogue movements — this tranche leans into the
+  // band/chain-resisted barbell compounds, kettlebell jerk/press accessory work,
+  // sled & strongman loaded carries, plyometric jumps and stretch/mobility staples
+  // the earlier tranches still under-covered. Every KEY below is NEW — absent from
+  // GRANDFATHERED, the FEDB_BACKED_SLUGS entries above (tranches #1-#17),
+  // YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos() admits each one as
+  // kind:'fedb_frames', verified:false (precedence: an already-set name is skipped).
+  // Every slug VALUE was machine-verified to be present in BOTH FEDB_SLUGS
+  // (exerciseDemos.ts) AND __tests__/fixtures/fedb-catalog-slugs.json (the shipped
+  // 873-slug catalogue), and each is a fresh slug dir not already referenced by an
+  // earlier tranche — so every entry resolves to an ordered 2-frame [0.jpg, 1.jpg]
+  // HTTPS pair via fedbPair() with NO new HTTP call. Strictly additive: the
+  // kind:'youtube'-only sync guard (scripts/check-demo-maps-in-sync.js) and
+  // pendingHumanReviewIds.json (YouTube ids only) are both untouched, so
+  // check-demo-maps-in-sync stays green. A 200-ok URL is NOT a movement review, so
+  // nothing here is verified:true — that remains a human-gated step.
+
+  // Band / chain-resisted barbell compounds
+  'Bench Press with Bands': 'Bench_Press_-_With_Bands',
+  'Squat with Bands': 'Squat_with_Bands',
+  'Deadlift with Bands': 'Deadlift_with_Bands',
+  'Deadlift with Chains': 'Deadlift_with_Chains',
+  'Box Squat with Bands': 'Box_Squat_with_Bands',
+  'Sumo Deadlift with Bands': 'Sumo_Deadlift_with_Bands',
+  'Shoulder Press with Bands': 'Shoulder_Press_-_With_Bands',
+  'Upright Row with Bands': 'Upright_Row_-_With_Bands',
+  // Kettlebell — jerk / press / clean accessory
+  'Double Kettlebell Jerk': 'Double_Kettlebell_Jerk',
+  'Double Kettlebell Push Press': 'Double_Kettlebell_Push_Press',
+  'Two-Arm Kettlebell Jerk': 'Two-Arm_Kettlebell_Jerk',
+  'Kettlebell Seated Press': 'Kettlebell_Seated_Press',
+  'Kettlebell Seesaw Press': 'Kettlebell_Seesaw_Press',
+  'One-Arm Kettlebell Push Press': 'One-Arm_Kettlebell_Push_Press',
+  'Kettlebell Dead Clean': 'Kettlebell_Dead_Clean',
+  // Sled / strongman loaded carries
+  'Sled Drag (Harness)': 'Sled_Drag_-_Harness',
+  'Sled Overhead Triceps Extension': 'Sled_Overhead_Triceps_Extension',
+  'Sled Reverse Flye': 'Sled_Reverse_Flye',
+  'Rickshaw Deadlift': 'Rickshaw_Deadlift',
+  'Power Stairs': 'Power_Stairs',
+  // Plyometric / conditioning
+  'Front Box Jump': 'Front_Box_Jump',
+  'Kneeling Jump Squat': 'Kneeling_Jump_Squat',
+  'Weighted Jump Squat': 'Weighted_Jump_Squat',
+  'Depth Jump Leap': 'Depth_Jump_Leap',
+  // Mobility / stretch staples
+  'Worlds Greatest Stretch (Dynamic)': 'Worlds_Greatest_Stretch',
+  'Seated Calf Stretch': 'Seated_Calf_Stretch',
+  'Standing Lateral Stretch': 'Standing_Lateral_Stretch',
+  'Upward Stretch': 'Upward_Stretch',
+  'Groiners': 'Groiners',
+  'Inchworm': 'Inchworm',
 };
 
 /**

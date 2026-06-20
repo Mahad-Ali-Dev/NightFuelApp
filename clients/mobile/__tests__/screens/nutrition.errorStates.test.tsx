@@ -28,7 +28,7 @@
  *    real API client.
  */
 import React from 'react';
-import { render, fireEvent, screen } from '@testing-library/react-native';
+import { render, fireEvent, screen, within } from '@testing-library/react-native';
 import {
   ThemeContext,
   getThemeColors,
@@ -190,9 +190,12 @@ describe('NutritionHubScreen — loading / error / empty / filled states', () =>
   });
 
   test('macro ERROR Retry fans out to ALL FOUR query refetches (refetchAll)', () => {
-    // Drive the macro into error; keep plan empty (no second "Retry" from the
-    // plan section) so getByText('Retry') is unambiguous.
-    mockState['meal-logs'] = { data: undefined, isLoading: false, isError: true };
+    // Drive the macro into error via the PROGRESS read (macroError = progress OR
+    // logs). Using progress — not meal-logs — keeps the Today's Meals section in
+    // its resolved-EMPTY state ("Log a Meal", not a Retry) and the plan empty
+    // ("GENERATE PLAN", not a Retry), so the macro card's "Retry" is the only one
+    // on screen and getByText('Retry') stays unambiguous.
+    mockState['daily-progress'] = { data: undefined, isLoading: false, isError: true };
     renderScreen();
 
     fireEvent.press(screen.getByText('Retry'));
@@ -389,5 +392,113 @@ describe('NutritionHubScreen — loading / error / empty / filled states', () =>
     fireEvent.press(screen.getByLabelText('View log'));
     expect(mockRouterPush).toHaveBeenCalledTimes(1);
     expect(mockRouterPush).toHaveBeenCalledWith('/(meals)/log-meal');
+  });
+
+  // ── Today's Meals — the day's REAL logged-meals list + day totals ──────────
+  // Driven entirely by the ['meal-logs'] query (no new query). The section
+  // sits below the macro dashboard. Note: macroLoading/macroError = progress OR
+  // logs, so driving 'meal-logs' into loading/error ALSO trips the macro card's
+  // own loading/error branch — these tests scope to the Today's Meals GlassCard
+  // by its testID and assert the SECTION-specific copy so the two never blur.
+  describe("Today's Meals — logged-meals honest states", () => {
+    // (a) meal-logs LOADING → the logged-meals Skeleton card renders, and NO
+    // fabricated meal rows / day-total ("consumed") numbers leak through.
+    test('logged-meals LOADING: section skeletons render; no meal rows or totals leak', () => {
+      mockState['meal-logs'] = { data: undefined, isLoading: true, isError: false };
+      renderScreen();
+
+      // The Today's Meals loading branch is present, with its 3 row Skeletons.
+      const card = screen.getByTestId('logged-meals-loading');
+      expect(within(card).getAllByTestId('skeleton').length).toBe(3);
+      // The section header still renders above it.
+      expect(screen.getByText("Today's Meals")).toBeTruthy();
+      // No fabricated content leaks: no filled list (TOTAL line) and no error/
+      // empty branches.
+      expect(screen.queryByText('TOTAL')).toBeNull();
+      expect(screen.queryByTestId('logged-meals-filled')).toBeNull();
+      expect(screen.queryByText("Couldn't load today's meals")).toBeNull();
+      expect(screen.queryByText('No meals logged yet')).toBeNull();
+    });
+
+    // (b) meal-logs ERROR → the logged-meals error copy + a Retry render, the
+    // FILLED list is absent, and pressing THAT Retry fires logsQuery.refetch
+    // exactly once (scoped — NOT the macro card's refetchAll fan-out).
+    test('logged-meals ERROR: section error + Retry render; FILLED list absent', () => {
+      mockState['meal-logs'] = { data: undefined, isLoading: false, isError: true };
+      renderScreen();
+
+      const card = screen.getByTestId('logged-meals-error');
+      expect(within(card).getByText("Couldn't load today's meals")).toBeTruthy();
+      expect(within(card).getByText('Retry')).toBeTruthy();
+      // The populated list never renders on the error path.
+      expect(screen.queryByTestId('logged-meals-filled')).toBeNull();
+      expect(screen.queryByText('TOTAL')).toBeNull();
+    });
+
+    test('logged-meals ERROR Retry is SCOPED to logsQuery.refetch (fires exactly once, not refetchAll)', () => {
+      mockState['meal-logs'] = { data: undefined, isLoading: false, isError: true };
+      renderScreen();
+
+      // Scope to the Today's Meals card so we press ITS Retry, not the macro
+      // dashboard's (which logs-error also surfaces and whose Retry is refetchAll).
+      const card = screen.getByTestId('logged-meals-error');
+      fireEvent.press(within(card).getByText('Retry'));
+
+      expect(mockLogsRefetch).toHaveBeenCalledTimes(1);
+      // It is the scoped logs refetch — NOT the macro refetchAll fan-out.
+      expect(mockPlanRefetch).not.toHaveBeenCalled();
+      expect(mockProgressRefetch).not.toHaveBeenCalled();
+      expect(mockFastingRefetch).not.toHaveBeenCalled();
+    });
+
+    // (c) meal-logs resolved to [] → an explicit "No meals logged yet"
+    // EmptyState renders (NOT a fabricated list, NOT consumed>0), and its CTA
+    // routes to /(meals)/log-meal.
+    test('logged-meals EMPTY: explicit "No meals logged yet" CTA, no fabricated list/totals', () => {
+      mockState['meal-logs'] = { data: [], isLoading: false, isError: false };
+      renderScreen();
+
+      const card = screen.getByTestId('logged-meals-empty');
+      expect(within(card).getByText('No meals logged yet')).toBeTruthy();
+      expect(within(card).getByText('Log a Meal')).toBeTruthy();
+      // No fabricated meal rows / day totals on the empty path.
+      expect(screen.queryByTestId('logged-meals-filled')).toBeNull();
+      expect(screen.queryByText('TOTAL')).toBeNull();
+
+      // The CTA routes to the log-meal flow.
+      fireEvent.press(within(card).getByText('Log a Meal'));
+      expect(mockRouterPush).toHaveBeenCalledTimes(1);
+      expect(mockRouterPush).toHaveBeenCalledWith('/(meals)/log-meal');
+    });
+
+    // (d) meal-logs populated → each logged meal's label + its REAL per-log
+    // macros render, and the day's TOTAL equals stats.consumed (no double
+    // count — the totals come from the same reduce that feeds the macro ring).
+    test('logged-meals FILLED: each meal label + real per-log macros; day total = stats.consumed', () => {
+      mockState['meal-logs'] = {
+        data: [
+          { id: 'm1', mealType: 'BREAKFAST', totalCalories: 600, totalProtein: 40, totalCarbs: 50, totalFat: 20 },
+          { id: 'm2', mealType: 'LUNCH', totalCalories: 750, totalProtein: 55, totalCarbs: 60, totalFat: 25 },
+        ],
+        isLoading: false,
+        isError: false,
+      };
+      renderScreen();
+
+      const card = screen.getByTestId('logged-meals-filled');
+      // Humanized meal-type labels.
+      expect(within(card).getByText('Breakfast')).toBeTruthy();
+      expect(within(card).getByText('Lunch')).toBeTruthy();
+      // REAL per-log macros (rounded "kcal · g"), not fabricated.
+      expect(within(card).getByText('600 kcal · 40g')).toBeTruthy();
+      expect(within(card).getByText('750 kcal · 55g')).toBeTruthy();
+      // Day total equals the summed reduce (600+750 = 1350 kcal, 40+55 = 95g)
+      // — i.e. exactly stats.consumed, counted once.
+      expect(within(card).getByText('TOTAL')).toBeTruthy();
+      expect(within(card).getByText('1350 kcal · 95g protein')).toBeTruthy();
+      // Not the empty / error branches.
+      expect(screen.queryByText('No meals logged yet')).toBeNull();
+      expect(screen.queryByText("Couldn't load today's meals")).toBeNull();
+    });
   });
 });

@@ -328,3 +328,136 @@ describe('SetLogger — STRICT-UPGRADE affordances (allowEdit + allowAddRemove)'
     expect(screen.getByLabelText('Reps for set 1').props.value).toBe('12');
   });
 });
+
+/**
+ * PARENT-PERSIST callbacks — the additive `onToggleDone` / `onEditSet` /
+ * `onRemoveSet` notifications that mirror each in-row mutation to the OWNER's set
+ * model (closing the former display-only divergence). They default undefined (so
+ * the read-only modal usage is unaffected) and fire AFTER the matching local
+ * mutation, keyed by the row index. Critically, `onEditSet` fires ONLY for a
+ * value that passed the SAME `validateSet` guard — never on junk — so the single
+ * numeric entry point is preserved for both the add path and the in-row edit.
+ *
+ * We SEED via `initialSets` so the rows exist deterministically and the row index
+ * maps 1:1 to the index handed back to the parent (exactly how the routed workout
+ * screen seeds from ALL planned sets).
+ */
+describe('SetLogger — parent-persist callbacks (onToggleDone / onEditSet / onRemoveSet)', () => {
+  function renderWithCallbacks(
+    cbs: Partial<
+      Pick<React.ComponentProps<typeof SetLogger>, 'onToggleDone' | 'onEditSet' | 'onRemoveSet' | 'onLogSet'>
+    >,
+  ) {
+    const onLogSet = cbs.onLogSet ?? jest.fn();
+    render(
+      <SetLogger
+        exerciseName="Bench Press"
+        targetSets={3}
+        onLogSet={onLogSet}
+        allowEdit
+        allowAddRemove
+        // Two seeded rows: set 1 completed, set 2 completed → indices 0 and 1.
+        initialSets={[
+          { reps: 8, weightKg: 60, completed: true },
+          { reps: 10, weightKg: 50, completed: true },
+        ]}
+        onToggleDone={cbs.onToggleDone}
+        onEditSet={cbs.onEditSet}
+        onRemoveSet={cbs.onRemoveSet}
+      />,
+    );
+    return { onLogSet };
+  }
+
+  test('toggling a set fires onToggleDone with that row index', () => {
+    const onToggleDone = jest.fn();
+    renderWithCallbacks({ onToggleDone });
+
+    // Toggle the SECOND seeded row → index 1 (0-based) reaches the parent.
+    fireEvent.press(screen.getByRole('button', { name: 'Mark set 2 done' }));
+    expect(onToggleDone).toHaveBeenCalledTimes(1);
+    expect(onToggleDone).toHaveBeenCalledWith(1);
+
+    // Toggle the first row too → index 0.
+    fireEvent.press(screen.getByRole('button', { name: 'Mark set 1 done' }));
+    expect(onToggleDone).toHaveBeenCalledTimes(2);
+    expect(onToggleDone).toHaveBeenLastCalledWith(0);
+  });
+
+  test('a VALID in-row edit fires onEditSet with the index and parsed value (reps and kg)', () => {
+    const onEditSet = jest.fn();
+    const onLogSet = jest.fn();
+    renderWithCallbacks({ onEditSet, onLogSet });
+
+    // Edit set 1's reps 8 → 12: onEditSet fires with the row's CURRENT weight (60).
+    fireEvent.changeText(screen.getByLabelText('Reps for set 1'), '12');
+    expect(onEditSet).toHaveBeenCalledTimes(1);
+    expect(onEditSet).toHaveBeenLastCalledWith(0, { reps: 12, weightKg: 60 });
+
+    // Edit set 2's weight 50 → 55: index 1, reps stays its current 10.
+    fireEvent.changeText(screen.getByLabelText('Weight in kilograms for set 2'), '55');
+    expect(onEditSet).toHaveBeenCalledTimes(2);
+    expect(onEditSet).toHaveBeenLastCalledWith(1, { reps: 10, weightKg: 55 });
+
+    // An edit is NOT an add — onLogSet never fires from the edit path.
+    expect(onLogSet).not.toHaveBeenCalled();
+  });
+
+  // Junk in the in-row edit fires NEITHER onEditSet NOR onLogSet (validateSet is
+  // the single numeric entry point; junk → no parent mutation at all).
+  test.each(['abc', '0', '-3'])(
+    'junk in-row reps="%s" fires neither onEditSet nor onLogSet',
+    (badReps) => {
+      const onEditSet = jest.fn();
+      const onLogSet = jest.fn();
+      renderWithCallbacks({ onEditSet, onLogSet });
+
+      fireEvent.changeText(screen.getByLabelText('Reps for set 1'), badReps);
+      expect(onEditSet).not.toHaveBeenCalled();
+      expect(onLogSet).not.toHaveBeenCalled();
+    },
+  );
+
+  test('a negative in-row weight fires neither onEditSet nor onLogSet', () => {
+    const onEditSet = jest.fn();
+    const onLogSet = jest.fn();
+    renderWithCallbacks({ onEditSet, onLogSet });
+
+    fireEvent.changeText(screen.getByLabelText('Weight in kilograms for set 1'), '-20');
+    expect(onEditSet).not.toHaveBeenCalled();
+    expect(onLogSet).not.toHaveBeenCalled();
+  });
+
+  test('removing a set fires onRemoveSet with that row index', () => {
+    const onRemoveSet = jest.fn();
+    renderWithCallbacks({ onRemoveSet });
+
+    // Remove the SECOND seeded row → index 1 reaches the parent.
+    fireEvent.press(screen.getByRole('button', { name: 'Remove set 2' }));
+    expect(onRemoveSet).toHaveBeenCalledTimes(1);
+    expect(onRemoveSet).toHaveBeenCalledWith(1);
+  });
+
+  test('the callbacks are OPTIONAL: in-row mutations are local no-ops when none are passed', () => {
+    // No callbacks passed (the modal default). The local mutations must still
+    // work without throwing — proving the callbacks are guarded with `?.`.
+    render(
+      <SetLogger
+        exerciseName="Squat"
+        targetSets={3}
+        onLogSet={jest.fn()}
+        allowEdit
+        allowAddRemove
+        initialSets={[{ reps: 8, weightKg: 60, completed: true }]}
+      />,
+    );
+
+    expect(() => {
+      fireEvent.press(screen.getByRole('button', { name: 'Mark set 1 done' }));
+      fireEvent.changeText(screen.getByLabelText('Reps for set 1'), '9');
+      fireEvent.press(screen.getByRole('button', { name: 'Remove set 1' }));
+    }).not.toThrow();
+    // The set was removed locally (no row remains).
+    expect(screen.queryByText('Set 1')).toBeNull();
+  });
+});

@@ -37,9 +37,15 @@ import { HEALTH_SOURCE_LABELS, type HealthSource } from '@/lib/healthSync.types'
  *     per-source `reason` from the user's last connect/sync attempt (user-action
  *     feedback, not a duplicate of connection state). Status and last-synced are
  *     DERIVED live from the adapter on each render, so they can't drift.
- *   - rules/rendering-no-falsy-and.md: the honest reason renders via
- *     `{!!message && …}` so an empty/undefined message can never leak a falsy
- *     value into the tree.
+ *   - rules/rendering-no-falsy-and.md: the honest reason renders via an explicit
+ *     ternary-null (`{message ? … : null}`) so an empty/undefined message yields
+ *     `null` and can never leak a falsy ("" / 0) value into the JSX tree.
+ *   - rules/ui-pressable.md: the back button + Sync-now affordance are the
+ *     surrounding screen's existing TouchableOpacity idiom; the primary Connect
+ *     action is the design-system CtaButton (a Pressable under the hood). Both
+ *     touch targets meet the 44pt minimum (Connect forwards minHeight:44, Sync
+ *     has minHeight:44 + hitSlop), and both carry honest a11y labels/state that
+ *     reflect the adapter result rather than implying a connection.
  *   - rules/list-performance-callbacks.md: the row press handlers
  *     (`handleConnect` / `handleSync`) are single hoisted `useCallback`
  *     instances that each row invokes with its own source id — no new callback
@@ -102,6 +108,13 @@ const SourceRow = React.memo(function SourceRow({ source, message, onConnect, on
     const lastSynced = getHealthSyncAdapter().lastSyncedAt();
     const lastSyncedLabel = lastSynced ? formatLastSynced(lastSynced) : 'Never synced';
 
+    // Did this source's last connect/sync attempt come back non-connected (i.e.
+    // the adapter surfaced an honest reason)? Drives the a11y state on BOTH
+    // affordances so a screen reader announces the unavailable result instead of
+    // implying a working connection. The controls stay pressable on purpose —
+    // pressing re-surfaces the honest reason; we never fake `disabled`.
+    const hasNotice = !!message;
+
     return (
         <GlassCard radius={br.xl} style={styles.row}>
             <View style={styles.rowHeader}>
@@ -134,9 +147,10 @@ const SourceRow = React.memo(function SourceRow({ source, message, onConnect, on
             </View>
 
             {/* Honest unavailable reason (or any non-connected result). Rendered
-                with an explicit boolean coercion so an undefined/empty message
-                can never leak a falsy value into the JSX tree. */}
-            {!!message && (
+                with an explicit ternary-null per rules/rendering-no-falsy-and.md:
+                `message` is a string, so an empty/undefined value yields `null`
+                (never a falsy 0/"" leaked into the JSX tree). */}
+            {message ? (
                 <View
                     style={[
                         styles.noticeBox,
@@ -145,14 +159,21 @@ const SourceRow = React.memo(function SourceRow({ source, message, onConnect, on
                             borderColor: withAlpha(colors.warning, 0.25),
                         },
                     ]}
+                    // Group the icon + reason into ONE accessible alert unit so a
+                    // screen reader announces the honest reason as a single live
+                    // region (and the node is reachable by role="alert"). The label
+                    // mirrors the visible reason so the announcement is verbatim.
+                    accessible
                     accessibilityRole="alert"
+                    accessibilityLiveRegion="polite"
+                    accessibilityLabel={message}
                 >
                     <Ionicons name="information-circle-outline" size={16} color={colors.warning} />
                     <Text style={[typography.caption, styles.noticeText, { color: colors.text.secondary }]}>
                         {message}
                     </Text>
                 </View>
-            )}
+            ) : null}
 
             <View style={styles.actions}>
                 <CtaButton
@@ -160,7 +181,17 @@ const SourceRow = React.memo(function SourceRow({ source, message, onConnect, on
                     icon="link-outline"
                     size="sm"
                     onPress={() => onConnect(source)}
-                    accessibilityLabel={`Connect ${name}`}
+                    // Honest label: once an attempt has surfaced a reason, the
+                    // label announces the source is unavailable rather than
+                    // implying a connection. The CtaButton primitive owns its own
+                    // accessibilityRole="button" + accessibilityState.disabled (it
+                    // takes only a label), so we reflect the adapter result through
+                    // the label. We do NOT pass disabled — the control stays
+                    // pressable so a tap re-surfaces the honest reason.
+                    accessibilityLabel={hasNotice ? `Connect ${name}, currently unavailable` : `Connect ${name}`}
+                    // sm's intrinsic minHeight is 40; connectBtn forwards
+                    // minHeight:44 (merged last in CtaButton, so it wins) to meet
+                    // the 44pt touch-target minimum alongside the Sync control.
                     style={styles.connectBtn}
                     testID={`connect-${source}`}
                 />
@@ -168,7 +199,14 @@ const SourceRow = React.memo(function SourceRow({ source, message, onConnect, on
                     activeOpacity={0.85}
                     onPress={() => onSync(source)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Sync ${name} now`}
+                    // Honest label + state reflecting the adapter result: when the
+                    // last attempt was non-connected the label announces it, and
+                    // the hint explains what a press does. `disabled` stays false
+                    // on purpose — the control is pressable so a tap re-surfaces
+                    // the honest reason; we never fake a disabled/connected state.
+                    accessibilityLabel={hasNotice ? `Sync ${name} now, currently unavailable` : `Sync ${name} now`}
+                    accessibilityHint={`Attempts to sync ${name} and shows the result`}
+                    accessibilityState={{ disabled: false }}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     style={[styles.syncBtn, { borderColor: colors.border.light }]}
                     testID={`sync-${source}`}
@@ -320,7 +358,10 @@ const styles = StyleSheet.create({
     },
     noticeText: { flex: 1, lineHeight: 18 },
     actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.lg },
-    connectBtn: { flex: 1 },
+    // flex:1 to share the row; minHeight:44 lifts the sm CtaButton's intrinsic
+    // 40 to the 44pt touch-target minimum (forwarded style merges last in
+    // CtaButton, so it wins). Matches the Sync control's 44.
+    connectBtn: { flex: 1, minHeight: 44 },
     syncBtn: {
         flexDirection: 'row',
         alignItems: 'center',

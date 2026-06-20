@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
+import { EmptyState } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import { typography as typo } from '@/theme/typography';
 
@@ -35,6 +36,16 @@ export default function WorkoutCompleteScreen() {
     const displayTime = formatElapsed(isNaN(elapsedSeconds) ? 0 : elapsedSeconds);
     const totalVolume = volume ? Math.max(0, Math.round(parseFloat(volume))) : 0;
     const totalKcal = kcal ? Math.max(0, Math.round(parseFloat(kcal))) : 0;
+
+    // Honest-states guard for the raw deep-link / cold-reload / aborted-finish
+    // mount: when ALL three params are absent or non-finite there is nothing
+    // real to celebrate, so we render an EmptyState instead of three zeroed
+    // stat cards. The normal path (a finite elapsed plus any positive metric)
+    // is unchanged. `totalVolume`/`totalKcal` are already finite (Math.max
+    // floors NaN-derived values to 0 via parseFloat) and `elapsedSeconds` may
+    // be NaN, which `Number.isFinite` rejects — so this stays finite-safe.
+    const hasAnyMetric =
+        Number.isFinite(elapsedSeconds) && (elapsedSeconds > 0 || totalVolume > 0 || totalKcal > 0);
 
     const handleReturn = () => {
         queryClient.invalidateQueries({ queryKey: ['active-session'] });
@@ -64,26 +75,37 @@ export default function WorkoutCompleteScreen() {
                 </Text>
 
                 <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: 12, marginHorizontal: 32 }]}>
-                    Amazing work. You've logged another powerful session, optimizing your performance window.
+                    {hasAnyMetric
+                        ? "Amazing work. You've logged another powerful session, optimizing your performance window."
+                        : 'Your session is wrapped up. Head back to your dashboard to keep your window dialed in.'}
                 </Text>
 
-                <View style={styles.statsRow}>
-                    <Card variant="glass" style={styles.statBox}>
-                        <Ionicons name="flash-outline" size={24} color={colors.accent.coral} style={{ marginBottom: 8 }} />
-                        <Text style={[typography.caption, { color: colors.text.secondary }]}>Volume</Text>
-                        <Text style={[styles.statValue, { color: colors.text.primary }]} maxFontSizeMultiplier={1.3}>{totalVolume.toLocaleString()} <Text style={[styles.statUnit, { color: colors.text.secondary }]}>kg</Text></Text>
-                    </Card>
-                    <Card variant="glass" style={styles.statBox}>
-                        <Ionicons name="time-outline" size={24} color={colors.accent.cyan} style={{ marginBottom: 8 }} />
-                        <Text style={[typography.caption, { color: colors.text.secondary }]}>Time</Text>
-                        <Text style={[styles.statValue, { color: colors.text.primary }]} maxFontSizeMultiplier={1.3}>{displayTime}</Text>
-                    </Card>
-                    <Card variant="glass" style={styles.statBox}>
-                        <Ionicons name="flame-outline" size={24} color={colors.accent.amber} style={{ marginBottom: 8 }} />
-                        <Text style={[typography.caption, { color: colors.text.secondary }]}>Burn</Text>
-                        <Text style={[styles.statValue, { color: colors.text.primary }]} maxFontSizeMultiplier={1.3}>{totalKcal} <Text style={[styles.statUnit, { color: colors.text.secondary }]}>kcal</Text></Text>
-                    </Card>
-                </View>
+                {hasAnyMetric ? (
+                    <View style={styles.statsRow}>
+                        <Card variant="glass" style={styles.statBox}>
+                            <Ionicons name="flash-outline" size={24} color={colors.accent.coral} style={{ marginBottom: 8 }} />
+                            <Text style={[typography.caption, { color: colors.text.secondary }]}>Volume</Text>
+                            <Text style={[styles.statValue, { color: colors.text.primary }]} maxFontSizeMultiplier={1.3}>{totalVolume.toLocaleString()} <Text style={[styles.statUnit, { color: colors.text.secondary }]}>kg</Text></Text>
+                        </Card>
+                        <Card variant="glass" style={styles.statBox}>
+                            <Ionicons name="time-outline" size={24} color={colors.accent.cyan} style={{ marginBottom: 8 }} />
+                            <Text style={[typography.caption, { color: colors.text.secondary }]}>Time</Text>
+                            <Text style={[styles.statValue, { color: colors.text.primary }]} maxFontSizeMultiplier={1.3}>{displayTime}</Text>
+                        </Card>
+                        <Card variant="glass" style={styles.statBox}>
+                            <Ionicons name="flame-outline" size={24} color={colors.accent.amber} style={{ marginBottom: 8 }} />
+                            <Text style={[typography.caption, { color: colors.text.secondary }]}>Burn</Text>
+                            <Text style={[styles.statValue, { color: colors.text.primary }]} maxFontSizeMultiplier={1.3}>{totalKcal} <Text style={[styles.statUnit, { color: colors.text.secondary }]}>kcal</Text></Text>
+                        </Card>
+                    </View>
+                ) : (
+                    <EmptyState
+                        icon="barbell-outline"
+                        title="No session data"
+                        subtitle="We couldn't find any metrics for this session. Nothing was lost — just return to your dashboard."
+                        style={styles.emptyState}
+                    />
+                )}
 
                 <View style={{ flex: 1 }} />
 
@@ -114,6 +136,7 @@ const styles = StyleSheet.create({
     iconCircle: { width: 120, height: 120, borderRadius: 60, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
     statsRow: { flexDirection: 'row', gap: 12, marginTop: 40, width: '100%' },
     statBox: { flex: 1, padding: 16, alignItems: 'center' },
+    emptyState: { marginTop: 24, width: '100%' },
     statValue: { fontFamily: typo.statSmall.fontFamily, fontSize: 20, lineHeight: 28, marginTop: 2 },
     statUnit: { fontFamily: typo.statTiny.fontFamily, fontSize: 13 },
     returnBtn: { width: '100%', height: 56, borderRadius: 28 },

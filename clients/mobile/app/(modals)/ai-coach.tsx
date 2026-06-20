@@ -446,6 +446,14 @@ export default function AICoachScreen() {
     // seeded) and we're not in the exhausted state (which shows its own banner).
     const showQuotaHint = hasLoaded && !quota.exhausted;
 
+    // Honest history-load failure: when the persisted-history fetch errors and
+    // we have NOT yet loaded a transcript, surface a retryable inline error
+    // instead of a perpetual spinner (or a misleading seeded greeting). Once a
+    // refetch succeeds the success effect flips `hasLoaded`, so this branch
+    // self-clears. `isLoading` is false while `isError` is true, so the loading
+    // affordance and this error branch are mutually exclusive.
+    const historyError = historyQuery.isError && !hasLoaded;
+
     const sendDisabled = mutation.isPending || isStreaming || !input.trim() || quota.exhausted;
 
     return (
@@ -534,11 +542,35 @@ export default function AICoachScreen() {
                         {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase()}
                     </Text>
 
-                    {historyQuery.isLoading && !hasLoaded && (
+                    {historyQuery.isLoading && !hasLoaded ? (
                         <View style={{ alignItems: 'center', paddingTop: 40 }}>
                             <ActivityIndicator color={colors.accent.purpleLight} />
                         </View>
-                    )}
+                    ) : null}
+
+                    {/* Honest, retryable history-load error — replaces the spinner
+                        when the fetch FAILS so the screen never spins forever (and
+                        never shows the seeded greeting on a failed load). Retry
+                        refires the SAME ['ria-messages'] query via refetch(); a
+                        success then flips hasLoaded and this branch disappears.
+                        Ternary-null, never `&&`, so an empty/0 value can't render
+                        bare (rendering-no-falsy-and). */}
+                    {historyError ? (
+                        <GlassCard radius={20} glow={colors.accent.coral} style={styles.errorCard}>
+                            <View style={styles.errorInner}>
+                                <View style={[styles.errorIcon, { backgroundColor: withAlpha(colors.accent.coral, 0.16) }]}>
+                                    <Ionicons name="cloud-offline-outline" size={22} color={colors.accent.coralLight} />
+                                </View>
+                                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 16, fontWeight: '800', marginTop: 12, textAlign: 'center' }]}>
+                                    Couldn't load your conversation
+                                </Text>
+                                <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: 6, lineHeight: 20 }]} maxFontSizeMultiplier={1.4}>
+                                    Check your connection and try again.
+                                </Text>
+                                <RetryButton colors={colors} typography={typography} onPress={() => historyQuery.refetch()} />
+                            </View>
+                        </GlassCard>
+                    ) : null}
 
                     {/* Bounded render window: only the last MAX_RENDERED_MESSAGES
                         bubbles mount, but `messages` keeps the full transcript so
@@ -587,8 +619,9 @@ export default function AICoachScreen() {
                         </GlassCard>
                     )}
 
-                    {/* Quick Suggestions */}
-                    {messages.length <= 2 && !isTyping && !quota.exhausted && (
+                    {/* Quick Suggestions — hidden while the history-load error is
+                        showing (no empty-conversation prompts under an error). */}
+                    {messages.length <= 2 && !isTyping && !quota.exhausted && !historyError && (
                         <View style={{ marginTop: 24 }}>
                             <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 12, fontWeight: 'bold', letterSpacing: 0.5 }]}>
                                 QUICK QUESTIONS
@@ -763,6 +796,47 @@ function SendButton({ enabled, busy, colors, onPress }: { enabled: boolean; busy
                 ) : (
                     <Ionicons name="arrow-up" size={20} color={enabled ? colors.text.primary : colors.text.tertiary} />
                 )}
+            </Reanimated.View>
+        </GestureDetector>
+    );
+}
+
+// ── Retry button (bordered, animated press — history-load error state) ───────────
+//
+// A bordered, icon+label pill that re-fires the history fetch. Deliberately NOT a
+// coral CtaButton fill — this is a recoverable inline error, not the screen's
+// primary CTA (the only CtaButton on this screen is the quota→Upgrade action), and
+// the inline-CTA guard reserves the coral gradient for CtaButton. Press feedback
+// uses GestureDetector + a Reanimated shared value (the screen's press idiom; no
+// legacy Touchable — ui-pressable), animating only transform scale + opacity
+// (GPU-only). `onPress` is passed once from the parent (a stable refetch closure),
+// so no per-render callback is created (list-performance-callbacks).
+
+function RetryButton({ colors, typography, onPress }: { colors: any; typography: any; onPress: () => void }) {
+    const pressed = useSharedValue(0);
+    const tap = Gesture.Tap()
+        .onBegin(() => { pressed.set(withTiming(1, { duration: 90 })); })
+        .onFinalize(() => { pressed.set(withTiming(0, { duration: 120 })); })
+        .onEnd(() => { runOnJS(onPress)(); });
+    const animStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: interpolate(pressed.get(), [0, 1], [1, 0.96]) }],
+        opacity: interpolate(pressed.get(), [0, 1], [1, 0.85]),
+    }));
+    return (
+        <GestureDetector gesture={tap}>
+            <Reanimated.View
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading your conversation"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={[styles.retryBtn, {
+                    borderColor: withAlpha(colors.accent.purpleLight, 0.6),
+                    backgroundColor: withAlpha(colors.accent.purple, 0.14),
+                }, animStyle]}
+            >
+                <Ionicons name="refresh" size={16} color={colors.accent.purpleLight} />
+                <Text style={[typography.body, { color: colors.text.primary, fontWeight: '800', fontSize: 14 }]} maxFontSizeMultiplier={1.3}>
+                    Retry
+                </Text>
             </Reanimated.View>
         </GestureDetector>
     );
@@ -1055,6 +1129,35 @@ const styles = StyleSheet.create({
     upgradeCta: {
         marginTop: 16,
         alignSelf: 'stretch',
+    },
+    // Inline history-load error card (mirrors the upgrade card's footprint) shown
+    // in the scroll when the persisted-history fetch fails.
+    errorCard: {
+        marginTop: 8,
+        marginBottom: 8,
+    },
+    errorInner: {
+        padding: 20,
+        alignItems: 'center',
+    },
+    errorIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    // Bordered Retry pill (NOT a coral CTA fill) — keeps the 44pt touch target.
+    retryBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginTop: 16,
+        minHeight: 44,
+        paddingHorizontal: 22,
+        borderRadius: 14,
+        borderWidth: 1,
     },
     // Clipping wrapper for the frosted input bar: owns the top hairline + the
     // bottom safe-area pad; the full-bleed GlassCard (inside) owns the frost.

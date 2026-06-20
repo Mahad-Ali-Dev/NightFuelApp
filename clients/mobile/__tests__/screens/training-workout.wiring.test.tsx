@@ -224,47 +224,60 @@ describe('ActiveWorkoutScreen — RestTimer + SetLogger wiring', () => {
   });
 
   // ── 3: junk is rejected (hardening reachable); valid entry logs + rests ────
+  // NOTE: the screen now seeds SetLogger from ALL planned sets (1:1 with ex.sets)
+  // so the seeded "Set 1/2/3" rows are present from the start — the OLD "Set 1
+  // absent" signal no longer distinguishes a logged set. We bind instead to the
+  // two effects of the guarded ADD path: the header `N/3 Sets Done` count (from
+  // ex.sets[].completed — the mockSession seeds 3 incomplete sets → opens at 0/3)
+  // and the rest cycle (the RestTimer). Junk fires neither; a valid set fires both.
   test.each(['abc', '0', '-3'])(
-    'junk reps="%s" does NOT log a set or open the rest cycle',
+    'junk reps="%s" does NOT advance the completed count or open the rest cycle',
     async (badReps) => {
       renderScreen();
       await flushInit();
       clearStartupCountdown();
 
+      // Seeded fresh: 0 of 3 done, no rest timer.
+      expect(screen.getByText(/0\/3 Sets Done/)).toBeTruthy();
+
       logViaSetLogger(badReps, '40');
 
-      // SetLogger's Number.isFinite + reps>=1 guard rejected it: no logged row
-      // surfaced and the rest cycle never opened (no RestTimer).
-      expect(screen.queryByText('Set 1')).toBeNull();
+      // SetLogger's Number.isFinite + reps>=1 guard rejected it: the completed
+      // count stayed 0/3 (no ex.set marked complete) and the rest cycle never
+      // opened (no RestTimer).
+      expect(screen.getByText(/0\/3 Sets Done/)).toBeTruthy();
       expect(screen.queryByRole('timer')).toBeNull();
     },
   );
 
-  test('a negative weight does NOT log a set or open the rest cycle', async () => {
+  test('a negative weight does NOT advance the completed count or open the rest cycle', async () => {
     renderScreen();
     await flushInit();
     clearStartupCountdown();
+
+    expect(screen.getByText(/0\/3 Sets Done/)).toBeTruthy();
 
     logViaSetLogger('5', '-20');
 
-    expect(screen.queryByText('Set 1')).toBeNull();
+    expect(screen.getByText(/0\/3 Sets Done/)).toBeTruthy();
     expect(screen.queryByRole('timer')).toBeNull();
   });
 
-  test('a valid entry DOES log a "Set 1" row and open the rest cycle', async () => {
+  test('a valid entry advances the completed count AND opens the rest cycle', async () => {
     renderScreen();
     await flushInit();
     clearStartupCountdown();
 
-    // Sanity: nothing logged / no timer before the valid entry.
-    expect(screen.queryByText('Set 1')).toBeNull();
+    // Sanity: 0 of 3 done / no timer before the valid entry.
+    expect(screen.getByText(/0\/3 Sets Done/)).toBeTruthy();
     expect(screen.queryByRole('timer')).toBeNull();
 
     logViaSetLogger('12', '50');
 
-    // The valid set was accepted: SetLogger renders its "Set 1" logged row AND
-    // the screen opened the rest cycle (the real RestTimer mounted).
-    expect(screen.getByText('Set 1')).toBeTruthy();
+    // The valid set was accepted: logSet marked the next pending ex.set complete
+    // (header → 1/3 Sets Done) AND the screen opened the rest cycle (real
+    // RestTimer mounted).
+    expect(screen.getByText(/1\/3 Sets Done/)).toBeTruthy();
     expect(screen.getByRole('timer')).toBeTruthy();
   });
 });
@@ -351,5 +364,139 @@ describe('ActiveWorkoutScreen — restored-session seed + summary read-side', ()
     // 2 completed sets × (50kg × 10 reps) = 1000 — counted ONCE (the seed never
     // fired onLogSet, so there is no second counter to double it).
     expect(arg.params.volume).toBe('1000');
+  });
+});
+
+// ── In-row toggle / edit / remove PERSIST to ex.sets (not display-only) ────────
+// The capstone for THIS change: a DONE-toggle / reps-or-kg edit / remove in the
+// (real) SetLogger of the routed workout screen must reach the screen's PERSISTED
+// `exerciseStates[eIdx].sets` — the SAME ground truth the header count
+// `${completedCount}/${ex.sets.length} Sets Done` AND handleEnd's finish-time
+// summary volume read. We bind each gesture to BOTH (the header count + the
+// forwarded summary volume) so it can never silently regress to a cosmetic
+// SetLogger-local edit again. The RESTORED fixture seeds 3 sets (2 completed
+// 50×10 + 1 pending) so the first, default-expanded card's SetLogger maps row i
+// 1:1 to ex.sets[i].
+describe('ActiveWorkoutScreen — in-row toggle / edit / remove persist to ex.sets', () => {
+  const AsyncStorage = require('@react-native-async-storage/async-storage');
+
+  const RESTORED = {
+    sessionId: 'sess-1',
+    startedAt: new Date(2026, 5, 17, 19, 30, 0).getTime(),
+    elapsedSeconds: 0,
+    exercises: [
+      {
+        name: 'Bench Press',
+        muscleGroup: 'Chest',
+        restSeconds: 90,
+        sets: [
+          { kg: 50, reps: 10, completed: true },
+          { kg: 50, reps: 10, completed: true },
+          { kg: 50, reps: 10, completed: false },
+        ],
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2026, 5, 17, 20, 0, 0));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.clearAllMocks();
+    AsyncStorage.getItem.mockResolvedValue(null);
+  });
+
+  async function renderRestored() {
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(RESTORED));
+    renderScreen();
+    await flushInit();
+    await flushInit();
+  }
+
+  /** Finish the workout and return the params handleEnd forwarded to /complete. */
+  async function finishAndReadSummary() {
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Finish workout'));
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(2500);
+      await Promise.resolve();
+    });
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    return mockReplace.mock.calls[0][0].params;
+  }
+
+  test('toggling a logged set DONE updates the header count AND the persisted finish-time volume', async () => {
+    await renderRestored();
+
+    // Opens at 2 / 3 (both the header — from ex.sets — and the SetLogger agree).
+    expect(screen.getByText(/2\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getByText('2 / 3 sets')).toBeTruthy();
+
+    // Toggle set 1 OFF via the SetLogger's per-set DONE control. This now flows
+    // through onToggleDone → toggleSetDone → exerciseStates[0].sets[0].completed.
+    fireEvent.press(screen.getByRole('button', { name: 'Mark set 1 done' }));
+
+    // The header count (derived from ex.sets) drops to 1 / 3 — proof the toggle
+    // reached the PERSISTED sets, not just SetLogger-local state.
+    expect(screen.getByText(/1\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getByText('1 / 3 sets')).toBeTruthy();
+
+    // …and finish-time volume now counts only the 1 remaining completed set:
+    // 50×10 = 500 (was 1000).
+    const params = await finishAndReadSummary();
+    expect(params.volume).toBe('500');
+  });
+
+  test('editing a logged set reps + kg updates the persisted finish-time volume', async () => {
+    await renderRestored();
+
+    // Edit set 1: reps 10 → 12, kg 50 → 60. Each valid edit flows through
+    // onEditSet → updateSet → exerciseStates[0].sets[0] (and marks it completed).
+    fireEvent.changeText(screen.getByLabelText('Reps for set 1'), '12');
+    fireEvent.changeText(screen.getByLabelText('Weight in kilograms for set 1'), '60');
+
+    // Volume = set1 (60×12 = 720) + set2 (50×10 = 500) = 1220 — proof the edit
+    // reached the PERSISTED set value, not just the SetLogger row.
+    const params = await finishAndReadSummary();
+    expect(params.volume).toBe('1220');
+  });
+
+  test('removing a logged set drops it from the header count AND the persisted finish-time volume', async () => {
+    await renderRestored();
+
+    expect(screen.getByText(/2\/3 Sets Done/)).toBeTruthy();
+
+    // Remove set 1 via the SetLogger's per-set remove → onRemoveSet → removeSetAt
+    // drops exerciseStates[0].sets[0]. The exercise now has 2 sets (1 completed).
+    fireEvent.press(screen.getByRole('button', { name: 'Remove set 1' }));
+
+    // Header total + completed both drop: 1 completed of 2 remaining.
+    expect(screen.getByText(/1\/2 Sets Done/)).toBeTruthy();
+
+    // Finish-time volume now counts only the single remaining completed set:
+    // 50×10 = 500 (the removed completed set is gone).
+    const params = await finishAndReadSummary();
+    expect(params.volume).toBe('500');
+  });
+
+  test('the rest cycle still opens when a NEW set is logged via the input row (add path intact)', async () => {
+    await renderRestored();
+
+    // No rest timer yet.
+    expect(screen.queryByRole('timer')).toBeNull();
+
+    // Use the input-row add path (the guarded "Log set"): this is the ONLY path
+    // that fires onLogSet → logSet, which marks the next pending ex.set complete
+    // AND opens the rest cycle. Toggle/edit/remove above never open it.
+    fireEvent.changeText(screen.getByLabelText('Reps'), '8');
+    fireEvent.changeText(screen.getByLabelText('Weight in kilograms'), '40');
+    fireEvent.press(screen.getByRole('button', { name: 'Log set' }));
+
+    // The real RestTimer mounted → the add path's rest-trigger is intact.
+    expect(screen.getByRole('timer')).toBeTruthy();
   });
 });

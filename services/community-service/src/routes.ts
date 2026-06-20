@@ -4,6 +4,14 @@ import { CommunityService, SelfFollowError } from './community.service';
 import jwt from 'jsonwebtoken';
 import { sendUnauthorized } from '@nightfuel/config';
 
+// ── Input upper bounds ──────────────────────────────────────────────────────
+// Generous caps so every currently-valid app payload still passes; only
+// absurd/abusive page sizes are rejected with the standard 400. Mirrors the
+// named `MAX_*` style in meal-service/src/routes.ts and the existing
+// .max(100) feed bound below.
+const MAX_USER_POSTS_LIMIT = 100;   // GET /user/:id/posts page size
+const MAX_LEADERBOARD_LIMIT = 100;  // GET /leaderboard page size
+
 export default async function (fastify: FastifyInstance, opts: { communityService: CommunityService, jwtSecret: string }) {
     const { communityService, jwtSecret } = opts;
 
@@ -109,7 +117,7 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
     fastify.get('/v1/community/user/:id/posts', {
         schema: {
             params: z.object({ id: z.string() }),
-            querystring: z.object({ limit: z.coerce.number().default(20) })
+            querystring: z.object({ limit: z.coerce.number().int().min(1).max(MAX_USER_POSTS_LIMIT).default(20) })
         },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
@@ -155,7 +163,7 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
 
     // Leaderboard — rows enriched with real displayName/avatar (author-resolved)
     fastify.get('/v1/community/leaderboard', {
-        schema: { querystring: z.object({ limit: z.coerce.number().default(10) }) },
+        schema: { querystring: z.object({ limit: z.coerce.number().int().min(1).max(MAX_LEADERBOARD_LIMIT).default(10) }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const { limit } = request.query as any;

@@ -250,4 +250,33 @@ describe('ActiveWorkoutScreen — loading / error / active-session states', () =
     expect(screen.queryByText('Couldn\'t start your workout')).toBeNull();
     expect(screen.queryByText('Try Again')).toBeNull();
   });
+
+  // ── Test D: an in-row DONE toggle PERSISTS to ex.sets (header count) ────────
+  // Regression guard for the former display-only divergence: the (real) SetLogger
+  // on the default-expanded card now mirrors a per-set DONE toggle back to the
+  // screen's `exerciseStates[eIdx].sets` via onToggleDone → toggleSetDone. The
+  // header `${completedCount}/${ex.sets.length} Sets Done` is DERIVED from
+  // ex.sets, so binding the toggle to that count proves it reached the persisted
+  // model — not just SetLogger-local state. SESSION seeds 3 sets, all incomplete
+  // → opens at 0/3.
+  test('in-row DONE toggle persists to ex.sets: the header count tracks it', async () => {
+    mockSession.data = SESSION;
+
+    renderScreen();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Seeded fresh: 0 of 3 done (header derived from ex.sets, SetLogger agrees).
+    expect(screen.getByText(/0\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getByText('0 / 3 sets')).toBeTruthy();
+
+    // Toggle set 1 ON via the SetLogger's per-set DONE control.
+    fireEvent.press(screen.getByRole('button', { name: 'Mark set 1 done' }));
+
+    // The header count (from ex.sets[].completed) rises to 1/3 — the toggle
+    // reached the PERSISTED sets.
+    expect(screen.getByText(/1\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getByText('1 / 3 sets')).toBeTruthy();
+  });
 });

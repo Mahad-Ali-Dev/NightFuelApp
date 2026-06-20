@@ -521,6 +521,115 @@ describe('curated coverage — Widened FEDB-backed tranche #3', () => {
   );
 });
 
+// ── Newly-added curated coverage — "Widened FEDB-backed tranche #18" ─────────
+// The latest tranche of distinct catalogue movements added to FEDB_BACKED_SLUGS
+// (kind:'fedb_frames', verified:false). This block LOCKS a representative slice
+// so a future edit that drops/mis-slugs one of these new entries — or
+// accidentally promotes it to verified:true — turns RED.
+//
+// Same MISS-vs-INDEX split as tranches #2/#3 (see those headers for the full
+// rationale). Each key below was machine-verified against the FINAL
+// curatedDemos.ts + the FEDB_SLUGS by-name index in exerciseDemos.ts:
+//
+//   • MISS keys — curated keys whose NORMALIZED name is NOT a FEDB_SLUGS by-name
+//     index key (an alias of the slug-derived name, e.g.
+//     "Worlds Greatest Stretch (Dynamic)" → slug "Worlds_Greatest_Stretch",
+//     whose own normalized name is the index key but the parenthesized display
+//     alias is not). resolveDemoFrames + resolveDemo BOTH miss, so the curated
+//     fallback in [id].tsx is the SOLE source — exactly the screen's fallback
+//     path.
+//   • INDEX-backed keys — names whose normalized form already resolves through
+//     the default FEDB_SLUGS name index. We deliberately SKIP the "(a) resolvers
+//     both miss" sub-assertion (it would be FALSE) and instead positively pin
+//     that the default frames index DOES cover them, while still locking the
+//     curated entry's kind / verified / frame-pair.
+//
+// Both halves lock (b) kind:'fedb_frames', (c) verified:false, and (d) an
+// ordered 2-frame HTTPS [.../0.jpg, .../1.jpg] pair via the curated accessor.
+
+describe('curated coverage — Widened FEDB-backed tranche #18', () => {
+  // Shared shape assertion: the curated entry is an unreviewed in-app frame pair
+  // with an ordered start→end HTTPS pair. Local copy (kept self-contained) of the
+  // helper used by tranches #2/#3 above.
+  const expectCuratedFedbFramePair = (name: string) => {
+    const demo = getCuratedDemo(name);
+    expect(demo).not.toBeNull();
+    expect(demo!.kind).toBe('fedb_frames');
+    // Every NEW tranche entry ships unreviewed — guards against an accidental
+    // promotion to verified:true (which would suppress the "Unreviewed" chip).
+    expect(demo!.verified).toBe(false);
+
+    const frames = getCuratedDemoFrames(name);
+    expect(frames).not.toBeNull();
+    expect(frames!.length).toBe(2);
+    expect(frames![0]!.endsWith('/0.jpg')).toBe(true);
+    expect(frames![1]!.endsWith('/1.jpg')).toBe(true);
+    expect(frames!.every((u) => u.startsWith('https://'))).toBe(true);
+
+    // The typed verified accessor agrees with the entry — the screen reads this.
+    expect(getCuratedDemoVerified(name)).toBe(false);
+  };
+
+  // (a)-eligible: curated keys that are aliases NOT covered by the default
+  // FEDB_SLUGS name index, so resolveDemoFrames + resolveDemo BOTH miss and the
+  // curated fallback is the sole source — i.e. exactly the screen's fallback
+  // path, identical to the short-name + tranche #2/#3 miss cases above.
+  const NEW_TRANCHE18_MISS_KEYS = ['Worlds Greatest Stretch (Dynamic)'] as const;
+
+  test.each(NEW_TRANCHE18_MISS_KEYS)(
+    '"%s" misses the default resolvers but resolves via the curated map',
+    (name) => {
+      // (a) The default frames/url resolvers both miss → the curated fallback is
+      // the ONLY thing that lights this exercise up.
+      expect(resolveDemoFrames({ name })).toBeNull();
+      expect(resolveDemo({ name })).toBeNull();
+      // (b)+(c)+(d): the curated entry is an unreviewed ordered HTTPS frame pair.
+      expectCuratedFedbFramePair(name);
+    },
+  );
+
+  // INDEX-backed: a representative slice across the tranche's sections (band/chain
+  // compounds, kettlebell, sled/strongman, plyometric, stretch). These DO resolve
+  // via the default name index, so we do NOT assert the resolvers miss (that would
+  // be false); we instead pin that the curated entry is present and correct, and
+  // that the default frames index also covers them (a redundant-but-correct second
+  // source).
+  const NEW_TRANCHE18_INDEXED_KEYS = [
+    'Bench Press with Bands',
+    'Deadlift with Chains',
+    'Sumo Deadlift with Bands',
+    'Double Kettlebell Jerk',
+    'Kettlebell Seesaw Press',
+    'Sled Drag (Harness)',
+    'Rickshaw Deadlift',
+    'Front Box Jump',
+    'Weighted Jump Squat',
+    'Seated Calf Stretch',
+    'Standing Lateral Stretch',
+    'Inchworm',
+  ] as const;
+
+  test.each(NEW_TRANCHE18_INDEXED_KEYS)(
+    '"%s" resolves to an unreviewed curated fedb_frames pair (default name index also covers it)',
+    (name) => {
+      // (b)+(c)+(d): the curated entry is locked exactly as for the miss keys.
+      expectCuratedFedbFramePair(name);
+      // These names ARE in the default FEDB_SLUGS name index, so resolveDemoFrames
+      // resolves them directly too. Pin that fact (rather than skipping silently)
+      // so this case documents WHY the (a) miss-assertion is intentionally absent
+      // — and so a future rename that knocks the name out of the index is caught.
+      const indexFrames = resolveDemoFrames({ name });
+      expect(indexFrames).not.toBeNull();
+      expect(indexFrames!.length).toBe(2);
+      expect(indexFrames![0]!.endsWith('/0.jpg')).toBe(true);
+      expect(indexFrames![1]!.endsWith('/1.jpg')).toBe(true);
+      // resolveDemo (curated YouTube watch-URL map) still misses — these are
+      // frame-only catalogue movements, not grandfathered YouTube entries.
+      expect(resolveDemo({ name })).toBeNull();
+    },
+  );
+});
+
 // ── Screen render test: the "Unreviewed" chip ────────────────────────────────
 
 function renderScreen() {
