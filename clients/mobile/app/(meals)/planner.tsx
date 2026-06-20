@@ -21,7 +21,7 @@ import { withAlpha } from '@/theme/utils';
 import { getErrorMessage } from '@/utils/validation';
 import { shadows } from '@/theme/shadows';
 import { spacing, borderRadius } from '@/theme/spacing';
-import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
+import { Skeleton, EmptyState, CtaButton, GlassCard } from '@/components/ui';
 // Per-meal accent stripes use canonical Aurora theme accent hexes (module scope
 // can't read the hook): amber / emerald / purple / cyan from '@/theme/colors'.
 const MEAL_COLORS: Record<string,string> = { breakfast:'#FFB300', lunch:'#10B981', dinner:'#7C4DFF', snack:'#00D4AA' };
@@ -202,14 +202,21 @@ export default function MealPlannerScreen() {
                     </View>
                 ):(
                     <View>
-                        <View style={[s.summaryRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
-                            {[{l:'CALORIES',v:Math.round(plan.meals.reduce((a:number,m:any)=>a+(m.macros?.calories||0),0)),u:'kcal',c:colors.accent.coral},{l:'PROTEIN',v:Math.round(plan.meals.reduce((a:number,m:any)=>a+(m.macros?.protein||0),0)),u:'g',c:colors.accent.emerald},{l:'HYDRATION',v:(plan.hydrationTargetMl/1000).toFixed(1),u:'L',c:colors.accent.cyan}].map((m)=>(
-                                <View key={m.l} style={{alignItems:'center',flex:1}}>
-                                    <Text style={[typography.statMedium,{color:m.c,fontSize:26,lineHeight:32}]}>{m.v}</Text>
-                                    <Text style={[typography.overline,{color:colors.text.secondary,fontSize:9,letterSpacing:1,marginTop:4}]}>{m.l}</Text>
-                                </View>
-                            ))}
-                        </View>
+                        {/* Loaded-plan stat summary — the static Aurora dark-glass
+                            surface (GlassCard owns radius+hairline+clip+blur; the
+                            inner row keeps the flex layout + padding). The
+                            CALORIES/PROTEIN/HYDRATION columns and their reduce()
+                            macro math are unchanged. */}
+                        <GlassCard radius={14} style={{ marginBottom: 8 }}>
+                            <View style={s.summaryRow}>
+                                {[{l:'CALORIES',v:Math.round(plan.meals.reduce((a:number,m:any)=>a+(m.macros?.calories||0),0)),u:'kcal',c:colors.accent.coral},{l:'PROTEIN',v:Math.round(plan.meals.reduce((a:number,m:any)=>a+(m.macros?.protein||0),0)),u:'g',c:colors.accent.emerald},{l:'HYDRATION',v:(plan.hydrationTargetMl/1000).toFixed(1),u:'L',c:colors.accent.cyan}].map((m)=>(
+                                    <View key={m.l} style={{alignItems:'center',flex:1}}>
+                                        <Text style={[typography.statMedium,{color:m.c,fontSize:26,lineHeight:32}]}>{m.v}</Text>
+                                        <Text style={[typography.overline,{color:colors.text.secondary,fontSize:9,letterSpacing:1,marginTop:4}]}>{m.l}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </GlassCard>
                         <Text style={[typography.overline,{color:colors.text.secondary,marginVertical:16}]}>TIMELINE</Text>
                         {plan.meals.map((meal:any,idx:number)=>{
                             const mKey:string = ((meal.label||'snack') as string).toLowerCase().split(' ')[0]??'snack';
@@ -276,7 +283,9 @@ const s = StyleSheet.create({
     aiBadge:{flexDirection:'row',alignItems:'center',paddingHorizontal:10,paddingVertical:5,borderRadius:999,borderWidth:1},
     emptyState:{alignItems:'center',justifyContent:'center',marginTop:40},
     emptyIcon:{width:100,height:100,borderRadius:50,alignItems:'center',justifyContent:'center'},
-    summaryRow:{flexDirection:'row',padding:16,borderRadius:14,borderWidth:1,marginBottom:8},
+    // Inner stat-row layout for the loaded-plan GlassCard (the glass surface —
+    // radius / hairline / clip / blur / marginBottom — is owned by GlassCard).
+    summaryRow:{flexDirection:'row',padding:16},
     mealItem:{flexDirection:'row',marginBottom:16}, timeLeft:{width:56,alignItems:'center',paddingTop:14},
     timeline:{width:2,flex:1,marginVertical:4},
     mealCard:{flex:1,flexDirection:'row',alignItems:'center',padding:10,borderRadius:14,borderWidth:1,overflow:'hidden'},

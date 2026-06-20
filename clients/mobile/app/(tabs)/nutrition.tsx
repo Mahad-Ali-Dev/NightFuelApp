@@ -14,7 +14,6 @@ import { getMealLogs, getFastingLogs } from '@/api/meals';
 import { getToday as getTodayProgress } from '@/api/progress';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CircularProgress } from '@/components/ui/CircularProgress';
-import { Card } from '@/components/ui/Card';
 import { Skeleton, EmptyState, GlassCard } from '@/components/ui';
 import { format } from 'date-fns';
 import { withAlpha } from '@/theme/utils';
@@ -148,16 +147,16 @@ export default function NutritionHubScreen() {
 
                 {/* Macro Dashboard */}
                 {macroLoading ? (
-                    <Card variant="glass" style={styles.macroDashboard}>
+                    <GlassCard radius={borderRadius.xl} style={styles.macroDashboard}>
                         <Skeleton width={180} height={180} radius={borderRadius.full} style={{ marginBottom: 30 }} />
                         <View style={styles.macroGrid}>
                             {[0, 1, 2].map((i) => (
                                 <Skeleton key={i} width="100%" height={28} radius={borderRadius.md} />
                             ))}
                         </View>
-                    </Card>
+                    </GlassCard>
                 ) : macroError ? (
-                    <Card variant="glass" style={styles.macroDashboard}>
+                    <GlassCard radius={borderRadius.xl} style={styles.macroDashboard}>
                         <EmptyState
                             icon="cloud-offline-outline"
                             title="Couldn't load your macros"
@@ -165,9 +164,9 @@ export default function NutritionHubScreen() {
                             actionLabel="Retry"
                             onAction={refetchAll}
                         />
-                    </Card>
+                    </GlassCard>
                 ) : (
-                <Card variant="glass" style={styles.macroDashboard}>
+                <GlassCard radius={borderRadius.xl} style={styles.macroDashboard}>
                     {/* SVG has no implicit text → expose the ring to TalkBack /
                         VoiceOver as a single labelled summary. accessible groups
                         the numeral + label so they aren't read as two fragments. */}
@@ -206,7 +205,7 @@ export default function NutritionHubScreen() {
                         <MacroItem label="Carbs" current={stats.consumed.carbs} target={stats.target.carbs} color={colors.accent.cyan} unit="g" />
                         <MacroItem label="Fat" current={stats.consumed.fat} target={stats.target.fat} color={colors.accent.amber} unit="g" />
                     </View>
-                </Card>
+                </GlassCard>
                 )}
 
                 {/* Quick Tools */}

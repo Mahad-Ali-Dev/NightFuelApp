@@ -56,6 +56,12 @@ const mockLogsRefetch = jest.fn();
 const mockProgressRefetch = jest.fn();
 const mockFastingRefetch = jest.fn();
 
+// Stable router.push spy (mock-prefixed so the hoisted expo-router factory may
+// close over it). A single shared fn — NOT a fresh jest.fn() per useRouter()
+// call — so a test can press the header history button and assert the exact
+// route it pushed. beforeEach clears it alongside the refetch spies.
+const mockRouterPush = jest.fn();
+
 type QState = { data?: unknown; isLoading?: boolean; isError?: boolean };
 
 // Mutated by each test BEFORE renderScreen(). Defaults = everything resolved &
@@ -111,7 +117,7 @@ jest.mock('@/api/progress', () => ({ getToday: jest.fn() }));
 jest.mock('../../app/(tabs)/_layout', () => ({ TAB_BAR_H: 64 }));
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ push: mockRouterPush, replace: jest.fn(), back: jest.fn() }),
 }));
 
 // Decorative glyphs; stub to plain text (avoids expo-font → expo-asset).
@@ -154,6 +160,7 @@ describe('NutritionHubScreen — loading / error / empty / filled states', () =>
     mockLogsRefetch.mockClear();
     mockProgressRefetch.mockClear();
     mockFastingRefetch.mockClear();
+    mockRouterPush.mockClear();
     resetQueryState();
   });
 
@@ -255,5 +262,69 @@ describe('NutritionHubScreen — loading / error / empty / filled states', () =>
     expect(screen.getByText('VIEW TIMER')).toBeTruthy();
     expect(screen.queryByText('IDLE')).toBeNull();
     expect(screen.queryByText('START FAST')).toBeNull();
+  });
+
+  // ── GlassCard-conversion guard rails (Aurora coverage item) ────────────────
+  // These pin the two states the Card→GlassCard conversion of the macro
+  // dashboard touched — loading and loaded — plus the header history-button
+  // route. They assert the screen still mounts and behaves identically AFTER the
+  // three `Card variant="glass"` macro surfaces became `<GlassCard>`; the macro
+  // dashboard's loading Skeletons and its populated ring must each render under
+  // the new primitive, and nothing about the history button changed.
+
+  // LOADING render: the macro card mounts (Skeletons present), now inside a
+  // GlassCard rather than a Card. Complements test (a) by also asserting the
+  // surrounding screen chrome (header date overline, "Quick Tools") renders.
+  test('GlassCard conversion — macro LOADING still mounts the dashboard + screen chrome', () => {
+    mockState['daily-progress'] = { data: undefined, isLoading: true, isError: false };
+    mockState['meal-logs'] = { data: undefined, isLoading: true, isError: false };
+    renderScreen();
+
+    // Loading branch (now a GlassCard) renders the ring + 3 bar Skeletons.
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThanOrEqual(4);
+    // Static screen chrome around the converted card is unaffected.
+    expect(screen.getByText('Nutrition')).toBeTruthy();
+    expect(screen.getByText('Quick Tools')).toBeTruthy();
+    // Not the loaded ring or the error copy.
+    expect(screen.queryByText('KCAL LEFT')).toBeNull();
+    expect(screen.queryByText("Couldn't load your macros")).toBeNull();
+  });
+
+  // LOADED render: all four queries resolved → the populated macro ring renders
+  // inside the converted GlassCard (KCAL LEFT + the three macro labels), with no
+  // loading Skeletons and no error copy. Proves the loaded branch's GlassCard
+  // wraps the same children as the old Card.
+  test('GlassCard conversion — fully LOADED renders the macro ring + macros (no skeletons, no error)', () => {
+    mockState['daily-progress'] = {
+      data: { caloriesTarget: 2400, proteinTarget: 180, carbsTarget: 200, fatTarget: 70 },
+      isLoading: false,
+      isError: false,
+    };
+    mockState['meal-logs'] = {
+      data: [{ totalCalories: 600, totalProtein: 40, totalCarbs: 50, totalFat: 20 }],
+      isLoading: false,
+      isError: false,
+    };
+    renderScreen();
+
+    // The loaded macro card (now a GlassCard) shows the ring summary + macros.
+    expect(screen.getByText('KCAL LEFT')).toBeTruthy();
+    expect(screen.getByText('PROTEIN')).toBeTruthy();
+    expect(screen.getByText('CARBS')).toBeTruthy();
+    expect(screen.getByText('FAT')).toBeTruthy();
+    // Mutually exclusive with the loading and error branches.
+    expect(screen.queryByTestId('skeleton')).toBeNull();
+    expect(screen.queryByText("Couldn't load your macros")).toBeNull();
+  });
+
+  // The header history button (accessibilityLabel "View log") still routes to
+  // '/(meals)/log-meal'. The conversion left this TouchableOpacity and its
+  // onPress untouched; this pins the exact route via the stable router.push spy.
+  test('history button routes to /(meals)/log-meal (onPress unchanged by the conversion)', () => {
+    renderScreen();
+
+    fireEvent.press(screen.getByLabelText('View log'));
+    expect(mockRouterPush).toHaveBeenCalledTimes(1);
+    expect(mockRouterPush).toHaveBeenCalledWith('/(meals)/log-meal');
   });
 });

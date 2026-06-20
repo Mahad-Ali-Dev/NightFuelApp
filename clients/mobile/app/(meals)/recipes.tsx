@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { spacing, borderRadius } from '@/theme/spacing';
-import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
+import { Skeleton, EmptyState, CtaButton, GlassCard } from '@/components/ui';
 // Bundled Aurora dark-glass placeholder so imageless recipes never depend on an
 // external host (no 404 / rate-limit). '@/*' resolves to ./src, so the asset is
 // required by relative path (same pattern as the exercise fallbacks).
@@ -125,11 +125,13 @@ export default function RecipesScreen() {
                                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close" style={[s.closeBtn,{backgroundColor:'rgba(0,0,0,0.5)',top:insets.top+12}]} onPress={()=>setDetailId(null)}><Ionicons name="close" size={24} color="#FFF" /></TouchableOpacity>
                                 <View style={s.modalBody}>
                                     <Text style={[typography.display,{color:colors.text.primary,fontSize:26,fontWeight:'900'}]}>{detailQ.data.title}</Text>
-                                    <View style={{flexDirection:'row',justifyContent:'space-around',paddingVertical:20}}>
-                                        {[{v:detailQ.data.prepTimeMins,l:'PREP'},{v:detailQ.data.cookTimeMins,l:'COOK'},{v:Math.round(detailQ.data.calories),l:'KCAL'}].map((m)=>(
-                                            <View key={m.l} style={{alignItems:'center'}}><Text style={[typography.statSmall,{color:colors.text.primary}]}>{m.v}</Text><Text style={[typography.overline,{color:colors.text.secondary,marginTop:4}]}>{m.l}</Text></View>
-                                        ))}
-                                    </View>
+                                    <GlassCard radius={borderRadius.lg} style={{marginBottom:8}}>
+                                        <View style={{flexDirection:'row',justifyContent:'space-around',paddingVertical:20}}>
+                                            {[{v:detailQ.data.prepTimeMins,l:'PREP'},{v:detailQ.data.cookTimeMins,l:'COOK'},{v:Math.round(detailQ.data.calories),l:'KCAL'}].map((m)=>(
+                                                <View key={m.l} style={{alignItems:'center'}}><Text style={[typography.statSmall,{color:colors.text.primary}]}>{m.v}</Text><Text style={[typography.overline,{color:colors.text.secondary,marginTop:4}]}>{m.l}</Text></View>
+                                            ))}
+                                        </View>
+                                    </GlassCard>
                                     <Text style={[typography.h3,{color:colors.text.primary,borderBottomWidth:1,borderBottomColor:colors.border.default,paddingBottom:8,marginTop:8}]}>Ingredients</Text>
                                     {detailQ.data.ingredients.map((ing:any,i:number)=>(
                                         <View key={i} style={{flexDirection:'row',alignItems:'center',marginTop:12}}>

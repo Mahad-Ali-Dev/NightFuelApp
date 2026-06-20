@@ -11,7 +11,7 @@ import { logMeal, searchFoods, getFoodById, getRecipe, FoodItem } from '@/api/me
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { borderRadius } from '@/theme/spacing';
-import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
+import { GlassCard, Skeleton, EmptyState, CtaButton } from '@/components/ui';
 import { getErrorMessage } from '@/utils/validation';
 const MT = [
     { id:'BREAKFAST', label:'Breakfast', img:require('../../assets/images/meal-breakfast.png'), color:'#F59E0B' },
@@ -102,11 +102,13 @@ export default function LogMealScreen() {
                     ))}
                 </ScrollView>
                 <Text style={[typography.overline,{color:colors.text.secondary,paddingHorizontal:20,marginBottom:12}]}>ADD FOOD</Text>
-                <View style={[s.searchBox,{backgroundColor:colors.background.secondary,borderColor:colors.border.default,marginHorizontal:20,marginBottom:12}]}>
-                    <Ionicons name="search" size={18} color={colors.text.tertiary} />
-                    <TextInput style={[s.searchIn,{color:colors.text.primary}]} placeholder="Search food..." placeholderTextColor={colors.text.tertiary} value={sq} onChangeText={setSq} />
-                    {sq.length>0&&<TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Clear" onPress={()=>setSq('')}><Ionicons name="close-circle" size={18} color={colors.text.tertiary} /></TouchableOpacity>}
-                </View>
+                <GlassCard radius={14} style={{ marginHorizontal:20, marginBottom:12 }}>
+                    <View style={s.searchBox}>
+                        <Ionicons name="search" size={18} color={colors.text.tertiary} />
+                        <TextInput style={[s.searchIn,{color:colors.text.primary}]} placeholder="Search food..." placeholderTextColor={colors.text.tertiary} value={sq} onChangeText={setSq} />
+                        {sq.length>0&&<TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Clear" onPress={()=>setSq('')}><Ionicons name="close-circle" size={18} color={colors.text.tertiary} /></TouchableOpacity>}
+                    </View>
+                </GlassCard>
                 {searchQ.isLoading&&(
                     <View style={{marginHorizontal:20,marginBottom:16}}>
                         {[0,1,2].map((i)=>(
@@ -159,14 +161,16 @@ export default function LogMealScreen() {
                                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Delete" style={{paddingLeft:8}} onPress={()=>setPlate(plate.filter((_,i)=>i!==idx))}><Ionicons name="trash-outline" size={18} color={colors.accent.coral} /></TouchableOpacity>
                             </View>
                         ))}
-                        <View style={[s.macroRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
-                            {[{l:'KCAL',v:Math.round(totals.calories),c:colors.accent.coral},{l:'PROTEIN',v:Math.round(totals.protein),c:colors.accent.emerald},{l:'CARBS',v:Math.round(totals.carbs),c:colors.accent.cyan},{l:'FAT',v:Math.round(totals.fat),c:colors.accent.amber}].map((m)=>(
-                                <View key={m.l} style={{alignItems:'center',flex:1}}>
-                                    <Text style={[typography.statSmall,{color:m.c,fontSize:20,lineHeight:26}]}>{m.v}</Text>
-                                    <Text style={[typography.overline,{color:colors.text.secondary,fontSize:9,letterSpacing:1,marginTop:2}]}>{m.l}</Text>
-                                </View>
-                            ))}
-                        </View>
+                        <GlassCard radius={14} style={{ marginTop:10, marginBottom:24 }}>
+                            <View style={s.macroRow}>
+                                {[{l:'KCAL',v:Math.round(totals.calories),c:colors.accent.coral},{l:'PROTEIN',v:Math.round(totals.protein),c:colors.accent.emerald},{l:'CARBS',v:Math.round(totals.carbs),c:colors.accent.cyan},{l:'FAT',v:Math.round(totals.fat),c:colors.accent.amber}].map((m)=>(
+                                    <View key={m.l} style={{alignItems:'center',flex:1}}>
+                                        <Text style={[typography.statSmall,{color:m.c,fontSize:20,lineHeight:26}]}>{m.v}</Text>
+                                        <Text style={[typography.overline,{color:colors.text.secondary,fontSize:9,letterSpacing:1,marginTop:2}]}>{m.l}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </GlassCard>
                     </View>
                 )}
                 {plate.length===0&&sq.length===0&&(
@@ -197,13 +201,13 @@ const s = StyleSheet.create({
     iconBtn:{width:40,height:40,borderRadius:12,borderWidth:1,alignItems:'center',justifyContent:'center'},
     mealCard:{width:88,height:96,borderRadius:14,overflow:'hidden',justifyContent:'flex-end',padding:10,borderWidth:1,borderColor:'transparent'},
     mealChk:{position:'absolute',top:6,right:6,width:20,height:20,borderRadius:10,alignItems:'center',justifyContent:'center'},
-    searchBox:{flexDirection:'row',alignItems:'center',borderWidth:1,borderRadius:14,paddingHorizontal:14,height:48,gap:8},
+    searchBox:{flexDirection:'row',alignItems:'center',paddingHorizontal:14,height:48,gap:8},
     searchIn:{flex:1,fontSize:15},
     searchResult:{flexDirection:'row',alignItems:'center',padding:14,marginBottom:8,borderRadius:12,borderWidth:1},
     plateRow:{flexDirection:'row',alignItems:'center',padding:12,marginBottom:10,borderRadius:14,borderWidth:1,overflow:'hidden'},
     plateAccent:{width:4,alignSelf:'stretch',borderRadius:2},
     qtyRow:{flexDirection:'row',alignItems:'center'},
-    macroRow:{flexDirection:'row',borderWidth:1,borderRadius:14,padding:14,marginTop:10,marginBottom:24},
+    macroRow:{flexDirection:'row',padding:14},
     footer:{position:'absolute',bottom:0,left:0,right:0,paddingHorizontal:20},
     logBtnWrap:{height:60,borderRadius:30},
 });

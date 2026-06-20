@@ -855,6 +855,57 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Atlas Stone Trainer': 'Atlas_Stone_Trainer',
   'Axle Deadlift': 'Axle_Deadlift',
   'Car Deadlift': 'Car_Deadlift',
+
+  // ── Widened FEDB-backed tranche #12 (data-only, zero new fetch) ──────────────
+  // A further slice of distinct catalogue movements. Every KEY below is NEW —
+  // absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries above (tranches #1-#11),
+  // YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos() admits each one as
+  // kind:'fedb_frames', verified:false (precedence: an already-set name is skipped).
+  // Every slug VALUE was machine-verified (scripts derivation) to be present in BOTH
+  // FEDB_SLUGS (exerciseDemos.ts) AND __tests__/fixtures/fedb-catalog-slugs.json (the
+  // shipped 873-slug catalogue), and each is a fresh slug dir not already referenced
+  // by an earlier tranche (nor by DEMO_FRAMES) — so every entry resolves to an ordered
+  // 2-frame [0.jpg, 1.jpg] HTTPS pair via fedbPair() with NO new HTTP call. Strictly
+  // additive: the kind:'youtube'-only sync guard (scripts/check-demo-maps-in-sync.js)
+  // and pendingHumanReviewIds.json (YouTube ids only) are both untouched, so
+  // check-demo-maps-in-sync stays green. A 200-ok URL is NOT a movement review, so
+  // nothing here is verified:true — that remains a human-gated step.
+
+  // Chest / push-up variants
+  'Reverse Band Bench Press': 'Reverse_Band_Bench_Press',
+  'Clock Push-Up': 'Clock_Push-Up',
+  'Close-Grip Push-Up off of a Dumbbell': 'Close-Grip_Push-Up_off_of_a_Dumbbell',
+  'Push-Ups - Close Triceps Position': 'Push-Ups_-_Close_Triceps_Position',
+  // Back / rows / vertical pulls
+  'Alternating Renegade Row': 'Alternating_Renegade_Row',
+  'Alternating Kettlebell Row': 'Alternating_Kettlebell_Row',
+  'Kneeling Single-Arm High Pulley Row': 'Kneeling_Single-Arm_High_Pulley_Row',
+  'Mixed Grip Chin': 'Mixed_Grip_Chin',
+  'Band Assisted Pull-Up': 'Band_Assisted_Pull-Up',
+  'Band Pull Apart': 'Band_Pull_Apart',
+  // Shoulders / delts / traps
+  'One-Arm Incline Lateral Raise': 'One-Arm_Incline_Lateral_Raise',
+  'Dumbbell Lying One-Arm Rear Lateral Raise': 'Dumbbell_Lying_One-Arm_Rear_Lateral_Raise',
+  'Leverage Shrug': 'Leverage_Shrug',
+  'Clean Shrug': 'Clean_Shrug',
+  // Biceps
+  'Finger Curls': 'Finger_Curls',
+  'Incline Inner Biceps Curl': 'Incline_Inner_Biceps_Curl',
+  'Standing One-Arm Dumbbell Curl Over Incline Bench': 'Standing_One-Arm_Dumbbell_Curl_Over_Incline_Bench',
+  // Triceps
+  'Band Skull Crusher': 'Band_Skull_Crusher',
+  'One Arm Pronated Dumbbell Triceps Extension': 'One_Arm_Pronated_Dumbbell_Triceps_Extension',
+  'One Arm Supinated Dumbbell Triceps Extension': 'One_Arm_Supinated_Dumbbell_Triceps_Extension',
+  // Legs / squats / posterior chain / glutes
+  'Barbell Squat To A Bench': 'Barbell_Squat_To_A_Bench',
+  'Front Barbell Squat To A Bench': 'Front_Barbell_Squat_To_A_Bench',
+  'One-Legged Cable Kickback': 'One-Legged_Cable_Kickback',
+  'Kettlebell One-Legged Deadlift': 'Kettlebell_One-Legged_Deadlift',
+  // Core / obliques
+  'Dumbbell Side Bend': 'Dumbbell_Side_Bend',
+  'Rope Crunch': 'Rope_Crunch',
+  'Plate Twist': 'Plate_Twist',
+  'Side Jackknife': 'Side_Jackknife',
 };
 
 /**

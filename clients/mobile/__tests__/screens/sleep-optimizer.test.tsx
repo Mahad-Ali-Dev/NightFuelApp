@@ -25,11 +25,22 @@
  * `computeLightPlan` throw, and the screen's try/catch must degrade to the same
  * EmptyState as the no-shift branch (no crash, no windows).
  *
+ * A final test pins the hero + primary action (loaded state): the Sleep-Quality
+ * hero GlassCard renders ("Sleep Quality Score" / "QUALITY" / the resolved score
+ * + summary), and pressing the screen's only primary button — "Log Rest Block",
+ * a PURPLE (colors.gradients.purple) gradient, deliberately NOT a coral CtaButton
+ * — fires the UNCHANGED `onPress={() => logMutation.mutate()}` exactly once. (The
+ * purple button is left verbatim: recoloring it coral / wrapping it in CtaButton
+ * would manufacture a brand CTA where the screen has none, so the source is not
+ * modified by the coverage item this suite belongs to.)
+ *
  * Mock conventions mirror the sibling screen suites (circadian / shift-detail /
  * dashboard.shiftTransition): `@tanstack/react-query` is stubbed and branches on
  * queryKey[0] (a mutable `mockShiftState` holder drives ['current-shift'] and a
- * mutable `mockAnalyticsState` drives ['sleep-analytics']); useMutation /
- * useQueryClient are benign no-ops (the Log-Rest-Block mutation isn't exercised);
+ * mutable `mockAnalyticsState` drives ['sleep-analytics']); useMutation returns a
+ * hoisted `mockMutate` (so the Log-Rest-Block press can be asserted) with
+ * `isPending:false` so the button renders its label; useQueryClient is a benign
+ * no-op (cache invalidation isn't exercised);
  * `@/api/sleep` + `@/api/shifts` are plain jest.fns so the real axios client
  * (via @/api/client) never loads (the queryFns are never invoked — useQuery is
  * fully stubbed); expo-router, safe-area insets, @expo/vector-icons,
@@ -49,6 +60,13 @@ type QueryState = { data: any; isLoading: boolean; isError: boolean };
 const mockAnalyticsState: QueryState = { data: {}, isLoading: false, isError: false };
 const mockShiftState: QueryState = { data: null, isLoading: false, isError: false };
 const mockAnalyticsRefetch = jest.fn();
+// The "Log Rest Block" primary action calls `logMutation.mutate()` on press.
+// `mutate` is a hoisted `mock`-prefixed holder (the prefix lets
+// babel-plugin-jest-hoist allow the react-query factory to close over it) so the
+// log-button test can assert the screen's UNCHANGED `onPress={() =>
+// logMutation.mutate()}` fires exactly once. `isPending` stays false so the
+// button renders its "Log Rest Block" label (not the ActivityIndicator).
+const mockMutate = jest.fn();
 
 // react-query: branch on queryKey[0]. ['sleep-analytics'] reads the analytics
 // holder (resolved by default so the screen is past its own top-level skeleton/
@@ -76,7 +94,7 @@ jest.mock('@tanstack/react-query', () => ({
     }
     return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
   },
-  useMutation: () => ({ mutate: jest.fn(), isPending: false, isError: false, reset: jest.fn() }),
+  useMutation: () => ({ mutate: mockMutate, isPending: false, isError: false, reset: jest.fn() }),
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 
@@ -118,7 +136,7 @@ jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
-import { render, screen } from '@testing-library/react-native';
+import { render, fireEvent, screen } from '@testing-library/react-native';
 import {
   ThemeContext,
   getThemeColors,
@@ -207,6 +225,7 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
     mockShiftState.isLoading = false;
     mockShiftState.isError = false;
     mockAnalyticsRefetch.mockClear();
+    mockMutate.mockClear();
   });
 
   // ── Test A: shift loading → Skeleton fallback only ────────────────────────
@@ -316,5 +335,41 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
     expect(screen.queryByText('Avoid Light')).toBeNull();
     expect(screen.queryByText('icon:sunny')).toBeNull();
     expect(screen.queryByText('icon:glasses-outline')).toBeNull();
+  });
+
+  // ── Hero GlassCard + Log-Rest-Block handler (loaded state) ────────────────
+  // The screen's only primary action is "Log Rest Block" — a PURPLE
+  // (colors.gradients.purple) gradient button, NOT a coral CtaButton. It is left
+  // verbatim (recoloring it coral / wrapping it in CtaButton would manufacture a
+  // brand CTA where none exists), so this test pins it as-is: the hero GlassCard
+  // renders in the loaded state and pressing the button fires the UNCHANGED
+  // `onPress={() => logMutation.mutate()}` exactly once.
+  test('loaded: the hero GlassCard renders and pressing "Log Rest Block" calls logMutation.mutate once', () => {
+    // analytics resolved (beforeEach) → past the top-level skeleton/error, loaded.
+    mockAnalyticsState.data = { qualityScore: 80, summary: 'Looking good.' };
+
+    renderScreen();
+
+    // The hero Sleep-Quality GlassCard mounted: its "Sleep Quality Score"
+    // overline, the "QUALITY" ring caption, and the resolved score (80) all
+    // render (the CircularProgress ring inside is decorative; the score TEXT is
+    // the stable marker). The summary copy from analytics renders too.
+    expect(screen.getByText('Sleep Quality Score')).toBeTruthy();
+    expect(screen.getByText('QUALITY')).toBeTruthy();
+    expect(screen.getByText('80')).toBeTruthy();
+    expect(screen.getByText('Looking good.')).toBeTruthy();
+
+    // The primary action — queried by its (stable) accessibilityLabel "Log rest
+    // block" — and its visible "Log Rest Block" label both present (isPending is
+    // forced false, so the label renders rather than the ActivityIndicator).
+    const logBtn = screen.getByRole('button', { name: 'Log rest block' });
+    expect(screen.getByText('Log Rest Block')).toBeTruthy();
+
+    // Pressing it fires the screen's UNCHANGED handler exactly once. The mutation
+    // is a no-op stub here (its real mutationFn → log() API is mocked away); we
+    // assert only that the press is wired to logMutation.mutate — the load-bearing
+    // behaviour — with no stray extra invocation.
+    fireEvent.press(logBtn);
+    expect(mockMutate).toHaveBeenCalledTimes(1);
   });
 });

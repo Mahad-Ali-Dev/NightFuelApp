@@ -13,7 +13,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getGroceryList, GroceryItem } from '@/api/meals';
 import { LinearGradient } from 'expo-linear-gradient';
 import { shadows } from '@/theme/shadows';
-import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
+import { Skeleton, EmptyState, CtaButton, GlassCard } from '@/components/ui';
 
 const { width } = Dimensions.get('window');
 const STORAGE_KEY = '@nightfuel_weekly_grocery';
@@ -263,19 +263,21 @@ export default function GroceryListScreen() {
                 ) : (
                     <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
                         {/* Summary bar */}
-                        <View style={[styles.summaryBar, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Ionicons name="basket" size={20} color={colors.accent.emerald} />
-                                <Text style={[typography.body, { color: colors.text.primary, fontWeight: 'bold', marginLeft: 8 }]}>
-                                    {customItems.length + planItems.length} items
-                                </Text>
+                        <GlassCard radius={14} style={{ marginBottom: 20 }}>
+                            <View style={styles.summaryBar}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons name="basket" size={20} color={colors.accent.emerald} />
+                                    <Text style={[typography.body, { color: colors.text.primary, fontWeight: 'bold', marginLeft: 8 }]}>
+                                        {customItems.length + planItems.length} items
+                                    </Text>
+                                </View>
+                                {checkedCount > 0 && (
+                                    <Text style={[typography.caption, { color: colors.accent.emerald }]}>
+                                        {checkedCount} done
+                                    </Text>
+                                )}
                             </View>
-                            {checkedCount > 0 && (
-                                <Text style={[typography.caption, { color: colors.accent.emerald }]}>
-                                    {checkedCount} done
-                                </Text>
-                            )}
-                        </View>
+                        </GlassCard>
 
                         {/* Custom items grouped by category */}
                         {Object.keys(groupedCustom).map((category) => (
@@ -388,7 +390,8 @@ export default function GroceryListScreen() {
                 >
                     <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowAddModal(false)}>
                         <TouchableOpacity activeOpacity={1} onPress={() => { /* prevent close */ }}>
-                            <View style={[styles.modalContent, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                            <GlassCard radius={24} style={{ borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
+                              <View style={styles.modalContent}>
                                 {/* Modal Header */}
                                 <View style={styles.modalHeader}>
                                     <Text style={[typography.h3, { color: colors.text.primary }]}>
@@ -464,7 +467,8 @@ export default function GroceryListScreen() {
                                     onPress={handleAddItem}
                                     style={styles.addButtonWrap}
                                 />
-                            </View>
+                              </View>
+                            </GlassCard>
                         </TouchableOpacity>
                     </TouchableOpacity>
                 </KeyboardAvoidingView>
@@ -479,14 +483,14 @@ const styles = StyleSheet.create({
     backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     iconBtn: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     modalClose: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-    summaryBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 20 },
+    summaryBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14 },
     categorySection: { marginBottom: 24 },
     itemStack: { borderWidth: 1, overflow: 'hidden' },
     itemRow: { flexDirection: 'row', alignItems: 'center', padding: 16 },
     fab: { position: 'absolute', bottom: 30, right: 20, width: 64, height: 64, borderRadius: 32, overflow: 'hidden' },
     fabGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-    modalContent: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, borderWidth: 1, borderBottomWidth: 0 },
+    modalContent: { padding: 24 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     input: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 16, height: 48, fontSize: 15 },
     categoryChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8 },

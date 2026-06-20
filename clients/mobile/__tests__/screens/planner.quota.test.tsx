@@ -55,11 +55,14 @@ jest.mock('expo-router', () => ({
 }));
 
 // The metered plan-service generate call — a mutable spy each test wires. The
-// other two plan endpoints the screen imports are inert: getPlanByDate resolves
-// null (404 → empty state so the "GENERATE AI PLAN" CTA renders), ratePlan noop.
+// other two plan endpoints the screen imports are inert: getPlanByDate is a
+// mutable spy that DEFAULTS to resolving null (404 → empty state so the "GENERATE
+// AI PLAN" CTA renders, the entry point for the quota suite); the loaded-plan
+// GlassCard test below overrides it to resolve a real plan. ratePlan is a noop.
 const mockGenerate = jest.fn();
+const mockGetPlan = jest.fn();
 jest.mock('@/api/plans', () => ({
-  getPlanByDate: jest.fn(() => Promise.resolve(null)),
+  getPlanByDate: (...args: any[]) => mockGetPlan(...args),
   generatePlan: (...args: any[]) => mockGenerate(...args),
   ratePlan: jest.fn(() => Promise.resolve({})),
 }));
@@ -111,6 +114,16 @@ jest.mock('expo-image', () => {
   return { Image: (props: any) => <RN.View {...props} /> };
 });
 
+// The loaded-plan summary card is the real <GlassCard>, which wraps a
+// SafeBlurView (expo-blur native). Replace SafeBlurView with a passthrough View —
+// forwarding props/children — so the REAL GlassCard mounts cleanly and its
+// CALORIES/PROTEIN/HYDRATION stat columns are queryable, without loading the
+// native blur module. Same convention as community.feed.states.test.tsx.
+jest.mock('@/components/SafeBlurView', () => {
+  const RN = require('react-native');
+  return { SafeBlurView: ({ children, ...props }: any) => <RN.View {...props}>{children}</RN.View> };
+});
+
 // expo-status-bar renders nothing in the tree under test.
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
@@ -157,6 +170,10 @@ let alertSpy: jest.SpyInstance;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Default the date-keyed plan fetch to "no plan" (404 → empty state) so the
+  // quota suite's entry point is the "GENERATE AI PLAN" CTA. A test that needs a
+  // LOADED plan (the summary-GlassCard render check) overrides this per-test.
+  mockGetPlan.mockResolvedValue(null);
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 });
 
@@ -304,5 +321,55 @@ describe('MealPlannerScreen — daily-AI-limit upgrade state', () => {
 
     await waitFor(() => expect(screen.getByText('Generation Failed')).toBeTruthy());
     expect(screen.queryByText('Daily AI limit reached')).toBeNull();
+  });
+});
+
+// ── Aurora coverage: the loaded-plan summary card is a GlassCard surface ───────
+//
+// Beyond the quota states above, the planner's loaded-plan view wraps its
+// CALORIES / PROTEIN / HYDRATION stat block in the Aurora <GlassCard> primitive
+// (the dark-glass surface that owns radius + hairline + clip + the SafeBlurView
+// fill) rather than an inline token-filled View. Under jest, expo-blur's
+// SafeBlurView renders its children straight through, so a successful mount of
+// that subtree means the three stat labels (which live ONLY inside the GlassCard)
+// are queryable. This is a render-presence assertion — it does NOT touch the
+// quota logic, resolvePlan, the CTA handlers, or any copy.
+describe('MealPlannerScreen — loaded-plan summary GlassCard', () => {
+  it('renders the CALORIES/PROTEIN/HYDRATION stat block inside the plan-summary GlassCard when a plan is loaded', async () => {
+    // A loaded plan (the normalized shape getPlanByDate returns): two meals so the
+    // summary reduce() sums real macros, plus a hydration target.
+    mockGetPlan.mockResolvedValue({
+      id: 'plan-1',
+      userId: 'u1',
+      date: format(new Date(), 'yyyy-MM-dd'),
+      meals: [
+        { time: '08:00', label: 'Breakfast', description: 'Eggs', macros: { protein: 30, carbs: 20, fat: 10, calories: 320 } },
+        { time: '13:00', label: 'Lunch', description: 'Chicken bowl', macros: { protein: 45, carbs: 60, fat: 18, calories: 600 } },
+      ],
+      supplements: [],
+      hydrationTargetMl: 2500,
+      createdAt: '2026-06-20T00:00:00.000Z',
+    });
+
+    renderScreen();
+
+    // The summary GlassCard's stat block is present — these three labels live
+    // ONLY inside that card, so their presence proves the GlassCard subtree
+    // mounted with its CALORIES/PROTEIN/HYDRATION columns.
+    await waitFor(() => expect(screen.getByText('CALORIES')).toBeTruthy());
+    expect(screen.getByText('PROTEIN')).toBeTruthy();
+    expect(screen.getByText('HYDRATION')).toBeTruthy();
+
+    // The reduce() macro math is unchanged by the GlassCard wrap: calories sum
+    // 320 + 600 = 920; protein 30 + 45 = 75; hydration 2500 ml → 2.5 L.
+    expect(screen.getByText('920')).toBeTruthy();
+    expect(screen.getByText('75')).toBeTruthy();
+    expect(screen.getByText('2.5')).toBeTruthy();
+
+    // The empty-state generate CTA is gone (a plan is loaded), and neither failure
+    // card is present on the clean loaded path.
+    expect(screen.queryByText('GENERATE AI PLAN')).toBeNull();
+    expect(screen.queryByText('Daily AI limit reached')).toBeNull();
+    expect(screen.queryByText('Generation Failed')).toBeNull();
   });
 });

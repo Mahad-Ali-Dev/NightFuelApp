@@ -12,7 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import { borderRadius } from '@/theme/spacing';
-import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
+import { Skeleton, EmptyState, CtaButton, GlassCard } from '@/components/ui';
 // Bundled Aurora dark-glass placeholder so the browse tiles never depend on an
 // external host (no 404 / rate-limit). '@/*' resolves to ./src, so the asset is
 // required by relative path (same pattern as the exercise fallbacks). The
@@ -161,17 +161,19 @@ export default function FoodEncyclopediaScreen() {
                                         );
                                     })}
                                 </View>
-                                <View style={[s.sumCard,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
-                                    <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold',marginBottom:12}]}>Nutrition Summary</Text>
-                                    <View style={{flexDirection:'row',justifyContent:'space-between'}}>
-                                        {[{l:'Calories',v:Math.round(servingModal.calories*parseFloat(qty||'0')),u:'kcal',c:colors.accent.coral},{l:'Protein',v:Math.round(servingModal.protein*parseFloat(qty||'0')),u:'g',c:colors.accent.emerald},{l:'Carbs',v:Math.round(servingModal.carbs*parseFloat(qty||'0')),u:'g',c:colors.accent.cyan},{l:'Fat',v:Math.round(servingModal.fat*parseFloat(qty||'0')),u:'g',c:colors.accent.amber}].map((m)=>(
-                                            <View key={m.l} style={{alignItems:'center',flex:1}}>
-                                                <Text style={[typography.statSmall,{color:m.c,fontSize:18,lineHeight:24}]}>{m.v}</Text>
-                                                <Text style={[typography.overline,{color:colors.text.secondary,fontSize:9,letterSpacing:1,marginTop:2}]}>{m.u}</Text>
-                                            </View>
-                                        ))}
+                                <GlassCard radius={14} style={s.sumCard}>
+                                    <View style={s.sumInner}>
+                                        <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold',marginBottom:12}]}>Nutrition Summary</Text>
+                                        <View style={{flexDirection:'row',justifyContent:'space-between'}}>
+                                            {[{l:'Calories',v:Math.round(servingModal.calories*parseFloat(qty||'0')),u:'kcal',c:colors.accent.coral},{l:'Protein',v:Math.round(servingModal.protein*parseFloat(qty||'0')),u:'g',c:colors.accent.emerald},{l:'Carbs',v:Math.round(servingModal.carbs*parseFloat(qty||'0')),u:'g',c:colors.accent.cyan},{l:'Fat',v:Math.round(servingModal.fat*parseFloat(qty||'0')),u:'g',c:colors.accent.amber}].map((m)=>(
+                                                <View key={m.l} style={{alignItems:'center',flex:1}}>
+                                                    <Text style={[typography.statSmall,{color:m.c,fontSize:18,lineHeight:24}]}>{m.v}</Text>
+                                                    <Text style={[typography.overline,{color:colors.text.secondary,fontSize:9,letterSpacing:1,marginTop:2}]}>{m.u}</Text>
+                                                </View>
+                                            ))}
+                                        </View>
                                     </View>
-                                </View>
+                                </GlassCard>
                                 <CtaButton
                                     label="LOG MEAL"
                                     size="lg"
@@ -201,6 +203,6 @@ const s = StyleSheet.create({
     modalClose:{width:36,height:36,borderRadius:18,borderWidth:1,alignItems:'center',justifyContent:'center'},
     numInput:{height:56,paddingHorizontal:16,fontSize:20,fontWeight:'bold',borderRadius:14,borderWidth:1,marginBottom:8},
     typeBtn:{flex:1,minWidth:'45%',height:44,borderRadius:22,borderWidth:1,alignItems:'center',justifyContent:'center'},
-    sumCard:{borderRadius:14,borderWidth:1,padding:20,marginBottom:8},
+    sumCard:{marginBottom:8}, sumInner:{padding:20},
     logBtnWrap:{height:60,borderRadius:30},
 });

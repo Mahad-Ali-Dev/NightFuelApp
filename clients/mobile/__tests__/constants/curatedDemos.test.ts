@@ -1283,3 +1283,168 @@ describe('CURATED_DEMOS — FEDB-backed tranche #11 (data-only additions)', () =
     expect(all.length - withoutTranche11.length).toBe(tranche11.size);
   });
 });
+
+// ---------------------------------------------------------------------------
+// (o) The "tranche #12" FEDB-backed additions resolve to a real catalogue slug
+// ---------------------------------------------------------------------------
+//
+// Same contract as tranches #4/#5/#7/#8/#9/#10/#11: DATA-ONLY additions that reuse
+// FEDB slugs already shipped in exerciseDemos.ts (no new HTTP fetch). This block
+// pins EVERY new tranche-#12 key explicitly AND cross-checks that the slug
+// directory both frames point at is a real entry in the 873-slug FEDB catalogue
+// fixture (__tests__/fixtures/fedb-catalog-slugs.json) — i.e. the demo will
+// actually load, not 404. Each ships kind:'fedb_frames', verified:false. The
+// block also asserts every key is unique across the WHOLE CURATED_DEMOS map,
+// that getPendingHumanReviewIds() is UNCHANGED (no new YouTube ids), and that
+// the CURATED_DEMOS count grew by exactly the tranche size.
+describe('CURATED_DEMOS — FEDB-backed tranche #12 (data-only additions)', () => {
+  // The COMPLETE set of display-name keys added in tranche #12 of curatedDemos.ts
+  // (every key is asserted, not just a representative slice).
+  const TRANCHE_12_NAMES = [
+    // Chest / push-up variants
+    'Reverse Band Bench Press',
+    'Clock Push-Up',
+    'Close-Grip Push-Up off of a Dumbbell',
+    'Push-Ups - Close Triceps Position',
+    // Back / rows / vertical pulls
+    'Alternating Renegade Row',
+    'Alternating Kettlebell Row',
+    'Kneeling Single-Arm High Pulley Row',
+    'Mixed Grip Chin',
+    'Band Assisted Pull-Up',
+    'Band Pull Apart',
+    // Shoulders / delts / traps
+    'One-Arm Incline Lateral Raise',
+    'Dumbbell Lying One-Arm Rear Lateral Raise',
+    'Leverage Shrug',
+    'Clean Shrug',
+    // Biceps
+    'Finger Curls',
+    'Incline Inner Biceps Curl',
+    'Standing One-Arm Dumbbell Curl Over Incline Bench',
+    // Triceps
+    'Band Skull Crusher',
+    'One Arm Pronated Dumbbell Triceps Extension',
+    'One Arm Supinated Dumbbell Triceps Extension',
+    // Legs / squats / posterior chain / glutes
+    'Barbell Squat To A Bench',
+    'Front Barbell Squat To A Bench',
+    'One-Legged Cable Kickback',
+    'Kettlebell One-Legged Deadlift',
+    // Core / obliques
+    'Dumbbell Side Bend',
+    'Rope Crunch',
+    'Plate Twist',
+    'Side Jackknife',
+  ] as const;
+
+  // Per-frame shape with the slug dir captured (group 1) and frame index (group 2).
+  const FEDB_FRAME_RE =
+    /^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\/main\/exercises\/([^/]+)\/([01])\.jpg$/;
+
+  // The authoritative 873-slug FEDB catalogue fixture — every tranche-#12 slug
+  // MUST be present here (and therefore in FEDB_SLUGS, the same set), so the
+  // frame URLs resolve to real images.
+  const CATALOG_SLUGS: ReadonlySet<string> = (() => {
+    const fixturePath = path.resolve(__dirname, '../fixtures/fedb-catalog-slugs.json');
+    const raw = fs.readFileSync(fixturePath, 'utf8');
+    const parsed = JSON.parse(raw) as Array<{ slug: string }>;
+    expect(Array.isArray(parsed)).toBe(true);
+    return new Set(parsed.map((e) => e.slug));
+  })();
+
+  test('the catalogue fixture loaded a healthy set of slugs', () => {
+    // Sanity: guards against a refactor that empties the fixture and makes the
+    // membership checks below vacuously pass.
+    expect(CATALOG_SLUGS.size).toBeGreaterThanOrEqual(800);
+  });
+
+  test('every tranche-#12 key is a NEW distinct CURATED_DEMOS entry (unique across the whole map)', () => {
+    // The tranche is internally distinct…
+    expect(new Set(TRANCHE_12_NAMES).size).toBe(TRANCHE_12_NAMES.length);
+    // …and every name actually resolved into the frozen map (none dropped by the
+    // never-overwrite precedence rule because of a stale collision).
+    for (const name of TRANCHE_12_NAMES) {
+      expect(Object.prototype.hasOwnProperty.call(CURATED_DEMOS, name)).toBe(true);
+    }
+    // Each tranche-#12 key appears EXACTLY once among the map's keys — i.e. it is
+    // unique across the entire CURATED_DEMOS map, not just within the tranche.
+    const allKeys = Object.keys(CURATED_DEMOS);
+    for (const name of TRANCHE_12_NAMES) {
+      expect(allKeys.filter((k) => k === name).length).toBe(1);
+    }
+  });
+
+  test.each(TRANCHE_12_NAMES)('getCuratedDemo(%j) is a verified:false kind:"fedb_frames" entry', (name) => {
+    const demo = getCuratedDemo(name);
+    expect(demo).not.toBeNull();
+    expect(demo!.kind).toBe('fedb_frames');
+    expect(demo!.verified).toBe(false);
+    expect(demo!.url).toMatch(FEDB_FRAME_PAIR_RE);
+  });
+
+  test.each(TRANCHE_12_NAMES)(
+    'getCuratedDemoFrames(%j) is an ordered 2-element HTTPS [0.jpg, 1.jpg] pair on a real catalogue slug',
+    (name) => {
+      const frames = getCuratedDemoFrames(name);
+      expect(frames).not.toBeNull();
+      expect(frames!.length).toBe(2);
+
+      const m0 = FEDB_FRAME_RE.exec(frames![0]!);
+      const m1 = FEDB_FRAME_RE.exec(frames![1]!);
+      expect(m0).not.toBeNull();
+      expect(m1).not.toBeNull();
+      // Both HTTPS (ATS-safe).
+      expect(frames![0]!.startsWith('https://')).toBe(true);
+      expect(frames![1]!.startsWith('https://')).toBe(true);
+      // Ordered start (0) → end (1).
+      expect(m0![2]).toBe('0');
+      expect(m1![2]).toBe('1');
+      // A genuine start/end pair: both frames share ONE slug directory…
+      expect(m0![1]).toBe(m1![1]);
+      // …and that slug is a real entry in the shipped FEDB catalogue (so the
+      // demo loads rather than 404s).
+      expect(CATALOG_SLUGS.has(m0![1]!)).toBe(true);
+    },
+  );
+
+  test.each(TRANCHE_12_NAMES)('getCuratedDemoVerified(%j) === false (renders the "Unreviewed" chip)', (name) => {
+    expect(getCuratedDemoVerified(name)).toBe(false);
+  });
+
+  test('no tranche-#12 name is a YouTube/gif entry (each is a pure fedb_frames addition)', () => {
+    for (const name of TRANCHE_12_NAMES) {
+      const demo = getCuratedDemo(name);
+      expect(demo).not.toBeNull();
+      // Never silently landed on a grandfathered YouTube key or a gif alias.
+      expect(demo!.kind).toBe('fedb_frames');
+      expect(getCuratedDemoFrames(name)).not.toBeNull();
+    }
+  });
+
+  test('tranche #12 leaves getPendingHumanReviewIds() unchanged (no new YouTube ids)', () => {
+    // tranche #12 is fedb_frames-only, so the human-review YouTube id set must be
+    // exactly the on-disk mirror — none of the new names contribute a YouTube id.
+    const ids = getPendingHumanReviewIds();
+    const pendingJsonPath = path.resolve(__dirname, '../../src/constants/pendingHumanReviewIds.json');
+    const mirror = JSON.parse(fs.readFileSync(pendingJsonPath, 'utf8')) as string[];
+    expect([...ids].sort()).toEqual([...mirror].sort());
+    // And not one tranche-#12 name resolves to a youtube kind (belt + braces).
+    for (const name of TRANCHE_12_NAMES) {
+      expect(getCuratedDemo(name)!.kind).not.toBe('youtube');
+    }
+  });
+
+  test('CURATED_DEMOS count grew by exactly the tranche-#12 size over the pre-#12 baseline', () => {
+    // The pre-#12 map = everything EXCEPT the tranche-#12 keys. Removing them must
+    // drop the count by exactly TRANCHE_12_NAMES.length, proving the tranche added
+    // that many brand-new entries (no silent collisions / drops).
+    const all = Object.keys(CURATED_DEMOS);
+    const tranche12 = new Set<string>(TRANCHE_12_NAMES);
+    const withoutTranche12 = all.filter((k) => !tranche12.has(k));
+    expect(all.length - withoutTranche12.length).toBe(TRANCHE_12_NAMES.length);
+    // Every tranche-#12 key was genuinely present to be removed (no typo'd key
+    // that silently never existed in the map).
+    expect(all.length - withoutTranche12.length).toBe(tranche12.size);
+  });
+});
