@@ -319,3 +319,77 @@ describe('decision-engine input-bounds — out-of-range / over-long / unknown-fi
         expect(res.statusCode).toBe(200);
     });
 });
+
+// ── F19 production fix: the app's onboarding goals + a weightless user no longer 400 ──
+// Live logs showed compute-params 400-ing on `goal: 'GENERAL_HEALTH' | 'ENERGY'`
+// (real onboarding goals the enum omitted) and on `currentWeightKg: null` (a user
+// who hasn't entered weight). Both are now accepted; these lock that.
+describe('decision-engine F19 — app onboarding goals + nullable weight are accepted (no 400)', () => {
+    let app: FastifyInstance;
+
+    beforeAll(async () => {
+        app = buildApp();
+        await app.ready();
+    });
+    afterAll(async () => {
+        await app.close();
+    });
+
+    it.each(['GENERAL_HEALTH', 'ENERGY'] as const)(
+        'accepts goal=%s (200) and behaves like MAINTENANCE (no macro override)',
+        async (goal) => {
+            const res = await app.inject({
+                method: 'POST',
+                url: '/v1/decision/compute-params',
+                payload: { ...VALID_INPUT, goal },
+            });
+            expect(res.statusCode).toBe(200);
+            // Neither goal carries a FAT_LOSS/MUSCLE_GAIN override, so the output is
+            // identical to the same input on MAINTENANCE.
+            const maintenance = new DecisionEngine().computeParams({ ...VALID_INPUT, goal: 'MAINTENANCE' });
+            expect(res.json()).toEqual(maintenance);
+        },
+    );
+
+    it('accepts a null currentWeightKg (200) — the weightless-user path that used to 400', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/v1/decision/compute-params',
+            payload: { ...VALID_INPUT, userState: { ...VALID_INPUT.userState, currentWeightKg: null } },
+        });
+        expect(res.statusCode).toBe(200);
+    });
+
+    it('MUSCLE_GAIN with null weight skips the bodyweight protein floor (no NaN) — protein stays the target', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/v1/decision/compute-params',
+            payload: {
+                ...VALID_INPUT,
+                goal: 'MUSCLE_GAIN' as const,
+                userState: { ...VALID_INPUT.userState, currentWeightKg: null, currentProteinTargetG: 180 },
+            },
+        });
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        expect(Number.isFinite(body.protein_g)).toBe(true);
+        // With no weight, the bodyweight floor (weight*2.2) is skipped -> protein is
+        // just the rounded incoming target (180), never NaN.
+        expect(body.protein_g).toBe(180);
+    });
+
+    it('a present weight still applies the MUSCLE_GAIN bodyweight protein floor (unchanged behaviour)', async () => {
+        // currentProteinTargetG 100 < weight(90)*2.2 = 198 -> the floor lifts it to 198.
+        const res = await app.inject({
+            method: 'POST',
+            url: '/v1/decision/compute-params',
+            payload: {
+                ...VALID_INPUT,
+                goal: 'MUSCLE_GAIN' as const,
+                userState: { ...VALID_INPUT.userState, currentWeightKg: 90, currentProteinTargetG: 100 },
+            },
+        });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().protein_g).toBe(198);
+    });
+});

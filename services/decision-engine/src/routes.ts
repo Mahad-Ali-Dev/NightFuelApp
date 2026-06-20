@@ -45,7 +45,10 @@ const MAX_CYCLE_WEEK = 520; // ~10 years of weekly cycles — an effectively-unr
 const userStateSchema = z
     .object({
         userId: z.string().min(1).max(MAX_USER_ID_LEN),
-        currentWeightKg: z.number().positive().max(MAX_WEIGHT_KG),
+        // Nullable: a user who has not set their weight sends null. Bounds still
+        // apply when a value IS present; null/undefined pass (the engine guards
+        // every weight-derived calc). Previously this 400-ed every weightless user.
+        currentWeightKg: z.number().positive().max(MAX_WEIGHT_KG).nullish(),
         targetWeightKg: z.number().positive().max(MAX_WEIGHT_KG).optional(),
         last7DaysAdherence: z.number().min(0).max(1), // 0 to 1 (now enforced)
         avgSleepQuality: z.number().min(1).max(10), // 1 to 10 (now enforced)
@@ -62,7 +65,10 @@ const userStateSchema = z
 const boundedDecisionInputSchema = z
     .object({
         userState: userStateSchema,
-        goal: z.enum(['FAT_LOSS', 'MUSCLE_GAIN', 'MAINTENANCE', 'STRENGTH', 'ENDURANCE']),
+        // Must match engine.ts's goal enum — GENERAL_HEALTH and ENERGY are real
+        // mobile onboarding goals (behave like MAINTENANCE in the engine). Omitting
+        // them here 400-ed every user who picked those two goals.
+        goal: z.enum(['FAT_LOSS', 'MUSCLE_GAIN', 'MAINTENANCE', 'STRENGTH', 'ENDURANCE', 'GENERAL_HEALTH', 'ENERGY']),
         planHistory: z
             .array(
                 z

@@ -2,7 +2,10 @@ import { z } from 'zod';
 
 export const UserStateSchema = z.object({
     userId: z.string(),
-    currentWeightKg: z.number(),
+    // Nullable: a user who has not entered their weight yet sends null. The engine
+    // guards every weight-derived calculation against null/undefined (see the
+    // MUSCLE_GAIN protein floor below) so the request succeeds instead of 400-ing.
+    currentWeightKg: z.number().nullish(),
     targetWeightKg: z.number().optional(),
     last7DaysAdherence: z.number(), // 0 to 1
     avgSleepQuality: z.number(), // 1 to 10
@@ -15,7 +18,11 @@ export const UserStateSchema = z.object({
 
 export const DecisionInputSchema = z.object({
     userState: UserStateSchema,
-    goal: z.enum(['FAT_LOSS', 'MUSCLE_GAIN', 'MAINTENANCE', 'STRENGTH', 'ENDURANCE']),
+    // GENERAL_HEALTH and ENERGY are first-class onboarding goals in the mobile app
+    // (see app/(onboarding)/shift-type.tsx). They carry no FAT_LOSS/MUSCLE_GAIN-style
+    // macro override, so they behave like MAINTENANCE (fall through the goal switch
+    // below). Omitting them here previously 400-ed every user on those two goals.
+    goal: z.enum(['FAT_LOSS', 'MUSCLE_GAIN', 'MAINTENANCE', 'STRENGTH', 'ENDURANCE', 'GENERAL_HEALTH', 'ENERGY']),
     planHistory: z.array(z.object({
         date: z.string(),
         adherence: z.boolean(),
@@ -95,8 +102,14 @@ export class DecisionEngine {
         if (goal === 'FAT_LOSS') {
             // Logic for fat loss goals
         } else if (goal === 'MUSCLE_GAIN') {
-            protein_g = Math.max(protein_g, userState.currentWeightKg * 2.2); // Ensure high protein
+            // Weight is nullable (a user may not have entered it). Only apply the
+            // bodyweight-scaled protein floor when we actually have a weight;
+            // otherwise keep the existing protein target.
+            if (userState.currentWeightKg != null) {
+                protein_g = Math.max(protein_g, userState.currentWeightKg * 2.2); // Ensure high protein
+            }
         }
+        // GENERAL_HEALTH, ENERGY, MAINTENANCE, STRENGTH, ENDURANCE: no macro override.
 
         return {
             calories: Math.round(calories),

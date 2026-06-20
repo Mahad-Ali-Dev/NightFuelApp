@@ -140,9 +140,13 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/library/:id', {
 });
 
 // GET /v1/exercises?limit=20
+// limit cap is 500 to match GET /v1/exercises/library above (same underlying
+// ExerciseDB-backed data). The mobile activity heatmap calls getRecent(200)
+// -> /v1/exercises?limit=200; a 100 cap here rejected that with a 400 on every
+// load while the library route (max 500) accepted the identical 200.
 fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises', {
     onRequest: [(fastify as any).authenticate],
-    schema: { querystring: z.object({ limit: z.coerce.number().int().min(1).max(100).default(20) }) },
+    schema: { querystring: z.object({ limit: z.coerce.number().int().min(1).max(500).default(20) }) },
 }, async (request, reply) => {
     try {
         const userId = (request.user as any).userId ?? (request.user as any).id;
