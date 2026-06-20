@@ -137,3 +137,194 @@ describe('SetLogger — accessibility', () => {
     expect(screen.getByRole('button', { name: 'Log set' })).toBeTruthy();
   });
 });
+
+/**
+ * The STRICT-UPGRADE affordances — opt-in via `allowEdit` / `allowAddRemove`
+ * (the routed workout screen passes both; the modal keeps the read-only default
+ * covered by the suites above). Each path — initial log, in-row edit, add —
+ * still flows through the SAME finite + reps>=1 / weight>=0 guard.
+ */
+describe('SetLogger — STRICT-UPGRADE affordances (allowEdit + allowAddRemove)', () => {
+  function renderUpgraded(extra?: Partial<React.ComponentProps<typeof SetLogger>>) {
+    const onLogSet = jest.fn();
+    render(
+      <SetLogger
+        exerciseName="Bench Press"
+        targetSets={3}
+        onLogSet={onLogSet}
+        allowEdit
+        allowAddRemove
+        {...extra}
+      />,
+    );
+    return { onLogSet };
+  }
+
+  // (a) per-set DONE control is a Pressable queryable by role=button +
+  //     accessibilityState; pressing it toggles `completed`.
+  test('a logged set exposes a DONE Pressable (role=button) whose accessibilityState toggles', () => {
+    renderUpgraded();
+
+    // Log one set so a logged row (with its DONE control) exists.
+    type('Reps', '10');
+    type('Weight in kilograms', '40');
+    pressLog();
+
+    const done = screen.getByRole('button', { name: 'Mark set 1 done' });
+    // Seeded/just-logged set starts completed.
+    expect(done.props.accessibilityState.selected).toBe(true);
+
+    // Toggle it off, then on again — the flag follows the press.
+    fireEvent.press(done);
+    expect(screen.getByRole('button', { name: 'Mark set 1 done' }).props.accessibilityState.selected).toBe(false);
+    fireEvent.press(done);
+    expect(screen.getByRole('button', { name: 'Mark set 1 done' }).props.accessibilityState.selected).toBe(true);
+  });
+
+  // The displayed N / M count derives from the completed flags (state-ground-
+  // truth): toggling a logged set off drops the count.
+  test('the displayed count derives from the completed flags', () => {
+    renderUpgraded();
+
+    type('Reps', '10');
+    type('Weight in kilograms', '40');
+    pressLog();
+    expect(screen.getByText('1 / 3 sets')).toBeTruthy();
+
+    fireEvent.press(screen.getByRole('button', { name: 'Mark set 1 done' }));
+    expect(screen.getByText('0 / 3 sets')).toBeTruthy();
+  });
+
+  // (b) an already-logged set's KG and REPS edit in place and re-commit through
+  //     the guard, updating the displayed value.
+  test('an already-logged set edits KG / REPS in place through the guard', () => {
+    renderUpgraded();
+
+    type('Reps', '10');
+    type('Weight in kilograms', '40');
+    pressLog();
+
+    const repsInput = screen.getByLabelText('Reps for set 1');
+    const weightInput = screen.getByLabelText('Weight in kilograms for set 1');
+    expect(repsInput.props.value).toBe('10');
+    expect(weightInput.props.value).toBe('40');
+
+    // A valid edit re-commits and updates the displayed value.
+    fireEvent.changeText(repsInput, '12');
+    fireEvent.changeText(weightInput, '45');
+    expect(screen.getByLabelText('Reps for set 1').props.value).toBe('12');
+    expect(screen.getByLabelText('Weight in kilograms for set 1').props.value).toBe('45');
+  });
+
+  // (d) the in-row edit path rejects junk: the row value is left untouched.
+  test.each(['abc', '0', '-3'])(
+    'in-row edit rejects reps="%s": the row value is unchanged',
+    (badReps) => {
+      renderUpgraded();
+
+      type('Reps', '10');
+      type('Weight in kilograms', '40');
+      pressLog();
+
+      fireEvent.changeText(screen.getByLabelText('Reps for set 1'), badReps);
+      // Junk rejected by the guard → the committed value snaps back to 10.
+      expect(screen.getByLabelText('Reps for set 1').props.value).toBe('10');
+    },
+  );
+
+  test('in-row edit rejects a negative weight: the row value is unchanged', () => {
+    renderUpgraded();
+
+    type('Reps', '10');
+    type('Weight in kilograms', '40');
+    pressLog();
+
+    fireEvent.changeText(screen.getByLabelText('Weight in kilograms for set 1'), '-20');
+    expect(screen.getByLabelText('Weight in kilograms for set 1').props.value).toBe('40');
+  });
+
+  // (c) ADD adds an editable row (the guarded input-row "Log set" is the add
+  //     path; allowAddRemove keeps it visible past target), REMOVE removes one.
+  test('add appends an editable row and remove deletes one', () => {
+    renderUpgraded();
+
+    // Add set 1.
+    type('Reps', '10');
+    type('Weight in kilograms', '40');
+    pressLog();
+    expect(screen.getByText('Set 1')).toBeTruthy();
+    expect(screen.getByLabelText('Reps for set 1')).toBeTruthy();
+
+    // Add set 2.
+    type('Reps', '8');
+    type('Weight in kilograms', '42');
+    pressLog();
+    expect(screen.getByText('Set 2')).toBeTruthy();
+
+    // Remove set 1 → the remaining row re-numbers to "Set 1" and there is no
+    // longer a "Set 2".
+    fireEvent.press(screen.getByRole('button', { name: 'Remove set 1' }));
+    expect(screen.getByText('Set 1')).toBeTruthy();
+    expect(screen.queryByText('Set 2')).toBeNull();
+  });
+
+  // (d) the add path rejects junk: no onLogSet, no row.
+  test.each(['abc', '0', '-3'])(
+    'add rejects reps="%s": no onLogSet call, no logged row',
+    (badReps) => {
+      const { onLogSet } = renderUpgraded();
+
+      type('Reps', badReps);
+      type('Weight in kilograms', '40');
+      pressLog();
+
+      expect(onLogSet).not.toHaveBeenCalled();
+      expect(screen.queryByText('Set 1')).toBeNull();
+    },
+  );
+
+  // (e) seeding with initialSets opens at N / M with NO onLogSet, and later edits
+  //     are not reset by a re-render (lazy one-time seed).
+  test('initialSets of 2 completed + targetSets=3 shows "2 / 3" with no onLogSet, and edits persist', () => {
+    const onLogSet = jest.fn();
+    const { rerender } = render(
+      <SetLogger
+        exerciseName="Squat"
+        targetSets={3}
+        onLogSet={onLogSet}
+        allowEdit
+        allowAddRemove
+        initialSets={[
+          { reps: 8, weightKg: 60, completed: true },
+          { reps: 8, weightKg: 60, completed: true },
+        ]}
+      />,
+    );
+
+    // Opens at 2 / 3 (not 0 / 3) and the seed did NOT fire onLogSet.
+    expect(screen.getByText('2 / 3 sets')).toBeTruthy();
+    expect(onLogSet).not.toHaveBeenCalled();
+
+    // Edit set 1's reps, then force a parent re-render with the SAME initialSets:
+    // the lazy seed must NOT re-run and clobber the edit.
+    fireEvent.changeText(screen.getByLabelText('Reps for set 1'), '12');
+    expect(screen.getByLabelText('Reps for set 1').props.value).toBe('12');
+
+    rerender(
+      <SetLogger
+        exerciseName="Squat"
+        targetSets={3}
+        onLogSet={onLogSet}
+        allowEdit
+        allowAddRemove
+        initialSets={[
+          { reps: 8, weightKg: 60, completed: true },
+          { reps: 8, weightKg: 60, completed: true },
+        ]}
+      />,
+    );
+
+    // The edited value survives the re-render (seed is one-time).
+    expect(screen.getByLabelText('Reps for set 1').props.value).toBe('12');
+  });
+});

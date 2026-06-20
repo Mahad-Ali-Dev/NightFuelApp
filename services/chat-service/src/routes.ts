@@ -199,19 +199,29 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
     });
 
     // ── Legacy: get message history by conversation ID ──────────────────────
+    // limit is clamped int 1..100 (default 50) so a hostile/non-finite ?limit=
+    // (e.g. 99999999, -1, NaN) yields a clean 400 BEFORE the bounded value is
+    // forwarded to getMessageHistory's Prisma `take` — never an unbounded read.
     fastify.get('/v1/chat/:conversationId/history', {
-        schema: { params: z.object({ conversationId: z.string().uuid() }) },
+        schema: {
+            params: z.object({ conversationId: z.string().uuid() }),
+            querystring: z.object({ limit: z.coerce.number().int().min(1).max(100).default(50) }),
+        },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const { conversationId } = request.params as any;
-        return reply.send(await chatService.getMessageHistory(conversationId));
+        const { limit } = request.query as any;
+        return reply.send(await chatService.getMessageHistory(conversationId, limit));
     });
 
     // ── Ria AI Chat Routes ───────────────────────────────────────────────────
 
     // GET /v1/chat/ria/messages — load persistent Ria conversation history
+    // limit is clamped int 1..100 (default 50) so a hostile/non-finite ?limit=
+    // (e.g. 99999999, 0, -1, NaN) is rejected with a clean 400 BEFORE the value
+    // reaches getRiaMessages -> Prisma `take`, closing the unbounded-read path.
     fastify.get('/v1/chat/ria/messages', {
-        schema: { querystring: z.object({ limit: z.coerce.number().default(50) }) },
+        schema: { querystring: z.object({ limit: z.coerce.number().int().min(1).max(100).default(50) }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;

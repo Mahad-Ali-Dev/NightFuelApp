@@ -1079,6 +1079,56 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   // Stationary cardio / mobility
   'Recumbent Bike': 'Recumbent_Bike',
   'Arm Circles': 'Arm_Circles',
+
+  // ── Widened FEDB-backed tranche #17 (data-only, zero new fetch) ──────────────
+  // A further slice of distinct catalogue movements — this tranche leans into the
+  // floor-press, dumbbell/cable arm-isolation, pullover, leg-pull-in core and
+  // kettlebell accessory work the earlier tranches still under-covered. Every KEY
+  // below is NEW — absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries above
+  // (tranches #1-#16), YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos()
+  // admits each one as kind:'fedb_frames', verified:false (precedence: an
+  // already-set name is skipped). Every slug VALUE was machine-verified to be
+  // present in BOTH FEDB_SLUGS (exerciseDemos.ts) AND __tests__/fixtures/
+  // fedb-catalog-slugs.json (the shipped 873-slug catalogue), and each is a fresh
+  // slug dir not already referenced by an earlier tranche — so every entry resolves
+  // to an ordered 2-frame [0.jpg, 1.jpg] HTTPS pair via fedbPair() with NO new HTTP
+  // call. Strictly additive: the kind:'youtube'-only sync guard
+  // (scripts/check-demo-maps-in-sync.js) and pendingHumanReviewIds.json (YouTube
+  // ids only) are both untouched, so check-demo-maps-in-sync stays green. A 200-ok
+  // URL is NOT a movement review, so nothing here is verified:true — that remains a
+  // human-gated step.
+
+  // Chest / floor press & dumbbell-press variants
+  'Alternating Floor Press': 'Alternating_Floor_Press',
+  'One-Arm Floor Press': 'One_Arm_Floor_Press',
+  'Leg-Over Floor Press': 'Leg-Over_Floor_Press',
+  'Standing Palms-In Dumbbell Press': 'Standing_Palms-In_Dumbbell_Press',
+  // Shoulders / delts
+  'Dumbbell Raise': 'Dumbbell_Raise',
+  'One-Arm Side Laterals': 'One-Arm_Side_Laterals',
+  'Reverse Flyes With External Rotation': 'Reverse_Flyes_With_External_Rotation',
+  // Biceps / forearm supination
+  'Dumbbell Lying Supination': 'Dumbbell_Lying_Supination',
+  'Reverse Plate Curls': 'Reverse_Plate_Curls',
+  'Standing Inner-Biceps Curl': 'Standing_Inner-Biceps_Curl',
+  'Flexor Incline Dumbbell Curls': 'Flexor_Incline_Dumbbell_Curls',
+  // Triceps
+  'Standing Bent-Over One-Arm Dumbbell Triceps Extension': 'Standing_Bent-Over_One-Arm_Dumbbell_Triceps_Extension',
+  // Back / pullovers / rows / chins
+  'Wide-Grip Decline Barbell Pullover': 'Wide-Grip_Decline_Barbell_Pullover',
+  'Front Raise And Pullover': 'Front_Raise_And_Pullover',
+  'Middle Back Shrug': 'Middle_Back_Shrug',
+  'Side To Side Chins': 'Side_To_Side_Chins',
+  'Shotgun Row': 'Shotgun_Row',
+  'Lower Back Curl': 'Lower_Back_Curl',
+  // Core / abs — leg-pull-in family
+  'Frog Sit-Ups': 'Frog_Sit-Ups',
+  'Leg Pull-In': 'Leg_Pull-In',
+  'Flat Bench Leg Pull-In': 'Flat_Bench_Leg_Pull-In',
+  // Kettlebell accessory
+  'Kettlebell Figure 8': 'Kettlebell_Figure_8',
+  'Kettlebell Hang Clean': 'Kettlebell_Hang_Clean',
+  'One-Arm Kettlebell Floor Press': 'One-Arm_Kettlebell_Floor_Press',
 };
 
 /**

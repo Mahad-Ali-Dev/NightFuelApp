@@ -771,6 +771,23 @@ export default function ActiveWorkoutScreen() {
                                         <SetLogger
                                             exerciseName={ex.name}
                                             targetSets={ex.sets.length}
+                                            // Seed from the COMPLETED planned sets so a
+                                            // resumed session opens at N / M (not 0 / M)
+                                            // and the SetLogger count agrees with the
+                                            // header's `${completedCount}/${ex.sets.length}
+                                            // Sets Done`. Purely visual — initialSets does
+                                            // NOT call onLogSet, so handleEnd's volume
+                                            // (computed from ex.sets[].completed) still
+                                            // counts each restored set exactly once.
+                                            initialSets={ex.sets
+                                                .filter((s) => s.completed)
+                                                .map((s) => ({ reps: s.reps, weightKg: s.kg, completed: true }))}
+                                            // Routed-screen in-place affordances: per-set
+                                            // DONE toggle + editable KG/REPS + add/remove.
+                                            // The input-row add still flows through logSet
+                                            // (rest-trigger + ex.sets advance) unchanged.
+                                            allowEdit
+                                            allowAddRemove
                                             onLogSet={(data) => logSet(eIdx, data)}
                                         />
                                     </View>
@@ -927,15 +944,11 @@ const styles = StyleSheet.create({
     exTitleRow: { flexDirection: 'row', alignItems: 'center' },
     iconBox: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     exContent: { paddingHorizontal: 16, paddingBottom: 16 },
-    rowLabel: { flexDirection: 'row', marginBottom: 8, paddingHorizontal: 4, alignItems: 'center' },
-    label: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1 },
-    setRow: { flexDirection: 'row', gap: 10, alignItems: 'center', height: 48, marginBottom: 8 },
-    setNum: { width: 32, height: 32, borderRadius: 9999, alignItems: 'center', justifyContent: 'center' },
-    setNumText: { fontFamily: typo.statTiny.fontFamily, fontSize: 16, fontWeight: 'bold' },
-    setInput: { flex: 1, height: 40, borderRadius: 10, borderWidth: 1, textAlign: 'center', fontWeight: 'bold', fontSize: 16 },
-    checkBtn: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    removeSetBtn: { paddingLeft: 2, alignItems: 'center', justifyContent: 'center' },
-    addSetBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, minHeight: 44, borderStyle: 'dashed' as any, borderWidth: 1, borderRadius: 10, marginTop: 4 },
+    // The per-set entry rows (setRow/setNum/setInput/checkBtn/removeSetBtn/
+    // addSetBtn + their rowLabel/label header) used to live here when this screen
+    // owned an inline set grid. That entry surface is now the hardened
+    // <SetLogger/> (which carries its own styles), so those orphaned keys were
+    // removed — no dead StyleSheet entries left behind.
     modalOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
     countdownNum: { fontFamily: typo.statLarge.fontFamily, fontSize: 120, lineHeight: 130 },
     modalActions: { flexDirection: 'row', gap: 16, marginTop: 20, alignSelf: 'stretch' },

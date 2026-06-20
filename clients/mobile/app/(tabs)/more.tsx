@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-    View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch,
+    View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -22,6 +22,10 @@ type SettingItemType = {
     label: string;
     icon: string;
     route?: string;
+    // External link target (e.g. Help Center / Terms) opened via Linking.openURL.
+    // Mirrors the (settings)/index.tsx Support rows so both screens are honest:
+    // a row with a `url` is a real link, not a silent no-op.
+    url?: string;
     value?: string | boolean;
     isSwitch?: boolean;
 };
@@ -57,8 +61,8 @@ const SETTINGS_SECTIONS: { title: string; items: SettingItemType[] }[] = [
     {
         title: 'Support',
         items: [
-            { label: 'Help Center', icon: 'help-circle-outline' },
-            { label: 'Terms of Service', icon: 'document-text-outline' },
+            { label: 'Help Center', icon: 'help-circle-outline', url: 'https://zeitra.app/support' },
+            { label: 'Terms of Service', icon: 'document-text-outline', url: 'https://zeitra.app/terms' },
         ]
     }
 ];
@@ -141,18 +145,29 @@ export default function MoreScreen() {
                                 style={StyleSheet.absoluteFillObject}
                                 pointerEvents="none"
                             />
-                            {section.items.map((item, itemIdx) => (
+                            {section.items.map((item, itemIdx) => {
+                                // A row is genuinely actionless only when it has no
+                                // route, no external url, and is not a switch. Such a
+                                // row is rendered explicitly disabled (dimmed, no
+                                // chevron, accessibilityState.disabled) so the UI never
+                                // implies a tap target that does nothing.
+                                const isDisabled = !item.route && !item.url && !item.isSwitch;
+                                return (
                                 <TouchableOpacity
                                     key={itemIdx}
-                                    accessibilityRole={item.isSwitch ? undefined : 'button'}
+                                    accessibilityRole={item.isSwitch ? undefined : (item.url ? 'link' : 'button')}
                                     accessibilityLabel={item.isSwitch ? undefined : item.label}
+                                    accessibilityState={{ disabled: isDisabled }}
                                     style={[
                                         styles.settingItem,
                                         itemIdx !== section.items.length - 1 && { borderBottomColor: colors.border.default, borderBottomWidth: StyleSheet.hairlineWidth },
-                                        (!item.route && !item.isSwitch) && { opacity: 0.45 },
+                                        isDisabled && { opacity: 0.45 },
                                     ]}
-                                    onPress={() => item.route && router.push(item.route as any)}
-                                    disabled={!item.route && !item.isSwitch}
+                                    onPress={() => {
+                                        if (item.route) router.push(item.route as any);
+                                        else if (item.url) Linking.openURL(item.url);
+                                    }}
+                                    disabled={isDisabled}
                                     activeOpacity={0.7}
                                 >
                                     <View style={styles.itemLeft}>
@@ -175,12 +190,16 @@ export default function MoreScreen() {
                                         />
                                     ) : (
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            {item.value && <Text style={[typography.captionMedium, { color: colors.text.secondary, marginRight: spacing.sm }]} maxFontSizeMultiplier={1.4}>{item.value}</Text>}
-                                            <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} />
+                                            {item.value ? <Text style={[typography.captionMedium, { color: colors.text.secondary, marginRight: spacing.sm }]} maxFontSizeMultiplier={1.4}>{item.value}</Text> : null}
+                                            {/* Suppress the chevron on genuinely disabled rows so the UI never
+                                                implies a tap target that does nothing. Ternary-null (never
+                                                `{cond && <JSX/>}`) per the rendering-no-falsy-and rule. */}
+                                            {isDisabled ? null : <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} />}
                                         </View>
                                     )}
                                 </TouchableOpacity>
-                            ))}
+                                );
+                            })}
                         </GlassCard>
                     </View>
                 ))}

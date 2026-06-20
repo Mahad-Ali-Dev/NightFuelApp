@@ -23,8 +23,19 @@
  */
 import React from 'react';
 import { render, screen, act } from '@testing-library/react-native';
+import { Circle } from 'react-native-svg';
 
 import { RestTimer, formatRestA11yLabel } from '@/components/workout/RestTimer';
+// RestTimer reads the STATIC `colors` palette (not useTheme), so it renders with
+// no ThemeContext provider — assert the tokenized stroke/label resolve from the
+// same exported tokens rather than against hardcoded hex.
+import { colors } from '@/theme';
+
+/** Flatten a possibly-nested/array RN style prop into a single object. */
+function flatten(style: unknown): Record<string, unknown> {
+  if (Array.isArray(style)) return Object.assign({}, ...style.map(flatten));
+  return (style as Record<string, unknown>) ?? {};
+}
 
 /** Advance N whole seconds inside act() so state settles with no warnings. */
 function tickSeconds(n: number) {
@@ -175,5 +186,29 @@ describe('RestTimer', () => {
 
     rerender(<RestTimer durationSeconds={45} isRunning={false} />);
     expect(clockText()).toBe('00:45');
+  });
+});
+
+describe('RestTimer tokenized styling (resolves from @/theme, no hardcoded hex)', () => {
+  test('the progress-ring stroke resolves to colors.accent.coral', () => {
+    const { UNSAFE_getAllByType } = render(<RestTimer durationSeconds={30} isRunning={false} />);
+
+    // Two <Circle>s render: the deep track and the progress ring. The ring is
+    // the one carrying strokeDasharray (the swept arc); the track has none.
+    const circles = UNSAFE_getAllByType(Circle);
+    const ring = circles.find((c) => c.props.strokeDasharray !== undefined);
+    expect(ring).toBeTruthy();
+    expect(ring!.props.stroke).toBe(colors.accent.coral);
+
+    // And the track ring stays on its own token (untouched by this change).
+    const track = circles.find((c) => c.props.strokeDasharray === undefined);
+    expect(track!.props.stroke).toBe(colors.border.light);
+  });
+
+  test('the MM:SS time uses colors.text.primary and the REST label uses colors.accent.coral', () => {
+    render(<RestTimer durationSeconds={30} isRunning={false} />);
+
+    expect(flatten(screen.getByText(/^\d{2}:\d{2}$/).props.style).color).toBe(colors.text.primary);
+    expect(flatten(screen.getByText('REST').props.style).color).toBe(colors.accent.coral);
   });
 });

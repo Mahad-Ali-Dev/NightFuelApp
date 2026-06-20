@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TextInput,
-    KeyboardAvoidingView, Platform, ActivityIndicator,
+    KeyboardAvoidingView, Platform, ActivityIndicator, Linking,
 } from 'react-native';
 import Reanimated, {
     useSharedValue, useDerivedValue, useAnimatedStyle,
@@ -24,6 +24,7 @@ import { apiClient } from '@/api/client';
 import { withAlpha } from '@/theme/utils';
 import { LinearGradient } from 'expo-linear-gradient';
 import { sanitizeAiInput } from '@/lib/aiSafety';
+import { linkify, type LinkifySpan } from '@/lib/linkify';
 import { useRateLimit } from '@/hooks/useRateLimit';
 import { captureException } from '@/lib/sentry';
 
@@ -66,6 +67,13 @@ const DEFAULT_SUGGESTIONS = [
 ];
 
 const TYPING_SPEED_MS = 18;
+
+// Cap how many message bubbles the ScrollView renders at once. `messages` state
+// stays the full ground truth (state-ground-truth) — we only bound the RENDERED
+// window so a very long conversation never mounts hundreds of bubbles and janks.
+// We always keep the TAIL (the newest message is never dropped); older turns
+// scroll out of the rendered window but remain in state and in the DB history.
+const MAX_RENDERED_MESSAGES = 80;
 
 // Plan → default daily Ria cap, mirroring chat-service's AI_FREE_DAILY (5) /
 // AI_PRO_DAILY (20) fallbacks. Used ONLY to render the "N left today" hint
@@ -419,6 +427,14 @@ export default function AICoachScreen() {
         startStream(safe.text);
     };
 
+    // Bounded render window — the last N bubbles only. `messages` remains the
+    // full ground truth (history + the live tail); we just cap what mounts so a
+    // long conversation can't render unboundedly. The newest message is always
+    // inside this slice. slice() keeps the inner Message references stable.
+    const renderedMessages = messages.length > MAX_RENDERED_MESSAGES
+        ? messages.slice(messages.length - MAX_RENDERED_MESSAGES)
+        : messages;
+
     const isTyping = mutation.isPending || isStreaming;
     // Only show the standalone "thinking" dots while we have no live assistant
     // text yet. Once tokens land in the streaming bubble (which has its own
@@ -524,7 +540,12 @@ export default function AICoachScreen() {
                         </View>
                     )}
 
-                    {messages.map((msg) => (
+                    {/* Bounded render window: only the last MAX_RENDERED_MESSAGES
+                        bubbles mount, but `messages` keeps the full transcript so
+                        the newest turn is ALWAYS shown. slice() makes a new array
+                        whose inner Message refs are unchanged, so React's keyed
+                        reconciliation still skips unchanged bubbles. */}
+                    {renderedMessages.map((msg) => (
                         <MessageBubble key={msg.id} msg={msg} colors={colors} typography={typography} />
                     ))}
 
@@ -748,6 +769,46 @@ function SendButton({ enabled, busy, colors, onPress }: { enabled: boolean; busy
 }
 
 // ── Message Bubble ────────────────────────────────────────────────────────────
+//
+// Bubble text is run through linkify() so real URLs become tappable. The spans
+// are rendered as NESTED <Text> inside the bubble's parent <Text>
+// (rendering-text-in-text-component) — a link span gets an onPress that opens
+// the URL. The span→element mapper is a STABLE module-scope function (no
+// per-row closure created in render — list-performance-callbacks); it takes the
+// link colour as an argument so it stays hoisted while still theming correctly.
+
+/** Open a tapped link's href. Hoisted so it isn't recreated per span/row. */
+function openLink(href: string): void {
+    // Linking.openURL can reject (e.g. no handler / malformed); never throw into
+    // render. We don't surface a toast here — an inert tap is acceptable UX.
+    Linking.openURL(href).catch(() => undefined);
+}
+
+/**
+ * Map linkify() spans to nested <Text>. Plain spans render as text; link spans
+ * render as an underlined, accent-coloured <Text> with an onPress. A stable
+ * key per index keeps reconciliation cheap. Falsy/empty values are never
+ * rendered bare (rendering-no-falsy-and) — every value lands inside <Text>.
+ */
+function renderLinkifiedSpans(spans: LinkifySpan[], linkColor: string): React.ReactNode {
+    return spans.map((span, i) => {
+        if (span.type === 'link') {
+            return (
+                <Text
+                    key={`l-${i}`}
+                    style={{ color: linkColor, textDecorationLine: 'underline', fontWeight: '700' }}
+                    onPress={() => openLink(span.href)}
+                    accessibilityRole="link"
+                >
+                    {span.value}
+                </Text>
+            );
+        }
+        // Plain text span — rendered as a nested <Text> so it sits legally inside
+        // the parent <Text> alongside any link spans.
+        return <Text key={`t-${i}`}>{span.value}</Text>;
+    });
+}
 
 const MessageBubble = React.memo(function MessageBubble({ msg, colors, typography }: { msg: Message; colors: any; typography: any }) {
     const isAI = msg.sender === 'ai';
@@ -793,7 +854,7 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
                     color: colors.text.primary,
                     lineHeight: 22,
                 }]}>
-                    {msg.text}
+                    {renderLinkifiedSpans(linkify(msg.text), colors.accent.purpleLight)}
                     {msg.streaming ? <StreamingCursor color={colors.accent.purpleLight} /> : null}
                 </Text>
                 <Text

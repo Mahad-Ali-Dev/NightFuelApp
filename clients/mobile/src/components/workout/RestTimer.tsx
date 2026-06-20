@@ -104,7 +104,7 @@ export function RestTimer({ durationSeconds, isRunning, onFinish, size = 140 }: 
                 <Circle cx={size / 2} cy={size / 2} r={radius} stroke={colors.border.light} strokeWidth={10} fill="none" />
                 <Circle
                     cx={size / 2} cy={size / 2} r={radius}
-                    stroke="#FF6B35" strokeWidth={10} fill="none"
+                    stroke={colors.accent.coral} strokeWidth={10} fill="none"
                     strokeDasharray={`${circumference * progress} ${circumference * (1 - progress)}`}
                     strokeLinecap="round"
                     transform={`rotate(-90 ${size / 2} ${size / 2})`}
@@ -121,6 +121,6 @@ export function RestTimer({ durationSeconds, isRunning, onFinish, size = 140 }: 
 const styles = StyleSheet.create({
     container: { alignItems: 'center', justifyContent: 'center' },
     center: { position: 'absolute', alignItems: 'center' },
-    time: { color: '#FFFFFF', fontSize: 32, fontWeight: '800', fontFamily: 'monospace' },
-    label: { color: '#FF6B35', fontSize: 12, fontWeight: '800', letterSpacing: 2, marginTop: 4 },
+    time: { color: colors.text.primary, fontSize: 32, fontWeight: '800', fontFamily: 'monospace' },
+    label: { color: colors.accent.coral, fontSize: 12, fontWeight: '800', letterSpacing: 2, marginTop: 4 },
 });

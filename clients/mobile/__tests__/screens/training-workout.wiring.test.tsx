@@ -38,9 +38,11 @@
 // ── jest.mock hoisting block (runs ABOVE the imports) ────────────────────────
 
 // A present sessionId enables the ['active-session', id] query (the realistic
-// "resume / open a session" navigation).
+// "resume / open a session" navigation). `mockReplace` is hoisted so the summary
+// test can assert the params handleEnd forwards to /training/complete.
+const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
+  useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: mockReplace }),
   useLocalSearchParams: () => ({ sessionId: 'sess-1' }),
 }));
 
@@ -264,5 +266,90 @@ describe('ActiveWorkoutScreen — RestTimer + SetLogger wiring', () => {
     // the screen opened the rest cycle (the real RestTimer mounted).
     expect(screen.getByText('Set 1')).toBeTruthy();
     expect(screen.getByRole('timer')).toBeTruthy();
+  });
+});
+
+// ── Restored-session seed (N / N) + summary read-side (volume counted once) ────
+// A resumed workout (restored from AsyncStorage with already-completed sets) must
+// open at N / M: the header's `${completedCount}/${total} Sets Done` and the
+// seeded <SetLogger/> count must AGREE, and handleEnd's summary volume (derived
+// from ExerciseState.sets[].completed) must count each restored set EXACTLY ONCE
+// — the SetLogger seed is purely visual (no onLogSet), so it never double-counts.
+describe('ActiveWorkoutScreen — restored-session seed + summary read-side', () => {
+  const AsyncStorage = require('@react-native-async-storage/async-storage');
+
+  // Restored state: one exercise with 2 completed sets (50kg x 10) + 1 pending →
+  // 2 / 3. Volume from the two completed sets = 50*10*2 = 1000.
+  const RESTORED = {
+    sessionId: 'sess-1',
+    startedAt: new Date(2026, 5, 17, 19, 30, 0).getTime(), // 30 min before "now"
+    elapsedSeconds: 0,
+    exercises: [
+      {
+        name: 'Bench Press',
+        muscleGroup: 'Chest',
+        restSeconds: 90,
+        sets: [
+          { kg: 50, reps: 10, completed: true },
+          { kg: 50, reps: 10, completed: true },
+          { kg: 50, reps: 10, completed: false },
+        ],
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date(2026, 5, 17, 20, 0, 0));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.clearAllMocks();
+    // clearAllMocks wipes call data but not implementations; restore the default
+    // getItem→null so other suites/tests are unaffected.
+    AsyncStorage.getItem.mockResolvedValue(null);
+  });
+
+  test('a pre-completed session seeds N / N: header and SetLogger count agree', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(RESTORED));
+
+    renderScreen();
+    await flushInit();
+    // The restore path may start a session if none is set; flush that microtask too.
+    await flushInit();
+
+    // The first card is expanded by default, so its SetLogger is mounted. Both
+    // the header count and the SetLogger count read the SAME ground truth: 2 / 3.
+    expect(screen.getByText(/2\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getByText('2 / 3 sets')).toBeTruthy();
+  });
+
+  test('the summary volume derives from sets[].completed and counts a resumed set exactly once', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(RESTORED));
+
+    renderScreen();
+    await flushInit();
+    await flushInit();
+
+    // Finish the workout. handleEnd computes the summary from ExerciseState.sets[]
+    // (the SINGLE counting path) and, after its async logging + a 2.5s confetti
+    // delay, forwards the totals to /training/complete via router.replace.
+    await act(async () => {
+      // Press the FINISH Button via its accessibilityLabel (targets the
+      // Pressable, mirroring how this suite presses "Skip rest").
+      fireEvent.press(screen.getByLabelText('Finish workout'));
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(2500);
+      await Promise.resolve();
+    });
+
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    const [arg] = mockReplace.mock.calls[0];
+    expect(arg.pathname).toBe('/training/complete');
+    // 2 completed sets × (50kg × 10 reps) = 1000 — counted ONCE (the seed never
+    // fired onLogSet, so there is no second counter to double it).
+    expect(arg.params.volume).toBe('1000');
   });
 });
