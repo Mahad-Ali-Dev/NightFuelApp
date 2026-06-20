@@ -578,7 +578,12 @@ export default function ActiveWorkoutScreen() {
 
             queryClient.invalidateQueries({ queryKey: ['active-session'] });
             queryClient.invalidateQueries({ queryKey: ['workout-active-session'] });
-            queryClient.invalidateQueries({ queryKey: ['exercises', 'history'] });
+            // The exercise-history list (see app/(exercises)/history.tsx:25) reads
+            // queryKey ['exercise-history']; React-Query matches keys positionally
+            // from index 0, so this must be that exact single-element key (not
+            // ['exercises', 'history'], which never matches and leaves the history
+            // list stale until staleTime expires / a cold refetch).
+            queryClient.invalidateQueries({ queryKey: ['exercise-history'] });
 
             // Let the confetti run for 2.5 seconds before navigating
             setTimeout(() => {

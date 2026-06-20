@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAnalytics, log } from '@/api/sleep';
 import { getCurrent } from '@/api/shifts';
+import { invalidateSleep } from '@/utils/invalidateSleep';
 import { computeLightPlan } from '@/lib/lightPlan';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { useRouter } from 'expo-router';
@@ -62,7 +63,11 @@ export default function SleepOptimizerScreen() {
             return log({ startTime: start.toISOString(), endTime: end.toISOString() });
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['sleep-analytics'] });
+            // Refresh the full sleep cache set (Recovery-History session list +
+            // analytics + dashboard ring) via the shared helper, not just
+            // ['sleep-analytics'] — otherwise this quick "log 8h block" leaves the
+            // log-sleep modal's Recovery-History list (['sleep-sessions']) stale.
+            invalidateSleep(queryClient);
             Alert.alert('Sleep Logged', 'Your sleep block has been recorded successfully.');
         },
         onError: (err: any) => {

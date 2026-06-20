@@ -327,9 +327,11 @@ describe('Active Workout — Finish persists then navigates to the summary', () 
     expect(api.endSession).toHaveBeenCalledTimes(1);
     expect(api.endSession).toHaveBeenCalledWith(mockSession.id);
 
-    // … the active-session + exercise-history caches were invalidated …
+    // … the active-session + exercise-history caches were invalidated (the
+    // history list reads ['exercise-history']; React-Query matches keys
+    // positionally from index 0, so the finish path must use that exact key) …
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['active-session'] });
-    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['exercises', 'history'] });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['exercise-history'] });
 
     // … and we navigated to the completion summary via router.replace (NOT back)
     // with finite numeric-string params (no NaN / -Infinity).

@@ -49,13 +49,17 @@ jest.mock('expo-router', () => ({
 // react-query: branch useQuery on queryKey[0]. The ['active-session'] query
 // returns a seeded session (one logged exercise) so the init effect's fallback
 // path seeds a single exercise card. The resolved-card detail/last-set queries
-// default to a benign empty result. useMutation / useQueryClient are benign
-// stubs (handleEnd is not exercised here).
+// default to a benign empty result. useMutation is a benign stub. useQueryClient
+// returns a STABLE invalidateQueries spy (`mockInvalidateQueries`) so the finish
+// path's cache flush can be asserted — the handleEnd onSuccess invalidates
+// ['active-session'], ['workout-active-session'] and the history list's
+// ['exercise-history'] (NOT the dead ['exercises','history'] — see workout.tsx).
 const mockSession = {
   id: 'sess-1',
   startedAt: '2026-06-17T20:00:00.000Z',
   logs: [{ exerciseName: 'Bench Press', sets: 3, reps: 8, weightKg: 0, durationSecs: 0 }],
 };
+const mockInvalidateQueries = jest.fn();
 jest.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     const key = queryKey[0];
@@ -65,7 +69,7 @@ jest.mock('@tanstack/react-query', () => ({
     return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
   },
   useMutation: () => ({ mutate: jest.fn(), isPending: false, isError: false, reset: jest.fn() }),
-  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
+  useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 
 // API module the screen statically imports — stub to plain jest.fns so axios
@@ -364,6 +368,17 @@ describe('ActiveWorkoutScreen — restored-session seed + summary read-side', ()
     // 2 completed sets × (50kg × 10 reps) = 1000 — counted ONCE (the seed never
     // fired onLogSet, so there is no second counter to double it).
     expect(arg.params.volume).toBe('1000');
+
+    // …and the finish path flushed the right caches. The history list (see
+    // app/(exercises)/history.tsx:25) reads ['exercise-history']; React-Query
+    // matches keys positionally from index 0, so handleEnd MUST invalidate that
+    // exact single-element key — NOT the dead ['exercises','history'], which never
+    // matches and would leave the history list stale. The two active-session keys
+    // (both have real readers) are retained alongside it.
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['exercise-history'] });
+    expect(mockInvalidateQueries).not.toHaveBeenCalledWith({ queryKey: ['exercises', 'history'] });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['active-session'] });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['workout-active-session'] });
   });
 });
 

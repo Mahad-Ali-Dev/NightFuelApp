@@ -13,6 +13,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { useAuthStore } from '@/store/authStore';
 import * as userApi from '@/api/users';
+import { create as createShift } from '@/api/shifts';
+
+/** Local-calendar `YYYY-MM-DD` for `date` (defaults to now). */
+function localDate(date: Date = new Date()): string {
+    const y = date.getFullYear();
+    const m = `${date.getMonth() + 1}`.padStart(2, '0');
+    const d = `${date.getDate()}`.padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+/** Today as a local-calendar `YYYY-MM-DD`. */
+function todayLocalDate(): string {
+    return localDate();
+}
+/** The local-calendar `YYYY-MM-DD` one day after the given `YYYY-MM-DD`. */
+function nextLocalDate(ymd: string): string {
+    const d = new Date(`${ymd}T00:00:00`);
+    d.setDate(d.getDate() + 1);
+    return localDate(d);
+}
 
 export default function ProfileSummaryScreen() {
     const { colors, typography, spacing } = useTheme();
@@ -101,6 +120,37 @@ export default function ProfileSummaryScreen() {
 
             // Update local state
             updateUser({ onboardingComplete: true });
+
+            // 4. Best-effort: persist the selected shift so a freshly-onboarded
+            // user lands on a dashboard that reflects their schedule instead of
+            // "No active shift" (and the circadian tab's ['circadian-model'] query,
+            // which is enabled only when a current shift exists, can run). We use
+            // the collected sleep window as the proxy for the shift window — the
+            // user can refine the exact times later in the log-shift modal. This
+            // is intentionally guarded in its OWN try/catch: a failure here must
+            // NEVER block onboarding completion / the redirect below.
+            const { shiftType, sleepWindowStart, sleepWindowEnd } = data;
+            if (shiftType && sleepWindowStart && sleepWindowEnd) {
+                try {
+                    const today = todayLocalDate();
+                    // Roll the end day +1 for an overnight window (end <= start),
+                    // mirroring the overnight handling in log-shift.tsx.
+                    const endDate = sleepWindowEnd <= sleepWindowStart
+                        ? nextLocalDate(today)
+                        : today;
+                    const startTime = new Date(`${today}T${sleepWindowStart}:00`).toISOString();
+                    const endTime = new Date(`${endDate}T${sleepWindowEnd}:00`).toISOString();
+                    await createShift({
+                        shiftType,
+                        shiftDate: today,
+                        startTime,
+                        endTime,
+                    });
+                } catch (shiftError: any) {
+                    // Non-blocking: log and swallow so completion still proceeds.
+                    console.warn('[Onboarding] Best-effort shift creation failed (non-blocking):', shiftError?.response?.status, shiftError?.response?.data || shiftError?.message);
+                }
+            }
 
             // Final redirect to dashboard
             router.replace('/(tabs)');

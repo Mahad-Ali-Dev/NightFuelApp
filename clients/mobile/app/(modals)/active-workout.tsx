@@ -470,10 +470,14 @@ export default function ActiveWorkoutScreen() {
                 console.error('Failed to end workout session on backend:', e);
             }
 
-            // Same keys workout.tsx invalidates: the active-session query and the
-            // exercise-history list, so the next read reflects the just-ended session.
+            // The active-session query and the exercise-history list, so the next
+            // read reflects the just-ended session. The history list (see
+            // app/(exercises)/history.tsx:25) reads queryKey ['exercise-history'];
+            // React-Query matches keys positionally from index 0, so this must be
+            // that exact single-element key (not ['exercises', 'history'], which
+            // never matches and leaves the list stale until staleTime expires).
             queryClient.invalidateQueries({ queryKey: ['active-session'] });
-            queryClient.invalidateQueries({ queryKey: ['exercises', 'history'] });
+            queryClient.invalidateQueries({ queryKey: ['exercise-history'] });
         }
 
         router.replace({ pathname: '/training/complete', params: summaryParams });

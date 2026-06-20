@@ -24,6 +24,7 @@ import { shadows } from '@/theme/shadows';
 import { typography as themeTypography } from '@/theme/typography';
 import { format, parseISO, differenceInMinutes } from 'date-fns';
 import { getErrorMessage } from '@/utils/validation';
+import { invalidateSleep } from '@/utils/invalidateSleep';
 import {
     validateLogSleepForm,
     fieldErrorsFromAxiosError,
@@ -106,8 +107,13 @@ export default function LogSleepModal() {
             });
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['today-progress'] });
-            queryClient.invalidateQueries({ queryKey: ['sleep-sessions'] });
+            // Refresh EVERY sleep surface via the shared helper: the Recovery-
+            // History list (['sleep-sessions']), the Sleep-Optimizer quality
+            // score + 7-day chart (['sleep-analytics'] — previously NOT refreshed
+            // here, so logging sleep left it stale until a cold refetch), and the
+            // dashboard ring (['today-progress'], a preserved no-op). Centralising
+            // these keys keeps this writer and the Sleep-Optimizer writer in sync.
+            invalidateSleep(queryClient);
             // Reset form
             setStartTime('23:00');
             setEndTime('07:00');

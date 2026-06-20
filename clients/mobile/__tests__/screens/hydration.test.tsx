@@ -19,15 +19,21 @@
  *     Again" action render, and the preset tiles / tip copy are NOT in the tree
  *     (the loaded ScrollView never mounts). Tapping "Try Again" calls the
  *     query's refetch.
+ *   - Test C (loaded, invalidation lock): a successful water-log MUST refresh
+ *     the dashboard / hydration-ring cache — the screen's `logMutation.onSuccess`
+ *     invalidates ['today-progress'] (the complete set for a hydration write,
+ *     mirroring the shared invalidateMealAndProgress discipline). This pins that
+ *     refresh so a future refactor cannot silently drop it.
  *
  * Mock conventions mirror the sibling screen suites (performance-index /
  * circadian / sleep-optimizer):
  *   - `@tanstack/react-query` is stubbed: useQuery branches on queryKey[0]
  *     (a mutable `mockTodayState` holder drives ['today-progress'] so each test
  *     picks the loaded / error branch before render); useMutation captures the
- *     screen's lifecycle config and returns a benign `mutate`/`isPending:false`
- *     (the log-water mutation is never exercised here); useQueryClient is a
- *     no-op (the onSuccess invalidateQueries isn't asserted).
+ *     screen's `onSuccess` into `mockLogOnSuccess` (so Test C can drive the
+ *     water-log success path) and returns a benign `mutate`/`isPending:false`;
+ *     useQueryClient returns a stable `{ invalidateQueries: mockInvalidate }`
+ *     spy so that success-path cache invalidation is assertable.
  *   - `@/api/progress` (getToday / logHydration) is a plain jest.fn map so the
  *     real axios client (via @/api/client) and its env config never load —
  *     useQuery/useMutation are fully stubbed, so these fns are never invoked;
@@ -56,13 +62,19 @@
 type QueryState = { data: any; isLoading: boolean; isError: boolean };
 const mockTodayState: QueryState = { data: {}, isLoading: false, isError: false };
 const mockTodayRefetch = jest.fn();
+// Holder for the log-water mutation's onSuccess so a test can drive the success
+// path and observe the cache invalidation it performs.
+const mockLogOnSuccess: { current: null | ((data?: unknown) => unknown) } = { current: null };
+// Stable spy returned from useQueryClient so the onSuccess invalidation is
+// assertable (replaces the previous inline throwaway jest.fn).
+const mockInvalidate = jest.fn();
 
 // react-query: branch on queryKey[0]. ['today-progress'] reads the today holder
 // (it drives the screen's error/loaded branch). useMutation captures the
-// screen's onSuccess/onError config and returns a benign `mutate` with
-// isPending false (the log-water mutation is never exercised in these render
-// tests). useQueryClient is a no-op — the onSuccess cache invalidation isn't
-// asserted here.
+// screen's onSuccess into `mockLogOnSuccess` (the log-water success path) and
+// returns a benign `mutate` with isPending false (the mutation is never actually
+// fired by the render tests). useQueryClient returns a stable invalidateQueries
+// spy so the onSuccess cache invalidation can be asserted.
 jest.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     const key = queryKey[0];
@@ -76,8 +88,11 @@ jest.mock('@tanstack/react-query', () => ({
     }
     return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
   },
-  useMutation: (_config: any) => ({ mutate: jest.fn(), isPending: false }),
-  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
+  useMutation: ({ onSuccess }: { onSuccess?: (data?: unknown) => unknown }) => {
+    mockLogOnSuccess.current = onSuccess ?? null;
+    return { mutate: jest.fn(), isPending: false };
+  },
+  useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
 }));
 
 // API module the screen statically imports — stub to plain jest.fns so the real
@@ -169,6 +184,8 @@ describe('HydrationTrackerScreen — Aurora GlassCard surfaces', () => {
     mockTodayState.isLoading = false;
     mockTodayState.isError = false;
     mockTodayRefetch.mockClear();
+    mockInvalidate.mockClear();
+    mockLogOnSuccess.current = null;
   });
 
   // ── Test A: loaded → the GlassCard preset tiles + tip copy render ─────────
@@ -211,5 +228,25 @@ describe('HydrationTrackerScreen — Aurora GlassCard surfaces', () => {
     // straight to todayQuery.refetch).
     fireEvent.press(tryAgain);
     expect(mockTodayRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Test C: loaded → a successful water-log invalidates ['today-progress'] ──
+  // Behaviour lock on the hydration writer's cache refresh. The screen's
+  // logMutation.onSuccess MUST invalidate ['today-progress'] — the complete key
+  // set for a hydration write (it backs BOTH the dashboard ring and this screen's
+  // hydration ring). Dropping that invalidation in a future refactor (e.g. while
+  // reworking the mutation) leaves both rings stale, so this test fails closed if
+  // the success path ever stops refreshing ['today-progress'].
+  test('loaded: a successful water-log invalidates [today-progress] (dashboard + hydration ring refresh)', () => {
+    renderScreen();
+
+    // The screen registered an onSuccess via useMutation.
+    expect(mockLogOnSuccess.current).toBeTruthy();
+
+    // Drive the success path (as react-query would after logHydration() resolves).
+    mockLogOnSuccess.current!({ id: 'log-1' });
+
+    // The dashboard / hydration-ring cache key is refreshed.
+    expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['today-progress'] });
   });
 });

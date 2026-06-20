@@ -12,7 +12,7 @@ and the explicit no-silent-drop disposition of the three F15-dropped sweeps.
 > **single source of truth is [`docs/DEPLOY-HANDOFF.md`](./DEPLOY-HANDOFF.md)** — that
 > file's commands are **owner-only**. This digest summarises and cross-links it; it does
 > not duplicate the migration table (see [§4](#4-user-gated-remaining-owner-only--do-not-execute)
-> and [§7](#7-deploy-handoff-freshness-check)).
+> and [§8](#8-deploy-handoff-freshness-check)).
 
 ---
 
@@ -24,7 +24,8 @@ and the explicit no-silent-drop disposition of the three F15-dropped sweeps.
 4. [User-gated remaining (owner-only — DO NOT execute)](#4-user-gated-remaining-owner-only--do-not-execute)
 5. [What F16 found](#5-what-f16-found)
 6. [F15-dropped sweep disposition (no silent drop)](#6-f15-dropped-sweep-disposition-no-silent-drop)
-7. [DEPLOY-HANDOFF freshness check](#7-deploy-handoff-freshness-check)
+7. [Flows H / I / J + writers — traced-and-correct (no-finding ledger)](#7-flows-h--i--j--writers--traced-and-correct-no-finding-ledger)
+8. [DEPLOY-HANDOFF freshness check](#8-deploy-handoff-freshness-check)
 
 ---
 
@@ -262,7 +263,106 @@ error-retry / resolved-active-tier states.
 
 ---
 
-## 7. DEPLOY-HANDOFF freshness check
+## 7. Flows H / I / J + writers — traced-and-correct (no-finding ledger)
+
+A consolidation-round adversarial trace re-walked four more flows — **H** (sleep →
+circadian), **I** (community `likedByMe`), **J** (settings / watch) — plus the **meal /
+shift / hydration cache-invalidation writers**. **Every one was found correct in code.**
+This is an **honest no-finding ledger**: it exists so a reviewer can see these were
+adversarially traced and found correct, **not skipped**. No code was changed for any of
+them, no test was added, and no churn was manufactured — recording the disposition is the
+entire deliverable. (File:line references are **approximate ("~L…")** and shift by a few
+lines under concurrent edits — navigate by symbol.)
+
+### H — sleep → circadian: correctly shift-derived, NOT sleep-fed
+
+Logging sleep correctly does **not** (and must **not**) invalidate the circadian model,
+because the model is **derived from the active shift, not from logged sleep**:
+
+- **Mobile.** `clients/mobile/src/api/circadian.ts` `getModel()` (~L115) computes a fresh
+  model purely from `getCurrentShift()` → `POST /v1/circadian/profile`. It reads **no**
+  sleep log, so logged sleep cannot feed the `['circadian-model']` query — `log-sleep`
+  correctly leaves that key alone.
+- **Engine.** `services/circadian-engine` (a Python service) listens **only** on the
+  `nightfuel:shift:shift-created` / `shift-updated` Redis streams
+  (`app/events.py` ~L60) and runs `compute_profile(shift)` off the shift payload alone —
+  there is **no** subscription to any sleep stream. The token "sleep" appears in that
+  service only as profile **output** fields (`app/models.py` — e.g. the computed
+  sleep-window / melatonin recommendations) and as `asyncio.sleep(…)` in the listener's
+  retry-backoff; **none** of those is a logged-sleep **input**. So the model is
+  shift-derived by design.
+- **Disposition.** Correct as-is. The genuine sleep gap was the **`['sleep-analytics']`**
+  surface, which is captured as its **own** item(s) — not here. H is **not** a defect.
+
+### I — community `likedByMe`: correct-in-code, dark-until-migration
+
+The feed cannot show a per-viewer "liked" heart yet, and that is a **schema** limitation,
+not a code defect:
+
+- **Client (intentional + documented).** `clients/mobile/app/(tabs)/community.tsx` sets
+  `const liked = false` (~L368) behind an explicit comment (~L363–L368): the feed `Post`
+  shape has **no** per-viewer flag, so the heart's color/glyph swap is wired off this
+  single source of truth and will light up automatically **once the API returns a
+  `likedByMe` field**. Inventing a field access there would break `tsc`.
+- **Like mutation is fully correct.** The same screen's `likeMutation` (~L132–L160) does
+  an optimistic **count** bump (`onMutate` `setQueryData`), a **snapshot rollback** on
+  error (`onError` restores `ctx.previous`), and an `onSettled` **reconcile** (invalidate
+  `['community-feed']`). Only the count moves — never a fabricated `likedByMe`.
+- **Backend has no per-user like edge.** `services/community-service/src/community.service.ts`
+  `likePost` (~L120) stores a like as a **bare counter** (`data: { likes: { increment: 1 } }`),
+  and `prisma/schema.prisma` models `Post.likes` as a scalar `Int @default(0)` (~L18) with
+  **no `PostLike` join table**. `likedByMe` therefore **cannot** be wired without a new,
+  **user-gated UNAPPLIED migration** (a `PostLike(userId, postId)` edge).
+- **Disposition.** Correct in code, **dark until that migration** — the same posture as
+  flows D / F in [§3](#3-flows-verified-correct-in-code). **Not** a fixable code defect;
+  the blocker is the unapplied community join-table migration, not the client or service
+  code.
+
+### J — settings / watch: honest no-op + correct, minimal invalidations
+
+- **Notification preferences.** `clients/mobile/app/(settings)/notification-preferences.tsx`
+  is the **sole** reader of `['notification-preferences']` (`prefsQuery` ~L137) and its
+  `saveMutation` (~L148) **persists** via `saveNotificationPreferences`; the edited `prefs`
+  is the local working copy, so there is no second consumer to reconcile and **no**
+  invalidate is needed. Correct.
+- **Notifications list.** `clients/mobile/app/(settings)/notifications.tsx` mark-read
+  `onSuccess` invalidates `['notifications']` (~L40) — the complete set for that screen.
+  Correct.
+- **Devices / watch.** `clients/mobile/app/(settings)/devices.tsx` uses a **documented
+  HONEST no-op** health adapter (~L24–L48): `connect()` / `syncNow()` resolve to
+  `{ status: 'unavailable', reason }` (they never throw) and the screen surfaces that
+  reason **verbatim** — it **never fakes a "Connected" state**. Real HealthKit /
+  Health-Connect / BLE adapters slot in behind the same interface in a later dev build
+  (native pairing is owner-gated — see
+  [§4](#4-user-gated-remaining-owner-only--do-not-execute) #5). Correct.
+
+### Writers — meal / shift / hydration cache invalidation: already complete
+
+- **Meal (4 writers).** The four meal writers route through the shared
+  `clients/mobile/src/utils/invalidateMealAndProgress.ts`, which invalidates `['meal-logs']`
+  + `['daily-progress']` + `['today-progress']` together — the dual-ring contract that
+  prevents the meal-progress split-brain ([§5](#5-what-f16-found) #3). Complete.
+- **Shift.** `clients/mobile/app/(modals)/log-shift.tsx` `onSuccess` (~L74–L81) invalidates
+  all three shift keys — `['current-shift']`, `['shifts']`, **and** `['shifts-upcoming']`
+  (the dashboard Next-shift key fixed in [§5](#5-what-f16-found) #2). Complete.
+- **Hydration.** Both `['today-progress']` hydration writers invalidate the **complete**
+  set — the dashboard quick-add (`app/(tabs)/index.tsx` ~L249) and the hydration screen
+  (`app/(performance)/hydration.tsx` ~L39) each invalidate `['today-progress']` only,
+  which is correct because hydration affects **only** `DailyProgress.hydrationActual`.
+  (The separate `src/hooks/useHydration.ts` is self-consistent on its own `['progress',
+  'today']` key — it reads and writes the same key — so it is **not** a drift either.)
+  Complete.
+
+> **No-finding, by design.** This section adds **zero** code and **zero** tests — it is a
+> ledger entry, not a fix. The only `likedByMe`-shaped follow-up is the **unapplied,
+> user-gated community `PostLike` migration** (owner-only — see
+> [§4](#4-user-gated-remaining-owner-only--do-not-execute)); everything else above is
+> correct as it stands. This digest remains pure docs and `node scripts/gate.js` stays
+> green (nothing the gate inspects was touched).
+
+---
+
+## 8. DEPLOY-HANDOFF freshness check
 
 **Re-verified against [`docs/DEPLOY-HANDOFF.md`](./DEPLOY-HANDOFF.md) as of F16 — in
 sync.** Confirmed by reading that file (not duplicated here):
