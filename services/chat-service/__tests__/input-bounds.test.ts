@@ -3,7 +3,7 @@
  * querystring. Two history endpoints feed a Prisma `take` directly:
  *
  *   - GET /v1/chat/ria/messages          query.limit -> getRiaMessages(userId, limit)
- *   - GET /v1/chat/:conversationId/history query.limit -> getMessageHistory(id, limit)
+ *   - GET /v1/chat/:conversationId/history query.limit -> getMessageHistory(id, userId, limit)
  *
  * Before the sprint bounds, the Ria route used `z.coerce.number().default(50)`
  * with NO .int()/.min()/.max(), so a hostile ?limit=99999999 / 0 / -1 / NaN
@@ -229,7 +229,9 @@ describe('chat-service input bounds — GET history `limit` clamp (int, 1..100, 
             expect(res.statusCode).not.toBe(400);
             expect(res.statusCode).toBeLessThan(500);
             expect(chatService.getMessageHistory).toHaveBeenCalledTimes(1);
-            expect(chatService.getMessageHistory).toHaveBeenCalledWith(REAL_UUID, LIMIT_MAX);
+            // The route now threads the authenticated userId (for the participant
+            // gate) between the conversationId and the clamped limit.
+            expect(chatService.getMessageHistory).toHaveBeenCalledWith(REAL_UUID, 'real-user-1', LIMIT_MAX);
         });
 
         it('limit omitted -> not 400, reaches getMessageHistory with the default 50', async () => {
@@ -240,7 +242,7 @@ describe('chat-service input bounds — GET history `limit` clamp (int, 1..100, 
             expect(chatService.getMessageHistory).toHaveBeenCalledTimes(1);
             // The route now forwards the schema default rather than relying on
             // the service-side default — assert the bounded value reaches it.
-            expect(chatService.getMessageHistory).toHaveBeenCalledWith(REAL_UUID, LIMIT_DEFAULT);
+            expect(chatService.getMessageHistory).toHaveBeenCalledWith(REAL_UUID, 'real-user-1', LIMIT_DEFAULT);
         });
 
         it('valid in-range limit=10 -> not 400, reaches getMessageHistory with (uuid, 10)', async () => {
@@ -248,7 +250,7 @@ describe('chat-service input bounds — GET history `limit` clamp (int, 1..100, 
 
             expect(res.statusCode).not.toBe(400);
             expect(chatService.getMessageHistory).toHaveBeenCalledTimes(1);
-            expect(chatService.getMessageHistory).toHaveBeenCalledWith(REAL_UUID, 10);
+            expect(chatService.getMessageHistory).toHaveBeenCalledWith(REAL_UUID, 'real-user-1', 10);
         });
     });
 });

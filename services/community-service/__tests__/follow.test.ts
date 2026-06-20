@@ -335,3 +335,60 @@ describe('social routes — wire contract', () => {
         expect(res.json()).toEqual({ isFollowing: false, followers: 0, following: 0 });
     });
 });
+
+// ── Privacy gate on a user's POSTS (sprint F18, finding 1) ────────────────────
+// Regression: getUserPosts previously returned a private account's posts to ANY
+// authenticated user — the follow-gate covered only the profile HEADER
+// (getUserDetailedProfile), not the protected content. These lock the gate:
+// a private author's posts are visible only to the author and accepted followers.
+describe('CommunityService.getUserPosts — privacy gate', () => {
+    function buildPostPrisma() {
+        const { follow, rows } = buildFollowStore();
+        const findMany = jest.fn(async () => [
+            { id: 'p1', authorId: TARGET, content: 'private thoughts', likes: 0, createdAt: new Date(), _count: { comments: 0 } },
+        ]);
+        return { prisma: { follow, post: { findMany } } as any, rows, findMany };
+    }
+
+    it('PRIVATE author, viewer is NOT a follower -> empty list, posts never queried', async () => {
+        const { prisma, findMany } = buildPostPrisma();
+        const svc = new CommunityService(prisma, buildResolver(true)); // target is private
+
+        const posts = await svc.getUserPosts(VIEWER, TARGET, 20);
+
+        expect(posts).toEqual([]);
+        // Gate blocks BEFORE the post query — no protected rows are ever read.
+        expect(findMany).not.toHaveBeenCalled();
+    });
+
+    it('PRIVATE author, viewer IS an accepted follower -> posts returned', async () => {
+        const { prisma, findMany } = buildPostPrisma();
+        const svc = new CommunityService(prisma, buildResolver(true));
+        await svc.followUser(VIEWER, TARGET); // VIEWER now follows the private TARGET
+
+        const posts = await svc.getUserPosts(VIEWER, TARGET, 20);
+
+        expect(posts).toHaveLength(1);
+        expect(findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('PUBLIC author -> posts returned to any viewer (no follow required)', async () => {
+        const { prisma, findMany } = buildPostPrisma();
+        const svc = new CommunityService(prisma, buildResolver(false)); // public
+
+        const posts = await svc.getUserPosts(VIEWER, TARGET, 20);
+
+        expect(posts).toHaveLength(1);
+        expect(findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('the author sees their OWN posts even when private (viewer === author)', async () => {
+        const { prisma, findMany } = buildPostPrisma();
+        const svc = new CommunityService(prisma, buildResolver(true));
+
+        const posts = await svc.getUserPosts(TARGET, TARGET, 20);
+
+        expect(posts).toHaveLength(1);
+        expect(findMany).toHaveBeenCalledTimes(1);
+    });
+});

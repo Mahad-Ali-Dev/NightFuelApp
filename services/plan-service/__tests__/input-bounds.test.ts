@@ -180,6 +180,26 @@ describe('plan-service input-bounds — REAL schemas reject out-of-bounds input 
         expect(parsed.success).toBe(true);
     });
 
+    // ── Calendar-validity refine — the regex is structural; these pass the regex
+    //    but are NOT real calendar dates. Before the .refine, '2026-13-01' /
+    //    '2026-00-10' reached new Date(date) → Invalid Date → Prisma 500, and
+    //    '2026-02-30' silently rolled forward to 2026-03-02 (wrong-day data). The
+    //    round-trip refine rejects all three with a clean 400 at the boundary.
+    it('getPlanParamsSchema rejects an out-of-range month (2026-13-01) — passes regex, not a calendar date', () => {
+        const parsed = getPlanParamsSchema.safeParse({ date: '2026-13-01' });
+        expect(parsed.success).toBe(false);
+    });
+
+    it('getPlanParamsSchema rejects a zero month (2026-00-10) — passes regex, not a calendar date', () => {
+        const parsed = getPlanParamsSchema.safeParse({ date: '2026-00-10' });
+        expect(parsed.success).toBe(false);
+    });
+
+    it('getPlanParamsSchema rejects an impossible day (2026-02-30) — would silently roll to Mar 2, must 400 not corrupt', () => {
+        const parsed = getPlanParamsSchema.safeParse({ date: '2026-02-30' });
+        expect(parsed.success).toBe(false);
+    });
+
     // ── getPlanHistoryQuerySchema — optional bounded range ───────────────────
     it('getPlanHistoryQuerySchema rejects a reversed range with RANGE_REVERSED_MSG on path ["end"]', () => {
         const parsed = getPlanHistoryQuerySchema.safeParse({ start: '2026-06-30', end: '2026-06-01' });

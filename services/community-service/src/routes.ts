@@ -121,12 +121,15 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
         },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
+        const viewerId = (request as any).user?.id || (request as any).user?.userId;
         let { id } = request.params as any;
         if (id === 'me') {
-            id = (request as any).user?.id || (request as any).user?.userId;
+            id = viewerId;
         }
         const { limit } = request.query as any;
-        const posts = await communityService.getUserPosts(id, limit);
+        // viewerId drives the privacy gate: a private author's posts are returned
+        // only to the author themselves or an accepted follower.
+        const posts = await communityService.getUserPosts(viewerId, id, limit);
         const mappedPosts = posts.map(p => ({ ...p, commentsCount: (p as any)._count?.comments || 0 }));
         return reply.send(mappedPosts);
     });

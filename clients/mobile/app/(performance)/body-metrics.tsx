@@ -26,6 +26,11 @@ const { width } = Dimensions.get('window');
 // pre-check — the server stays the source of truth.
 export const HEIGHT_CM_MAX = 300;
 export const WEIGHT_KG_MAX = 600;
+// Body-fat is a percentage, so (0, 100]. Tape measurements are circumferences in
+// cm — bounded generously (no human body part exceeds 300cm), mirroring the
+// WEIGHT_KG_MAX style: an honest pre-check, with the server as source of truth.
+export const BODY_FAT_PCT_MAX = 100;
+export const MEASUREMENT_CM_MAX = 300;
 
 // Validate an OPTIONAL numeric field (empty string = "not provided" = valid, since
 // the server marks both fields .optional()). When provided it must parse to a finite
@@ -40,6 +45,15 @@ export function validateMeasurement(raw: string, max: number, label: string): st
         return `${label} must be ${max} or less.`;
     }
     return null;
+}
+
+// Finite-coercion for the payload: parse a provided field and ship it ONLY when it
+// resolves to a finite, strictly-positive number. A non-numeric string (parseFloat
+// → NaN) or a non-positive value drops to undefined instead of escaping to the API.
+function toFiniteMeasurement(raw: string): number | undefined {
+    if (raw.trim() === '') return undefined;
+    const n = parseFloat(raw);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 const MeasurementInput = ({ label, value, onChange, placeholder, error }: any) => {
@@ -110,10 +124,26 @@ export default function BodyMetricsScreen() {
     });
 
     // Derived (never stored — see react-state-minimize): inline validation copy for
-    // the weight field, mirroring the server weightKg bound (0, 600]. `hasErrors`
-    // gates the Save control so we never fire a body-metrics PATCH the API will 400.
+    // EVERY provided field, each mirroring its server bound. `hasErrors` gates the
+    // Save control so we never fire a body-metrics PATCH the API will 400 — a
+    // non-numeric entry (parseFloat → NaN) or out-of-range value blocks the save.
     const weightError = validateMeasurement(weight, WEIGHT_KG_MAX, 'weight');
-    const hasErrors = weightError !== null;
+    const bodyFatError = validateMeasurement(bodyFat, BODY_FAT_PCT_MAX, 'body fat %');
+    const chestError = validateMeasurement(chest, MEASUREMENT_CM_MAX, 'chest');
+    const armError = validateMeasurement(arm, MEASUREMENT_CM_MAX, 'arms');
+    const waistError = validateMeasurement(waist, MEASUREMENT_CM_MAX, 'waist');
+    const hipsError = validateMeasurement(hips, MEASUREMENT_CM_MAX, 'hips');
+    const thighError = validateMeasurement(thigh, MEASUREMENT_CM_MAX, 'thighs');
+    const calfError = validateMeasurement(calf, MEASUREMENT_CM_MAX, 'calves');
+    const hasErrors =
+        weightError !== null ||
+        bodyFatError !== null ||
+        chestError !== null ||
+        armError !== null ||
+        waistError !== null ||
+        hipsError !== null ||
+        thighError !== null ||
+        calfError !== null;
     const saveDisabled = mutation.isPending || hasErrors;
 
     const handleLog = () => {
@@ -121,15 +151,18 @@ export default function BodyMetricsScreen() {
         // Block the mutation if any provided value is out of the server bounds —
         // even if a control somehow fires while invalid.
         if (hasErrors) return;
+        // Finite-coerce every field: a NaN/non-positive parse drops to undefined
+        // instead of shipping a bad value to the API (defence-in-depth behind the
+        // hasErrors gate above).
         mutation.mutate({
-            weightKg: weight ? parseFloat(weight) : undefined,
-            bodyFatPct: bodyFat ? parseFloat(bodyFat) : undefined,
-            chestCm: chest ? parseFloat(chest) : undefined,
-            armsCm: arm ? parseFloat(arm) : undefined,
-            waistCm: waist ? parseFloat(waist) : undefined,
-            hipsCm: hips ? parseFloat(hips) : undefined,
-            thighsCm: thigh ? parseFloat(thigh) : undefined,
-            calvesCm: calf ? parseFloat(calf) : undefined,
+            weightKg: toFiniteMeasurement(weight),
+            bodyFatPct: toFiniteMeasurement(bodyFat),
+            chestCm: toFiniteMeasurement(chest),
+            armsCm: toFiniteMeasurement(arm),
+            waistCm: toFiniteMeasurement(waist),
+            hipsCm: toFiniteMeasurement(hips),
+            thighsCm: toFiniteMeasurement(thigh),
+            calvesCm: toFiniteMeasurement(calf),
         });
     };
 
@@ -175,7 +208,7 @@ export default function BodyMetricsScreen() {
                         <Text style={[typography.h3, { color: colors.text.primary, marginBottom: 20 }]}>Log Today's Metrics</Text>
 
                         <MeasurementInput label="Weight (kg)" value={weight} onChange={setWeight} placeholder="e.g. 82.5" error={weightError} />
-                        <MeasurementInput label="Body Fat %" value={bodyFat} onChange={setBodyFat} placeholder="e.g. 15.2" />
+                        <MeasurementInput label="Body Fat %" value={bodyFat} onChange={setBodyFat} placeholder="e.g. 15.2" error={bodyFatError} />
 
                         <TouchableOpacity
                             activeOpacity={0.7}
@@ -194,16 +227,16 @@ export default function BodyMetricsScreen() {
                         {showAdvanced && (
                             <View style={{ marginTop: 8 }}>
                                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                                    <View style={{ flex: 1 }}><MeasurementInput label="Chest (cm)" value={chest} onChange={setChest} placeholder="105" /></View>
-                                    <View style={{ flex: 1 }}><MeasurementInput label="Arms (cm)" value={arm} onChange={setArm} placeholder="38" /></View>
+                                    <View style={{ flex: 1 }}><MeasurementInput label="Chest (cm)" value={chest} onChange={setChest} placeholder="105" error={chestError} /></View>
+                                    <View style={{ flex: 1 }}><MeasurementInput label="Arms (cm)" value={arm} onChange={setArm} placeholder="38" error={armError} /></View>
                                 </View>
                                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                                    <View style={{ flex: 1 }}><MeasurementInput label="Waist (cm)" value={waist} onChange={setWaist} placeholder="85" /></View>
-                                    <View style={{ flex: 1 }}><MeasurementInput label="Hips (cm)" value={hips} onChange={setHips} placeholder="100" /></View>
+                                    <View style={{ flex: 1 }}><MeasurementInput label="Waist (cm)" value={waist} onChange={setWaist} placeholder="85" error={waistError} /></View>
+                                    <View style={{ flex: 1 }}><MeasurementInput label="Hips (cm)" value={hips} onChange={setHips} placeholder="100" error={hipsError} /></View>
                                 </View>
                                 <View style={{ flexDirection: 'row', gap: 12 }}>
-                                    <View style={{ flex: 1 }}><MeasurementInput label="Thighs (cm)" value={thigh} onChange={setThigh} placeholder="60" /></View>
-                                    <View style={{ flex: 1 }}><MeasurementInput label="Calves (cm)" value={calf} onChange={setCalf} placeholder="40" /></View>
+                                    <View style={{ flex: 1 }}><MeasurementInput label="Thighs (cm)" value={thigh} onChange={setThigh} placeholder="60" error={thighError} /></View>
+                                    <View style={{ flex: 1 }}><MeasurementInput label="Calves (cm)" value={calf} onChange={setCalf} placeholder="40" error={calfError} /></View>
                                 </View>
                             </View>
                         )}

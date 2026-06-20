@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import '@fastify/websocket';
 import { z } from 'zod';
-import { ChatService, RequestPendingError } from './chat.service';
+import { ChatService, RequestPendingError, ConversationAccessError } from './chat.service';
 import jwt from 'jsonwebtoken';
 import { sendUnauthorized } from '@nightfuel/config';
 
@@ -110,8 +110,16 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
     }, async (request, reply) => {
         const { conversationId } = request.params as any;
         const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
-        const messages = await chatService.getMessagesForUser(conversationId, userId);
-        return reply.send({ data: messages });
+        try {
+            const messages = await chatService.getMessagesForUser(conversationId, userId);
+            return reply.send({ data: messages });
+        } catch (err) {
+            // Non-participant (or missing conversation) -> 403, never the messages.
+            if (err instanceof ConversationAccessError) {
+                return reply.status(403).send({ error: 'forbidden' });
+            }
+            throw err;
+        }
     });
 
     // ── Send message in a conversation ──────────────────────────────────────
@@ -124,8 +132,16 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
         const { text } = request.body as any;
 
         // Resolve the conversation so we can enforce the request gate and know the
-        // recipient for delivery + the outbound event.
-        const conv = await resolveConversation(chatService, conversationId);
+        // recipient for delivery + the outbound event. A lookup FAILURE must fail
+        // CLOSED: we cannot run assertCanSend, so we reject rather than persist a
+        // message that bypassed the request gate.
+        let conv;
+        try {
+            conv = await resolveConversation(chatService, conversationId);
+        } catch (err) {
+            request.log.error({ err, conversationId }, 'send: conversation lookup failed; failing closed');
+            return reply.status(503).send({ error: 'conversation_unavailable' });
+        }
 
         try {
             if (conv) await chatService.assertCanSend(conv, userId);
@@ -210,8 +226,17 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const { conversationId } = request.params as any;
+        const userId = (request as any).user?.userId ?? (request as any).user?.id ?? (request as any).user?.sub;
         const { limit } = request.query as any;
-        return reply.send(await chatService.getMessageHistory(conversationId, limit));
+        try {
+            return reply.send(await chatService.getMessageHistory(conversationId, userId, limit));
+        } catch (err) {
+            // Membership gate: a non-participant (or missing conversation) gets 403.
+            if (err instanceof ConversationAccessError) {
+                return reply.status(403).send({ error: 'forbidden' });
+            }
+            throw err;
+        }
     });
 
     // ── Ria AI Chat Routes ───────────────────────────────────────────────────
@@ -451,7 +476,14 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
                 // to THEIR sockets — never echoed back to the sender, never
                 // persisted.
                 if (frame.type === 'typing_start' || frame.type === 'typing_stop') {
-                    const conv = await resolveConversation(chatService, frame.conversationId);
+                    // Ephemeral: a lookup failure simply means we don't relay (no-op),
+                    // never a persisted side effect — so swallow the throw here.
+                    let conv = null;
+                    try {
+                        conv = await resolveConversation(chatService, frame.conversationId);
+                    } catch {
+                        return;
+                    }
                     if (conv) {
                         const recipientId = conv.participantA === senderId ? conv.participantB : conv.participantA;
                         broadcastToUser(recipientId, {
@@ -464,7 +496,15 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
                 }
 
                 // ── send_message ──────────────────────────────────────────
-                const conv = await resolveConversation(chatService, frame.conversationId);
+                // A lookup FAILURE fails CLOSED: emit an error frame and do NOT
+                // persist (the request gate can't be enforced without the conv).
+                let conv;
+                try {
+                    conv = await resolveConversation(chatService, frame.conversationId);
+                } catch {
+                    socket.send(JSON.stringify({ type: 'error', error: 'conversation_unavailable' }));
+                    return;
+                }
 
                 // Enforce the request gate; a pending requester's 2nd send is
                 // rejected with a `request_pending` error frame (socket stays open).
@@ -509,22 +549,24 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 /**
- * Best-effort conversation lookup for delivery/gate decisions. Reads the raw row
- * (participants + requestState) through the ChatService's Prisma client. Returns
- * null if the conversation can't be resolved so delivery degrades to "ack only"
- * (the message is still persisted) rather than throwing on the hot path. Kept as a
- * free function so both the REST send handler and the WS handler share one path.
+ * Conversation lookup for delivery/gate decisions. Reads the raw row
+ * (participants + requestState) through the ChatService's Prisma client.
+ *
+ * Returns null when the conversation is genuinely ABSENT (or no DB is wired).
+ * A lookup FAILURE (DB fault), however, now PROPAGATES — it is deliberately NOT
+ * swallowed. Previously this caught all errors and returned null, which made the
+ * send paths skip assertCanSend and persist the message anyway: the request gate
+ * failed OPEN under any transient DB error. Callers on the send path must catch
+ * the throw and fail CLOSED (reject, never persist); the ephemeral typing relay
+ * may treat a throw as "no recipient" and no-op. Kept as a free function so the
+ * REST send handler and the WS handler share one path.
  */
 async function resolveConversation(
     chatService: ChatService,
     conversationId: string,
 ): Promise<{ id: string; participantA: string; participantB: string; requestState: string } | null> {
-    try {
-        const prisma = (chatService as any).prisma;
-        if (!prisma?.conversation?.findUnique) return null;
-        const conv = await prisma.conversation.findUnique({ where: { id: conversationId } });
-        return conv ?? null;
-    } catch {
-        return null;
-    }
+    const prisma = (chatService as any).prisma;
+    if (!prisma?.conversation?.findUnique) return null;
+    const conv = await prisma.conversation.findUnique({ where: { id: conversationId } });
+    return conv ?? null;
 }

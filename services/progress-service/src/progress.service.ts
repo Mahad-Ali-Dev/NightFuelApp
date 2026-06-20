@@ -554,6 +554,7 @@ export class ProgressService {
         avgProteinActual: number;
         avgCarbsActual: number;
         avgFatActual: number;
+        avgHydrationActual: number;
         totalMealsLogged: number;
     }> {
         // Finite-ness invariant (mirrors sleep-service src/sleep.service.ts):
@@ -591,6 +592,7 @@ export class ProgressService {
                 avgProteinActual: 0,
                 avgCarbsActual: 0,
                 avgFatActual: 0,
+                avgHydrationActual: 0,
                 totalMealsLogged: 0,
             };
         }
@@ -613,6 +615,7 @@ export class ProgressService {
         const totalProteinActual = sum('proteinActual');
         const totalCarbsActual = sum('carbsActual');
         const totalFatActual = sum('fatActual');
+        const totalHydrationActual = sum('hydrationActual');
         const totalMealsLogged = records.reduce((acc, r) => acc + r.mealsLogged, 0);
 
         const targetRecords = records.filter((r) => r.caloriesTarget !== null);
@@ -635,6 +638,7 @@ export class ProgressService {
             avgProteinActual: finite(Math.round((totalProteinActual / daysTracked) * 10) / 10),
             avgCarbsActual: finite(Math.round((totalCarbsActual / daysTracked) * 10) / 10),
             avgFatActual: finite(Math.round((totalFatActual / daysTracked) * 10) / 10),
+            avgHydrationActual: finite(Math.round((totalHydrationActual / daysTracked) * 10) / 10),
             totalMealsLogged,
         };
     }

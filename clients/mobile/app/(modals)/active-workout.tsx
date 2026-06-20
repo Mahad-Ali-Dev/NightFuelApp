@@ -18,6 +18,7 @@ import { RestTimer } from '@/components/workout/RestTimer';
 import { SetLogger } from '@/components/workout/SetLogger';
 import { resolveDemo, resolveDemoFrames } from '@/constants/exerciseDemos';
 import { getCuratedDemo, getCuratedDemoFrames } from '@/constants/curatedDemos';
+import { invalidateWorkoutCaches } from '@/utils/invalidateWorkoutCaches';
 
 // Default rest length started when a set is completed/logged. Drives the
 // hardened <RestTimer/> in the rest banner (which owns its own countdown).
@@ -470,14 +471,19 @@ export default function ActiveWorkoutScreen() {
                 console.error('Failed to end workout session on backend:', e);
             }
 
-            // The active-session query and the exercise-history list, so the next
-            // read reflects the just-ended session. The history list (see
-            // app/(exercises)/history.tsx:25) reads queryKey ['exercise-history'];
-            // React-Query matches keys positionally from index 0, so this must be
-            // that exact single-element key (not ['exercises', 'history'], which
-            // never matches and leaves the list stale until staleTime expires).
-            queryClient.invalidateQueries({ queryKey: ['active-session'] });
-            queryClient.invalidateQueries({ queryKey: ['exercise-history'] });
+            // Refresh EVERY workout-derived reader in one place so the next read
+            // reflects the just-ended session: the active session, the
+            // exercise-history list, AND the heatmap grid / analytics summaries
+            // (['exercise-heatmap'], ['exercises-heatmap'], ['exercise-analytics'])
+            // which all derive from the session/exercise data this Finish just
+            // wrote. Centralised in invalidateWorkoutCaches so this writer and the
+            // full-screen workout writer can never drift apart and leave a surface
+            // (e.g. the same-screen heatmap) stale. React-Query matches keys
+            // positionally from index 0, so the helper uses the exact reader keys
+            // (note ['exercises-heatmap'] is a SEPARATE key from
+            // ['exercise-heatmap']) and prefix-invalidates ['exercise-analytics']
+            // to catch every ['exercise-analytics', <name>] variant.
+            invalidateWorkoutCaches(queryClient);
         }
 
         router.replace({ pathname: '/training/complete', params: summaryParams });

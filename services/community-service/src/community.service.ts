@@ -105,7 +105,38 @@ export class CommunityService {
         return { success: true };
     }
 
-    async getUserPosts(authorId: string, limit: number = 20) {
+    /**
+     * Whether `viewerId` may see `authorId`'s protected content (their posts).
+     * True for the author themselves, for a PUBLIC author, or for an accepted
+     * follower of a PRIVATE author. Mirrors the follow-gate already enforced in
+     * getUserDetailedProfile so the privacy contract ("a private profile is
+     * visible only to accepted followers") protects the POSTS, not just the
+     * profile header.
+     */
+    private async canViewUserContent(viewerId: string, authorId: string): Promise<boolean> {
+        if (viewerId === authorId) return true;
+        const author = this.authorResolver
+            ? await this.authorResolver.resolveOne(authorId).catch((err) => {
+                logger.warn({ err, authorId }, 'user-posts author resolve failed');
+                return null;
+            })
+            : null;
+        const isPrivate = author?.isPrivate ?? false;
+        if (!isPrivate) return true;
+        const edge = await this.prisma.follow.findUnique({
+            where: { followerId_followingId: { followerId: viewerId, followingId: authorId } },
+        });
+        return !!edge;
+    }
+
+    async getUserPosts(viewerId: string, authorId: string, limit: number = 20) {
+        // Privacy gate: a private author's posts are visible only to the author
+        // and accepted followers. A blocked viewer gets an empty list (the
+        // profile header already conveys the private state via the detailed
+        // profile endpoint) — never the protected posts.
+        if (!(await this.canViewUserContent(viewerId, authorId))) {
+            return this._withAuthors([]);
+        }
         const posts = await this.prisma.post.findMany({
             where: { authorId },
             take: limit,

@@ -33,6 +33,7 @@ interface FakeRow {
     proteinActual: number;
     carbsActual: number;
     fatActual: number;
+    hydrationActual: number;
     caloriesTarget: number | null;
     mealsLogged: number;
     isAdherent: boolean;
@@ -72,6 +73,7 @@ describe('progress-service getStats — finite-ness invariant', () => {
             avgProteinActual: 0,
             avgCarbsActual: 0,
             avgFatActual: 0,
+            avgHydrationActual: 0,
             totalMealsLogged: 0,
         });
 
@@ -81,6 +83,7 @@ describe('progress-service getStats — finite-ness invariant', () => {
         expect(Number.isFinite(stats.avgProteinActual)).toBe(true);
         expect(Number.isFinite(stats.avgCarbsActual)).toBe(true);
         expect(Number.isFinite(stats.avgFatActual)).toBe(true);
+        expect(Number.isFinite(stats.avgHydrationActual)).toBe(true);
         expect(stats.avgCaloriesTarget).toBeNull();
     });
 
@@ -88,9 +91,9 @@ describe('progress-service getStats — finite-ness invariant', () => {
         // Three days: two with a calorie target (one adherent), one with no
         // target. Hand-computed expectations below match getStats exactly.
         const svc = makeService([
-            { caloriesActual: 2000, proteinActual: 150, carbsActual: 200, fatActual: 70, caloriesTarget: 2000, mealsLogged: 3, isAdherent: true },
-            { caloriesActual: 1000, proteinActual: 100, carbsActual: 100, fatActual: 30, caloriesTarget: 2200, mealsLogged: 2, isAdherent: false },
-            { caloriesActual: 2400, proteinActual: 200, carbsActual: 250, fatActual: 90, caloriesTarget: null, mealsLogged: 4, isAdherent: false },
+            { caloriesActual: 2000, proteinActual: 150, carbsActual: 200, fatActual: 70, hydrationActual: 1000, caloriesTarget: 2000, mealsLogged: 3, isAdherent: true },
+            { caloriesActual: 1000, proteinActual: 100, carbsActual: 100, fatActual: 30, hydrationActual: 500, caloriesTarget: 2200, mealsLogged: 2, isAdherent: false },
+            { caloriesActual: 2400, proteinActual: 200, carbsActual: 250, fatActual: 90, hydrationActual: 0, caloriesTarget: null, mealsLogged: 4, isAdherent: false },
         ]);
         const stats = await svc.getStats(USER, 30);
 
@@ -101,6 +104,7 @@ describe('progress-service getStats — finite-ness invariant', () => {
         // avgProteinActual = round((450/3)*10)/10 = 150
         // avgCarbsActual   = round((550/3)*10)/10 = 183.3
         // avgFatActual     = round((190/3)*10)/10 = 63.3
+        // avgHydrationActual = round(((1000+500+0)/3)*10)/10 = 500
         // totalMealsLogged = 3+2+4 = 9
         expect(stats).toEqual({
             daysTracked: 3,
@@ -112,6 +116,7 @@ describe('progress-service getStats — finite-ness invariant', () => {
             avgProteinActual: 150,
             avgCarbsActual: 183.3,
             avgFatActual: 63.3,
+            avgHydrationActual: 500,
             totalMealsLogged: 9,
         });
 
@@ -123,6 +128,7 @@ describe('progress-service getStats — finite-ness invariant', () => {
         expect(Number.isFinite(stats.avgProteinActual)).toBe(true);
         expect(Number.isFinite(stats.avgCarbsActual)).toBe(true);
         expect(Number.isFinite(stats.avgFatActual)).toBe(true);
+        expect(Number.isFinite(stats.avgHydrationActual)).toBe(true);
 
         // statsResponseSchema bounds hold: adherencePercent within [0,100],
         // every avg* nonnegative.
@@ -132,5 +138,28 @@ describe('progress-service getStats — finite-ness invariant', () => {
         expect(stats.avgProteinActual).toBeGreaterThanOrEqual(0);
         expect(stats.avgCarbsActual).toBeGreaterThanOrEqual(0);
         expect(stats.avgFatActual).toBeGreaterThanOrEqual(0);
+        expect(stats.avgHydrationActual).toBeGreaterThanOrEqual(0);
+    });
+
+    // Contract-drift lock (Finding 8): the Performance overview "Water" recap
+    // reads weekly-stats summary.avgHydrationActual (mapped in
+    // clients/mobile/src/api/progress.ts getWeeklyStats → avgHydration, then
+    // rendered /1000 as "…L" at app/(performance)/index.tsx). Before this fix
+    // getStats returned NO hydration aggregate, so the field was always
+    // undefined → 0 → a permanent "0L". This test pins that getStats now
+    // aggregates the per-day hydrationActual column into a REAL average that
+    // tracks the underlying data (never a constant 0 when hydration was logged).
+    it('Finding 8: aggregates per-day hydrationActual into a real average (not a constant 0)', async () => {
+        const svc = makeService([
+            { caloriesActual: 0, proteinActual: 0, carbsActual: 0, fatActual: 0, hydrationActual: 3000, caloriesTarget: null, mealsLogged: 0, isAdherent: false },
+            { caloriesActual: 0, proteinActual: 0, carbsActual: 0, fatActual: 0, hydrationActual: 1000, caloriesTarget: null, mealsLogged: 0, isAdherent: false },
+        ]);
+        const stats = await svc.getStats(USER, 7);
+
+        // avgHydrationActual = round(((3000+1000)/2)*10)/10 = 2000
+        expect(stats.avgHydrationActual).toBe(2000);
+        // Guards against a regression to a hard-coded / always-zero value.
+        expect(stats.avgHydrationActual).toBeGreaterThan(0);
+        expect(Number.isFinite(stats.avgHydrationActual)).toBe(true);
     });
 });

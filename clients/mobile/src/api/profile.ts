@@ -26,7 +26,11 @@ export interface UserPreferences {
 export interface UserStatus {
     fatigueScore: number;
     adherenceScore: number;
-    circadianPhase: 'WAKE' | 'SLEEP' | 'WIND_DOWN';
+    // Optional: no service currently returns a circadian phase on the status
+    // row (the user-service status carries circadianPeakTime/circadianLowTime,
+    // not a phase). Leave it undefined when absent so the UI's honest-empty
+    // fallback ('—') renders instead of a fabricated 'WAKE' for everyone.
+    circadianPhase?: 'WAKE' | 'SLEEP' | 'WIND_DOWN';
     lastUpdated: string;
 }
 
@@ -56,7 +60,11 @@ export const getStatus = async (): Promise<UserStatus> => {
     return {
         fatigueScore: data.fatigueScore ?? 0,
         adherenceScore: data.adherenceScore ?? data.adherenceRate ?? 0,
-        circadianPhase: data.circadianPhase ?? 'WAKE',
+        // Pass through only when the backend actually provides a phase. Do NOT
+        // fabricate 'WAKE' — no service returns this field, so the old default
+        // hard-stuck the Profile "CIRCADIAN PHASE" card on 'WAKE' for everyone.
+        // Left undefined, profile.tsx's `?? '—'` honest-empty fallback renders.
+        circadianPhase: data.circadianPhase,
         lastUpdated: data.lastUpdated ?? data.updatedAt ?? '',
     };
 };

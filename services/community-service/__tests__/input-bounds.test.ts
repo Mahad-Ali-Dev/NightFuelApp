@@ -399,8 +399,9 @@ describe('community-service input bounds (valid token, schema-lock)', () => {
 
             expect(res.statusCode).not.toBe(400);
             expect(svc.getUserPosts).toHaveBeenCalledTimes(1);
-            // Default page size is preserved: second positional arg is 20.
-            expect(svc.getUserPosts).toHaveBeenCalledWith(expect.anything(), 20);
+            // Signature is now (viewerId, authorId, limit) for the privacy gate —
+            // default page size is preserved as the THIRD positional arg.
+            expect(svc.getUserPosts).toHaveBeenCalledWith(expect.anything(), expect.anything(), 20);
         });
 
         it('limit=101 (above max) -> 400 and getUserPosts NOT called', async () => {
@@ -434,7 +435,7 @@ describe('community-service input bounds (valid token, schema-lock)', () => {
 
             expect(res.statusCode).not.toBe(400);
             expect(svc.getUserPosts).toHaveBeenCalledTimes(1);
-            expect(svc.getUserPosts).toHaveBeenCalledWith(expect.anything(), 100);
+            expect(svc.getUserPosts).toHaveBeenCalledWith(expect.anything(), expect.anything(), 100);
         });
 
         it('limit=0 (below min) -> 400 and getUserPosts NOT called', async () => {

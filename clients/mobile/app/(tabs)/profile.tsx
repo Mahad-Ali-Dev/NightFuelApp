@@ -50,9 +50,13 @@ export default function ProfileScreen() {
     const router = useRouter();
 
     const { data: profile, isLoading } = useQuery({ queryKey: ['my-profile'], queryFn: getMyProfile });
-    const { data: status } = useQuery({ queryKey: ['my-status'], queryFn: getStatus });
-    const { data: stats } = useQuery({ queryKey: ['profile-weekly-stats'], queryFn: getWeeklyStats });
-    const { data: streak } = useQuery({ queryKey: ['profile-streak'], queryFn: getStreak });
+    // Secondary queries are destructured with isError + refetch so a backend
+    // failure surfaces an HONEST indicator ('—' / "Unavailable" + retry) on the
+    // affected stat pills instead of coalescing to '0%' / '0d' / 'Level 1' — a
+    // failed fetch must NOT look like a healthy brand-new (genuinely zeroed) user.
+    const { data: status, isError: statusError, refetch: refetchStatus } = useQuery({ queryKey: ['my-status'], queryFn: getStatus });
+    const { data: stats, isError: statsError, refetch: refetchStats } = useQuery({ queryKey: ['profile-weekly-stats'], queryFn: getWeeklyStats });
+    const { data: streak, isError: streakError, refetch: refetchStreak } = useQuery({ queryKey: ['profile-streak'], queryFn: getStreak });
 
     const isCoach = ['COACH', 'TRAINER', 'NUTRITIONIST', 'coach'].includes(user?.role ?? '');
     const isAdmin = user?.role === 'admin' || (user?.role as any) === 'ADMIN';
@@ -131,7 +135,7 @@ export default function ProfileScreen() {
                         {displayName}
                     </Text>
                     <Text style={[typography.body, { color: colors.text.secondary, marginTop: 4, textAlign: 'center' }]}>
-                        {(profile as any)?.occupation ?? 'Member'} · Level {Math.floor(((stats?.daysLogged ?? 0)) / 7) + 1}
+                        {(profile as any)?.occupation ?? 'Member'} · {statsError ? 'Level —' : `Level ${Math.floor(((stats?.daysLogged ?? 0)) / 7) + 1}`}
                     </Text>
                     {!!(profile as any)?.aboutMe && (
                         <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: 10, paddingHorizontal: 20 }]}>
@@ -174,11 +178,12 @@ export default function ProfileScreen() {
                         </TouchableOpacity>
                     )}
 
-                    {/* Stats */}
+                    {/* Stats — each pill distinguishes an honest fetch error
+                        ('—' + retry) from a genuine zeroed new-user value. */}
                     <View style={s.statsRow}>
-                        <StatPill label="FATIGUE" value={`${(status as any)?.fatigueScore ?? 0}%`} color={C.warning} />
-                        <StatPill label="STREAK" value={`${streak?.current ?? 0}d`} color={C.accent.cyan} />
-                        <StatPill label="ADHERENCE" value={`${(status as any)?.adherenceScore ?? 0}%`} color={C.success} />
+                        <StatPill label="FATIGUE" value={`${(status as any)?.fatigueScore ?? 0}%`} color={C.warning} isError={statusError} onRetry={refetchStatus} />
+                        <StatPill label="STREAK" value={`${streak?.current ?? 0}d`} color={C.accent.cyan} isError={streakError} onRetry={refetchStreak} />
+                        <StatPill label="ADHERENCE" value={`${(status as any)?.adherenceScore ?? 0}%`} color={C.success} isError={statusError} onRetry={refetchStatus} />
                     </View>
 
                     {/* Circadian phase card */}
@@ -189,21 +194,36 @@ export default function ProfileScreen() {
                                 <Text style={[s.circLabel, { color: colors.text.secondary }]}>CIRCADIAN PHASE</Text>
                             </View>
                             <Text style={[typography.h3, { color: colors.text.primary, marginTop: 10 }]}>
-                                {(status as any)?.circadianPhase ?? '—'}
+                                {statusError ? 'Unavailable' : ((status as any)?.circadianPhase ?? '—')}
                             </Text>
                             <Text style={[typography.body, { color: colors.text.secondary, marginTop: 4 }]}>
-                                Your metabolic window is currently optimised for activity.
+                                {statusError
+                                    ? "We couldn't load your circadian status."
+                                    : 'Your metabolic window is currently optimised for activity.'}
                             </Text>
-                            <TouchableOpacity
-                                accessibilityRole="button"
-                                accessibilityLabel="View full schedule"
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                style={[s.circBtn, { backgroundColor: withAlpha(C.accent.amber, 0.12), borderColor: withAlpha(C.accent.amber, 0.25) }]}
-                                onPress={() => router.push('/(tabs)/circadian' as any)}
-                                activeOpacity={0.85}
-                            >
-                                <Text style={[s.circBtnTxt, { color: C.accent.amber }]}>View Full Schedule →</Text>
-                            </TouchableOpacity>
+                            {statusError ? (
+                                <TouchableOpacity
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Retry loading circadian status"
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    style={[s.circBtn, { backgroundColor: withAlpha(C.accent.amber, 0.12), borderColor: withAlpha(C.accent.amber, 0.25) }]}
+                                    onPress={() => refetchStatus()}
+                                    activeOpacity={0.85}
+                                >
+                                    <Text style={[s.circBtnTxt, { color: C.accent.amber }]}>Retry</Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <TouchableOpacity
+                                    accessibilityRole="button"
+                                    accessibilityLabel="View full schedule"
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    style={[s.circBtn, { backgroundColor: withAlpha(C.accent.amber, 0.12), borderColor: withAlpha(C.accent.amber, 0.25) }]}
+                                    onPress={() => router.push('/(tabs)/circadian' as any)}
+                                    activeOpacity={0.85}
+                                >
+                                    <Text style={[s.circBtnTxt, { color: C.accent.amber }]}>View Full Schedule →</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </GlassCard>
 
@@ -255,8 +275,45 @@ export default function ProfileScreen() {
 
 // ─── StatPill sub-component ───────────────────────────────────────────────────
 
-function StatPill({ label, value, color }: { label: string; value: string; color: string }) {
+function StatPill({
+    label,
+    value,
+    color,
+    isError = false,
+    onRetry,
+}: {
+    label: string;
+    value: string;
+    color: string;
+    isError?: boolean;
+    onRetry?: () => void;
+}) {
     const { typography, borderRadius, colors } = useTheme();
+
+    // HONEST error state: the fetch failed, so we DON'T know this stat. Render
+    // '—' + a small "Unavailable / Retry" affordance instead of the misleading
+    // '0%'/'0d' a coalesce would produce — a backend failure must not look like
+    // a healthy brand-new (genuinely zeroed) user.
+    if (isError) {
+        return (
+            <GlassCard radius={borderRadius.xl} style={s.statPill}>
+                <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`${label} unavailable, tap to retry`}
+                    onPress={() => onRetry?.()}
+                    style={({ pressed }) => [s.statInner, pressed ? { opacity: 0.85 } : null]}
+                >
+                    <Text style={[typography.statSmall, s.statValue, { color: colors.text.tertiary }]} maxFontSizeMultiplier={1.3}>—</Text>
+                    <Text style={[s.statLabel, { color: colors.text.secondary }]}>Unavailable</Text>
+                    <View style={s.statRetryRow}>
+                        <Ionicons name="refresh" size={11} color={colors.text.tertiary} />
+                        <Text style={[s.statRetryTxt, { color: colors.text.tertiary }]}>Retry</Text>
+                    </View>
+                </Pressable>
+            </GlassCard>
+        );
+    }
+
     return (
         <GlassCard
             radius={borderRadius.xl}
@@ -363,6 +420,8 @@ const s = StyleSheet.create({
     statInner: { paddingVertical: 16, alignItems: 'center' },
     statValue: {},
     statLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginTop: 4 },
+    statRetryRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 6 },
+    statRetryTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4 },
 
     // Circadian
     circCard: { width: '100%', marginBottom: 28 },

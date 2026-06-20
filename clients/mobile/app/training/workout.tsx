@@ -30,6 +30,7 @@ import ConfettiCannon from 'react-native-confetti-cannon';
 import { withAlpha } from '@/theme/utils';
 import { typography as typo } from '@/theme/typography';
 import { getCuratedDemo, getCuratedDemoFrames } from '@/constants/curatedDemos';
+import { invalidateWorkoutCaches } from '@/utils/invalidateWorkoutCaches';
 
 // Bundled neutral placeholder shown when a resolved exercise has no curated
 // thumbnail (no network hit). Reuses the same asset the exercise-detail screen
@@ -576,14 +577,19 @@ export default function ActiveWorkoutScreen() {
                 console.error('Failed to end workout session on backend:', e);
             }
 
-            queryClient.invalidateQueries({ queryKey: ['active-session'] });
-            queryClient.invalidateQueries({ queryKey: ['workout-active-session'] });
-            // The exercise-history list (see app/(exercises)/history.tsx:25) reads
-            // queryKey ['exercise-history']; React-Query matches keys positionally
-            // from index 0, so this must be that exact single-element key (not
-            // ['exercises', 'history'], which never matches and leaves the history
-            // list stale until staleTime expires / a cold refetch).
-            queryClient.invalidateQueries({ queryKey: ['exercise-history'] });
+            // Refresh EVERY workout-derived reader in one place: the active
+            // session, the exercise-history list, AND the heatmap grid /
+            // analytics summaries (['exercise-heatmap'], ['exercises-heatmap'],
+            // ['exercise-analytics']) — all of which derive from the session/
+            // exercise data this FINISH just wrote. Centralised in
+            // invalidateWorkoutCaches so this writer and the shift-prep
+            // active-workout writer can never drift apart and leave a surface
+            // (e.g. the same-screen heatmap) stale. React-Query matches keys
+            // positionally from index 0, so the helper uses the exact reader keys
+            // (note ['exercises-heatmap'] is a SEPARATE key from
+            // ['exercise-heatmap']) and prefix-invalidates ['exercise-analytics']
+            // to catch every ['exercise-analytics', <name>] variant.
+            invalidateWorkoutCaches(queryClient);
 
             // Let the confetti run for 2.5 seconds before navigating
             setTimeout(() => {

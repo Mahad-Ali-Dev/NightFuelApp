@@ -283,4 +283,47 @@ describe('BodyMetricsScreen — loading / empty / error / loaded states + a11y',
     const submitBusy = screen.getByLabelText('Save snapshot');
     expect(submitBusy.props.accessibilityState).toMatchObject({ disabled: true, busy: true });
   });
+
+  // ── Test F: NON-weight fields are finite-guarded too (not just weight) ────────
+  // Regression for FINDING 5: handleLog used to gate on a weight-only hasErrors,
+  // so a non-numeric body-fat / tape-measurement entry (parseFloat → NaN) escaped
+  // to the API. Now EVERY provided field is validated; any non-finite / out-of-range
+  // value surfaces an inline error AND disables the Save control.
+  test('validation: a non-numeric Body Fat % entry surfaces an inline error and disables Save', () => {
+    mockHistory.data = [];
+    renderScreen();
+
+    // Idle (all fields empty) → Save enabled.
+    expect(
+      screen.getByLabelText('Save snapshot').props.accessibilityState,
+    ).toMatchObject({ disabled: false });
+
+    // Type garbage into Body Fat % — parseFloat('abc') === NaN. Pre-fix this slipped
+    // through because only `weight` was validated.
+    fireEvent.changeText(screen.getByLabelText('Body Fat %'), 'abc');
+
+    // The honest inline error appears on the Body Fat field…
+    expect(screen.getByText('Enter a valid body fat % greater than 0.')).toBeTruthy();
+    // …and the Save control is now disabled so the NaN can never reach the API.
+    expect(
+      screen.getByLabelText('Save snapshot').props.accessibilityState,
+    ).toMatchObject({ disabled: true });
+  });
+
+  // ── Test G: out-of-range tape measurement (cm) is rejected ───────────────────
+  test('validation: an out-of-range tape measurement disables Save with an inline error', () => {
+    mockHistory.data = [];
+    renderScreen();
+
+    // Reveal the tape-measurement inputs.
+    fireEvent.press(screen.getByLabelText('Add tape measurements'));
+
+    // A wildly out-of-range waist (cm) value — beyond MEASUREMENT_CM_MAX (300).
+    fireEvent.changeText(screen.getByLabelText('Waist (cm)'), '9999');
+
+    expect(screen.getByText('waist must be 300 or less.')).toBeTruthy();
+    expect(
+      screen.getByLabelText('Save snapshot').props.accessibilityState,
+    ).toMatchObject({ disabled: true });
+  });
 });

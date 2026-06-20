@@ -36,6 +36,23 @@ export class RequestPendingError extends Error {
     }
 }
 
+/**
+ * Thrown when a caller tries to read/act on a conversation they are not a
+ * participant of (or that does not exist). Carries a typed `code` so the route
+ * layer can map it to 403 without string-matching. Missing and non-participant
+ * are deliberately collapsed into the SAME error so the response never reveals
+ * whether a given conversationId exists (no existence oracle). This is the
+ * membership gate the message READ paths previously lacked — they filtered by
+ * conversationId alone, an IDOR letting any authenticated user read any DM.
+ */
+export class ConversationAccessError extends Error {
+    readonly code = 'forbidden';
+    constructor(message = 'forbidden') {
+        super(message);
+        this.name = 'ConversationAccessError';
+    }
+}
+
 /** Resolved peer identity attached to a conversation list item. */
 export interface ConversationPeer {
     userId: string;
@@ -153,7 +170,24 @@ export class ChatService {
         });
     }
 
-    async getMessageHistory(conversationId: string, limit: number = 50) {
+    /**
+     * Load a conversation and assert `userId` is one of its two participants.
+     * Throws ConversationAccessError (mapped to 403 by the route) when the
+     * conversation is missing OR the user is not a participant — the membership
+     * gate the read paths previously lacked. Mirrors the participant check
+     * already enforced in markConversationRead / transitionRequest.
+     */
+    private async assertParticipant(conversationId: string, userId: string) {
+        const conv = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+        if (!conv || (conv.participantA !== userId && conv.participantB !== userId)) {
+            throw new ConversationAccessError();
+        }
+        return conv;
+    }
+
+    async getMessageHistory(conversationId: string, userId: string, limit: number = 50) {
+        // Membership gate: only a participant may read a conversation's history.
+        await this.assertParticipant(conversationId, userId);
         return this.prisma.message.findMany({
             where: { conversationId },
             take: limit,
@@ -163,6 +197,8 @@ export class ChatService {
 
     /** Get messages formatted for the frontend */
     async getMessagesForUser(conversationId: string, userId: string, limit: number = 50) {
+        // Membership gate: only a participant may read a conversation's messages.
+        await this.assertParticipant(conversationId, userId);
         const messages = await this.prisma.message.findMany({
             where: { conversationId },
             take: limit,
