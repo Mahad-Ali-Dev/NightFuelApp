@@ -27,6 +27,7 @@ import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { searchLibrary } from '@/api/exercises';
 import ShiftTransitionCard from '@/components/home/ShiftTransitionCard';
 import LightPlanCard from '@/components/home/LightPlanCard';
+import AnchorSleepCard from '@/components/home/AnchorSleepCard';
 import { CaffeineTimerTile } from '@/components/home/CaffeineTimerTile';
 import { TAB_BAR_H } from './_layout';
 
@@ -486,6 +487,14 @@ export default function DashboardScreen() {
 
                 {/* ══ LIGHT PLAN (light-exposure coaching) ════════════════════ */}
                 <LightPlanCard
+                    shift={shift ?? null}
+                    loading={shiftLoading}
+                    error={shiftError}
+                    onRetry={() => shiftRefetch()}
+                />
+
+                {/* ══ ANCHOR SLEEP (fixed core-sleep block) ═══════════════════ */}
+                <AnchorSleepCard
                     shift={shift ?? null}
                     loading={shiftLoading}
                     error={shiftError}

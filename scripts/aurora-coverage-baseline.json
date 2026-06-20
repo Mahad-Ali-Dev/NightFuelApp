@@ -1,0 +1,7 @@
+{
+  "_comment": "Aurora-adoption ANTI-REGRESSION baseline (HARD floor) — see scripts/check-aurora-coverage-baseline.js. These counts are the Aurora-primitive adoption on the CURRENT clients/mobile/app tree, captured by `node scripts/check-aurora-coverage.js`. The baseline guard FAILS the gate only if the live glassCard or statusBar count drops BELOW these floors (a ratchet — adoption may rise, never silently regress). ctaButton is recorded for the record ONLY and is NEVER thresholded: the inline-coral-CTA migration is complete and many hubs/feeds legitimately have no coral CTA, so chasing a CtaButton number manufactures bad-UX CTAs. `total` is informational (screen count denominator at capture time). Re-baseline ONLY by re-running the coverage script after intentional UI changes land.",
+  "glassCard": 40,
+  "ctaButton": 33,
+  "statusBar": 68,
+  "total": 75
+}

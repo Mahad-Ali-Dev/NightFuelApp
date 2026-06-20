@@ -22,6 +22,27 @@
  *     so the coverage numbers can NEVER block a merge. The hard Aurora contracts
  *     are owned by the two guards above; this just measures adoption.
  *
+ *   THE CtaButton GOAL IS RETIRED ────────────────────────────────────────────
+ *     This script reports a CtaButton count/percentage, but a CtaButton ADOPTION
+ *     PERCENTAGE IS NOT A GOAL and must never be chased. The inline-coral-CTA →
+ *     CtaButton migration is COMPLETE, and the only hard CtaButton contract — that
+ *     no screen reintroduces an inline coral-CTA <LinearGradient> — is already
+ *     owned by scripts/check-no-inline-cta.js. Many hubs, feeds, list and detail
+ *     screens legitimately have NO primary coral call-to-action; pushing the
+ *     CtaButton number upward to hit some percentage would manufacture bad-UX CTAs
+ *     where the design wants none. So CtaButton here is purely a printed metric.
+ *
+ *   THE ANTI-REGRESSION FLOOR LIVES ELSEWHERE ────────────────────────────────
+ *     This script stays purely informational. The HARD anti-regression floor that
+ *     keeps Aurora adoption from silently SLIDING BACK is enforced by its sibling,
+ *     scripts/check-aurora-coverage-baseline.js — a real gate step that reuses
+ *     THIS file's collectScreens()+computeCoverage() (exported via
+ *     module.exports.__test) and FAILS only if the live GlassCard or StatusBar
+ *     count drops below scripts/aurora-coverage-baseline.json. That guard enforces
+ *     GlassCard + StatusBar ONLY (never CtaButton — see above). Splitting the
+ *     metric (here, always exit 0) from the floor (there, exit 1 on regression)
+ *     keeps THIS report non-blocking and out of gate.js's hard buildSteps() array.
+ *
  * DENOMINATOR — what counts as a "screen":
  *   Every *.tsx under clients/mobile/app EXCEPT the non-screen route files:
  *     • files named `_layout.tsx` (Expo Router layout wrappers — not screens), and
@@ -37,6 +58,8 @@
  *       screen uses the glass-card primitive; some screens import it and render
  *       it via a wrapper, so the import alone counts.)
  *   (b) CtaButton — a `<CtaButton` JSX tag (the rendered primary call-to-action).
+ *       Reported for the record ONLY — this count is never a goal and is never
+ *       thresholded by any guard (the CtaButton chase is retired; see the header).
  *   (c) StatusBar — BOTH an `expo-status-bar` import AND a `<StatusBar` JSX tag.
  *       (Requiring both avoids counting a stray import or an unrelated
  *       react-native StatusBar tag — the Aurora pattern is the expo-status-bar

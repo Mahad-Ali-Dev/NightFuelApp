@@ -21,6 +21,10 @@ import { getNotificationPreferences } from '@/api/notifications';
 import { useAuthStore } from '@/store/authStore';
 import { OFFSETS } from '@/lib/shiftTransition';
 import { BLUE_BLOCKER_LEAD_HOURS } from '@/lib/lightPlan';
+// Import the CONST only — not computeAnchorSleep — so buildShiftReminders stays
+// pure and never throws on malformed ISO (mirrors the nf-avoid-light pattern
+// below, which inlines the math instead of calling computeLightPlan).
+import { ANCHOR_SLEEP_HOURS } from '@/lib/circadian/anchorSleep';
 
 const IS_EXPO_GO = Constants.appOwnership === 'expo';
 
@@ -63,6 +67,22 @@ export function buildShiftReminders(shift: { startTime: string; endTime: string 
     { id: 'nf-avoid-light', prefKey: 'sleepReminderEnabled', title: 'Dim the lights 🕶️',
       body: 'Switch to blue-blockers / dim light now so melatonin can rise before your recovery sleep.',
       date: shift_(end, OFFSETS.sleepStartAfterEnd - BLUE_BLOCKER_LEAD_HOURS) },
+    // Anchor-sleep nudge, fired at the OPENING of the fixed core-sleep block so the
+    // AnchorSleepCard's anchor window and this scheduled reminder tell ONE story.
+    // We compute the instant directly here rather than calling computeAnchorSleep
+    // to keep buildShiftReminders pure (no throw on malformed ISO):
+    // computeAnchorSleep(shift).anchor.start === sleepWindow.start
+    //                                         === end + OFFSETS.sleepStartAfterEnd h,
+    // which is bit-identical to this date by construction. (The fixed block runs
+    // for ANCHOR_SLEEP_HOURS from this instant — we nudge at its start; the length
+    // const is imported above purely to document that relationship.) NOTE this
+    // shares the exact instant of nf-winddown (also end + sleepStartAfterEnd h):
+    // wind-down and the anchor open together at the recovery-sleep opportunity, and
+    // that tie is intentional. Reuses the existing sleepReminderEnabled pref — no
+    // new preference key.
+    { id: 'nf-anchor-sleep', prefKey: 'sleepReminderEnabled', title: 'Anchor your sleep 🛏️',
+      body: `Start your anchor-sleep block now and hold this ${ANCHOR_SLEEP_HOURS}h core-sleep window consistent across your rotation to keep your body clock steady.`,
+      date: shift_(end, OFFSETS.sleepStartAfterEnd) },
   ];
 }
 

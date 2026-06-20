@@ -401,6 +401,17 @@ describe('check-aurora-coverage — formatReport', () => {
 describe('check-aurora-coverage — exit-0 by construction', () => {
     const source = fs.readFileSync(COVERAGE_PATH, 'utf8');
 
+    test('the header documents that the CtaButton goal is RETIRED (informational only)', () => {
+        // The script must explicitly state that a CtaButton adoption percentage is
+        // not a goal and that the hard anti-regression floor (GlassCard+StatusBar)
+        // lives in the sibling baseline guard. This locks the documented intent so
+        // a future edit can't quietly re-introduce a CtaButton % chase here.
+        expect(source).toMatch(/CtaButton GOAL IS RETIRED/);
+        expect(source).toMatch(/check-aurora-coverage-baseline\.js/);
+        expect(source).toMatch(/check-no-inline-cta\.js/);
+        expect(source).toMatch(/NOT A GOAL|not a goal/);
+    });
+
     test('the script never calls process.exit with a non-zero code', () => {
         // No process.exit(1) (or any non-zero literal) exists in the file.
         expect(/process\.exit\(\s*0\s*\)/.test(source)).toBe(true);
@@ -440,12 +451,18 @@ describe('check-aurora-coverage — gate.js wiring (informational, separate from
         expect(last.split(/[\\/]/).join('/')).toMatch(/scripts\/check-aurora-coverage\.js$/);
     });
 
-    test('the coverage report is NOT in the hard buildSteps() array', () => {
+    test('the INFORMATIONAL coverage report is NOT in the hard buildSteps() array', () => {
+        // The informational metric (check-aurora-coverage.js) must never be a hard
+        // step. NOTE: its HARD anti-regression sibling, check-aurora-coverage-
+        // baseline, IS legitimately a hard step — so we match the metric by its
+        // EXACT reporting-step name and its EXACT script basename, NOT by a loose
+        // /aurora-coverage/ substring (which would also catch the baseline guard).
         const hardNames = buildSteps().map((s) => s.name);
-        // It must not appear among the hard steps under any aurora-coverage name.
-        expect(hardNames.some((n) => /aurora-coverage/.test(n))).toBe(false);
-        // And no hard step references the coverage script (which would make the
-        // gate-steps meta self-test require it to be a HARD on-disk step).
+        expect(hardNames).not.toContain('aurora-coverage (informational)');
+        // No hard step references the INFORMATIONAL coverage script (which would
+        // make the gate-steps meta self-test require it to be a HARD on-disk step).
+        // `.endsWith('check-aurora-coverage.js')` deliberately does NOT match
+        // 'check-aurora-coverage-baseline.js'.
         const refsCoverage = buildSteps().some((s) =>
             Array.isArray(s.args) && s.args.some((a) => typeof a === 'string' && a.endsWith('check-aurora-coverage.js')),
         );

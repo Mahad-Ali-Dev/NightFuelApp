@@ -301,6 +301,19 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
     // this while a wrong/NaN instant still would.
     expect(screen.getByText(windowMatcher(plan.seekLight))).toBeTruthy();
     expect(screen.getByText(windowMatcher(plan.avoidLight))).toBeTruthy();
+    // …and the richer PLAN now carries an explicit WHY line under each window.
+    // We pin the LOAD-BEARING reason of each — the seek line's alertness-
+    // anchoring rationale and the avoid line's rising-melatonin rationale — via a
+    // resilient substring RegExp (case-insensitive) rather than the whole
+    // sentence, so a peripheral copy tweak can't regress this while a dropped WHY
+    // line still would. These are the two reasons the item requires the plan to
+    // explain: SEEK anchors alertness early; AVOID protects rising melatonin
+    // before recovery sleep.
+    expect(screen.getByText(/anchors alertness/i)).toBeTruthy();
+    expect(screen.getByText(/melatonin/i)).toBeTruthy();
+    // The timeline framing ("in order") that turns the two rows into a sequenced
+    // plan is also present — asserted by its stable "in order" fragment.
+    expect(screen.getByText(/in order/i)).toBeTruthy();
     // The no-shift EmptyState must NOT be present for a populated shift — its
     // structural marker (the sunny-outline glyph) is absent.
     expect(screen.queryByText('No shift to plan light around')).toBeNull();

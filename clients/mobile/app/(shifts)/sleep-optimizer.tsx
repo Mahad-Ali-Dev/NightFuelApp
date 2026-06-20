@@ -183,16 +183,32 @@ export default function SleepOptimizerScreen() {
                         <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>90-minute cycle to top off cognitive alertness before shift.</Text>
                     </GlassCard>
 
-                    {/* Light timing — seek/avoid light windows derived from the
-                        user's current shift via the pure computeLightPlan reuse.
-                        Falls back to the screen's Skeleton while the shift query
-                        is loading, and to an EmptyState when there's no usable
-                        shift (none scheduled, or a malformed shift whose ISO made
-                        computeLightPlan throw) — never a crash. */}
+                    {/* Light timing — a seek→avoid light-exposure PLAN derived from
+                        the user's current shift via the pure computeLightPlan reuse.
+                        Two windows framed as an in-order timeline (anchor early →
+                        dim before recovery sleep), each carrying an explicit WHY
+                        line under its window. Falls back to the screen's Skeleton
+                        while the shift query is loading, and to an EmptyState when
+                        there's no usable shift (none scheduled, or a malformed shift
+                        whose ISO made computeLightPlan throw) — never a crash.
+
+                        react-native-skills applied here (see the diff notes):
+                        • js-hoist-intl: every time is rendered through the existing
+                          module-scope `formatLightTime` helper — we do NOT create a
+                          per-render Intl formatter or duplicate the Intl logic.
+                        • rendering-no-falsy-and: the section is selected with
+                          ternaries that resolve to a component or `null` (never a
+                          bare `value && <JSX/>` over a possibly-falsy value), so a
+                          falsy never leaks into the tree as text.
+                        • scroll-position-no-state: this is additive ScrollView
+                          content only — no onScroll / scroll position is tracked in
+                          state. • list-performance-inline-objects: new repeated
+                          styles are hoisted into StyleSheet.create rather than
+                          rebuilt as inline objects on each render. */}
                     <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing.xl, marginBottom: spacing.lg }]}>Light Timing</Text>
 
                     {shiftLoading ? (
-                        <Skeleton width="100%" height={140} radius={borderRadius.xl} style={{ marginBottom: spacing.lg }} />
+                        <Skeleton width="100%" height={200} radius={borderRadius.xl} style={styles.lightSkeleton} />
                     ) : !lightPlan ? (
                         <GlassCard style={[styles.windowCard, { borderColor: colors.border.default }]}>
                             <EmptyState
@@ -204,31 +220,46 @@ export default function SleepOptimizerScreen() {
                         </GlassCard>
                     ) : (
                         <GlassCard style={[styles.windowCard, { borderColor: withAlpha(colors.accent.amber, 0.25) }]}>
+                            {/* Timeline framing: this card is a two-step plan read
+                                top-to-bottom — anchor early, then dim before sleep. */}
+                            <Text style={[typography.overline, { color: colors.accent.amber }]}>Your light plan, in order</Text>
+                            <Text style={[typography.caption, styles.lightIntro, { color: colors.text.tertiary }]}>
+                                Two windows across your shift — anchor alertness early, then protect your recovery sleep.
+                            </Text>
+
+                            {/* Step 1 — SEEK light early in the shift. */}
                             <View style={styles.windowHeader}>
-                                <View style={[styles.windowIcon, { backgroundColor: withAlpha(colors.accent.amber, 0.14), borderColor: withAlpha(colors.accent.amber, 0.28), borderWidth: 1 }]}>
+                                <View style={[styles.windowIcon, styles.windowIconBorder, { backgroundColor: withAlpha(colors.accent.amber, 0.14), borderColor: withAlpha(colors.accent.amber, 0.28) }]}>
                                     <Ionicons name="sunny" size={18} color={colors.accent.amber} />
                                 </View>
-                                <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: spacing.md }]}>Seek Light</Text>
-                                <View style={{ flex: 1 }} />
+                                <Text style={[typography.subhead, styles.windowTitle, { color: colors.text.primary }]}>Seek Light</Text>
+                                <View style={styles.windowSpacer} />
                                 <Text style={[typography.statTiny, { color: colors.accent.amber }]}>
                                     {`${formatLightTime(lightPlan.seekLight.start)} – ${formatLightTime(lightPlan.seekLight.end)}`}
                                 </Text>
                             </View>
-                            <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>Bright light early in your shift holds alertness and anchors your clock.</Text>
+                            <Text style={[typography.overline, styles.windowWhen, { color: colors.text.tertiary }]}>Early in your shift</Text>
+                            <Text style={[typography.bodySm, styles.windowWhy, { color: colors.text.secondary }]}>
+                                Bright light early in your shift anchors alertness and pushes your clock the night-worker direction.
+                            </Text>
 
                             <View style={[styles.lightDivider, { backgroundColor: colors.border.default }]} />
 
+                            {/* Step 2 — AVOID light before the recovery sleep. */}
                             <View style={styles.windowHeader}>
-                                <View style={[styles.windowIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.28), borderWidth: 1 }]}>
+                                <View style={[styles.windowIcon, styles.windowIconBorder, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.28) }]}>
                                     <Ionicons name="glasses-outline" size={18} color={colors.accent.purple} />
                                 </View>
-                                <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: spacing.md }]}>Avoid Light</Text>
-                                <View style={{ flex: 1 }} />
+                                <Text style={[typography.subhead, styles.windowTitle, { color: colors.text.primary }]}>Avoid Light</Text>
+                                <View style={styles.windowSpacer} />
                                 <Text style={[typography.statTiny, { color: colors.accent.purple }]}>
                                     {`${formatLightTime(lightPlan.avoidLight.start)} – ${formatLightTime(lightPlan.avoidLight.end)}`}
                                 </Text>
                             </View>
-                            <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>Dim down / wear blue-blockers before sleep so melatonin can rise.</Text>
+                            <Text style={[typography.overline, styles.windowWhen, { color: colors.text.tertiary }]}>Before recovery sleep</Text>
+                            <Text style={[typography.bodySm, styles.windowWhy, { color: colors.text.secondary }]}>
+                                Dim down / wear blue-blockers so rising melatonin isn't suppressed before recovery sleep.
+                            </Text>
                         </GlassCard>
                     )}
 
@@ -292,6 +323,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    // The tinted icon chips in the Light-timing rows carry a 1px ring; hoisted
+    // here (per list-performance-inline-objects) so the borderWidth isn't a fresh
+    // inline object on each render — only the per-tint color is merged inline.
+    windowIconBorder: { borderWidth: 1 },
+    // Static layout fragments for the Light-timing rows, hoisted out of render so
+    // the seek/avoid rows reuse stable style references instead of rebuilding
+    // inline objects (list-performance-inline-objects).
+    windowTitle: { marginLeft: spacingTokens.md },
+    windowSpacer: { flex: 1 },
+    // The "in order" framing caption under the card's plan heading.
+    lightIntro: { marginTop: spacingTokens.xs, marginBottom: spacingTokens.lg },
+    // The per-row "when" tag (e.g. "Early in your shift") above each WHY line.
+    windowWhen: { marginTop: spacingTokens.md },
+    // The explicit WHY line under each window (alertness-anchoring / melatonin).
+    windowWhy: { marginTop: spacingTokens.xs },
+    // The shift-loading placeholder for the (now richer) Light-timing plan card.
+    lightSkeleton: { marginBottom: spacingTokens.lg },
     // Hairline separator between the two light windows inside the Light-timing card.
     lightDivider: {
         height: StyleSheet.hairlineWidth,

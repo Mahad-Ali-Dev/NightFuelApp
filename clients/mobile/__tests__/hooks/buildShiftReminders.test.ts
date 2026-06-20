@@ -1,18 +1,19 @@
 /**
  * Tests for buildShiftReminders — the pure time-deriving core of
  * useCircadianReminders. It maps a shift's ISO start/end timestamps to the
- * seven circadian-coach reminders and their fire times.
+ * eight circadian-coach reminders and their fire times.
  *
  * buildShiftReminders is a pure function with no React / native dependencies,
- * so it needs no mocks. We assert both the shape (7 reminders, ids, prefKeys,
+ * so it needs no mocks. We assert both the shape (8 reminders, ids, prefKeys,
  * titles) and the exact derived Date for each reminder relative to the shift.
  *
  * The 'nf-bright-light' reminder is the reconciliation anchor with the coach
- * card's brightLightWindow, and the 'nf-avoid-light' reminder is the analogous
- * anchor for the card's avoidLight (blue-blocker) window — see the parity test
- * in __tests__/lib/shiftTransition.test.ts and __tests__/lib/lightPlanReminderParity.test.ts
- * for the bit-identical assertions that each reminder fires at the same instant
- * the card advertises.
+ * card's brightLightWindow, the 'nf-avoid-light' reminder is the analogous
+ * anchor for the card's avoidLight (blue-blocker) window, and the new
+ * 'nf-anchor-sleep' reminder is the anchor for the AnchorSleepCard's core-sleep
+ * block — see the parity tests in __tests__/lib/shiftTransition.test.ts and
+ * __tests__/lib/lightPlanReminderParity.test.ts for the bit-identical assertions
+ * that each reminder fires at the same instant the card advertises.
  */
 import { buildShiftReminders } from '@/hooks/useCircadianReminders';
 import { OFFSETS } from '@/lib/shiftTransition';
@@ -33,8 +34,8 @@ function build() {
 }
 
 describe('buildShiftReminders', () => {
-  test('returns exactly seven reminders', () => {
-    expect(build()).toHaveLength(7);
+  test('returns exactly eight reminders', () => {
+    expect(build()).toHaveLength(8);
   });
 
   test('emits the expected reminder ids in order', () => {
@@ -46,6 +47,7 @@ describe('buildShiftReminders', () => {
       'nf-winddown',
       'nf-log-sleep',
       'nf-avoid-light',
+      'nf-anchor-sleep',
     ]);
   });
 
@@ -67,6 +69,7 @@ describe('buildShiftReminders', () => {
     expect(byId['nf-winddown']).toBe('sleepReminderEnabled');
     expect(byId['nf-log-sleep']).toBe('sleepReminderEnabled');
     expect(byId['nf-avoid-light']).toBe('sleepReminderEnabled');
+    expect(byId['nf-anchor-sleep']).toBe('sleepReminderEnabled');
   });
 
   test('bright-light reminder uses sleepReminderEnabled pref key (no new pref this sprint)', () => {
@@ -92,6 +95,22 @@ describe('buildShiftReminders', () => {
     const avoidLight = build().find((r) => r.id === 'nf-avoid-light');
     expect(avoidLight).toBeDefined();
     expect(avoidLight!.prefKey).toBe('sleepReminderEnabled');
+  });
+
+  test('anchor-sleep reminder uses sleepReminderEnabled pref key (no new pref this sprint)', () => {
+    // Like nf-bright-light / nf-avoid-light, the anchor-sleep nudge piggy-backs on
+    // the existing sleep toggle rather than introducing a dedicated pref — and
+    // crucially adds NO new key to NotificationPreferences (src/api/notifications.ts).
+    const anchorSleep = build().find((r) => r.id === 'nf-anchor-sleep');
+    expect(anchorSleep).toBeDefined();
+    expect(anchorSleep!.prefKey).toBe('sleepReminderEnabled');
+  });
+
+  test('anchor-sleep reminder body mentions the anchor-sleep block', () => {
+    // Acceptance: the body must reference the anchor-sleep concept so the user
+    // understands the nudge maps to the AnchorSleepCard's core-sleep window.
+    const anchorSleep = build().find((r) => r.id === 'nf-anchor-sleep')!;
+    expect(anchorSleep.body.toLowerCase()).toContain('anchor-sleep');
   });
 
   test('every reminder fire time is a valid Date', () => {
@@ -125,6 +144,14 @@ describe('buildShiftReminders', () => {
       expect(byId()['nf-winddown']).toBe(endMs + 1 * HOUR);
     });
 
+    test('anchor-sleep fires at end + OFFSETS.sleepStartAfterEnd h (== sleepWindow.start)', () => {
+      // Bit-identical to computeAnchorSleep(shift).anchor.start (== sleepWindow.start)
+      // — asserted bit-for-bit in the lib parity test. The anchor opens at the
+      // recovery-sleep opportunity, the SAME instant as nf-winddown above.
+      expect(byId()['nf-anchor-sleep']).toBe(endMs + OFFSETS.sleepStartAfterEnd * HOUR);
+      expect(byId()['nf-anchor-sleep']).toBe(byId()['nf-winddown']);
+    });
+
     test('log-sleep nudge fires 9 hours after shift end', () => {
       expect(byId()['nf-log-sleep']).toBe(endMs + 9 * HOUR);
     });
@@ -138,26 +165,39 @@ describe('buildShiftReminders', () => {
       );
     });
 
-    test('all seven fire times are distinct or document the exact tie', () => {
+    test('fire times are distinct EXCEPT the intentional anchor↔winddown tie at end+1h', () => {
       // The reminders are emitted in a logical (not strictly chronological)
       // order — e.g. for a short night shift the caffeine cutoff (end-6h) can
       // precede the midpoint. The bright-light reminder fires at clock-in
       // (start + OFFSETS.brightLightStartAfterStart), which on a real shift
       // ties only with anchors derived from `start` at the same offset — and
-      // we have none others at offset 0 from start. The new avoid-light reminder
+      // we have none others at offset 0 from start. The avoid-light reminder
       // fires at end-1h (sleepStartAfterEnd − BLUE_BLOCKER_LEAD_HOURS), distinct
-      // from caffeine-cutoff (end-6h) and winddown (end+1h). For this night
-      // fixture every fire time should be unique; if a future offset change
-      // introduces a tie, this test should be relaxed with a deliberate comment.
-      const times = build().map((r) => r.date.getTime());
-      expect(new Set(times).size).toBe(times.length);
+      // from caffeine-cutoff (end-6h) and winddown (end+1h).
+      //
+      // DELIBERATE TIE: nf-anchor-sleep and nf-winddown BOTH fire at
+      // end + OFFSETS.sleepStartAfterEnd h (== sleepWindow.start). That is by
+      // design — wind-down and the anchor-sleep block both open at the
+      // recovery-sleep opportunity, so they share the exact instant. We therefore
+      // assert that the ONLY collision is that pair: removing one of them makes
+      // the remaining seven fire times unique.
+      const reminders = build();
+      const anchor = reminders.find((r) => r.id === 'nf-anchor-sleep')!;
+      const winddown = reminders.find((r) => r.id === 'nf-winddown')!;
+      expect(anchor.date.getTime()).toBe(winddown.date.getTime());
+
+      const withoutAnchor = reminders
+        .filter((r) => r.id !== 'nf-anchor-sleep')
+        .map((r) => r.date.getTime());
+      expect(new Set(withoutAnchor).size).toBe(withoutAnchor.length);
     });
 
     test('the earliest reminder is the pre-shift meal and the latest is log-sleep', () => {
       // preshift-meal at start-1h is still earlier than bright-light at start+0h,
-      // and log-sleep at end+9h is still latest. Bright-light slots in second and
+      // and log-sleep at end+9h is still latest. Bright-light slots in second,
       // avoid-light at end-1h sits between caffeine-cutoff (end-6h) and winddown
-      // (end+1h) — neither displaces the earliest/latest extremes.
+      // (end+1h), and anchor-sleep at end+1h coincides with winddown in the middle
+      // — none of these displaces the earliest/latest extremes.
       const reminders = build();
       const sorted = [...reminders].sort((a, b) => a.date.getTime() - b.date.getTime());
       expect(sorted[0]!.id).toBe('nf-preshift-meal');
@@ -192,5 +232,6 @@ describe('buildShiftReminders', () => {
     expect(byId['nf-winddown']).toBe(eMs + OFFSETS.sleepStartAfterEnd * HOUR);
     expect(byId['nf-log-sleep']).toBe(eMs + OFFSETS.sleepEndAfterEnd * HOUR);
     expect(byId['nf-avoid-light']).toBe(eMs + (OFFSETS.sleepStartAfterEnd - BLUE_BLOCKER_LEAD_HOURS) * HOUR);
+    expect(byId['nf-anchor-sleep']).toBe(eMs + OFFSETS.sleepStartAfterEnd * HOUR);
   });
 });

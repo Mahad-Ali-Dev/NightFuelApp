@@ -37,29 +37,38 @@
  *      <LinearGradient> (a labeled coral button fill) outside the CtaButton
  *      primitive — so the Aurora coral-CTA contract can't drift back into
  *      duplicated inline gradient buttons. Runs immediately after the glass guard)
- *   7. harness-self-tests                         (runs scripts/__tests__/*.test.js
+ *   7. node scripts/check-aurora-coverage-baseline.js (lint-tier guard — HARD /
+ *      unconditional, same as #2-#6. No fs.existsSync guard. The ANTI-REGRESSION
+ *      floor for Aurora adoption: it reuses check-aurora-coverage.js's
+ *      collectScreens()+computeCoverage() to count live GlassCard / StatusBar
+ *      adoption over clients/mobile/app and FAILS if either drops BELOW
+ *      scripts/aurora-coverage-baseline.json — a ratchet (adoption may rise, never
+ *      silently regress). CtaButton is reported but NEVER thresholded (that chase
+ *      is retired). This is the HARD sibling of the INFORMATIONAL aurora-coverage
+ *      report below, which still always exits 0)
+ *   8. harness-self-tests                         (runs scripts/__tests__/*.test.js
  *      via the already-installed jest — these lock the gate's own helpers:
  *      parseSuiteSummary's fail-closed contract and the inline-401 detectors.
  *      No new dependency: we invoke the repo-hoisted jest CLI directly as a
  *      NODE step. A regression that made parseSuiteSummary fail-OPEN, or that
  *      narrowed the 401 regexes, turns this step RED before it reaches CI)
- *   8. npm run check-types --silent              (root turbo typecheck — all
+ *   9. npm run check-types --silent              (root turbo typecheck — all
  *      packages and services)
- *   9. @nightfuel/config build                    (force-emit packages/config
+ *  10. @nightfuel/config build                    (force-emit packages/config
  *      via `tsc -b packages/config --force`; see the long note on the step for
  *      WHY --force is mandatory — a stale tsconfig.tsbuildinfo makes a plain
  *      `tsc`/`tsc -b` report 'up to date' and emit NOTHING even when dist/ is
  *      missing, which would let the backend redaction suites import a stale or
  *      absent @nightfuel/config. Runs BEFORE test:backend so the 11
  *      shared-family redaction suites resolve packages/config/dist/index.js)
- *  10. node scripts/run-backend-tests.js         (per-service jest/vitest
+ *  11. node scripts/run-backend-tests.js         (per-service jest/vitest
  *      runs with one PASS/FAIL line per service)
- *  11. npm test --workspace=@nightfuel/mobile -- --ci --silent
+ *  12. npm test --workspace=@nightfuel/mobile -- --ci --silent
  *      (mobile jest run; --ci so it doesn't wait for an interactive watcher
  *      and disables snapshot updates)
  *
- * The 11 steps above are HARD: the FIRST non-zero exit FAILS the gate. After all
- * 11 pass, the gate ALSO runs ONE informational reporting step whose exit code is
+ * The 12 steps above are HARD: the FIRST non-zero exit FAILS the gate. After all
+ * 12 pass, the gate ALSO runs ONE informational reporting step whose exit code is
  * deliberately IGNORED:
  *
  *   • Aurora coverage report (INFORMATIONAL — node scripts/check-aurora-
@@ -71,7 +80,10 @@
  *     coverage numbers can never affect the gate's PASS/FAIL. It runs SEPARATELY
  *     from buildSteps() (not part of the hard step array) so the gate-steps meta
  *     self-test — which forbids on-disk guard steps from carrying a `file:` field
- *     — is unaffected, and so a 0% coverage number can never block a merge.
+ *     — is unaffected, and so a 0% coverage number can never block a merge. The
+ *     anti-regression FLOOR under these numbers is enforced separately by the HARD
+ *     step #7 (check-aurora-coverage-baseline) above — this bullet is only the
+ *     human-readable metric.
  *
  * Dependency-free on purpose — uses only Node's built-in `fs`, `path`, and
  * `child_process`. Steps stream their output directly to the gate's stdio so
@@ -307,6 +319,23 @@ function buildSteps() {
             name: 'check-no-inline-cta',
             cmd: NODE,
             args: [path.join(REPO_ROOT, 'scripts', 'check-no-inline-cta.js')],
+        },
+        {
+            // HARD / unconditional — no `file` guard, same pattern as the lint-tier
+            // guards above. The ANTI-REGRESSION floor for Aurora adoption: it reuses
+            // check-aurora-coverage.js's collectScreens()+computeCoverage() to count
+            // live GlassCard / StatusBar adoption over clients/mobile/app and FAILS
+            // if either drops BELOW scripts/aurora-coverage-baseline.json (a ratchet
+            // — adoption may rise, never silently regress). CtaButton is reported but
+            // NEVER thresholded (that chase is retired — see the guard's header).
+            // This is the HARD sibling of the INFORMATIONAL 'aurora-coverage' report
+            // in buildReportingSteps(): the metric still always exits 0 and stays out
+            // of this array, while the floor below it is enforced here. Left UNGUARDED
+            // (no `file:`) so the gate-steps meta self-test stays green; a missing or
+            // throwing script (or a missing baseline JSON) fails the gate.
+            name: 'check-aurora-coverage-baseline',
+            cmd: NODE,
+            args: [path.join(REPO_ROOT, 'scripts', 'check-aurora-coverage-baseline.js')],
         },
         {
             // Harness self-tests: run scripts/__tests__/*.test.js, which lock

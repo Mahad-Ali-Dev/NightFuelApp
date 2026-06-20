@@ -15,11 +15,11 @@ function SleepWindowCardComponent({ targetTime, progress, hint = 'Melatonin risi
     return (
         <Card style={styles.card}>
             <View style={styles.header}>
-                <Ionicons name="moon" size={20} color="#00D4AA" />
+                <Ionicons name="moon" size={20} color={colors.accent.cyan} />
                 <Text style={styles.title}>Sleep Window</Text>
             </View>
             <View style={styles.ringContainer}>
-                <CircularProgress progress={progress} size={90} strokeWidth={8} color="#00D4AA" trackColor={colors.border.light} />
+                <CircularProgress progress={progress} size={90} strokeWidth={8} color={colors.accent.cyan} trackColor={colors.border.light} />
                 <View style={styles.ringInner}>
                     <Text style={styles.time}>{targetTime}</Text>
                     <Text style={styles.label}>Target</Text>
@@ -38,10 +38,10 @@ export const SleepWindowCard = React.memo(SleepWindowCardComponent);
 const styles = StyleSheet.create({
     card: { flex: 1, backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderWidth: 1, borderRadius: 20, padding: 16 },
     header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-    title: { color: '#FFFFFF', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+    title: { color: colors.text.primary, fontSize: 16, fontWeight: '600', marginLeft: 8 },
     ringContainer: { alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
     ringInner: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-    time: { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
+    time: { color: colors.text.primary, fontSize: 20, fontWeight: '700' },
     label: { color: colors.text.secondary, fontSize: 10 },
     hint: { color: colors.text.secondary, textAlign: 'center', fontSize: 12, marginTop: -4 },
 });

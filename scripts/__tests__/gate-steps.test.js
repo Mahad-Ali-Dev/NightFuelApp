@@ -135,4 +135,18 @@ describe('gate.js — present guard scripts must be HARD (no fs.existsSync SKIP)
         expect(step).toBeDefined();
         expect(step.file).toBeUndefined();
     });
+
+    // Belt-and-suspenders for the Aurora anti-regression floor: the new HARD guard
+    // check-aurora-coverage-baseline must be present in buildSteps() and carry NO
+    // `file:` guard (the auto-iterated invariant above already covers it once its
+    // script exists on disk; this pins it unconditionally so the guarantee can't
+    // evaporate during a refactor that momentarily moves/renames the script).
+    test('check-aurora-coverage-baseline is present in buildSteps() and is HARD (no file: guard)', () => {
+        const step = steps.find((s) => s.name === 'check-aurora-coverage-baseline');
+        expect(step).toBeDefined();
+        expect(step.file).toBeUndefined();
+        // It runs the dedicated guard script (not the informational metric).
+        const last = step.args[step.args.length - 1];
+        expect(last.split(/[\\/]/).join('/')).toMatch(/scripts\/check-aurora-coverage-baseline\.js$/);
+    });
 });

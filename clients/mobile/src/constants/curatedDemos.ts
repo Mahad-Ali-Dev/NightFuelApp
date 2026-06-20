@@ -906,6 +906,51 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Rope Crunch': 'Rope_Crunch',
   'Plate Twist': 'Plate_Twist',
   'Side Jackknife': 'Side_Jackknife',
+
+  // ── Widened FEDB-backed tranche #13 (data-only, zero new fetch) ──────────────
+  // A further slice of distinct catalogue movements. Every KEY below is NEW —
+  // absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries above (tranches #1-#12),
+  // YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos() admits each one as
+  // kind:'fedb_frames', verified:false (precedence: an already-set name is skipped).
+  // Every slug VALUE was machine-verified to be present in BOTH FEDB_SLUGS
+  // (exerciseDemos.ts) AND __tests__/fixtures/fedb-catalog-slugs.json (the shipped
+  // 873-slug catalogue), and each is a fresh slug dir not already referenced by an
+  // earlier tranche — so every entry resolves to an ordered 2-frame [0.jpg, 1.jpg]
+  // HTTPS pair via fedbPair() with NO new HTTP call. Strictly additive: the
+  // kind:'youtube'-only sync guard (scripts/check-demo-maps-in-sync.js) and
+  // pendingHumanReviewIds.json (YouTube ids only) are both untouched, so
+  // check-demo-maps-in-sync stays green. A 200-ok URL is NOT a movement review, so
+  // nothing here is verified:true — that remains a human-gated step.
+
+  // Olympic / power — clean & snatch family
+  'Clean': 'Clean',
+  'Snatch': 'Snatch',
+  'Clean Pull': 'Clean_Pull',
+  'Snatch Pull': 'Snatch_Pull',
+  'Muscle Snatch': 'Muscle_Snatch',
+  'Power Jerk': 'Power_Jerk',
+  'Split Jerk': 'Split_Jerk',
+  'Split Clean': 'Split_Clean',
+  'Snatch Balance': 'Snatch_Balance',
+  // Strongman / loaded carries
+  'Log Lift': 'Log_Lift',
+  'Tire Flip': 'Tire_Flip',
+  'Yoke Walk': 'Yoke_Walk',
+  'Sled Push': 'Sled_Push',
+  'Sled Row': 'Sled_Row',
+  'Keg Load': 'Keg_Load',
+  // Plyometric / conditioning
+  'Knee Tuck Jump': 'Knee_Tuck_Jump',
+  'Star Jump': 'Star_Jump',
+  'Rocket Jump': 'Rocket_Jump',
+  'Standing Long Jump': 'Standing_Long_Jump',
+  'Lateral Box Jump': 'Lateral_Box_Jump',
+  // Triceps / forearms isolation
+  'Standing Bent-Over Two-Arm Dumbbell Triceps Extension': 'Standing_Bent-Over_Two-Arm_Dumbbell_Triceps_Extension',
+  'Seated Dumbbell Palms-Up Wrist Curl': 'Seated_Dumbbell_Palms-Up_Wrist_Curl',
+  // Core / abs
+  'Scissor Kick': 'Scissor_Kick',
+  'Stomach Vacuum': 'Stomach_Vacuum',
 };
 
 /**
