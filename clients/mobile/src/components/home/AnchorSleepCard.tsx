@@ -3,13 +3,16 @@
  *
  * A read-only, presentational summary of the single fixed core-sleep block a
  * shift worker should hold steady across a rotation, derived (locally, no
- * backend) from the user's next upcoming / just-logged shift. The "anchor
- * sleep" window IS the recovery `sleepWindow` from the pure, unit-tested
- * `computeShiftTransition` (src/lib/shiftTransition.ts) — keeping this card in
- * lockstep with `ShiftTransitionCard`, `LightPlanCard`, and the scheduled
- * circadian reminders (nf-winddown == sleepWindow.start, nf-log-sleep ==
- * sleepWindow.end). We REUSE that engine rather than re-deriving any instants:
- * there is no new circadian math here.
+ * backend) from the user's next upcoming / just-logged shift. The primary
+ * "Anchor sleep (4h core)" window IS the fixed core block from the pure,
+ * unit-tested `computeAnchorSleep` (src/lib/circadian/anchorSleep.ts) —
+ * `sleepWindow.start … +ANCHOR_SLEEP_HOURS` (4h) — keeping this card in lockstep
+ * with the scheduled `nf-anchor-sleep` reminder, whose body coaches the same 4h
+ * core block. We REUSE that helper rather than re-deriving any instants: there
+ * is no new circadian math here. A secondary "Full sleep window" line surfaces
+ * the surrounding ~8h recovery `sleepWindow` from `computeShiftTransition` for
+ * context (the anchor sits within it: anchor.start === sleepWindow.start,
+ * anchor.end <= sleepWindow.end).
  *
  * This component owns ZERO data-fetching: the parent passes the shift plus
  * loading/error flags — an IDENTICAL prop contract to LightPlanCard /
@@ -19,7 +22,8 @@
  *   - loading            → Skeleton blocks
  *   - error              → inline message + Retry (via onRetry)
  *   - empty (no shift)   → EmptyState "Log a shift to see your anchor sleep"
- *   - populated          → the anchor window + a short WHY
+ *   - populated          → the 4h anchor window (+ a Full sleep window context
+ *                          line) + a short WHY
  *
  * The header doubles as a deep-link affordance ("Open your anchor sleep plan")
  * into the sleep optimizer screen, so the card surfaces guidance AND a way to
@@ -54,6 +58,7 @@ import { typography } from '@/theme/typography';
 import { spacing, borderRadius as br, iconSizes } from '@/theme/spacing';
 import { withAlpha } from '@/theme/utils';
 import { computeShiftTransition, type ShiftLike } from '@/lib/shiftTransition';
+import { computeAnchorSleep } from '@/lib/circadian/anchorSleep';
 
 export interface AnchorSleepCardProps {
   /** The user's next upcoming / logged shift, or null/undefined when none. */
@@ -64,30 +69,6 @@ export interface AnchorSleepCardProps {
   error?: unknown;
   /** Invoked when the user taps Retry in the error state. */
   onRetry?: () => void;
-}
-
-/** The derived anchor-sleep plan: the fixed core-sleep block to hold steady. */
-interface AnchorSleepPlan {
-  /** The anchor (core-sleep) window — the recovery `sleepWindow`. */
-  window: { start: Date; end: Date };
-}
-
-/**
- * Derive the anchor-sleep plan for a single shift.
- *
- * The "anchor sleep" block IS the recovery `sleepWindow` from the shared
- * `computeShiftTransition` engine — we reuse it verbatim rather than introducing
- * any new instants or offsets. Inherits the engine's throw-on-malformed-ISO
- * contract (a missing / unparseable timestamp throws rather than silently
- * yielding an `Invalid Date`), so the populated branch can guard it exactly like
- * LightPlanCard guards `computeLightPlan`.
- *
- * @throws if either timestamp is missing or unparseable (re-thrown from
- *   `computeShiftTransition`).
- */
-function computeAnchorSleep(shift: ShiftLike): AnchorSleepPlan {
-  const t = computeShiftTransition(shift);
-  return { window: t.sleepWindow };
 }
 
 /** Short, honest rationale shown beneath the populated anchor window. */
@@ -187,7 +168,7 @@ function AnchorSleepCardComponent({ shift, loading, error, onRetry }: AnchorSlee
   // Guard the pure compute: a malformed shift (bad ISO) throws rather than
   // returning NaN instants — degrade to the same inline message as
   // LightPlanCard's malformed branch instead of crashing the render tree.
-  let plan: AnchorSleepPlan;
+  let plan: ReturnType<typeof computeAnchorSleep>;
   try {
     plan = computeAnchorSleep(shift);
   } catch {
@@ -206,7 +187,12 @@ function AnchorSleepCardComponent({ shift, loading, error, onRetry }: AnchorSlee
     );
   }
 
-  const { window } = plan;
+  const { anchor } = plan;
+  // The surrounding ~8h recovery window for the secondary context line. Do NOT
+  // recompute offsets — read it straight off the shared engine (the same source
+  // computeAnchorSleep routes through), so the anchor provably sits within it
+  // (anchor.start === sw.start, anchor.end <= sw.end).
+  const sw = computeShiftTransition(shift).sleepWindow;
 
   return (
     <GlassCard style={styles.card}>
@@ -217,9 +203,12 @@ function AnchorSleepCardComponent({ shift, loading, error, onRetry }: AnchorSlee
             <Ionicons name="moon" size={iconSizes.sm} color={colors.accent.purple} />
           </View>
           <View style={styles.anchorText}>
-            <Text style={[typography.caption, { color: colors.text.secondary }]}>Core-sleep window</Text>
+            <Text style={[typography.caption, { color: colors.text.secondary }]}>Anchor sleep (4h core)</Text>
             <Text style={[typography.subtitle, { color: colors.text.primary }]}>
-              {`${formatTime(window.start)} – ${formatTime(window.end)}`}
+              {`${formatTime(anchor.start)} – ${formatTime(anchor.end)}`}
+            </Text>
+            <Text style={[typography.caption, styles.fullWindow, { color: colors.text.tertiary }]}>
+              {`Full sleep window  ${formatTime(sw.start)} – ${formatTime(sw.end)}`}
             </Text>
           </View>
         </View>
@@ -278,6 +267,9 @@ const styles = StyleSheet.create({
   },
   anchorText: {
     flex: 1,
+  },
+  fullWindow: {
+    marginTop: spacing.xs,
   },
   why: {
     marginTop: spacing.md,

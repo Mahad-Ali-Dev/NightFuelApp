@@ -159,16 +159,32 @@ export default function SleepOptimizerScreen() {
                     {/* Recommendations */}
                     <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.lg }]}>Recommended Windows</Text>
 
+                    {/* Recommended Sleep Block — this row surfaces the BACKEND
+                        analytics window (`analytics?.anchorSleepWindow`, an
+                        analytics-derived recommendation) and is deliberately
+                        DISTINCT from the home dashboard's "Anchor sleep (4h core)"
+                        card (src/components/home/AnchorSleepCard.tsx), which renders
+                        the engine's fixed 4h core block from the shared, pure
+                        `computeAnchorSleep` (src/lib/circadian/anchorSleep.ts). To
+                        avoid presenting this analytics window AS that same fixed 4h
+                        anchor, the label/subtitle here read as analytics-derived
+                        ("Recommended Sleep Block" / "your logged + recommended sleep
+                        analytics") rather than reusing the "anchor sleep" /
+                        "core block" wording. The displayed VALUE stays the backend's
+                        `anchorSleepWindow` (contract unchanged); a future sprint
+                        could reconcile the two by routing this row through the same
+                        `computeAnchorSleep` block, but that is intentionally out of
+                        scope here to avoid backend/mock contention. */}
                     <GlassCard style={[styles.windowCard, { borderColor: withAlpha(colors.accent.purple, 0.25) }]}>
                         <View style={styles.windowHeader}>
                             <View style={[styles.windowIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.28), borderWidth: 1 }]}>
                                 <Ionicons name="moon" size={18} color={colors.accent.purple} />
                             </View>
-                            <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: spacing.md }]}>Anchor Sleep</Text>
+                            <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: spacing.md }]}>Recommended Sleep Block</Text>
                             <View style={{ flex: 1 }} />
                             <Text style={[typography.statTiny, { color: colors.accent.cyan }]}>{analytics?.anchorSleepWindow ?? '—'}</Text>
                         </View>
-                        <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>Total darkness required. Avoid light exposure upon shift exit.</Text>
+                        <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.md }]}>Derived from your logged + recommended sleep analytics. Keep the room dark and avoid light on the way home.</Text>
                     </GlassCard>
 
                     <GlassCard style={[styles.windowCard, { borderColor: withAlpha(colors.accent.amber, 0.25) }]}>

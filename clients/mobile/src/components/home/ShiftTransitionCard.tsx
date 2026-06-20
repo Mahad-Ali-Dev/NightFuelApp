@@ -33,7 +33,7 @@ import { Card } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
-import { useTheme } from '@/theme';
+import { useTheme, type ThemeColors } from '@/theme';
 import { typography } from '@/theme/typography';
 import { spacing, borderRadius as br, iconSizes } from '@/theme/spacing';
 import { withAlpha } from '@/theme/utils';
@@ -67,13 +67,25 @@ interface AnchorRowProps {
   tint: string;
   label: string;
   value: string;
+  /**
+   * Themed palette threaded in as a prop (rather than read from `useTheme`
+   * inside the row) so this stays a pure, allocation-free module-scope
+   * component — a stable top-level identity React never treats as a "new"
+   * component type, per react-native-skills
+   * list-performance-function-references.md /
+   * react-compiler-destructure-functions.md.
+   */
+  colors: ThemeColors;
 }
 
-function ShiftTransitionCardComponent({ shift, loading, error, onRetry }: ShiftTransitionCardProps) {
-  const { colors } = useTheme();
-
-  // An anchor row: tinted icon chip, label, and the computed time(s).
-  const AnchorRow = ({ icon, tint, label, value }: AnchorRowProps) => (
+/**
+ * An anchor row: tinted icon chip, label, and the computed time(s). Hoisted to
+ * module scope (was a closure inside the render body) so its identity is stable
+ * across renders — using it as `<AnchorRow … />` no longer remounts a fresh
+ * subtree every render of the memoized card.
+ */
+const AnchorRow = React.memo(function AnchorRow({ icon, tint, label, value, colors }: AnchorRowProps) {
+  return (
     <View style={styles.row}>
       <View style={[styles.iconChip, { backgroundColor: withAlpha(tint, 0.14), borderColor: withAlpha(tint, 0.28) }]}>
         <Ionicons name={icon} size={iconSizes.sm} color={tint} />
@@ -84,8 +96,15 @@ function ShiftTransitionCardComponent({ shift, loading, error, onRetry }: ShiftT
       </View>
     </View>
   );
+});
 
-  const Header = () => (
+/**
+ * The card header. Hoisted to module scope alongside AnchorRow for the same
+ * reason: a stable top-level component identity rather than a per-render
+ * closure. The themed palette is passed in via `colors`.
+ */
+function Header({ colors }: { colors: ThemeColors }) {
+  return (
     <View style={styles.header}>
       <View style={[styles.headerIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.14) }]}>
         <Ionicons name="moon" size={iconSizes.sm} color={colors.accent.purple} />
@@ -93,12 +112,16 @@ function ShiftTransitionCardComponent({ shift, loading, error, onRetry }: ShiftT
       <Text style={[typography.subtitle, { color: colors.text.primary }]}>Next shift transition</Text>
     </View>
   );
+}
+
+function ShiftTransitionCardComponent({ shift, loading, error, onRetry }: ShiftTransitionCardProps) {
+  const { colors } = useTheme();
 
   // ---- Loading ------------------------------------------------------------
   if (loading) {
     return (
       <Card style={styles.card}>
-        <Header />
+        <Header colors={colors} />
         <View style={styles.skeletonGroup}>
           <Skeleton width="70%" height={18} />
           <Skeleton width="55%" height={18} />
@@ -112,7 +135,7 @@ function ShiftTransitionCardComponent({ shift, loading, error, onRetry }: ShiftT
   if (error) {
     return (
       <Card style={styles.card}>
-        <Header />
+        <Header colors={colors} />
         <View style={styles.message}>
           <Ionicons name="cloud-offline-outline" size={iconSizes.lg} color={colors.text.tertiary} />
           <Text style={[typography.body, styles.messageText, { color: colors.text.secondary }]}>
@@ -130,7 +153,7 @@ function ShiftTransitionCardComponent({ shift, loading, error, onRetry }: ShiftT
   if (!shift || !shift.startTime || !shift.endTime) {
     return (
       <Card style={styles.card}>
-        <Header />
+        <Header colors={colors} />
         <EmptyState
           icon="moon-outline"
           title="No shift scheduled"
@@ -151,7 +174,7 @@ function ShiftTransitionCardComponent({ shift, loading, error, onRetry }: ShiftT
   } catch {
     return (
       <Card style={styles.card}>
-        <Header />
+        <Header colors={colors} />
         <View style={styles.message}>
           <Ionicons name="alert-circle-outline" size={iconSizes.lg} color={colors.text.tertiary} />
           <Text style={[typography.body, styles.messageText, { color: colors.text.secondary }]}>
@@ -166,25 +189,28 @@ function ShiftTransitionCardComponent({ shift, loading, error, onRetry }: ShiftT
 
   return (
     <Card style={styles.card}>
-      <Header />
+      <Header colors={colors} />
       <View style={styles.anchors}>
         <AnchorRow
           icon="moon"
           tint={colors.accent.purple}
           label="Recommended sleep"
           value={`${formatTime(sleepWindow.start)} – ${formatTime(sleepWindow.end)}`}
+          colors={colors}
         />
         <AnchorRow
           icon="cafe"
           tint={colors.accent.amber}
           label="Caffeine cutoff"
           value={formatTime(caffeineCutoff)}
+          colors={colors}
         />
         <AnchorRow
           icon="sunny"
           tint={colors.accent.cyan}
           label="Bright light"
           value={`${formatTime(brightLightWindow.start)} – ${formatTime(brightLightWindow.end)}`}
+          colors={colors}
         />
       </View>
     </Card>

@@ -3,16 +3,19 @@
  *
  * AnchorSleepCard is a pure presentational card with an IDENTICAL prop contract
  * to LightPlanCard / ShiftTransitionCard (shift + loading/error/onRetry). It owns
- * no data fetching; the "anchor sleep" window IS the recovery `sleepWindow` from
- * the shared, unit-tested `computeShiftTransition` (src/lib/shiftTransition.ts) —
- * so we assert the rendered window against THAT source of truth (the same
- * instant the nf-winddown … nf-log-sleep reminders fire at), not a hand-rolled
- * arithmetic copy. It renders one of four states:
+ * no data fetching; the PRIMARY rendered window IS the fixed 4h core block from
+ * the shared, unit-tested `computeAnchorSleep` (src/lib/circadian/anchorSleep.ts)
+ * — so we assert that row against THAT source of truth (the same instant the
+ * nf-anchor-sleep reminder fires at, and whose body coaches the same 4h core),
+ * not a hand-rolled arithmetic copy. A SECONDARY "Full sleep window" line shows
+ * the surrounding ~8h recovery `sleepWindow` from `computeShiftTransition`, which
+ * we assert under its DISTINCT label. It renders one of four states:
  *
  *   1. loading            → Skeleton blocks (no window text yet)
  *   2. error (truthy)     → inline "Couldn't load…" copy + a Retry button
  *   3. empty (no shift)   → EmptyState "Log a shift to see your anchor sleep"
- *   4. populated          → a "Core-sleep window" row + the short WHY copy
+ *   4. populated          → an "Anchor sleep (4h core)" row + a Full sleep window
+ *                           context line + the short WHY copy
  *
  * The header doubles as a deep-link affordance (role=button, label "Open your
  * anchor sleep plan") into the sleep optimizer screen.
@@ -62,13 +65,15 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
 }));
 
-// Import AFTER the mocks are registered. `computeShiftTransition` is the engine
-// the card's (private) `computeAnchorSleep` delegates to — its `sleepWindow` IS
-// the rendered anchor window. Importing it lets us assert the rendered window is
-// the EXACT one the engine returns (card ↔ source-of-truth parity), not just the
-// test's hand-rolled arithmetic.
+// Import AFTER the mocks are registered. `computeAnchorSleep` is the shared
+// helper the card delegates to — its `anchor` IS the rendered PRIMARY (4h core)
+// window. `computeShiftTransition` supplies the surrounding ~8h `sleepWindow`
+// the card shows on the SECONDARY "Full sleep window" line. Importing both lets
+// us assert each rendered row is the EXACT one its source returns (card ↔
+// source-of-truth parity), not the test's hand-rolled arithmetic.
 import AnchorSleepCard from '@/components/home/AnchorSleepCard';
 import { computeShiftTransition } from '@/lib/shiftTransition';
+import { computeAnchorSleep } from '@/lib/circadian/anchorSleep';
 
 function renderWithTheme(ui: React.ReactElement) {
   return render(
@@ -80,18 +85,25 @@ function renderWithTheme(ui: React.ReactElement) {
   );
 }
 
-// A valid overnight shift (22:00 → 06:00 next-day UTC). The anchor window is the
-// engine's sleepWindow: (end + 1h) … (end + 9h).
+// A valid overnight shift (22:00 → 06:00 next-day UTC). The PRIMARY anchor block
+// is computeAnchorSleep's 4h core: sleepWindow.start … +4h (i.e. end + 1h … end +
+// 5h). The SECONDARY full window is the engine's ~8h sleepWindow: (end + 1h) …
+// (end + 9h).
 const START = '2026-01-02T22:00:00.000Z';
 const END = '2026-01-03T06:00:00.000Z';
 const SHIFT = { startTime: START, endTime: END };
 
-// Expected formatted window string, built with the SAME toLocaleTimeString call
-// the card uses (formatTime) against the SAME instants computeShiftTransition
-// returns, so it matches whatever timezone the runner uses.
+// Expected formatted window strings, built with the SAME toLocaleTimeString call
+// the card uses (formatTime) against the SAME instants the shared helpers
+// return, so they match whatever timezone the runner uses.
 const fmt = (d: Date) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const { anchor } = computeAnchorSleep(SHIFT);
 const { sleepWindow } = computeShiftTransition(SHIFT);
-const anchorValue = `${fmt(sleepWindow.start)} – ${fmt(sleepWindow.end)}`;
+// PRIMARY row: the 4h core block (computeAnchorSleep), NOT the 8h sleepWindow.
+const anchorValue = `${fmt(anchor.start)} – ${fmt(anchor.end)}`;
+// SECONDARY "Full sleep window" line: the surrounding ~8h sleepWindow, rendered
+// with a distinct two-space-separated label so it's queryable on its own.
+const fullWindowValue = `Full sleep window  ${fmt(sleepWindow.start)} – ${fmt(sleepWindow.end)}`;
 
 describe('AnchorSleepCard', () => {
   // Fail loudly on ANY console.error/warn during a render (a leaked falsy child,
@@ -118,7 +130,7 @@ describe('AnchorSleepCard', () => {
       // What pins down the LOADING skeleton is the combined absence of every
       // other branch's distinctive content (the Aurora Skeleton has no testID):
       //   - no populated window label or WHY copy
-      expect(screen.queryByText('Core-sleep window')).toBeNull();
+      expect(screen.queryByText('Anchor sleep (4h core)')).toBeNull();
       expect(
         screen.queryByText(
           'A fixed core-sleep block held steady across your rotation stabilizes your body clock.',
@@ -155,7 +167,7 @@ describe('AnchorSleepCard', () => {
 
     test('error state does not render the populated window label', () => {
       renderWithTheme(<AnchorSleepCard error={new Error('boom')} onRetry={jest.fn()} />);
-      expect(screen.queryByText('Core-sleep window')).toBeNull();
+      expect(screen.queryByText('Anchor sleep (4h core)')).toBeNull();
     });
   });
 
@@ -164,7 +176,7 @@ describe('AnchorSleepCard', () => {
       renderWithTheme(<AnchorSleepCard shift={null} />);
       expect(screen.getByText('Log a shift to see your anchor sleep')).toBeTruthy();
       // The populated and error affordances must NOT be present.
-      expect(screen.queryByText('Core-sleep window')).toBeNull();
+      expect(screen.queryByText('Anchor sleep (4h core)')).toBeNull();
       expect(screen.queryByText('Retry')).toBeNull();
     });
 
@@ -173,7 +185,7 @@ describe('AnchorSleepCard', () => {
       // routes to the empty branch rather than throwing in compute.
       renderWithTheme(<AnchorSleepCard shift={{} as any} />);
       expect(screen.getByText('Log a shift to see your anchor sleep')).toBeTruthy();
-      expect(screen.queryByText('Core-sleep window')).toBeNull();
+      expect(screen.queryByText('Anchor sleep (4h core)')).toBeNull();
     });
   });
 
@@ -188,19 +200,22 @@ describe('AnchorSleepCard', () => {
       expect(
         screen.getByText('This shift’s times look off — re-log it to see your plan.'),
       ).toBeTruthy();
-      expect(screen.queryByText('Core-sleep window')).toBeNull();
+      expect(screen.queryByText('Anchor sleep (4h core)')).toBeNull();
     });
   });
 
   describe('populated (valid shift)', () => {
-    test('renders the anchor window label, the formatted window, and the WHY copy', () => {
+    test('renders the 4h anchor label + value, the Full sleep window line, and the WHY copy', () => {
       renderWithTheme(<AnchorSleepCard shift={SHIFT} />);
 
-      // The anchor window label renders…
-      expect(screen.getByText('Core-sleep window')).toBeTruthy();
-      // …with the formatted window value (timezone-portable: same toLocaleTimeString
-      // call, same instants as the component)…
+      // The PRIMARY 4h-core label renders (truthful: the value below is the 4h
+      // anchor, not the 8h sleepWindow)…
+      expect(screen.getByText('Anchor sleep (4h core)')).toBeTruthy();
+      // …with the formatted 4h-core value (timezone-portable: same
+      // toLocaleTimeString call, same instants as the component)…
       expect(screen.getByText(anchorValue)).toBeTruthy();
+      // …the SECONDARY Full sleep window context line under its distinct label…
+      expect(screen.getByText(fullWindowValue)).toBeTruthy();
       // …and the short WHY rationale.
       expect(
         screen.getByText(
@@ -223,16 +238,26 @@ describe('AnchorSleepCard', () => {
       expect(rendered).toContain(' – ');
     });
 
-    test('the anchor window uses the EXACT sleepWindow computeShiftTransition returns', () => {
-      // Card ↔ source-of-truth parity: build the expected row value from the SAME
-      // computeShiftTransition output (sleepWindow) with the SAME fmt call the
-      // card uses, so the rendered window is provably the one the engine derives
-      // — the same sleepWindow.start the nf-winddown circadian reminder fires at.
-      const { sleepWindow: sw } = computeShiftTransition(SHIFT);
-      const expected = `${fmt(sw.start)} – ${fmt(sw.end)}`;
+    test('the PRIMARY row is the EXACT 4h core block computeAnchorSleep returns (and is a 4h span)', () => {
+      // Card ↔ source-of-truth parity: build the expected PRIMARY row from the
+      // SAME computeAnchorSleep output (anchor) with the SAME fmt call the card
+      // uses, so the rendered window is provably the 4h core the shared helper
+      // derives — the same anchor.start the nf-anchor-sleep reminder fires at —
+      // and NOT the 8h sleepWindow.
+      const { anchor: a } = computeAnchorSleep(SHIFT);
+      const expectedPrimary = `${fmt(a.start)} – ${fmt(a.end)}`;
       renderWithTheme(<AnchorSleepCard shift={SHIFT} />);
-      expect(screen.getByText('Core-sleep window')).toBeTruthy();
-      expect(screen.getByText(expected)).toBeTruthy();
+      expect(screen.getByText('Anchor sleep (4h core)')).toBeTruthy();
+      expect(screen.getByText(expectedPrimary)).toBeTruthy();
+      // The anchor block is exactly the 4h core (ANCHOR_SLEEP_HOURS), so the
+      // PRIMARY row can never silently widen back to the ~8h sleepWindow.
+      expect(a.end.getTime() - a.start.getTime()).toBe(4 * 3_600_000);
+
+      // The SECONDARY full window is the surrounding ~8h sleepWindow, asserted
+      // under its DISTINCT label so the two rows can't be confused.
+      const { sleepWindow: sw } = computeShiftTransition(SHIFT);
+      const expectedFull = `Full sleep window  ${fmt(sw.start)} – ${fmt(sw.end)}`;
+      expect(screen.getByText(expectedFull)).toBeTruthy();
     });
 
     test('the header exposes the "Open your anchor sleep plan" deep-link affordance (role=button)', () => {

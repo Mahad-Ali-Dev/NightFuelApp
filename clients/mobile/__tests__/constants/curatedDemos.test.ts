@@ -1640,3 +1640,201 @@ describe('CURATED_DEMOS — FEDB-backed tranche #13 (data-only additions)', () =
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// (q) The "tranche #14" FEDB-backed additions resolve to a real catalogue slug
+// ---------------------------------------------------------------------------
+//
+// Same contract as tranches #4/#5/#7/#8/#9/#10/#11/#12/#13: DATA-ONLY additions
+// that reuse FEDB slugs already shipped in exerciseDemos.ts (no new HTTP fetch).
+// This block pins EVERY new tranche-#14 key explicitly AND cross-checks that the
+// slug directory both frames point at is a real entry in the 873-slug FEDB
+// catalogue fixture (__tests__/fixtures/fedb-catalog-slugs.json) — i.e. the demo
+// will actually load, not 404. Each ships kind:'fedb_frames', verified:false. The
+// block also asserts every key is unique across the WHOLE CURATED_DEMOS map, that
+// getPendingHumanReviewIds() is UNCHANGED (no new YouTube ids) in BOTH directions
+// against the on-disk pendingHumanReviewIds.json mirror, and that the
+// CURATED_DEMOS count grew by exactly the tranche size.
+describe('CURATED_DEMOS — FEDB-backed tranche #14 (data-only additions)', () => {
+  // The COMPLETE set of display-name keys added in tranche #14 of curatedDemos.ts
+  // (every key is asserted, not just a representative slice).
+  const TRANCHE_14_NAMES = [
+    // Mobility / stretch staples
+    'Hamstring Stretch',
+    'Quad Stretch',
+    'All Fours Quad Stretch',
+    'Kneeling Hip Flexor',
+    'Middle Back Stretch',
+    'Chin To Chest Stretch',
+    'Behind Head Chest Stretch',
+    'Dynamic Chest Stretch',
+    // Neck
+    'Isometric Neck Exercise - Front And Back',
+    'Isometric Neck Exercise - Sides',
+    'Seated Head Harness Neck Resistance',
+    // Forearm / wrist
+    'Palms-Down Dumbbell Wrist Curl Over A Bench',
+    'Palms-Up Dumbbell Wrist Curl Over A Bench',
+    'Seated Palm-Up Barbell Wrist Curl',
+    'Seated Palms-Down Barbell Wrist Curl',
+    'Wrist Circles',
+    // Lower-leg / calf / tibialis / ankle
+    'Ankle Circles',
+    'Smith Machine Reverse Calf Raises',
+    'Seated Leg Tucks',
+    // Glutes / hip accessory (band)
+    'Hip Extension with Bands',
+    'Thigh Abductor',
+    'Band Hip Adductions',
+  ] as const;
+
+  // Per-frame shape with the slug dir captured (group 1) and frame index (group 2).
+  const FEDB_FRAME_RE =
+    /^https:\/\/raw\.githubusercontent\.com\/yuhonas\/free-exercise-db\/main\/exercises\/([^/]+)\/([01])\.jpg$/;
+
+  // The authoritative 873-slug FEDB catalogue fixture — every tranche-#14 slug
+  // MUST be present here (and therefore in FEDB_SLUGS, the same set), so the
+  // frame URLs resolve to real images.
+  const CATALOG_SLUGS: ReadonlySet<string> = (() => {
+    const fixturePath = path.resolve(__dirname, '../fixtures/fedb-catalog-slugs.json');
+    const raw = fs.readFileSync(fixturePath, 'utf8');
+    const parsed = JSON.parse(raw) as Array<{ slug: string }>;
+    expect(Array.isArray(parsed)).toBe(true);
+    return new Set(parsed.map((e) => e.slug));
+  })();
+
+  test('the catalogue fixture loaded a healthy set of slugs', () => {
+    // Sanity: guards against a refactor that empties the fixture and makes the
+    // membership checks below vacuously pass.
+    expect(CATALOG_SLUGS.size).toBeGreaterThanOrEqual(800);
+  });
+
+  test('tranche #14 adds at least 18 new entries (the work item floor)', () => {
+    expect(TRANCHE_14_NAMES.length).toBeGreaterThanOrEqual(18);
+  });
+
+  test('every tranche-#14 key is a NEW distinct CURATED_DEMOS entry (unique across the whole map)', () => {
+    // The tranche is internally distinct…
+    expect(new Set(TRANCHE_14_NAMES).size).toBe(TRANCHE_14_NAMES.length);
+    // …and every name actually resolved into the frozen map (none dropped by the
+    // never-overwrite precedence rule because of a stale collision).
+    for (const name of TRANCHE_14_NAMES) {
+      expect(Object.prototype.hasOwnProperty.call(CURATED_DEMOS, name)).toBe(true);
+    }
+    // Each tranche-#14 key appears EXACTLY once among the map's keys — i.e. it is
+    // unique across the entire CURATED_DEMOS map, not just within the tranche.
+    const allKeys = Object.keys(CURATED_DEMOS);
+    for (const name of TRANCHE_14_NAMES) {
+      expect(allKeys.filter((k) => k === name).length).toBe(1);
+    }
+  });
+
+  test.each(TRANCHE_14_NAMES)('getCuratedDemo(%j) is a verified:false kind:"fedb_frames" entry', (name) => {
+    const demo = getCuratedDemo(name);
+    expect(demo).not.toBeNull();
+    expect(demo!.kind).toBe('fedb_frames');
+    expect(demo!.verified).toBe(false);
+    expect(demo!.url).toMatch(FEDB_FRAME_PAIR_RE);
+  });
+
+  test.each(TRANCHE_14_NAMES)(
+    'getCuratedDemoFrames(%j) is an ordered 2-element HTTPS [0.jpg, 1.jpg] pair on a real catalogue slug',
+    (name) => {
+      const frames = getCuratedDemoFrames(name);
+      expect(frames).not.toBeNull();
+      expect(frames!.length).toBe(2);
+
+      const m0 = FEDB_FRAME_RE.exec(frames![0]!);
+      const m1 = FEDB_FRAME_RE.exec(frames![1]!);
+      expect(m0).not.toBeNull();
+      expect(m1).not.toBeNull();
+      // Both HTTPS (ATS-safe).
+      expect(frames![0]!.startsWith('https://')).toBe(true);
+      expect(frames![1]!.startsWith('https://')).toBe(true);
+      // Ordered start (0) → end (1).
+      expect(m0![2]).toBe('0');
+      expect(m1![2]).toBe('1');
+      // A genuine start/end pair: both frames share ONE slug directory…
+      expect(m0![1]).toBe(m1![1]);
+      // …and that slug is a real entry in the shipped FEDB catalogue (so the
+      // demo loads rather than 404s).
+      expect(CATALOG_SLUGS.has(m0![1]!)).toBe(true);
+    },
+  );
+
+  test.each(TRANCHE_14_NAMES)('getCuratedDemoVerified(%j) === false (renders the "Unreviewed" chip)', (name) => {
+    expect(getCuratedDemoVerified(name)).toBe(false);
+  });
+
+  test('resolution is case-insensitive / whitespace-trimmed for the new tranche', () => {
+    expect(getCuratedDemo('  hamstring STRETCH ')).toEqual(getCuratedDemo('Hamstring Stretch'));
+  });
+
+  test('no tranche-#14 name is a YouTube/gif entry (each is a pure fedb_frames addition)', () => {
+    for (const name of TRANCHE_14_NAMES) {
+      const demo = getCuratedDemo(name);
+      expect(demo).not.toBeNull();
+      // Never silently landed on a grandfathered YouTube key or a gif alias.
+      expect(demo!.kind).toBe('fedb_frames');
+      expect(getCuratedDemoFrames(name)).not.toBeNull();
+    }
+  });
+
+  test('tranche #14 leaves getPendingHumanReviewIds() unchanged (no new YouTube ids), both directions', () => {
+    // tranche #14 is fedb_frames-only, so the human-review YouTube id set must be
+    // exactly the on-disk mirror — none of the new names contribute a YouTube id.
+    // Assert set-equality in BOTH directions (nothing missing, no orphans).
+    const ids = getPendingHumanReviewIds();
+    const pendingJsonPath = path.resolve(__dirname, '../../src/constants/pendingHumanReviewIds.json');
+    const mirror = JSON.parse(fs.readFileSync(pendingJsonPath, 'utf8')) as string[];
+    const idSet = new Set(ids);
+    const mirrorSet = new Set(mirror);
+    const missingFromMirror = [...idSet].filter((id) => !mirrorSet.has(id));
+    const orphansInMirror = [...mirrorSet].filter((id) => !idSet.has(id));
+    expect({ missingFromMirror, orphansInMirror }).toEqual({ missingFromMirror: [], orphansInMirror: [] });
+    expect([...ids].sort()).toEqual([...mirror].sort());
+    // And not one tranche-#14 name resolves to a youtube kind (belt + braces).
+    for (const name of TRANCHE_14_NAMES) {
+      expect(getCuratedDemo(name)!.kind).not.toBe('youtube');
+    }
+  });
+
+  test('CURATED_DEMOS count grew by exactly the tranche-#14 size over the pre-#14 baseline', () => {
+    // The pre-#14 map = everything EXCEPT the tranche-#14 keys. Removing them must
+    // drop the count by exactly TRANCHE_14_NAMES.length, proving the tranche added
+    // that many brand-new entries (no silent collisions / drops).
+    const all = Object.keys(CURATED_DEMOS);
+    const tranche14 = new Set<string>(TRANCHE_14_NAMES);
+    const withoutTranche14 = all.filter((k) => !tranche14.has(k));
+    expect(all.length - withoutTranche14.length).toBe(TRANCHE_14_NAMES.length);
+    // Every tranche-#14 key was genuinely present to be removed (no typo'd key
+    // that silently never existed in the map).
+    expect(all.length - withoutTranche14.length).toBe(tranche14.size);
+  });
+
+  test('tranche #14 adds ONLY verified:false fedb_frames — no verified flag was flipped', () => {
+    // Belt + braces against the "DATA-ONLY, no flips" acceptance: the verified:true
+    // population is exactly the GRANDFATHERED block, which is key-for-key the 35
+    // DEMO_FALLBACK YouTube videos (the marquee compounds like "Goblet Squat" /
+    // "Barbell Hip Thrust" live in DEMO_FALLBACK too). It is the ONLY source of
+    // verified:true entries; every tranche — including this one — ships
+    // verified:false. Adding a fedb_frames tranche must NOT change that count, and
+    // every verified:true entry must still be a YouTube one (no fedb_frames/gif was
+    // silently promoted). The count is derived from DEMO_FALLBACK (asserted === 35
+    // elsewhere) rather than hard-coded, so it tracks the grandfather set exactly.
+    const verifiedTrue = CURATED_ENTRIES.filter(([, d]) => d.verified);
+    expect(verifiedTrue.length).toBe(Object.keys(DEMO_FALLBACK).length);
+    for (const [, demo] of verifiedTrue) {
+      expect(demo.kind).toBe('youtube');
+    }
+    // And the 35 grandfathered DEMO_FALLBACK names specifically stay verified:true
+    // with their original URL (no silent demotion, no URL change).
+    for (const name of Object.keys(DEMO_FALLBACK)) {
+      const demo = getCuratedDemo(name);
+      expect(demo).not.toBeNull();
+      expect(demo!.kind).toBe('youtube');
+      expect(demo!.verified).toBe(true);
+      expect(demo!.url).toBe(DEMO_FALLBACK[name]);
+    }
+  });
+});

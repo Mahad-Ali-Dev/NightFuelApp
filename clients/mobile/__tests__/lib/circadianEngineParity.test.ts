@@ -177,6 +177,29 @@ function assertEngineTriangle(shift: ShiftLike, expected: ContractInstants): voi
   // but no notification instant — an isolated edit to ANCHOR_SLEEP_HOURS → RED.
   expect(anchor.end.getTime()).toBe(ms(expected.anchorEnd));
   expect(anchor.end.getTime() - anchor.start.getTime()).toBe(ANCHOR_SLEEP_HOURS * HOUR);
+
+  // ── F8 anti-regression: the 4h anchor sits strictly WITHIN the ~8h window ────
+  // This is the invariant AnchorSleepCard now relies on to show a truthful "4h
+  // core" primary row plus a wider "Full sleep window" context line. anchor.start
+  // === sleepWindow.start is already pinned above (Layer 1 (a)); here we pin the
+  // CLOSING edge and the strict LENGTH ordering so the card's primary 4h block can
+  // never silently widen back to the 8h window (the original three-way drift),
+  // for BOTH fixtures.
+  expect(anchor.end.getTime()).toBeLessThanOrEqual(transition.sleepWindow.end.getTime());
+  expect(anchor.end.getTime() - anchor.start.getTime()).toBeLessThan(
+    transition.sleepWindow.end.getTime() - transition.sleepWindow.start.getTime(),
+  );
+
+  // ── F8 anti-regression: the nf-anchor-sleep COPY states ANCHOR_SLEEP_HOURS ───
+  // The reminder body coaches "hold this {N}h core-sleep window"; the card's
+  // primary label says "(4h core)". Parse the digit out of the shipped body and
+  // pin it to ANCHOR_SLEEP_HOURS so the copy, the constant, and the card stay one
+  // story — an edit to either the constant or the body text → RED.
+  const anchorReminder = buildShiftReminders(shift).find((r) => r.id === 'nf-anchor-sleep');
+  expect(anchorReminder).toBeDefined();
+  const bodyHours = anchorReminder!.body.match(/(\d+)h/);
+  expect(bodyHours).not.toBeNull();
+  expect(Number(bodyHours![1])).toBe(ANCHOR_SLEEP_HOURS);
 }
 
 describe('circadian engine integrity (anchor ↔ light ↔ reminders) — shared shift', () => {

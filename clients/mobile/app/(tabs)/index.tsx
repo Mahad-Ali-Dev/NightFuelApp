@@ -28,6 +28,7 @@ import { searchLibrary } from '@/api/exercises';
 import ShiftTransitionCard from '@/components/home/ShiftTransitionCard';
 import LightPlanCard from '@/components/home/LightPlanCard';
 import AnchorSleepCard from '@/components/home/AnchorSleepCard';
+import TodayCircadianTimeline from '@/components/home/TodayCircadianTimeline';
 import { CaffeineTimerTile } from '@/components/home/CaffeineTimerTile';
 import { TAB_BAR_H } from './_layout';
 
@@ -495,6 +496,14 @@ export default function DashboardScreen() {
 
                 {/* ══ ANCHOR SLEEP (fixed core-sleep block) ═══════════════════ */}
                 <AnchorSleepCard
+                    shift={shift ?? null}
+                    loading={shiftLoading}
+                    error={shiftError}
+                    onRetry={() => shiftRefetch()}
+                />
+
+                {/* ══ TODAY (composed circadian day-plan timeline) ═══════════ */}
+                <TodayCircadianTimeline
                     shift={shift ?? null}
                     loading={shiftLoading}
                     error={shiftError}

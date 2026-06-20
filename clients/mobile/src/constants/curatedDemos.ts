@@ -951,6 +951,51 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   // Core / abs
   'Scissor Kick': 'Scissor_Kick',
   'Stomach Vacuum': 'Stomach_Vacuum',
+
+  // ── Widened FEDB-backed tranche #14 (data-only, zero new fetch) ──────────────
+  // A further slice of distinct catalogue movements — this tranche leans into the
+  // stretch/mobility, neck, forearm/wrist and lower-leg accessory work the earlier
+  // tranches under-covered. Every KEY below is NEW — absent from GRANDFATHERED, the
+  // FEDB_BACKED_SLUGS entries above (tranches #1-#13), YOUTUBE_PENDING and
+  // GIF_PENDING — so buildCuratedDemos() admits each one as kind:'fedb_frames',
+  // verified:false (precedence: an already-set name is skipped). Every slug VALUE
+  // was machine-verified to be present in BOTH FEDB_SLUGS (exerciseDemos.ts) AND
+  // __tests__/fixtures/fedb-catalog-slugs.json (the shipped 873-slug catalogue),
+  // and each is a fresh slug dir not already referenced by an earlier tranche — so
+  // every entry resolves to an ordered 2-frame [0.jpg, 1.jpg] HTTPS pair via
+  // fedbPair() with NO new HTTP call. Strictly additive: the kind:'youtube'-only
+  // sync guard (scripts/check-demo-maps-in-sync.js) and pendingHumanReviewIds.json
+  // (YouTube ids only) are both untouched, so check-demo-maps-in-sync stays green.
+  // A 200-ok URL is NOT a movement review, so nothing here is verified:true — that
+  // remains a human-gated step.
+
+  // Mobility / stretch staples
+  'Hamstring Stretch': 'Hamstring_Stretch',
+  'Quad Stretch': 'Quad_Stretch',
+  'All Fours Quad Stretch': 'All_Fours_Quad_Stretch',
+  'Kneeling Hip Flexor': 'Kneeling_Hip_Flexor',
+  'Middle Back Stretch': 'Middle_Back_Stretch',
+  'Chin To Chest Stretch': 'Chin_To_Chest_Stretch',
+  'Behind Head Chest Stretch': 'Behind_Head_Chest_Stretch',
+  'Dynamic Chest Stretch': 'Dynamic_Chest_Stretch',
+  // Neck
+  'Isometric Neck Exercise - Front And Back': 'Isometric_Neck_Exercise_-_Front_And_Back',
+  'Isometric Neck Exercise - Sides': 'Isometric_Neck_Exercise_-_Sides',
+  'Seated Head Harness Neck Resistance': 'Seated_Head_Harness_Neck_Resistance',
+  // Forearm / wrist
+  'Palms-Down Dumbbell Wrist Curl Over A Bench': 'Palms-Down_Dumbbell_Wrist_Curl_Over_A_Bench',
+  'Palms-Up Dumbbell Wrist Curl Over A Bench': 'Palms-Up_Dumbbell_Wrist_Curl_Over_A_Bench',
+  'Seated Palm-Up Barbell Wrist Curl': 'Seated_Palm-Up_Barbell_Wrist_Curl',
+  'Seated Palms-Down Barbell Wrist Curl': 'Seated_Palms-Down_Barbell_Wrist_Curl',
+  'Wrist Circles': 'Wrist_Circles',
+  // Lower-leg / calf / tibialis / ankle
+  'Ankle Circles': 'Ankle_Circles',
+  'Smith Machine Reverse Calf Raises': 'Smith_Machine_Reverse_Calf_Raises',
+  'Seated Leg Tucks': 'Seated_Leg_Tucks',
+  // Glutes / hip accessory (band)
+  'Hip Extension with Bands': 'Hip_Extension_with_Bands',
+  'Thigh Abductor': 'Thigh_Abductor',
+  'Band Hip Adductions': 'Band_Hip_Adductions',
 };
 
 /**

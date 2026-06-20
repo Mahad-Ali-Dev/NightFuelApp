@@ -11,8 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getBodyMetrics, logBodyMetrics, BodyMetrics } from '@/api/progress';
-import { Card } from '@/components/ui/Card';
-import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui';
+import { Skeleton, SkeletonCard, EmptyState, GlassCard } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import { typography as typo } from '@/theme/typography';
 
@@ -104,23 +103,28 @@ export default function BodyMetricsScreen() {
             <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
                 {/* Stats Row */}
                 <View style={styles.statsRow}>
-                    <Card variant="glass" style={styles.statBox}>
-                        <Text style={[typography.overline, { color: colors.text.secondary }]}>Latest Weight</Text>
-                        <Text style={[styles.statValue, { color: colors.text.primary }]}>
-                            {latest?.weightKg || '--'} <Text style={[styles.statUnit, { color: colors.text.secondary }]}>kg</Text>
-                        </Text>
-                    </Card>
-                    <Card variant="glass" style={styles.statBox}>
-                        <Text style={[typography.overline, { color: colors.text.secondary }]}>Body Fat</Text>
-                        <Text style={[styles.statValue, { color: colors.text.primary }]}>
-                            {latest?.bodyFatPct || '--'}<Text style={[styles.statUnit, { color: colors.text.secondary }]}>%</Text>
-                        </Text>
-                    </Card>
+                    <GlassCard style={styles.statBox}>
+                        <View style={styles.statBoxBody}>
+                            <Text style={[typography.overline, { color: colors.text.secondary }]}>Latest Weight</Text>
+                            <Text style={[styles.statValue, { color: colors.text.primary }]}>
+                                {latest?.weightKg ?? '--'} <Text style={[styles.statUnit, { color: colors.text.secondary }]}>kg</Text>
+                            </Text>
+                        </View>
+                    </GlassCard>
+                    <GlassCard style={styles.statBox}>
+                        <View style={styles.statBoxBody}>
+                            <Text style={[typography.overline, { color: colors.text.secondary }]}>Body Fat</Text>
+                            <Text style={[styles.statValue, { color: colors.text.primary }]}>
+                                {latest?.bodyFatPct ?? '--'}<Text style={[styles.statUnit, { color: colors.text.secondary }]}>%</Text>
+                            </Text>
+                        </View>
+                    </GlassCard>
                 </View>
 
                 {/* Log Form */}
                 <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing['2xl'] }}>
-                    <Card variant="glass" style={styles.form} padding="2xl">
+                    <GlassCard style={styles.form}>
+                        <View style={styles.formBody}>
                         <Text style={[typography.h3, { color: colors.text.primary, marginBottom: 20 }]}>Log Today's Metrics</Text>
 
                         <MeasurementInput label="Weight (kg)" value={weight} onChange={setWeight} placeholder="e.g. 82.5" />
@@ -160,7 +164,7 @@ export default function BodyMetricsScreen() {
                         <TouchableOpacity
                             accessibilityRole="button"
                             accessibilityLabel="Save snapshot"
-                            accessibilityState={{ disabled: mutation.isPending }}
+                            accessibilityState={{ disabled: mutation.isPending, busy: mutation.isPending }}
                             style={[styles.submitBtn, { backgroundColor: colors.accent.purple, borderRadius: borderRadius.xl, marginTop: 24 }, !mutation.isPending && shadows.glow(colors.accent.purple)]}
                             onPress={handleLog}
                             disabled={mutation.isPending}
@@ -172,7 +176,8 @@ export default function BodyMetricsScreen() {
                                 <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>Save Snapshot</Text>
                             )}
                         </TouchableOpacity>
-                    </Card>
+                        </View>
+                    </GlassCard>
                 </View>
 
                 {/* History List */}
@@ -218,7 +223,11 @@ export default function BodyMetricsScreen() {
                                 </Text>
                             </View>
                             <View style={{ flexDirection: 'row', gap: 8 }}>
-                                {entry.waistCm && <View style={[styles.miniBadge, { backgroundColor: colors.background.tertiary }]}><Text style={[typography.caption, { fontSize: 10, color: colors.text.secondary }]}>W: {entry.waistCm}</Text></View>}
+                                {entry.waistCm ? (
+                                    <View style={[styles.miniBadge, { backgroundColor: colors.background.tertiary }]}>
+                                        <Text style={[typography.caption, { fontSize: 10, color: colors.text.secondary }]}>W: {entry.waistCm}</Text>
+                                    </View>
+                                ) : null}
                                 <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
                             </View>
                         </View>
@@ -235,9 +244,15 @@ const styles = StyleSheet.create({
     headerBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     statsRow: { flexDirection: 'row', paddingHorizontal: 20, marginTop: 20, gap: 12 },
     statBox: { flex: 1 },
+    // GlassCard owns no internal padding (unlike the legacy Card padding="lg"),
+    // so the body View supplies the lg (16) inset the stat boxes rendered with.
+    statBoxBody: { padding: 16 },
     statValue: { fontFamily: typo.statMedium.fontFamily, fontSize: 30, lineHeight: 38, marginTop: 6 },
     statUnit: { fontFamily: typo.statTiny.fontFamily, fontSize: 14 },
     form: {},
+    // Restores the legacy Card padding="2xl" (24) the form rendered with — moved
+    // into a body View because GlassCard carries no internal padding.
+    formBody: { padding: 24 },
     input: { padding: 14, fontSize: 16, borderWidth: 1 },
     submitBtn: { height: 52, alignItems: 'center', justifyContent: 'center' },
     historyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1 },

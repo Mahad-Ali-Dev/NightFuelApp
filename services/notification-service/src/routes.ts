@@ -8,6 +8,9 @@ import {
     listNotificationsQuerySchema,
     notificationIdParamSchema,
     updatePreferencesSchema,
+    expoPushTokenSchema,
+    webPushEndpointSchema,
+    webPushKeySchema,
 } from './schemas';
 
 const errorResponseSchema = z.object({
@@ -219,9 +222,9 @@ export const notificationRoutes = async (
             onRequest: [(fastify as any).authenticate],
             schema: {
                 body: z.object({
-                    endpoint: z.string().url(),
-                    p256dh: z.string().min(1),
-                    auth: z.string().min(1),
+                    endpoint: webPushEndpointSchema,
+                    p256dh: webPushKeySchema,
+                    auth: webPushKeySchema,
                 }),
                 response: {
                     200: z.object({ id: z.string() }),
@@ -254,7 +257,7 @@ export const notificationRoutes = async (
             onRequest: [(fastify as any).authenticate],
             schema: {
                 body: z.object({
-                    expoPushToken: z.string().min(1),
+                    expoPushToken: expoPushTokenSchema,
                 }),
                 response: {
                     200: z.object({ id: z.string() }),
@@ -287,7 +290,7 @@ export const notificationRoutes = async (
             onRequest: [(fastify as any).authenticate],
             schema: {
                 body: z.object({
-                    endpoint: z.string().min(1),
+                    endpoint: z.string().min(1).max(2048),
                 }),
                 response: {
                     200: z.object({ ok: z.boolean() }),

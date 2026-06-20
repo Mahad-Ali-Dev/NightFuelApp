@@ -34,6 +34,18 @@
  * would manufacture a brand CTA where the screen has none, so the source is not
  * modified by the coverage item this suite belongs to.)
  *
+ * A copy-coherence test pins the first "Recommended Windows" row. That row
+ * surfaces the BACKEND analytics window (`analytics?.anchorSleepWindow`) and is
+ * deliberately DISTINCT from the home dashboard's "Anchor sleep (4h core)" card
+ * (src/components/home/AnchorSleepCard.tsx), which renders the engine's fixed 4h
+ * core block from the shared `computeAnchorSleep` (src/lib/circadian/anchorSleep.ts).
+ * To stop this analytics row reading as that same fixed 4h anchor, its copy was
+ * clarified to "Recommended Sleep Block" (analytics-derived wording), no longer
+ * the "Anchor Sleep" / "total darkness required" framing. This test asserts the
+ * clarified label renders, the stale "Anchor Sleep" label does NOT, and the
+ * displayed VALUE is still the backend's `anchorSleepWindow` verbatim (the
+ * backend/mock analytics contract is unchanged — copy-only clarification).
+ *
  * Mock conventions mirror the sibling screen suites (circadian / shift-detail /
  * dashboard.shiftTransition): `@tanstack/react-query` is stubbed and branches on
  * queryKey[0] (a mutable `mockShiftState` holder drives ['current-shift'] and a
@@ -384,5 +396,38 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
     // behaviour — with no stray extra invocation.
     fireEvent.press(logBtn);
     expect(mockMutate).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Copy coherence: the analytics "Recommended Sleep Block" row ───────────
+  // The first "Recommended Windows" row is driven by the BACKEND analytics
+  // window (`analytics?.anchorSleepWindow`) and is intentionally distinct from
+  // the home dashboard's "Anchor sleep (4h core)" card (which renders the shared
+  // computeAnchorSleep fixed 4h block). This test pins the clarified copy so the
+  // row can't silently regress to claiming it IS that shared anchor block, while
+  // proving the backend/mock contract is untouched: the row still prints the
+  // analytics window value verbatim.
+  test('analytics row reads as "Recommended Sleep Block" (analytics-derived), prints the backend window verbatim, and no longer claims to be the shared "Anchor Sleep" 4h block', () => {
+    // A distinctive backend window so we can assert it is displayed UNCHANGED —
+    // the contract is the value the row prints, not its surrounding copy.
+    mockAnalyticsState.data = {
+      qualityScore: 80,
+      summary: 'Looking good.',
+      anchorSleepWindow: '2:00 PM – 6:00 PM',
+    };
+
+    renderScreen();
+
+    // The clarified, analytics-derived label renders…
+    expect(screen.getByText('Recommended Sleep Block')).toBeTruthy();
+    // …and the row prints the BACKEND analytics window VERBATIM — proving the
+    // backend/mock analytics contract (`analytics?.anchorSleepWindow` stays the
+    // displayed value) is unchanged by this copy-only clarification.
+    expect(screen.getByText('2:00 PM – 6:00 PM')).toBeTruthy();
+
+    // The stale "Anchor Sleep" label — which collided with the home dashboard's
+    // fixed-4h-core "Anchor sleep" card — must NOT be present on this analytics
+    // row anymore (the coherence guard). The home card owns the "anchor sleep"
+    // / "core block" wording; this analytics row no longer claims it.
+    expect(screen.queryByText('Anchor Sleep')).toBeNull();
   });
 });
