@@ -806,6 +806,55 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Cat Stretch': 'Cat_Stretch',
   "Child's Pose": 'Childs_Pose',
   'Standing Hip Flexors': 'Standing_Hip_Flexors',
+
+  // ── Widened FEDB-backed tranche #11 (data-only, zero new fetch) ──────────────
+  // A further slice of distinct catalogue movements. Every KEY below is NEW —
+  // absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries above (tranches #1-#10),
+  // YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos() admits each one as
+  // kind:'fedb_frames', verified:false (precedence: an already-set name is skipped).
+  // Every slug VALUE was machine-verified to be present in BOTH FEDB_SLUGS
+  // (exerciseDemos.ts) AND __tests__/fixtures/fedb-catalog-slugs.json (the shipped
+  // 873-slug catalogue), and each is a fresh slug dir not already referenced by an
+  // earlier tranche — so every entry resolves to an ordered 2-frame [0.jpg, 1.jpg]
+  // HTTPS pair via fedbPair() with NO new HTTP call. Strictly additive: the
+  // kind:'youtube'-only sync guard (scripts/check-demo-maps-in-sync.js) and
+  // pendingHumanReviewIds.json (YouTube ids only) are both untouched, so
+  // check-demo-maps-in-sync stays green. A 200-ok URL is NOT a movement review,
+  // so nothing here is verified:true — that stays a human-gated step.
+
+  // Machines / cable isolation
+  'Ab Crunch Machine': 'Ab_Crunch_Machine',
+  'Calf-Machine Shoulder Shrug': 'Calf-Machine_Shoulder_Shrug',
+  'Cable Internal Rotation': 'Cable_Internal_Rotation',
+  'Cable Seated Crunch': 'Cable_Seated_Crunch',
+  'Cable Iron Cross': 'Cable_Iron_Cross',
+  // Barbell / Smith variants
+  'Barbell Guillotine Bench Press': 'Barbell_Guillotine_Bench_Press',
+  'Barbell Incline Shoulder Raise': 'Barbell_Incline_Shoulder_Raise',
+  'Barbell Shrug Behind The Back': 'Barbell_Shrug_Behind_The_Back',
+  'Bradford Rocky Presses': 'Bradford_Rocky_Presses',
+  'Bent Press': 'Bent_Press',
+  // Dumbbell / pulley variants
+  'Bent Over Two-Dumbbell Row With Palms In': 'Bent_Over_Two-Dumbbell_Row_With_Palms_In',
+  'Bent Over Low-Pulley Side Lateral': 'Bent_Over_Low-Pulley_Side_Lateral',
+  'Car Drivers': 'Car_Drivers',
+  // Bodyweight / core
+  'Bent-Knee Hip Raise': 'Bent-Knee_Hip_Raise',
+  'Body Tricep Press': 'Body_Tricep_Press',
+  'Bodyweight Mid Row': 'Bodyweight_Mid_Row',
+  'Bodyweight Flyes': 'Bodyweight_Flyes',
+  'Butt Lift Bridge': 'Butt_Lift_Bridge',
+  'Ab Roller': 'Ab_Roller',
+  'Barbell Rollout from Bench': 'Barbell_Rollout_from_Bench',
+  // Conditioning / plyo
+  'Bench Jump': 'Bench_Jump',
+  'Bench Sprint': 'Bench_Sprint',
+  'Box Skip': 'Box_Skip',
+  'Catch and Overhead Throw': 'Catch_and_Overhead_Throw',
+  // Strongman
+  'Atlas Stone Trainer': 'Atlas_Stone_Trainer',
+  'Axle Deadlift': 'Axle_Deadlift',
+  'Car Deadlift': 'Car_Deadlift',
 };
 
 /**

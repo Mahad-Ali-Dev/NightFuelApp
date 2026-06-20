@@ -9,7 +9,7 @@ import { getFeed, likePost, getChallenges, Post } from '@/api/community';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
-import { Card, Button, Skeleton, EmptyState } from '@/components/ui';
+import { Button, Skeleton, EmptyState, GlassCard } from '@/components/ui';
 import { shadows } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { safeImageUri } from '@/lib/imageUrl';
@@ -181,69 +181,73 @@ function PostItem({ post, onLike, onComment, onShare }: { post: Post, onLike: ()
     const avatarUri = safeImageUri(post.author?.avatarUrl);
     const imageUri = safeImageUri(post.imageUrl);
     return (
-        <Card variant="glass" style={[styles.postCard, { borderColor: colors.border.default, borderRadius: borderRadius['2xl'] }]}>
-            <View style={styles.postHeader}>
-                <View style={[styles.avatarMini, { backgroundColor: colors.background.tertiary }]}>
-                    {avatarUri ? (
-                        <Image source={{ uri: avatarUri }} style={{ width: '100%', height: '100%', borderRadius: 16 }} cachePolicy="memory-disk" transition={200} />
-                    ) : (
-                        <Ionicons name="person" size={16} color={colors.text.tertiary} />
-                    )}
+        <GlassCard radius={borderRadius['2xl']} style={styles.postCard}>
+            <View style={styles.postCardInner}>
+                <View style={styles.postHeader}>
+                    <View style={[styles.avatarMini, { backgroundColor: colors.background.tertiary }]}>
+                        {avatarUri ? (
+                            <Image source={{ uri: avatarUri }} style={{ width: '100%', height: '100%', borderRadius: 16 }} cachePolicy="memory-disk" transition={200} />
+                        ) : (
+                            <Ionicons name="person" size={16} color={colors.text.tertiary} />
+                        )}
+                    </View>
+                    <View style={{ marginLeft: 12 }}>
+                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{post.author?.name || 'User'}</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                            {formatDistanceToNow(new Date(post.createdAt))} ago
+                        </Text>
+                    </View>
                 </View>
-                <View style={{ marginLeft: 12 }}>
-                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{post.author?.name || 'User'}</Text>
-                    <Text style={[typography.caption, { color: colors.text.secondary }]}>
-                        {formatDistanceToNow(new Date(post.createdAt))} ago
-                    </Text>
+
+                <Text style={[typography.body, { color: colors.text.secondary, marginVertical: 16, lineHeight: 22 }]}>
+                    {post.content}
+                </Text>
+
+                {imageUri ? (
+                    <Image source={{ uri: imageUri }} style={[styles.postImg, { borderRadius: borderRadius.lg }]} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                ) : null}
+
+                <View style={[styles.postActions, { borderTopColor: colors.border.default }]}>
+                    <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`Like post, ${post.likes} likes`} style={styles.actionItem} onPress={onLike}>
+                        <Ionicons name="heart-outline" size={20} color={colors.text.tertiary} />
+                        <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]}>{post.likes}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`Comment on post, ${post.commentsCount} comments`} style={styles.actionItem} onPress={onComment}>
+                        <Ionicons name="chatbubble-outline" size={18} color={colors.text.tertiary} />
+                        <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]}>{post.commentsCount}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Share" style={styles.actionItem} onPress={onShare}>
+                        <Ionicons name="share-social-outline" size={18} color={colors.text.tertiary} />
+                    </TouchableOpacity>
                 </View>
             </View>
-
-            <Text style={[typography.body, { color: colors.text.secondary, marginVertical: 16, lineHeight: 22 }]}>
-                {post.content}
-            </Text>
-
-            {imageUri && (
-                <Image source={{ uri: imageUri }} style={[styles.postImg, { borderRadius: borderRadius.lg }]} contentFit="cover" cachePolicy="memory-disk" transition={200} />
-            )}
-
-            <View style={[styles.postActions, { borderTopColor: colors.border.default }]}>
-                <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`Like post, ${post.likes} likes`} style={styles.actionItem} onPress={onLike}>
-                    <Ionicons name="heart-outline" size={20} color={colors.text.tertiary} />
-                    <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]}>{post.likes}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`Comment on post, ${post.commentsCount} comments`} style={styles.actionItem} onPress={onComment}>
-                    <Ionicons name="chatbubble-outline" size={18} color={colors.text.tertiary} />
-                    <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]}>{post.commentsCount}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Share" style={styles.actionItem} onPress={onShare}>
-                    <Ionicons name="share-social-outline" size={18} color={colors.text.tertiary} />
-                </TouchableOpacity>
-            </View>
-        </Card>
+        </GlassCard>
     );
 }
 
 function PostSkeleton() {
     const { colors, borderRadius } = useTheme();
     return (
-        <Card variant="glass" style={[styles.postCard, { borderColor: colors.border.default, borderRadius: borderRadius['2xl'] }]}>
-            <View style={styles.postHeader}>
-                <Skeleton width={32} height={32} radius={16} />
-                <View style={{ marginLeft: 12 }}>
-                    <Skeleton width={120} height={14} radius={4} />
-                    <Skeleton width={72} height={11} radius={4} style={{ marginTop: 6 }} />
+        <GlassCard radius={borderRadius['2xl']} style={styles.postCard}>
+            <View style={styles.postCardInner}>
+                <View style={styles.postHeader}>
+                    <Skeleton width={32} height={32} radius={16} />
+                    <View style={{ marginLeft: 12 }}>
+                        <Skeleton width={120} height={14} radius={4} />
+                        <Skeleton width={72} height={11} radius={4} style={{ marginTop: 6 }} />
+                    </View>
+                </View>
+                <View style={{ marginVertical: 16 }}>
+                    <Skeleton width="100%" height={14} radius={4} />
+                    <Skeleton width="70%" height={14} radius={4} style={{ marginTop: 8 }} />
+                </View>
+                <View style={[styles.postActions, { borderTopColor: colors.border.default }]}>
+                    <Skeleton width={48} height={16} radius={4} />
+                    <Skeleton width={48} height={16} radius={4} />
+                    <Skeleton width={24} height={16} radius={4} />
                 </View>
             </View>
-            <View style={{ marginVertical: 16 }}>
-                <Skeleton width="100%" height={14} radius={4} />
-                <Skeleton width="70%" height={14} radius={4} style={{ marginTop: 8 }} />
-            </View>
-            <View style={[styles.postActions, { borderTopColor: colors.border.default }]}>
-                <Skeleton width={48} height={16} radius={4} />
-                <Skeleton width={48} height={16} radius={4} />
-                <Skeleton width={24} height={16} radius={4} />
-            </View>
-        </Card>
+        </GlassCard>
     );
 }
 
@@ -258,7 +262,8 @@ const styles = StyleSheet.create({
     challIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
     postInputBtn: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 20, padding: 18, borderWidth: 1, marginBottom: 24 },
     avatarMini: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-    postCard: { padding: 18, marginBottom: 16, borderWidth: 1 },
+    postCard: { marginBottom: 16 },
+    postCardInner: { padding: 18 },
     postHeader: { flexDirection: 'row', alignItems: 'center' },
     postImg: { width: '100%', height: 220, marginBottom: 12 },
     postActions: { flexDirection: 'row', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, gap: 24 },

@@ -80,6 +80,14 @@ export function useEntrainmentScore(): EntrainmentScoreResult {
     // score directly: the entrainment.ts helper exposes the advice/window math
     // but no score-derivation function, so the genuine score lives on the model
     // (src/api/circadian.ts deriveEntrainmentScore), not the analytics proxy.
+    //
+    // TIMEZONE-NAIVE: this score is computed in a tz-NAIVE local-clock frame —
+    // the model aligns the engine's melatoninOnset against the shift end as
+    // minutes-since-LOCAL-midnight (src/api/circadian.ts shiftEndMinutes uses
+    // d.getHours()/getMinutes()), and no timezone is carried through getModel().
+    // We pass the value through UNCHANGED here; carrying a real timezone is
+    // DEFERRED / out of scope. EntrainmentCard surfaces the honest "approx."
+    // affordance so this estimate is never presented as tz-precise.
     const score = normalizeScore(modelQuery.data?.entrainmentScore);
 
     const shift =

@@ -117,7 +117,7 @@ jest.mock('@/lib/imageUrl', () => ({
 
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
-import { render, fireEvent, screen } from '@testing-library/react-native';
+import { render, fireEvent, screen, within } from '@testing-library/react-native';
 import {
   ThemeContext,
   getThemeColors,
@@ -219,5 +219,29 @@ describe('LeaderboardScreen', () => {
 
     fireEvent.press(screen.getByTestId('follow-btn-u4'));
     expect(mockToggleMutate).toHaveBeenCalledTimes(1);
+  });
+
+  // ── (vi) the self "My Rank" row renders inside the Aurora GlassCard surface ─
+  // The Aurora restyle wraps the self (isSelf) row in a GlassCard whose outer
+  // wrapper carries a stable `leader-row-card-<userId>` testID. This pins that
+  // the highlighted self row is rendered INSIDE that glass surface — and that
+  // tapping the row from within the surface still navigates to the profile, so
+  // the surface wrapper changed nothing about the row's behaviour.
+  test('self row renders inside the GlassCard surface and stays tappable', () => {
+    mockLb.data = LEADERBOARD;
+
+    renderScreen();
+
+    // The self footer row (myScore = 'me-1') is wrapped in the GlassCard surface.
+    const selfCard = screen.getByTestId('leader-row-card-me-1');
+    // The rank row body — its name + "(You)" marker — renders INSIDE that surface.
+    expect(within(selfCard).getByText(/My Name \(You\)/)).toBeTruthy();
+    // …and the tappable row still lives inside the surface and navigates on press.
+    fireEvent.press(within(selfCard).getByRole('button', { name: /View My Name's profile/ }));
+    expect(mockPush).toHaveBeenCalledWith('/(community)/userProfile?userId=me-1');
+
+    // A NON-self list row is NOT wrapped in a glass surface (no card testID) — the
+    // restyle is scoped to the self highlight, leaving plain rows untouched.
+    expect(screen.queryByTestId('leader-row-card-u4')).toBeNull();
   });
 });

@@ -14,7 +14,7 @@ import { searchLibrary } from '@/api/exercises';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
-import { Skeleton, EmptyState } from '@/components/ui';
+import { Skeleton, EmptyState, GlassCard } from '@/components/ui';
 import { TAB_BAR_H } from '../(tabs)/_layout';
 
 const { width } = Dimensions.get('window');
@@ -106,48 +106,50 @@ export default function ExerciseLibraryScreen() {
         const hasDemo = !!(item.demoGifUrl || item.demoUrl);
         return (
             <TouchableOpacity
-                style={[styles.exCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
+                style={styles.exCardTouch}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 accessibilityLabel={item.name}
                 onPress={() => router.push(`/(exercises)/${item.id}` as any)}
             >
-                <View style={styles.exImageWrapper}>
-                    <Image
-                        source={imgSrc}
-                        style={styles.exImage}
-                        contentFit="cover"
-                        cachePolicy="memory-disk"
-                        transition={300}
-                    />
-                    <LinearGradient
-                        colors={['transparent', 'rgba(0,0,0,0.55)']}
-                        style={StyleSheet.absoluteFillObject}
-                    />
-                    {hasDemo && (
-                        <View
-                            style={[styles.demoBadge, { backgroundColor: withAlpha(colors.accent.coral, 0.9) }]}
-                            accessibilityLabel="Has demo video"
-                        >
-                            <Ionicons name="play" size={11} color="#FFF" />
-                        </View>
-                    )}
-                </View>
-                <View style={styles.exInfo}>
-                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', fontSize: 13 }]} numberOfLines={2}>
-                        {item.name}
-                    </Text>
-                    <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 11, marginTop: 2 }]} numberOfLines={1}>
-                        {item.bodyPart || item.muscleGroup || ''}
-                    </Text>
-                    {item.equipment && item.equipment !== 'body weight' && (
-                        <View style={[styles.equipPill, { borderColor: withAlpha(colors.accent.cyan, 0.5) }]}>
-                            <Text style={{ color: colors.accent.cyan, fontSize: 9, fontWeight: '600' }}>
-                                {item.equipment.toUpperCase()}
-                            </Text>
-                        </View>
-                    )}
-                </View>
+                <GlassCard radius={16}>
+                    <View style={styles.exImageWrapper}>
+                        <Image
+                            source={imgSrc}
+                            style={styles.exImage}
+                            contentFit="cover"
+                            cachePolicy="memory-disk"
+                            transition={300}
+                        />
+                        <LinearGradient
+                            colors={['transparent', 'rgba(0,0,0,0.55)']}
+                            style={StyleSheet.absoluteFillObject}
+                        />
+                        {hasDemo && (
+                            <View
+                                style={[styles.demoBadge, { backgroundColor: withAlpha(colors.accent.coral, 0.9) }]}
+                                accessibilityLabel="Has demo video"
+                            >
+                                <Ionicons name="play" size={11} color="#FFF" />
+                            </View>
+                        )}
+                    </View>
+                    <View style={styles.exInfo}>
+                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', fontSize: 13 }]} numberOfLines={2}>
+                            {item.name}
+                        </Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 11, marginTop: 2 }]} numberOfLines={1}>
+                            {item.bodyPart || item.muscleGroup || ''}
+                        </Text>
+                        {item.equipment && item.equipment !== 'body weight' && (
+                            <View style={[styles.equipPill, { borderColor: withAlpha(colors.accent.cyan, 0.5) }]}>
+                                <Text style={{ color: colors.accent.cyan, fontSize: 9, fontWeight: '600' }}>
+                                    {item.equipment.toUpperCase()}
+                                </Text>
+                            </View>
+                        )}
+                    </View>
+                </GlassCard>
             </TouchableOpacity>
         );
     }, [colors, typography, router, activeCategory]);
@@ -196,22 +198,24 @@ export default function ExerciseLibraryScreen() {
 
             {/* Search Bar */}
             <View style={{ paddingHorizontal: 20, flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-                <View style={[styles.searchBox, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
-                    <Ionicons name="search" size={18} color={colors.text.tertiary} />
-                    <TextInput
-                        style={[styles.searchInput, { color: colors.text.primary }]}
-                        placeholder="Search exercises..."
-                        placeholderTextColor={colors.text.tertiary}
-                        value={searchQuery}
-                        onChangeText={setSearchQuery}
-                        returnKeyType="search"
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearchQuery('')}>
-                            <Ionicons name="close-circle" size={18} color={colors.text.tertiary} />
-                        </TouchableOpacity>
-                    )}
-                </View>
+                <GlassCard radius={14} style={styles.searchBox}>
+                    <View style={styles.searchBoxInner}>
+                        <Ionicons name="search" size={18} color={colors.text.tertiary} />
+                        <TextInput
+                            style={[styles.searchInput, { color: colors.text.primary }]}
+                            placeholder="Search exercises..."
+                            placeholderTextColor={colors.text.tertiary}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            returnKeyType="search"
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearchQuery('')}>
+                                <Ionicons name="close-circle" size={18} color={colors.text.tertiary} />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </GlassCard>
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Muscles"
                     style={[styles.iconBtn, shadows.glow(colors.accent.cyan), { backgroundColor: colors.background.secondary, borderColor: withAlpha(colors.accent.cyan, 0.35), borderWidth: 1 }]}
                     onPress={() => router.push('/(exercises)/muscles')}
@@ -290,13 +294,13 @@ export default function ExerciseLibraryScreen() {
                 >
                     <View style={styles.skeletonGrid}>
                         {Array.from({ length: 6 }).map((_, i) => (
-                            <View key={i} style={[styles.exCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                            <GlassCard key={i} radius={16} style={styles.exCardTouch}>
                                 <Skeleton width="100%" height={130} radius={0} />
                                 <View style={styles.exInfo}>
                                     <Skeleton width="85%" height={13} radius={4} />
                                     <Skeleton width="55%" height={11} radius={4} style={{ marginTop: spacing.sm }} />
                                 </View>
-                            </View>
+                            </GlassCard>
                         ))}
                     </View>
                 </ScrollView>
@@ -341,7 +345,11 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { paddingHorizontal: 20, paddingBottom: 16 },
     iconBtn: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-    searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 48, gap: 8 },
+    // Outer GlassCard wrapper for the search field — GlassCard owns the
+    // radius + hairline + frosted fill; this just lets it flex beside the
+    // muscles icon button (the row layout lives in searchBoxInner).
+    searchBox: { flex: 1 },
+    searchBoxInner: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, height: 48, gap: 8 },
     searchInput: { flex: 1, fontSize: 15, fontFamily: 'Inter' },
     categoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
     categoryCard: {
@@ -355,7 +363,9 @@ const styles = StyleSheet.create({
     muscleGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     muscleChip: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 20, borderWidth: 1 },
     skeletonGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-    exCard: { width: CARD_W, borderRadius: 16, overflow: 'hidden', borderWidth: 1 },
+    // Sizing wrapper for the exercise card — width only; the GlassCard child
+    // owns the radius + hairline + clip + frosted fill (radius={16}).
+    exCardTouch: { width: CARD_W, borderRadius: 16, borderCurve: 'continuous' },
     exImageWrapper: { position: 'relative', width: '100%', height: 130 },
     exImage: { width: '100%', height: 130 },
     demoBadge: {

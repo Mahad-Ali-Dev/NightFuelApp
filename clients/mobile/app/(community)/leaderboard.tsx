@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 // item 5 owns community.ts — this item only IMPORTS follow/social helpers + getLeaderboard.
 import { getLeaderboard, followUser, unfollowUser, getUserSocial } from '@/api/community';
-import { EmptyState, Avatar, Skeleton } from '@/components/ui';
+import { EmptyState, Avatar, Skeleton, GlassCard } from '@/components/ui';
 import { shadows } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { safeImageUri } from '@/lib/imageUrl';
@@ -188,9 +188,14 @@ export default function LeaderboardScreen() {
                 />
             )}
 
-            {/* My Rank Footer — fixed overlay, not part of the virtualized list */}
+            {/* My Rank Footer — fixed overlay, not part of the virtualized list.
+                The sticky positioning + safe-area paddingBottom live on this outer
+                wrapper; the visible "my rank" card surface is the self LeaderRow
+                below (isSelf), which now renders inside a GlassCard. So the old
+                background.secondary fill + borderTop divider are replaced by the
+                self row's own Aurora glass surface — no second surface here. */}
             {!isLoading && myScore && (
-                <View style={[styles.myRankBar, { backgroundColor: colors.background.secondary, borderTopColor: colors.border.default, paddingBottom: insets.bottom + 12 }]}>
+                <View style={[styles.myRankBar, { paddingBottom: insets.bottom + 12 }]}>
                     <LeaderRow
                         userId={myScore.userId}
                         name={displayNameOf(myScore)}
@@ -335,13 +340,18 @@ const LeaderRow = React.memo(function LeaderRow({ userId, name, avatarUrl, score
     const { colors, typography, borderRadius } = useTheme();
     const router = useRouter();
     const avatarUri = safeImageUri(avatarUrl);
-    return (
+
+    // The tappable row body — identical for every row. The fixed-height layout
+    // (styles.leaderRow → height: ROW_HEIGHT) is what FlatList's getItemLayout
+    // pins, so it stays on the TouchableOpacity in BOTH branches and is never
+    // wrapped in anything that adds vertical margin.
+    const row = (
         <TouchableOpacity
             activeOpacity={0.85}
             accessibilityRole="button"
             accessibilityLabel={`View ${name}'s profile${rank != null ? `, rank ${rank}` : ''}`}
             onPress={() => router.push(`/(community)/userProfile?userId=${userId}` as any)}
-            style={[styles.leaderRow, isSelf && { backgroundColor: withAlpha(colors.accent.cyan, 0.1), borderRadius: borderRadius.lg, borderWidth: 1, borderColor: withAlpha(colors.accent.cyan, 0.3) }]}
+            style={styles.leaderRow}
         >
             <Text style={[typography.statTiny, { color: colors.text.secondary, width: 30, textAlign: 'center' }]}>{rank != null ? rank : '–'}</Text>
             <Avatar uri={avatarUri} name={name} size={32} style={{ marginLeft: 4 }} />
@@ -352,6 +362,28 @@ const LeaderRow = React.memo(function LeaderRow({ userId, name, avatarUrl, score
             <Text style={[typography.statTiny, { color: colors.accent.cyan, marginLeft: 12 }]}>{score.toLocaleString()}</Text>
         </TouchableOpacity>
     );
+
+    // The self row reads as a tinted highlight card ("this is you"). That card
+    // surface is now the Aurora GlassCard: its frosted fill replaces the old
+    // withAlpha(cyan, 0.1) background, while the cyan-tinted hairline (passed via
+    // style, which the primitive spreads last so it overrides the default border)
+    // + a soft cyan glow keep the self-row identity. radius matches the original
+    // borderRadius.lg. The inner row keeps its fixed ROW_HEIGHT so getItemLayout
+    // stays exact even when the self row appears inside the virtualized list.
+    if (isSelf) {
+        return (
+            <GlassCard
+                testID={`leader-row-card-${userId}`}
+                radius={borderRadius.lg}
+                glow={colors.accent.cyan}
+                style={{ borderColor: withAlpha(colors.accent.cyan, 0.3) }}
+            >
+                {row}
+            </GlassCard>
+        );
+    }
+
+    return row;
 });
 
 const styles = StyleSheet.create({
@@ -372,5 +404,9 @@ const styles = StyleSheet.create({
     rankBadge: { position: 'absolute', bottom: -5, right: -5, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
     leaderRow: { flexDirection: 'row', alignItems: 'center', height: ROW_HEIGHT, paddingHorizontal: 20 },
     followBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, height: 30, borderRadius: 15, borderWidth: 1 },
-    myRankBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 0, paddingTop: 12, borderTopWidth: 1 },
+    // Sticky "my rank" overlay wrapper — positioning + safe-area padding only.
+    // The visible card surface is the self LeaderRow's GlassCard (it owns the
+    // fill + hairline), so this wrapper carries no fill/border; the horizontal
+    // padding insets that glass card from the screen edges.
+    myRankBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingTop: 12 },
 });

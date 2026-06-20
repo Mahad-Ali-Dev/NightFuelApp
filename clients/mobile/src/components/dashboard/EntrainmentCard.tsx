@@ -68,6 +68,18 @@ function EntrainmentCardComponent({ score, shift }: EntrainmentCardProps) {
   const advice = entrainmentAdvice(score);
   const good = isGoodAlignment(score);
 
+  // TIMEZONE-NAIVE SCORE (intentional, surfaced honestly below).
+  // The `score` we consume here is computed in a tz-NAIVE local-clock frame:
+  // the model (src/api/circadian.ts → deriveEntrainmentScore) compares the
+  // engine's melatoninOnset against the shift end as minutes-since-LOCAL-
+  // midnight (shiftEndMinutes uses d.getHours()/getMinutes()), and no timezone
+  // is ever carried through getModel(). So the alignment is only as honest as
+  // the device clock matching the shift's tz. Carrying a real timezone through
+  // getModel()/the score math is DEFERRED / out of scope for this card; until
+  // then we render the subtle "approx." affordance next to the title (and an
+  // accessibilityLabel) so the estimate is presented honestly rather than as a
+  // precise, tz-correct number.
+
   // Accent: cyan (success/progress) when aligned, amber (caution) otherwise —
   // both pulled from theme tokens, never raw hex.
   const accent = good ? colors.accent.cyan : colors.accent.amber;
@@ -109,14 +121,29 @@ function EntrainmentCardComponent({ score, shift }: EntrainmentCardProps) {
           </Text>
         </View>
 
-        {/* Title — hierarchy via weight/color, not a second font size */}
-        <Text
-          accessibilityRole="header"
-          maxFontSizeMultiplier={1.6}
-          style={[typography.subhead, { color: colors.text.primary, fontWeight: '800' }]}
-        >
-          {good ? 'Well aligned' : score != null ? 'Room to improve' : 'Build your baseline'}
-        </Text>
+        {/* Title row — hierarchy via weight/color, not a second font size. The
+            "approx." caption sits beside the title, gap-spaced, and renders
+            ONLY for a finite score (never on the null "Build your baseline"
+            baseline state) to honestly flag the tz-naive local-clock estimate
+            documented above. */}
+        <View style={styles.titleRow}>
+          <Text
+            accessibilityRole="header"
+            maxFontSizeMultiplier={1.6}
+            style={[typography.subhead, { color: colors.text.primary, fontWeight: '800' }]}
+          >
+            {good ? 'Well aligned' : score != null ? 'Room to improve' : 'Build your baseline'}
+          </Text>
+          {score != null ? (
+            <Text
+              maxFontSizeMultiplier={1.6}
+              accessibilityLabel="Approximate alignment, estimated from your local clock"
+              style={[typography.caption, { color: colors.text.tertiary }]}
+            >
+              approx.
+            </Text>
+          ) : null}
+        </View>
 
         {/* Advice copy — the exact string from entrainmentAdvice(score) */}
         <Text
@@ -156,6 +183,10 @@ const styles = StyleSheet.create({
   // Outer wrapper spacing only — GlassCard owns the radius/hairline/clip/fill.
   card: { marginTop: 12 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // Title + the subtle "approx." caption, baseline-aligned and gap-spaced so
+  // the caption reads as a quiet qualifier beside the bold title. `wrap` keeps
+  // it graceful at large font scales.
+  titleRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 },
   iconChip: {
     width: 32,
     height: 32,

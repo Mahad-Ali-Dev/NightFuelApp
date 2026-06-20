@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getToday, logHydration } from '@/api/progress';
 import { CircularProgress } from '@/components/ui/CircularProgress';
-import { EmptyState } from '@/components/ui';
+import { EmptyState, GlassCard } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { typography as typo } from '@/theme/typography';
@@ -105,15 +105,19 @@ export default function HydrationTrackerScreen() {
                                 accessibilityRole="button"
                                 accessibilityLabel={`Add ${amount} ml`}
                                 accessibilityState={{ disabled: mutation.isPending }}
-                                style={[styles.presetBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl }]}
+                                style={styles.presetBtn}
                                 onPress={() => handleAdd(amount)}
                                 disabled={mutation.isPending}
                             >
-                                <View style={[styles.presetIcon, { backgroundColor: withAlpha(colors.accent.cyan, 0.14) }]}>
-                                    <Ionicons name="add" size={22} color={colors.accent.cyan} />
-                                </View>
-                                <Text style={[styles.presetValue, { color: colors.text.primary }]}>{amount}</Text>
-                                <Text style={[typography.caption, { color: colors.text.secondary }]}>ml</Text>
+                                <GlassCard radius={borderRadius.xl} style={styles.presetGlass}>
+                                    <View style={styles.presetInner}>
+                                        <View style={[styles.presetIcon, { backgroundColor: withAlpha(colors.accent.cyan, 0.14) }]}>
+                                            <Ionicons name="add" size={22} color={colors.accent.cyan} />
+                                        </View>
+                                        <Text style={[styles.presetValue, { color: colors.text.primary }]}>{amount}</Text>
+                                        <Text style={[typography.caption, { color: colors.text.secondary }]}>ml</Text>
+                                    </View>
+                                </GlassCard>
                             </TouchableOpacity>
                         ))}
                     </View>
@@ -121,12 +125,14 @@ export default function HydrationTrackerScreen() {
 
                 {/* Hydration Tips */}
                 <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing['2xl'] }}>
-                    <View style={[styles.tipCard, { backgroundColor: withAlpha(colors.accent.cyan, 0.1), borderColor: withAlpha(colors.accent.cyan, 0.3), borderRadius: borderRadius.xl, borderWidth: 1 }]}>
-                        <Ionicons name="information-circle" size={24} color={colors.accent.cyan} />
-                        <Text style={[typography.body, { color: colors.text.primary, marginLeft: 12, flex: 1 }]}>
-                            Sip water consistently throughout the day to maintain peak cognitive and physical performance.
-                        </Text>
-                    </View>
+                    <GlassCard radius={borderRadius.xl}>
+                        <View style={styles.tipCard}>
+                            <Ionicons name="information-circle" size={24} color={colors.accent.cyan} />
+                            <Text style={[typography.body, { color: colors.text.primary, marginLeft: 12, flex: 1 }]}>
+                                Sip water consistently throughout the day to maintain peak cognitive and physical performance.
+                            </Text>
+                        </View>
+                    </GlassCard>
                 </View>
             </ScrollView>
 
@@ -162,8 +168,10 @@ const styles = StyleSheet.create({
     glow: { position: 'absolute', width: 280, height: 280, borderRadius: 140, opacity: 0.12 },
     bigStat: { fontFamily: typo.statLarge.fontFamily, fontSize: 52, lineHeight: 58, marginTop: 8 },
     presetsRow: { flexDirection: 'row', justifyContent: 'center', gap: 16 },
-    presetBtn: { width: 100, paddingVertical: 20, alignItems: 'center', borderWidth: 1 },
-    presetIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+    presetBtn: { width: 100 },
+    presetGlass: { flex: 1 },
+    presetInner: { paddingVertical: 20, alignItems: 'center' },
+    presetIcon: { width: 44, height: 44, borderRadius: 22, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
     presetValue: { fontFamily: typo.statSmall.fontFamily, fontSize: 22 },
     tipCard: { flexDirection: 'row', padding: 20, alignItems: 'center' },
     fab: { position: 'absolute', alignSelf: 'center', width: 72, height: 72, borderRadius: 36 },

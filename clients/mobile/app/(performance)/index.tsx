@@ -12,7 +12,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getToday, getWeeklyStats, TodayProgress } from '@/api/progress';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Card } from '@/components/ui/Card';
-import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui';
+import { Skeleton, SkeletonCard, EmptyState, GlassCard } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { typography as typo } from '@/theme/typography';
@@ -130,14 +130,18 @@ export default function DailyReportScreen() {
                             activeOpacity={0.85}
                             accessibilityRole="button"
                             accessibilityLabel={item.label}
-                            style={[styles.gridCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl }]}
+                            style={styles.gridCard}
                             onPress={() => router.push(item.route as any)}
                         >
-                            <View style={[styles.iconBox, { backgroundColor: withAlpha(item.color, 0.14), borderColor: withAlpha(item.color, 0.28), borderWidth: 1 }]}>
-                                <Ionicons name={item.icon as any} size={24} color={item.color} />
-                            </View>
-                            <Text style={[typography.subhead, { color: colors.text.primary, marginTop: 14, fontWeight: '700' }]}>{item.label}</Text>
-                            <Text style={[typography.captionMedium, { color: item.color, marginTop: 4 }]}>{item.value}</Text>
+                            <GlassCard radius={borderRadius.xl} style={styles.gridGlass}>
+                                <View style={styles.gridInner}>
+                                    <View style={[styles.iconBox, { backgroundColor: withAlpha(item.color, 0.14), borderColor: withAlpha(item.color, 0.28), borderWidth: 1 }]}>
+                                        <Ionicons name={item.icon as any} size={24} color={item.color} />
+                                    </View>
+                                    <Text style={[typography.subhead, { color: colors.text.primary, marginTop: 14, fontWeight: '700' }]}>{item.label}</Text>
+                                    <Text style={[typography.captionMedium, { color: item.color, marginTop: 4 }]}>{item.value}</Text>
+                                </View>
+                            </GlassCard>
                         </TouchableOpacity>
                     ))}
                 </View>
@@ -191,10 +195,12 @@ function RecapItem({ label, value, icon, color }: any) {
 function CheckItem({ label, checked, color }: any) {
     const { colors, typography, borderRadius } = useTheme();
     return (
-        <View style={[styles.checkRow, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.lg, borderColor: colors.border.default, borderWidth: 1 }]}>
-            <Text style={[typography.body, { color: colors.text.primary, flex: 1 }]}>{label}</Text>
-            <Ionicons name={checked ? 'checkbox' : 'square-outline'} size={24} color={checked ? color : colors.text.tertiary} />
-        </View>
+        <GlassCard radius={borderRadius.lg}>
+            <View style={styles.checkRow}>
+                <Text style={[typography.body, { color: colors.text.primary, flex: 1 }]}>{label}</Text>
+                <Ionicons name={checked ? 'checkbox' : 'square-outline'} size={24} color={checked ? color : colors.text.tertiary} />
+            </View>
+        </GlassCard>
     );
 }
 
@@ -210,8 +216,10 @@ const styles = StyleSheet.create({
     ringInner: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
     scoreInfo: { flex: 1, marginLeft: 24 },
     gridContainer: { flexDirection: 'row', paddingHorizontal: 20, flexWrap: 'wrap', gap: 12 },
-    gridCard: { width: (width - 52) / 2, padding: 20, borderWidth: 1 },
-    iconBox: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    gridCard: { width: (width - 52) / 2 },
+    gridGlass: { flex: 1 },
+    gridInner: { padding: 20 },
+    iconBox: { width: 44, height: 44, borderRadius: 22, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
     recapCard: { padding: 20 },
     recapRow: { flexDirection: 'row', justifyContent: 'space-between' },
     recapItem: { flex: 1, flexDirection: 'row', alignItems: 'center' },

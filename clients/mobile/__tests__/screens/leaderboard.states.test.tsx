@@ -120,7 +120,7 @@ jest.mock('@/lib/imageUrl', () => ({
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
 import { FlatList } from 'react-native';
-import { render, fireEvent, screen } from '@testing-library/react-native';
+import { render, fireEvent, screen, within } from '@testing-library/react-native';
 import {
   ThemeContext,
   getThemeColors,
@@ -241,5 +241,11 @@ describe('LeaderboardScreen — loading / error / empty / loaded states', () => 
     // The fixed "My Rank" footer is still rendered (it reads myScore and shows
     // "(You)") — not part of the virtualized list, untouched by this change.
     expect(screen.getByText(/My Name \(You\)/)).toBeTruthy();
+
+    // Aurora restyle: that self "My Rank" row renders INSIDE the GlassCard surface
+    // (its outer wrapper carries the stable `leader-row-card-<userId>` testID), and
+    // the rank row body — the name + "(You)" marker — lives within that surface.
+    const selfCard = screen.getByTestId('leader-row-card-me-1');
+    expect(within(selfCard).getByText(/My Name \(You\)/)).toBeTruthy();
   });
 });

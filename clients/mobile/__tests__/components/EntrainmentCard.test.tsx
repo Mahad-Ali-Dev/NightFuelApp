@@ -107,6 +107,60 @@ describe('EntrainmentCard', () => {
     });
   });
 
+  /**
+   * Timezone-honest "approx." affordance.
+   *
+   * The entrainment score is computed in a tz-NAIVE local-clock frame (the
+   * model aligns melatoninOnset vs the shift end as minutes-since-LOCAL-
+   * midnight — see src/api/circadian.ts shiftEndMinutes), so the card surfaces
+   * a subtle "approx." qualifier next to the title whenever a FINITE score is
+   * shown. It must NOT appear on the null "Build your baseline" state (there is
+   * no estimate to qualify there), and it carries an accessibilityLabel making
+   * the local-clock caveat explicit for screen-reader users.
+   *
+   * Rules cited (see ~/.claude/skills/react-native-skills/rules/):
+   *   - rendering-no-falsy-and.md → the affordance uses `score != null ? … :
+   *     null`, never `score && <…>`, so a 0 score still renders it safely.
+   *   - rendering-text-in-text-component.md → the caption string lives in <Text>.
+   */
+  describe('timezone-honest "approx." affordance', () => {
+    const APPROX_LABEL = 'Approximate alignment, estimated from your local clock';
+
+    test('good state (score 90) renders the "approx." affordance with its a11y label', () => {
+      renderWithTheme(<EntrainmentCard score={90} />);
+
+      // The good-alignment title is shown alongside the qualifier.
+      expect(screen.getByText('Well aligned')).toBeTruthy();
+      expect(screen.getByText('approx.')).toBeTruthy();
+      // The accessibilityLabel clarifies it is a local-clock estimate.
+      expect(screen.getByLabelText(APPROX_LABEL)).toBeTruthy();
+    });
+
+    test('improve state (score 50) renders the "approx." affordance with its a11y label', () => {
+      renderWithTheme(<EntrainmentCard score={50} />);
+
+      expect(screen.getByText('Room to improve')).toBeTruthy();
+      expect(screen.getByText('approx.')).toBeTruthy();
+      expect(screen.getByLabelText(APPROX_LABEL)).toBeTruthy();
+    });
+
+    test('a finite zero score still renders the "approx." affordance (no falsy-render skip)', () => {
+      // 0 is falsy but a valid finite score — the `!= null` guard keeps it shown.
+      renderWithTheme(<EntrainmentCard score={0} />);
+      expect(screen.getByText('approx.')).toBeTruthy();
+      expect(screen.getByLabelText(APPROX_LABEL)).toBeTruthy();
+    });
+
+    test('null state ("Build your baseline") does NOT render the "approx." affordance', () => {
+      renderWithTheme(<EntrainmentCard score={null} />);
+
+      expect(screen.getByText('Build your baseline')).toBeTruthy();
+      // No finite score → no estimate to qualify → no affordance, no a11y label.
+      expect(screen.queryByText('approx.')).toBeNull();
+      expect(screen.queryByLabelText(APPROX_LABEL)).toBeNull();
+    });
+  });
+
   describe('optional shift window hint', () => {
     test('a valid shift adds the derived wind-down window line', () => {
       // melatoninStart = endTime + 1h → formatted local time. We don't pin the

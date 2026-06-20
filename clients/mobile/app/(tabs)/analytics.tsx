@@ -13,7 +13,7 @@ import { useProgress } from '@/hooks/useProgress';
 import { useSleep } from '@/hooks/useSleep';
 import { useQuery } from '@tanstack/react-query';
 import { getUserScore } from '@/api/community';
-import { Skeleton, EmptyState } from '@/components/ui';
+import { Skeleton, EmptyState, GlassCard } from '@/components/ui';
 import { EntrainmentCard } from '@/components/dashboard/EntrainmentCard';
 import { useEntrainmentScore } from '@/components/dashboard/useEntrainmentScore';
 import { TAB_BAR_H } from './_layout';
@@ -196,7 +196,8 @@ export default function AnalyticsScreen() {
                 </View>
 
                 {/* ── Sleep vs Performance Chart ───────────────────────── */}
-                <View style={[styles.card, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius['2xl'] ?? 24, marginTop: 8 }]}>
+                <GlassCard radius={borderRadius['2xl'] ?? 24} style={{ marginTop: 8, marginBottom: 12 }}>
+                    <View style={{ padding: 20 }}>
                     <View style={styles.chartTitleRow}>
                         <View>
                             <Text style={[typography.h3, { color: colors.text.primary }]}>Sleep vs. Performance</Text>
@@ -250,50 +251,56 @@ export default function AnalyticsScreen() {
                             </View>
                         </View>
                     )}
-                </View>
+                    </View>
+                </GlassCard>
 
                 {/* ── Stats Row ─────────────────────────────────────────── */}
                 <View style={{ flexDirection: 'row', gap: 12, marginTop: 0 }}>
                     {/* Peak Fatigue */}
-                    <View style={[styles.statCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, flex: 1 }]}>
-                        <View style={[styles.statIconBox, { backgroundColor: withAlpha(colors.accent.coral, 0.12) }]}>
-                            <Ionicons name="warning-outline" size={18} color={colors.accent.coral} />
+                    <GlassCard radius={20} style={{ flex: 1 }}>
+                        <View style={{ padding: 18 }}>
+                            <View style={[styles.statIconBox, { backgroundColor: withAlpha(colors.accent.coral, 0.12) }]}>
+                                <Ionicons name="warning-outline" size={18} color={colors.accent.coral} />
+                            </View>
+                            <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 12, fontSize: 10 }]}>
+                                PEAK FATIGUE
+                            </Text>
+                            <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: 6 }]}>
+                                {fatiguePoint}
+                            </Text>
+                            <View style={[styles.miniBar, { backgroundColor: colors.border.default }]}>
+                                <View style={[styles.miniBarFill, { backgroundColor: colors.accent.coral, width: '70%' }]} />
+                            </View>
                         </View>
-                        <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 12, fontSize: 10 }]}>
-                            PEAK FATIGUE
-                        </Text>
-                        <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: 6 }]}>
-                            {fatiguePoint}
-                        </Text>
-                        <View style={[styles.miniBar, { backgroundColor: colors.border.default }]}>
-                            <View style={[styles.miniBarFill, { backgroundColor: colors.accent.coral, width: '70%' }]} />
-                        </View>
-                    </View>
+                    </GlassCard>
 
                     {/* Deep Sleep */}
-                    <View style={[styles.statCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, flex: 1 }]}>
-                        <View style={[styles.statIconBox, { backgroundColor: withAlpha(colors.accent.cyan, 0.12) }]}>
-                            <Ionicons name="moon-outline" size={18} color={colors.accent.cyan} />
-                        </View>
-                        <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 12, fontSize: 10 }]}>
-                            DEEP SLEEP
-                        </Text>
-                        <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: 6 }]}>
-                            {deepSleep}
-                        </Text>
-                        {deepSleepDelta != null && (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-                                <Ionicons name={deepSleepDelta >= 0 ? 'trending-up' : 'trending-down'} size={12} color={deepSleepDelta >= 0 ? colors.accent.cyan : colors.accent.coral} />
-                                <Text style={[typography.caption, { color: deepSleepDelta >= 0 ? colors.accent.cyan : colors.accent.coral, marginLeft: 4, fontSize: 10, fontWeight: '700' }]}>
-                                    {deepSleepDelta >= 0 ? '+' : ''}{deepSleepDelta}m vs avg
-                                </Text>
+                    <GlassCard radius={20} style={{ flex: 1 }}>
+                        <View style={{ padding: 18 }}>
+                            <View style={[styles.statIconBox, { backgroundColor: withAlpha(colors.accent.cyan, 0.12) }]}>
+                                <Ionicons name="moon-outline" size={18} color={colors.accent.cyan} />
                             </View>
-                        )}
-                    </View>
+                            <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 12, fontSize: 10 }]}>
+                                DEEP SLEEP
+                            </Text>
+                            <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: 6 }]}>
+                                {deepSleep}
+                            </Text>
+                            {deepSleepDelta != null ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                                    <Ionicons name={deepSleepDelta >= 0 ? 'trending-up' : 'trending-down'} size={12} color={deepSleepDelta >= 0 ? colors.accent.cyan : colors.accent.coral} />
+                                    <Text style={[typography.caption, { color: deepSleepDelta >= 0 ? colors.accent.cyan : colors.accent.coral, marginLeft: 4, fontSize: 10, fontWeight: '700' }]}>
+                                        {deepSleepDelta >= 0 ? '+' : ''}{deepSleepDelta}m vs avg
+                                    </Text>
+                                </View>
+                            ) : null}
+                        </View>
+                    </GlassCard>
                 </View>
 
                 {/* ── Performance Correlation Card ──────────────────────── */}
-                <View style={[styles.card, { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius['2xl'] ?? 24, marginTop: 12 }]}>
+                <GlassCard radius={borderRadius['2xl'] ?? 24} style={{ marginTop: 12, marginBottom: 12 }}>
+                    <View style={{ padding: 20 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                         <View style={{ flex: 1 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -325,7 +332,8 @@ export default function AnalyticsScreen() {
                             </Text>
                         </View>
                     </View>
-                </View>
+                    </View>
+                </GlassCard>
 
                 {/* ── Circadian Entrainment Insight ─────────────────────── */}
                 {/* Sources the REAL circadian entrainment score from the
@@ -432,8 +440,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
 
-    // Chart
-    card: { borderWidth: 1, padding: 20, marginBottom: 12 },
+    // Chart (the card surface is now the GlassCard primitive; these are its inner layout pieces)
     chartTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
     legendRow: { flexDirection: 'row', gap: 20, marginBottom: 16 },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -447,8 +454,7 @@ const styles = StyleSheet.create({
     xAxis: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row' },
     emptyChart: { paddingVertical: 12, paddingHorizontal: 0 },
 
-    // Stats cards
-    statCard: { borderWidth: 1, borderRadius: 20, padding: 18 },
+    // Stats cards (the card surface is now the GlassCard primitive; these are its inner pieces)
     statIconBox: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
     miniBar: { height: 4, borderRadius: 2, marginTop: 12 },
     miniBarFill: { height: '100%', borderRadius: 2 },

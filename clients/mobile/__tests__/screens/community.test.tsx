@@ -147,6 +147,21 @@ jest.mock('expo-image', () => {
   return { Image: (props: any) => <RN.View {...props} /> };
 });
 
+// GlassCard (the post-card surface) wraps a SafeBlurView (expo-blur native).
+// Replace SafeBlurView with a passthrough View — forwarding props and tagging it
+// `glass-surface` — so the real GlassCard mounts deterministically (regardless of
+// the Android<12 blur fallback branch) AND the test can grab the rendered glass
+// surface to assert a post renders INSIDE it. Mirrors the sibling
+// requests.test.tsx / community.feed.states.test.tsx convention.
+jest.mock('@/components/SafeBlurView', () => {
+  const RN = require('react-native');
+  return {
+    SafeBlurView: ({ children, ...props }: any) => (
+      <RN.View testID="glass-surface" {...props}>{children}</RN.View>
+    ),
+  };
+});
+
 // imageUrl trust-gate is pure, but stub to a passthrough so the screen's
 // safeImageUri() calls are deterministic regardless of the real allowlist.
 jest.mock('@/lib/imageUrl', () => ({
@@ -161,7 +176,7 @@ jest.mock('date-fns', () => ({
 
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
-import { render, fireEvent, screen } from '@testing-library/react-native';
+import { render, fireEvent, screen, within } from '@testing-library/react-native';
 import {
   ThemeContext,
   getThemeColors,
@@ -252,6 +267,15 @@ describe('CommunityFeedScreen', () => {
     expect(screen.queryByText('No posts yet')).toBeNull();
     expect(screen.queryByText("Couldn't load the feed")).toBeNull();
 
+    // …and the post card renders INSIDE the Aurora GlassCard surface — its body
+    // copy + author both live within the single glass surface the loaded
+    // single-post branch mounts (the skeletons only render while loading). This
+    // pins the restyle: the inline Card was replaced by <GlassCard> without
+    // moving the post content out of the card.
+    const surface = screen.getByTestId('glass-surface');
+    expect(within(surface).getByText('hi')).toBeTruthy();
+    expect(within(surface).getByText('Sam')).toBeTruthy();
+
     // The like button (accessibilityLabel "Like post, <n> likes") calls the
     // like mutation with THIS post's id.
     fireEvent.press(screen.getByRole('button', { name: /Like post/ }));
@@ -266,6 +290,38 @@ describe('CommunityFeedScreen', () => {
     // Defensive: the screen handed react-query a real mutationFn (built from
     // likePost) — so the captured fn is callable.
     expect(typeof capturedLikeMutationFn).toBe('function');
+  });
+
+  // ── (iii-b) Aurora restyle: post card renders inside the GlassCard surface ──
+  // Locks the restyle-only conversion of the feed post card from the inline
+  // `<Card variant="glass">` to the Aurora `<GlassCard>` primitive (which owns
+  // the radius + hairline + clip + Android<12 blur fallback): a loaded post's
+  // body copy AND author must still render INSIDE the new glass surface, and the
+  // like button must STILL wire likeMutation.mutate(postId). If a future edit
+  // drops the GlassCard wrapper, moves the post content out of it, or unwires the
+  // like handler, this test goes red.
+  test('Aurora restyle: a loaded post renders inside the GlassCard surface and its like button still wires likeMutation.mutate', () => {
+    mockFeed.data = [POST];
+
+    renderScreen();
+
+    // A GlassCard surface mounted for the loaded post (the skeleton surfaces only
+    // render while loading, so in the single-post loaded branch there is exactly
+    // one glass surface — the post card).
+    const surface = screen.getByTestId('glass-surface');
+    expect(surface).toBeTruthy();
+
+    // The post's body copy + author render INSIDE that glass surface (the restyle
+    // wrapped the same content, it did not relocate it).
+    expect(within(surface).getByText('hi')).toBeTruthy();
+    expect(within(surface).getByText('Sam')).toBeTruthy();
+
+    // The like control still lives inside the glass surface and still drives the
+    // like mutation with THIS post's id — the surface swap left the wiring intact.
+    const likeBtn = within(surface).getByRole('button', { name: /Like post/ });
+    fireEvent.press(likeBtn);
+    expect(mockLikeMutate).toHaveBeenCalledTimes(1);
+    expect(mockLikeMutate).toHaveBeenCalledWith('p1');
   });
 
   // ── (iv) header pushes → achievements + leaderboard ────────────────────────

@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getChallenges, joinChallenge, updateChallengeProgress } from '@/api/community';
 import { withAlpha } from '@/theme/utils';
-import { Card, Button, EmptyState, Skeleton, SkeletonCard } from '@/components/ui';
+import { GlassCard, Button, EmptyState, Skeleton, SkeletonCard } from '@/components/ui';
 import { shadows } from '@/theme';
 
 export default function ChallengesScreen() {
@@ -100,13 +100,7 @@ export default function ChallengesScreen() {
                         // lines) instead of a bare spinner, so the screen doesn't "pop"
                         // when data arrives.
                         Array.from({ length: 3 }).map((_, i) => (
-                            <Card
-                                key={i}
-                                style={[
-                                    styles.challCard,
-                                    { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl },
-                                ]}
-                            >
+                            <GlassCard key={i} radius={borderRadius.xl} style={styles.challCard}>
                                 <View style={styles.challBody}>
                                     <SkeletonCard height={52} radius={14} style={styles.skeletonIcon} />
                                     <View style={{ flex: 1, marginLeft: 16 }}>
@@ -116,7 +110,7 @@ export default function ChallengesScreen() {
                                         <Skeleton width={140} height={44} radius={borderRadius.lg} style={{ marginTop: 14 }} />
                                     </View>
                                 </View>
-                            </Card>
+                            </GlassCard>
                         ))
                     ) : isError ? (
                         // Honest retryable error — a failed fetch would otherwise fall
@@ -142,28 +136,27 @@ export default function ChallengesScreen() {
                             const isExpanded = expandedId === chall.id;
 
                             return (
-                                <Card
+                                <GlassCard
                                     key={chall.id}
+                                    testID={`challenge-card-${chall.id}`}
+                                    radius={borderRadius.xl}
+                                    glow={isJoined ? colors.accent.emerald : undefined}
                                     style={[
                                         styles.challCard,
-                                        {
-                                            backgroundColor: colors.background.secondary,
-                                            borderColor: isJoined
-                                                ? withAlpha(colors.accent.emerald, 0.4)
-                                                : colors.border.default,
-                                            borderRadius: borderRadius.xl,
-                                        },
+                                        isJoined
+                                            ? { borderColor: withAlpha(colors.accent.emerald, 0.4) }
+                                            : null,
                                     ]}
                                 >
                                     {/* Joined indicator */}
-                                    {isJoined && (
+                                    {isJoined ? (
                                         <View style={[styles.joinedBadge, { backgroundColor: withAlpha(colors.accent.emerald, 0.15) }]}>
                                             <Ionicons name="checkmark-circle" size={12} color={colors.accent.emerald} />
                                             <Text style={[typography.caption, { color: colors.accent.emerald, fontSize: 10, fontWeight: 'bold', marginLeft: 4 }]}>
                                                 JOINED
                                             </Text>
                                         </View>
-                                    )}
+                                    ) : null}
 
                                     <View style={styles.challBody}>
                                         {/* Icon */}
@@ -186,7 +179,7 @@ export default function ChallengesScreen() {
                                                 <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 4 }]}>
                                                     {chall.participants} joined
                                                 </Text>
-                                                {isJoined && chall.myProgress !== undefined && (
+                                                {isJoined && chall.myProgress !== undefined ? (
                                                     <>
                                                         <View style={[styles.dot, { backgroundColor: colors.text.tertiary }]} />
                                                         <Ionicons name="stats-chart" size={13} color={colors.accent.emerald} />
@@ -194,7 +187,7 @@ export default function ChallengesScreen() {
                                                             <Text style={[typography.statTiny, { color: colors.accent.emerald, fontSize: 13 }]}>{chall.myProgress}</Text> logged
                                                         </Text>
                                                     </>
-                                                )}
+                                                ) : null}
                                             </View>
 
                                             {/* CTA */}
@@ -235,7 +228,7 @@ export default function ChallengesScreen() {
                                     </View>
 
                                     {/* Inline progress logger (expands on demand) */}
-                                    {isJoined && isExpanded && (
+                                    {isJoined && isExpanded ? (
                                         <View style={[styles.progressPanel, { borderTopColor: withAlpha(colors.border.default, 0.6) }]}>
                                             <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 10 }]}>
                                                 Enter how much you've completed (steps, reps, km — whatever this challenge tracks):
@@ -273,8 +266,8 @@ export default function ChallengesScreen() {
                                                 </TouchableOpacity>
                                             </View>
                                         </View>
-                                    )}
-                                </Card>
+                                    ) : null}
+                                </GlassCard>
                             );
                         })
                     )}
@@ -296,7 +289,9 @@ const styles = StyleSheet.create({
     },
     backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
 
-    challCard: { marginBottom: 16, borderWidth: 1, overflow: 'hidden' },
+    // Margin-only wrapper — the GlassCard primitive owns the surface (radius +
+    // hairline + clip + the joined-state emerald border/glow passed via style).
+    challCard: { marginBottom: 16 },
     // Constrains SkeletonCard to the 52×52 challIcon square (it defaults to full
     // width + a bottom margin) so the loading scaffold lines up with the loaded card.
     skeletonIcon: { width: 52, marginBottom: 0 },

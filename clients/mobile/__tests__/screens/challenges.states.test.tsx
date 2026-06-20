@@ -96,9 +96,19 @@ jest.mock('expo-linear-gradient', () => {
 // expo-status-bar renders nothing in the tree under test.
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
+// The Aurora restyle wraps each challenge card (and the loading skeleton card) in
+// the GlassCard primitive, which renders a SafeBlurView (expo-blur native) fill.
+// Replace SafeBlurView with a passthrough View — preserving its forwarded props
+// (notably the outer wrapper's testID) — so GlassCard mounts deterministically on
+// the jest renderer regardless of the Android<12 blur fallback branch.
+jest.mock('@/components/SafeBlurView', () => {
+  const RN = require('react-native');
+  return { SafeBlurView: ({ children, ...props }: any) => <RN.View {...props}>{children}</RN.View> };
+});
+
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
-import { render, fireEvent, screen } from '@testing-library/react-native';
+import { render, fireEvent, screen, within } from '@testing-library/react-native';
 import {
   ThemeContext,
   getThemeColors,
@@ -181,7 +191,7 @@ describe('ChallengesScreen — loading / error / empty / loaded states', () => {
     expect(screen.queryByText('10k Steps a Day')).toBeNull();
   });
 
-  // ── Test D: loaded → real challenge cards render ───────────────────────────
+  // ── Test D: loaded → real challenge cards render inside the GlassCard surface ─
   test('loaded: renders the real challenge titles and no edge-state copy', () => {
     mockCh.data = CHALLENGES;
 
@@ -192,5 +202,26 @@ describe('ChallengesScreen — loading / error / empty / loaded states', () => {
     // …and neither edge-state copy is present.
     expect(screen.queryByText('No active challenges')).toBeNull();
     expect(screen.queryByText("Couldn't load challenges")).toBeNull();
+  });
+
+  // ── Test E: loaded → each card body lives INSIDE the new GlassCard surface ───
+  // Aurora restyle: every challenge card is now wrapped in the GlassCard primitive
+  // whose outer wrapper carries the stable `challenge-card-<id>` testID. This pins
+  // the surface conversion — the card's title (the body copy) renders WITHIN that
+  // glass surface, not as a loose sibling — without touching the join/log handlers
+  // or the loading / error / empty branches asserted above.
+  test('loaded: each challenge card renders inside its GlassCard surface', () => {
+    mockCh.data = CHALLENGES;
+
+    renderScreen();
+
+    const firstCard = screen.getByTestId('challenge-card-c1');
+    expect(within(firstCard).getByText('10k Steps a Day')).toBeTruthy();
+
+    const secondCard = screen.getByTestId('challenge-card-c2');
+    expect(within(secondCard).getByText('Early Riser')).toBeTruthy();
+
+    // One GlassCard surface per challenge in the populated list.
+    expect(screen.getAllByTestId(/^challenge-card-/)).toHaveLength(CHALLENGES.length);
   });
 });
