@@ -15,9 +15,20 @@
  *
  * It introduces NO new engine math: there is NO Date-offset arithmetic and NO
  * magic-hour constant in this file — the only Date operation is `getTime()` to
- * SORT the rows the helpers hand back (ascending by each row's start instant).
- * The helpers all route through `computeShiftTransition`, so this timeline stays
- * in lockstep with the sibling cards AND the scheduled circadian reminders.
+ * SORT the rows the helpers hand back (ascending by each row's start instant)
+ * AND, when the parent injects a `now`, to CLASSIFY each already-derived row
+ * (past / current / upcoming) against that SAME `getTime()` key. The helpers all
+ * route through `computeShiftTransition`, so this timeline stays in lockstep with
+ * the sibling cards AND the scheduled circadian reminders.
+ *
+ * Time-awareness is OPTIONAL and default-safe: the component NEVER reads
+ * `Date.now()` itself — the clock is injected via the `now?: Date` prop. When
+ * `now` is omitted the render is byte-identical to the time-blind version (no
+ * countdown, no per-row de-emphasis). When provided, the surface adds a single
+ * countdown line to the next upcoming instant ("Caffeine cutoff in 2h 10m", or
+ * the terminal "Day plan complete") and tints each row by its position relative
+ * to now — surfaced to assistive tech via accessibilityState + an extended
+ * accessibilityLabel so the state is assertable without inspecting styling.
  *
  * This component owns ZERO data-fetching: the parent passes the shift plus
  * loading/error flags — an IDENTICAL prop contract to AnchorSleepCard /
@@ -45,7 +56,9 @@
  *   - js-hoist-intl.md: NO new Intl formatter is created — we reuse the SAME
  *     ~10-line `formatTime` helper (toLocaleTimeString with the Intl-less HH:MM
  *     fallback) the sibling cards use, copied verbatim, rather than instantiating
- *     an Intl.DateTimeFormat per render.
+ *     an Intl.DateTimeFormat per render. The new `formatRelative` countdown
+ *     helper is module-scope + pure integer math (no per-render allocation, no
+ *     Intl.RelativeTimeFormat) for the same reason.
  *   - rendering-no-falsy-and.md + rendering-text-in-text-component.md: every
  *     conditional is an early return or a ternary-with-null (no `cond && <JSX>`
  *     that could leak a falsy value), and every string sits inside <Text>.
@@ -58,7 +71,9 @@
  *     navigation touch (no animated press state, matching the sibling cards), so
  *     it stays a TouchableOpacity carrying accessibilityRole="button" + a
  *     descriptive accessibilityLabel; each row carries its own accessibilityLabel
- *     while the decorative icon chips are left unannounced.
+ *     (extended with its now-relative state when a clock is injected) plus an
+ *     accessibilityState and a stable testID, while the decorative icon chips are
+ *     left unannounced.
  */
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
@@ -82,6 +97,17 @@ export interface TodayCircadianTimelineProps {
   error?: unknown;
   /** Invoked when the user taps Retry in the error state. */
   onRetry?: () => void;
+  /**
+   * The current instant, INJECTED by the parent (never read from `Date.now()`
+   * inside this component — keeps the surface pure and snapshot-deterministic).
+   *
+   * Default-safe + additive: when OMITTED the timeline renders byte-identically
+   * to before (no now-marker, no countdown), so existing callers and the
+   * pre-existing test suite are unaffected. When PROVIDED, each already-derived
+   * row is classified past / current / upcoming against the SAME `getTime()` key
+   * the rows are sorted by, and a single countdown to the next instant is shown.
+   */
+  now?: Date;
 }
 
 /** One chronological row of the composed plan. `end` absent ⇒ a single instant. */
@@ -120,7 +146,70 @@ function formatRowTime(row: TimelineRow): string {
   return row.end ? `${formatTime(row.start)} – ${formatTime(row.end)}` : `by ${formatTime(row.start)}`;
 }
 
-function TodayCircadianTimelineComponent({ shift, loading, error, onRetry }: TodayCircadianTimelineProps) {
+const MS_PER_MINUTE = 60_000;
+const MINUTES_PER_HOUR = 60;
+
+/**
+ * Format a positive forward duration (in ms) as a compact "Xh Ym" / "Ym" label,
+ * e.g. 7_800_000 → "2h 10m", 600_000 → "10m". Pure integer math — NO Intl
+ * formatter is instantiated (per js-hoist-intl: no per-render Intl allocation),
+ * so it is cheap to call and timezone-independent. A negative or zero input
+ * floors to "0m" (a deadline that has just passed reads as "0m", never a
+ * negative or NaN string); a non-finite input also degrades to "0m" so the
+ * caller can never surface "NaN" / "Invalid Date".
+ */
+function formatRelative(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '0m';
+  const totalMinutes = Math.floor(ms / MS_PER_MINUTE);
+  const hours = Math.floor(totalMinutes / MINUTES_PER_HOUR);
+  const minutes = totalMinutes % MINUTES_PER_HOUR;
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
+/** Time-position of a row relative to the injected `now`. */
+type RowState = 'past' | 'current' | 'upcoming';
+
+/**
+ * Classify an ALREADY-derived row against `now` using the SAME `getTime()` key
+ * the rows are sorted by — recomputing NO circadian math:
+ *   - a window (has `end`):  past once `end <= now`; current while
+ *     `start <= now < end`; otherwise upcoming.
+ *   - a single instant (no `end`, e.g. the caffeine cutoff): upcoming until
+ *     `now >= start`, then past (an instant is never "current").
+ */
+function classifyRow(row: TimelineRow, nowMs: number): RowState {
+  const startMs = row.start.getTime();
+  if (row.end) {
+    const endMs = row.end.getTime();
+    if (endMs <= nowMs) return 'past';
+    if (startMs <= nowMs) return 'current';
+    return 'upcoming';
+  }
+  return startMs <= nowMs ? 'past' : 'upcoming';
+}
+
+/**
+ * The next FUTURE instant across the rows, strictly after `now`: the smallest
+ * upcoming `start`, OR — when a window is in progress — its `end` (the moment
+ * that window closes). Returns the instant (ms) + the label of the row it
+ * belongs to, or null when nothing remains (the whole plan is in the past).
+ * Reuses the rows' own `getTime()` keys; introduces no new circadian math.
+ */
+function nextEvent(rows: TimelineRow[], nowMs: number): { atMs: number; label: string } | null {
+  let best: { atMs: number; label: string } | null = null;
+  const consider = (atMs: number, label: string) => {
+    if (atMs > nowMs && (best === null || atMs < best.atMs)) {
+      best = { atMs, label };
+    }
+  };
+  for (const row of rows) {
+    consider(row.start.getTime(), row.label);
+    if (row.end) consider(row.end.getTime(), row.label);
+  }
+  return best;
+}
+
+function TodayCircadianTimelineComponent({ shift, loading, error, onRetry, now }: TodayCircadianTimelineProps) {
   const { colors } = useTheme();
   // Destructure `push` from the router up front (React Compiler: a stable
   // reference, no dotting). The optional chaining on `onPress` keeps the
@@ -272,31 +361,76 @@ function TodayCircadianTimelineComponent({ shift, loading, error, onRetry }: Tod
     );
   }
 
+  // ---- Now-awareness (only when the parent injected a clock) --------------
+  // Everything below derives PURELY from the rows' existing getTime() keys and
+  // the injected `now`; no new circadian math, no Date.now(). When `now` is
+  // absent we skip it entirely so the render is byte-identical to before.
+  const nowMs = now ? now.getTime() : null;
+  // The single countdown line: time to the next future instant, or terminal
+  // copy when the whole plan is already in the past. Never NaN / Invalid Date —
+  // formatRelative floors non-positive/non-finite input to "0m".
+  let countdown: string | null = null;
+  if (nowMs !== null) {
+    const next = nextEvent(rows, nowMs);
+    countdown = next ? `${next.label} in ${formatRelative(next.atMs - nowMs)}` : 'Day plan complete';
+  }
+
   return (
     <GlassCard style={styles.card}>
       <View style={styles.body}>
         <Header />
+        {countdown !== null ? (
+          <View
+            style={[styles.countdown, { backgroundColor: withAlpha(colors.accent.cyan, 0.1) }]}
+            accessibilityRole="text"
+            accessibilityLabel={`Next: ${countdown}`}
+            testID="today-timeline-countdown"
+          >
+            <Ionicons name="hourglass-outline" size={iconSizes.sm} color={colors.accent.cyan} />
+            <Text style={[typography.captionMedium, { color: colors.text.primary }]}>{countdown}</Text>
+          </View>
+        ) : null}
         <View style={styles.timeline}>
           {rows.map((row) => {
             const time = formatRowTime(row);
+            const state: RowState | null = nowMs !== null ? classifyRow(row, nowMs) : null;
+            // Visual state via @/theme tokens + withAlpha ONLY (no new colors):
+            //   past     → de-emphasized (tertiary text, dimmer chip)
+            //   current  → accented (row tint promoted onto the label, brighter chip)
+            //   upcoming → normal (the pre-existing styling)
+            const isPast = state === 'past';
+            const isCurrent = state === 'current';
+            const labelColor = isCurrent ? row.tint : isPast ? colors.text.tertiary : colors.text.secondary;
+            const timeColor = isPast ? colors.text.tertiary : colors.text.primary;
+            const chipBgAlpha = isCurrent ? 0.22 : isPast ? 0.08 : 0.14;
+            const chipBorderAlpha = isCurrent ? 0.45 : isPast ? 0.16 : 0.28;
+            const iconColor = isPast ? withAlpha(row.tint, 0.55) : row.tint;
+            // Extend (never replace) the existing "<label>, <time>" label with the
+            // state word so tests assert classification via a11y, not styling.
+            const a11yLabel = state ? `${row.label}, ${time}, ${state}` : `${row.label}, ${time}`;
             return (
               <View
                 key={row.key}
                 style={styles.row}
                 accessibilityRole="text"
-                accessibilityLabel={`${row.label}, ${time}`}
+                accessibilityLabel={a11yLabel}
+                accessibilityState={state ? { selected: isCurrent, disabled: isPast } : undefined}
+                testID={`today-timeline-row-${row.key}`}
               >
                 <View
                   style={[
                     styles.iconChip,
-                    { backgroundColor: withAlpha(row.tint, 0.14), borderColor: withAlpha(row.tint, 0.28) },
+                    {
+                      backgroundColor: withAlpha(row.tint, chipBgAlpha),
+                      borderColor: withAlpha(row.tint, chipBorderAlpha),
+                    },
                   ]}
                 >
-                  <Ionicons name={row.icon} size={iconSizes.sm} color={row.tint} />
+                  <Ionicons name={row.icon} size={iconSizes.sm} color={iconColor} />
                 </View>
                 <View style={styles.rowText}>
-                  <Text style={[typography.caption, { color: colors.text.secondary }]}>{row.label}</Text>
-                  <Text style={[typography.subtitle, { color: colors.text.primary }]}>{time}</Text>
+                  <Text style={[typography.caption, { color: labelColor }]}>{row.label}</Text>
+                  <Text style={[typography.subtitle, { color: timeColor }]}>{time}</Text>
                 </View>
               </View>
             );
@@ -340,6 +474,17 @@ const styles = StyleSheet.create({
   },
   headerLabel: {
     flex: 1,
+  },
+  countdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: br.sm,
+    borderCurve: 'continuous',
+    marginBottom: spacing.lg,
   },
   timeline: {
     gap: spacing.md,

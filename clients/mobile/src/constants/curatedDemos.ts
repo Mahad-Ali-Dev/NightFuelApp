@@ -996,6 +996,52 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Hip Extension with Bands': 'Hip_Extension_with_Bands',
   'Thigh Abductor': 'Thigh_Abductor',
   'Band Hip Adductions': 'Band_Hip_Adductions',
+
+  // ── Widened FEDB-backed tranche #15 (data-only, zero new fetch) ──────────────
+  // A further slice of distinct catalogue movements — this tranche leans into the
+  // flexibility/stretch, self-myofascial-release (foam-roll "-SMR") and band
+  // posterior-chain accessory work the earlier tranches still under-covered. Every
+  // KEY below is NEW — absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries
+  // above (tranches #1-#14), YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos()
+  // admits each one as kind:'fedb_frames', verified:false (precedence: an already-set
+  // name is skipped). Every slug VALUE was machine-verified to be present in BOTH
+  // FEDB_SLUGS (exerciseDemos.ts) AND __tests__/fixtures/fedb-catalog-slugs.json (the
+  // shipped 873-slug catalogue), and each is a fresh slug dir not already referenced
+  // by an earlier tranche — so every entry resolves to an ordered 2-frame
+  // [0.jpg, 1.jpg] HTTPS pair via fedbPair() with NO new HTTP call. Strictly
+  // additive: the kind:'youtube'-only sync guard (scripts/check-demo-maps-in-sync.js)
+  // and pendingHumanReviewIds.json (YouTube ids only) are both untouched, so
+  // check-demo-maps-in-sync stays green. A 200-ok URL is NOT a movement review, so
+  // nothing here is verified:true — that remains a human-gated step.
+
+  // Mobility / stretch staples (lower body)
+  'Lying Hamstring Stretch': 'Lying_Hamstring',
+  'Seated Hamstring Stretch': 'Seated_Hamstring',
+  'Standing Toe Touches': 'Standing_Toe_Touches',
+  'Runners Stretch': 'Runners_Stretch',
+  'On Your Back Quad Stretch': 'On-Your-Back_Quad_Stretch',
+  'Standing Elevated Quad Stretch': 'Standing_Elevated_Quad_Stretch',
+  'Lying Glute Stretch': 'Lying_Glute',
+  'Knee To Chest': 'One_Knee_To_Chest',
+  'IT Band and Glute Stretch': 'IT_Band_and_Glute_Stretch',
+  'Standing Gastrocnemius Calf Stretch': 'Standing_Gastrocnemius_Calf_Stretch',
+  // Mobility / stretch (upper body / spine)
+  'Upper Back Stretch': 'Upper_Back_Stretch',
+  'Side Neck Stretch': 'Side_Neck_Stretch',
+  'Shoulder Stretch': 'Shoulder_Stretch',
+  'Triceps Stretch': 'Triceps_Stretch',
+  'Standing Biceps Stretch': 'Standing_Biceps_Stretch',
+  'Spinal Stretch': 'Spinal_Stretch',
+  // Foam-roll / self-myofascial release (-SMR)
+  'Hamstring SMR': 'Hamstring-SMR',
+  'Quadriceps SMR': 'Quadriceps-SMR',
+  'Calves SMR': 'Calves-SMR',
+  'Latissimus Dorsi SMR': 'Latissimus_Dorsi-SMR',
+  // Band posterior-chain / shoulder accessory
+  'Band Good Morning': 'Band_Good_Morning',
+  'Hip Lift with Band': 'Hip_Lift_with_Band',
+  'External Rotation with Band': 'External_Rotation_with_Band',
+  'Lateral Raise with Bands': 'Lateral_Raise_-_With_Bands',
 };
 
 /**

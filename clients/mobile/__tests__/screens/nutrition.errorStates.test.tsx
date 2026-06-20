@@ -264,6 +264,69 @@ describe('NutritionHubScreen — loading / error / empty / filled states', () =>
     expect(screen.queryByText('START FAST')).toBeNull();
   });
 
+  // (f) fasting LOADING — fastingQuery isLoading → the matched Skeleton renders
+  // and the card does NOT fall through to the resolved IDLE / "START FAST"
+  // layout (a fetch-in-flight must not masquerade as "no active fast").
+  test('fasting LOADING: renders skeletons and hides the IDLE / START FAST layout', () => {
+    mockState['fasting-logs'] = { data: undefined, isLoading: true, isError: false };
+    renderScreen();
+
+    // The fasting card's loading branch renders its own testID-bearing
+    // Skeletons (alongside none from the resolved macro/plan defaults).
+    expect(screen.getAllByTestId('skeleton').length).toBeGreaterThanOrEqual(1);
+    // Loading must NOT render the idle/active timer chrome…
+    expect(screen.queryByText('START FAST')).toBeNull();
+    expect(screen.queryByText('VIEW TIMER')).toBeNull();
+    expect(screen.queryByText('16:8 Windows')).toBeNull();
+    // …nor the fasting error copy.
+    expect(screen.queryByText("Couldn't load your fast")).toBeNull();
+  });
+
+  // (g) fasting ERROR — fastingQuery isError → a retryable EmptyState, mutually
+  // exclusive with the idle "START FAST" copy. Proves a fetch FAILURE no longer
+  // silently renders the benign idle layout.
+  test('fasting ERROR: shows retry affordance, hides the IDLE / START FAST layout', () => {
+    mockState['fasting-logs'] = { data: undefined, isLoading: false, isError: true };
+    renderScreen();
+
+    expect(screen.getByText("Couldn't load your fast")).toBeTruthy();
+    // The retry affordance is the only "Try Again" on the screen (the macro/
+    // plan errors say "Retry"), so this lookup is unambiguous.
+    expect(screen.getByText('Try Again')).toBeTruthy();
+    // Error branch is mutually exclusive with the resolved idle/active layout.
+    expect(screen.queryByText('START FAST')).toBeNull();
+    expect(screen.queryByText('VIEW TIMER')).toBeNull();
+    expect(screen.queryByText('IDLE')).toBeNull();
+  });
+
+  test('fasting ERROR Retry is SCOPED to fastingQuery.refetch (not the macro refetchAll)', () => {
+    // Only the fasting query errors; the macro/plan sections resolve, so the
+    // sole retry on screen is the fasting card's "Try Again".
+    mockState['fasting-logs'] = { data: undefined, isLoading: false, isError: true };
+    renderScreen();
+
+    fireEvent.press(screen.getByText('Try Again'));
+    // The fasting card's retry calls ONLY fastingQuery.refetch — it is not the
+    // macro card's refetchAll fan-out.
+    expect(mockFastingRefetch).toHaveBeenCalledTimes(1);
+    expect(mockPlanRefetch).not.toHaveBeenCalled();
+    expect(mockLogsRefetch).not.toHaveBeenCalled();
+    expect(mockProgressRefetch).not.toHaveBeenCalled();
+  });
+
+  // (h) the resolved fasting control stays accessible — queryable by role +
+  // descriptive label, satisfying the >=44px labelled-button requirement.
+  test('fasting control is queryable by accessibility role and label (idle: "Start fast")', () => {
+    mockState['fasting-logs'] = { data: undefined, isLoading: false, isError: false };
+    renderScreen();
+
+    const control = screen.getByRole('button', { name: 'Start fast' });
+    expect(control).toBeTruthy();
+    // Pressing it routes to the fasting timer (control wiring intact).
+    fireEvent.press(control);
+    expect(mockRouterPush).toHaveBeenCalledWith('/(meals)/fasting');
+  });
+
   // ── GlassCard-conversion guard rails (Aurora coverage item) ────────────────
   // These pin the two states the Card→GlassCard conversion of the macro
   // dashboard touched — loading and loaded — plus the header history-button

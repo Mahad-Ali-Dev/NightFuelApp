@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import {
-    View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Linking,
+    View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Linking, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -39,6 +39,27 @@ export default function SettingsIndexScreen() {
     });
 
     const appVersion = Constants.expoConfig?.version ?? '1.0.0';
+
+    // Log Out is a destructive account action, so it is gated behind an explicit
+    // confirmation. Only the destructive Alert button runs the logout + nav; the
+    // Cancel path is a no-op (logout fires zero times). Reading the store via
+    // getState() at call time avoids subscribing the screen to auth changes.
+    const performLogout = async () => {
+        await useAuthStore.getState().logout();
+        router.replace('/(auth)/login');
+    };
+
+    const confirmLogout = () => {
+        Alert.alert(
+            'Log Out',
+            'Are you sure you want to log out of Zeitra?',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Log Out', style: 'destructive', onPress: performLogout },
+            ],
+            { cancelable: true },
+        );
+    };
 
     type SettingItemType = {
         label: string;
@@ -194,10 +215,7 @@ export default function SettingsIndexScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Log Out"
                     style={[styles.logoutBtn, shadows.glow(colors.accent.coral), { borderColor: colors.accent.coral, backgroundColor: withAlpha(colors.accent.coral, 0.08), borderRadius: borderRadius.lg, marginHorizontal: spacing.lg }]}
-                    onPress={async () => {
-                        await useAuthStore.getState().logout();
-                        router.replace('/(auth)/login');
-                    }}
+                    onPress={confirmLogout}
                 >
                     <Text style={[typography.subhead, { color: colors.accent.coral, fontWeight: '700' }]}>Log Out</Text>
                 </TouchableOpacity>

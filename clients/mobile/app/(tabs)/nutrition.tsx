@@ -66,6 +66,12 @@ export default function NutritionHubScreen() {
     // failure. Retry re-runs every query feeding the tab in one tap.
     const macroLoading = progressQuery.isLoading || logsQuery.isLoading;
     const macroError = progressQuery.isError || logsQuery.isError;
+    // The Fasting card reads only fastingQuery, so it gets its own honest
+    // loading / error-with-retry states (scoped retry → fastingQuery.refetch).
+    // Without these a fetch FAILURE silently rendered the IDLE / "START FAST"
+    // layout, masking the error as a benign "no active fast".
+    const fastingLoading = fastingQuery.isLoading;
+    const fastingError = fastingQuery.isError;
     // TanStack `refetch` fns are stable across renders, so depending on them
     // keeps this callback stable too (avoids re-rendering the memoized EmptyState).
     const planRefetch = planQuery.refetch;
@@ -312,6 +318,36 @@ export default function NutritionHubScreen() {
 
                 {/* Fasting Card */}
                 <View style={styles.section}>
+                    {fastingLoading ? (
+                        // Layout-matched placeholder for the timer card (header
+                        // row + protocol/action row) so a fetch-in-flight reads
+                        // as loading, never as a resolved IDLE state.
+                        <GlassCard radius={borderRadius.xl}>
+                            <View style={styles.fastCard}>
+                                <View style={styles.fastHeader}>
+                                    <Skeleton width={150} height={24} radius={borderRadius.md} />
+                                    <Skeleton width={72} height={22} radius={borderRadius.md} />
+                                </View>
+                                <View style={styles.fastBody}>
+                                    <Skeleton width={120} height={40} radius={borderRadius.md} />
+                                    <Skeleton width={110} height={48} radius={borderRadius.lg} />
+                                </View>
+                            </View>
+                        </GlassCard>
+                    ) : fastingError ? (
+                        // Distinct, retryable error — never falls through to the
+                        // idle "START FAST" layout. Retry is SCOPED to the
+                        // fasting query (the only read this card depends on).
+                        <GlassCard radius={borderRadius.xl}>
+                            <EmptyState
+                                icon="cloud-offline-outline"
+                                title="Couldn't load your fast"
+                                subtitle="Check your connection and try again."
+                                actionLabel="Try Again"
+                                onAction={fastingRefetch}
+                            />
+                        </GlassCard>
+                    ) : (
                     <GlassCard
                         glow={colors.accent.cyan}
                         style={{ borderColor: withAlpha(colors.accent.cyan, 0.4) }}
@@ -347,6 +383,7 @@ export default function NutritionHubScreen() {
                             </View>
                         </View>
                     </GlassCard>
+                    )}
                 </View>
             </ScrollView>
 

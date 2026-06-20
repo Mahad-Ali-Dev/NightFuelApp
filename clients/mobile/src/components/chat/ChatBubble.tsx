@@ -48,7 +48,15 @@ function StatusTick({ status }: { status: ChatBubbleStatus }) {
   const { colors } = useTheme();
   // Read = coral double-check; sent/sending = muted white. Failed = red alert.
   if (status === 'failed') {
-    return <Ionicons name="alert-circle" size={13} color={colors.error} style={styles.tick} />;
+    return (
+      <Ionicons
+        name="alert-circle"
+        size={13}
+        color={colors.error}
+        style={styles.tick}
+        accessibilityLabel="Failed"
+      />
+    );
   }
   if (status === 'sending') {
     return (

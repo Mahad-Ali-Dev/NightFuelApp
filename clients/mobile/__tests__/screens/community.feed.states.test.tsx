@@ -1,7 +1,7 @@
 /**
  * community.feed.states.test.tsx
  *
- * Screen-level coverage for the FOUR load-bearing states of the Aurora community
+ * Screen-level coverage for the load-bearing states of the Aurora community
  * TAB feed — `app/(tabs)/community.tsx` (the primary Community tab: challenge
  * strip + create-post row + the post feed). This file owns the spinner-debt
  * burn-down for THAT screen specifically and is DISJOINT from:
@@ -36,44 +36,62 @@
  *     label — is NOT mounted in the loaded branch), pinning the composer's route
  *     unambiguously without matching the EmptyState's action.
  *
+ * ── Optimistic-like coverage (Tests F/G/H) ───────────────────────────────────
+ *   The like control is now OPTIMISTIC (TanStack onMutate/onError/onSettled). The
+ *   ['community-feed'] react-query CACHE is the single ground truth for the feed
+ *   (state-ground-truth.md): onMutate bumps the tapped post's `likes` in the
+ *   cached array (the heart count moves INSTANTLY, before the network returns) and
+ *   snapshots the prior cache; onError writes that snapshot back (rolling the count
+ *   to its true value) and surfaces a brief NON-destructive inline notice INSTEAD
+ *   of the old destructive Alert.alert; onSettled invalidates to reconcile. The
+ *   rendered count is DERIVED from the cache — never stored separately — so these
+ *   tests assert the cache-driven render:
+ *     - F: pressing like increments the rendered count BEFORE the mutation resolves;
+ *     - G: on mutationFn rejection the count rolls back to its prior value, an
+ *          inline notice appears, and Alert.alert is NEVER called (alertSpy);
+ *     - H: on success the optimistic value reconciles with NO double-count (the
+ *          count lands on prior+1, not prior+2).
+ *
  * ── Aurora CtaButton coverage note (HONEST SKIP) ─────────────────────────────
  *   This screen already adopts GlassCard everywhere (FeedSkeleton, the challenge
- *   cards, the composer row, and PostItem) so it ALREADY counts toward GlassCard
- *   coverage. There is NO valid CtaButton target on (tabs)/community.tsx: the
- *   composer "What's on your mind?" row is an INTENTIONAL GlassCard-wrapped glass
- *   row (kept as-is), the two header controls (Leaderboard / Messages) are NEUTRAL
- *   icon buttons, the PostItem like/comment/share controls are icon-only, and the
- *   two create-post EmptyState actions are the EmptyState primitive's OWN coral
- *   Button — there is no coral primary TouchableOpacity+Text anywhere. Adopting
- *   CtaButton here would MANUFACTURE a coral CTA the design does not have, which is
- *   forbidden, so the screen file is LEFT UNCHANGED (empty source diff) and is
- *   intentionally NOT in this item's owned-files list. The honest deliverable is
- *   this render-presence + route-pinning test only; check-no-inline-cta /
- *   check-no-inline-glass stay GREEN because the untouched source has no inline
- *   coral-CTA gradient and no inline-glass card (both guards skip __tests__/).
+ *   cards, the composer row, PostItem AND the new like-failure notice) so it
+ *   ALREADY counts toward GlassCard coverage. There is NO valid CtaButton target
+ *   on (tabs)/community.tsx: the composer "What's on your mind?" row is an
+ *   INTENTIONAL GlassCard-wrapped glass row (kept as-is), the two header controls
+ *   (Leaderboard / Messages) are NEUTRAL icon buttons, the PostItem
+ *   like/comment/share controls are icon-only, the like-failure notice is a
+ *   dismiss-on-tap GlassCard (NOT a coral CTA), and the two create-post EmptyState
+ *   actions are the EmptyState primitive's OWN coral Button — there is no coral
+ *   primary TouchableOpacity+Text anywhere. Adopting CtaButton here would
+ *   MANUFACTURE a coral CTA the design does not have, which is forbidden, so no
+ *   coral CTA is added; check-no-inline-cta / check-no-inline-glass stay GREEN
+ *   because the source has no inline-glass card (it uses GlassCard) and no
+ *   inline coral-CTA gradient (both guards skip __tests__/).
  *
  * Behaviour-pinning, not just rendering: the error test proves the retry wiring
- * (refetch), Test D proves the like mutation is left intact (the like button
- * still calls likeMutation.mutate(postId)), and Test E proves the create-post
- * destination is unchanged — so this coverage change is provably non-destructive
- * to the feed's mutations and navigation.
+ * (refetch), Tests F/G/H prove the optimistic like mutation (instant bump,
+ * rollback, reconcile), and Test E proves the create-post destination — so this
+ * coverage is provably tied to the feed's real mutations and navigation.
  *
  * Mock conventions mirror the sibling screen suites (challenges.states.test.tsx +
- * community.test.tsx + dashboard.cta.test.tsx): a hoisted `mock`-prefixed
- * react-query stub branches on queryKey[0] over a mutable holder (so each test
- * picks the loading / error / empty / loaded branch BEFORE render), a single
- * `refetch` spy proves the error retry wiring, and a single hoisted `mockPush`
- * router spy proves the create-post destination. `@/api/community` is fully mocked so the real axios client
- * never loads; the like `useMutation` returns a `mutate` spy (the like mutation
- * is untouched by this change but asserted as still-wired in Test D). The
- * `@/components/ui` barrel is left REAL so the assertions ride on the actual
- * EmptyState copy + primary action and the real Skeleton / SkeletonCard, and
- * `@/components/SafeBlurView` is a passthrough so the real GlassCard mounts.
+ * community.test.tsx + requests.test.tsx + dashboard.cta.test.tsx): a hoisted
+ * `mock`-prefixed react-query stub branches on queryKey[0]. To exercise the
+ * OPTIMISTIC lifecycle deterministically (without a live DB — the social like
+ * migration is unapplied so this stays MOCKED), the stub is STATEFUL: the
+ * ['community-feed'] query reads a single mutable cache holder, `useMutation`
+ * runs the real onMutate/onError/onSettled you pass it, and `useQueryClient`'s
+ * getQueryData/setQueryData/cancelQueries/invalidateQueries operate on that same
+ * holder and re-render every mounted query subscriber. This keeps the A–E branch
+ * cases byte-identical (they only ever SET the holder + assert synchronously)
+ * while letting F/G/H drive a genuine cache round-trip. `@/api/community` is fully
+ * mocked so the real axios client never loads; `likePost` delegates to a mutable
+ * spy each optimistic test resolves or rejects. The `@/components/ui` barrel is
+ * left REAL so the assertions ride on the actual EmptyState copy + the real
+ * Skeleton / SkeletonCard / GlassCard, and `@/components/SafeBlurView` is a
+ * passthrough so the real GlassCard mounts.
  *
- * Additive + behaviour-safe: this EXTENDS the existing suite (adds the create-post
- * route pin, Test E) and is the SOLE file changed by this item — the screen file
- * (app/(tabs)/community.tsx) is deliberately left UNCHANGED (honest CtaButton skip,
- * see the Aurora coverage note above), so the source diff for this item is empty.
+ * Additive + behaviour-safe: this EXTENDS the existing suite and is the test file
+ * paired with the optimistic-like change to app/(tabs)/community.tsx.
  */
 
 // ── jest.mock hoisting block (runs ABOVE the imports) ────────────────────────
@@ -89,52 +107,132 @@ jest.mock('expo-router', () => ({
 }));
 
 // Controlled state for the ['community-feed'] query — each test mutates this
-// holder BEFORE render() (the factory reads it at call-time). `refetch` is the
-// spy the error branch's "Try Again" action must RE-INVOKE.
+// holder BEFORE render() (the factory reads it at call-time). It is ALSO the
+// backing store the stateful query client reads/writes (getQueryData /
+// setQueryData), so the optimistic onMutate write and the onError rollback both
+// land here and re-render the feed. `refetch` is the spy the error branch's
+// "Try Again" action must RE-INVOKE.
 type FeedState = { data: any; isLoading: boolean; isError: boolean };
 const mockFeed: FeedState = { data: undefined, isLoading: false, isError: false };
 const mockRefetch = jest.fn();
+
+// Re-render fan-out: each mounted `useQuery` registers a force-update dispatch
+// here; the stateful client calls `mockNotify()` after any cache write so the
+// feed re-reads `mockFeed.data` (the optimistic bump / rollback becomes visible).
+// Harmless for the synchronous A–E branch cases — they render once and never
+// trigger a write.
+const mockListeners = new Set<() => void>();
+const mockNotify = () => {
+  mockListeners.forEach((fn) => fn());
+};
 
 // Active-challenges strip kept empty so the tests focus on the feed branches
 // (an empty array makes the screen render no challenge cards — the strip is
 // gated on `challenges && challenges.length > 0`).
 const mockChallenges: any[] = [];
 
-// The like mutation's `mutate` spy. The screen calls `likeMutation.mutate(post.id)`,
-// so asserting on this with the post id proves the like wiring is intact.
+// The like mutation's `mutate` spy — asserted in Test D to prove the like wiring
+// passes THIS post's id through. The stateful useMutation below calls it first
+// (before running the real lifecycle) so the call-count/arg assertions hold.
 const mockLikeMutate = jest.fn();
 
-// react-query: branch useQuery on queryKey[0]. ['community-feed'] reads the
-// mutable holder + the shared refetch spy; ['community-challenges'] returns the
-// (empty) challenges holder. useMutation returns the like spy. useQueryClient is
-// a benign stub (onRefresh / like onSuccess invalidate through it).
-jest.mock('@tanstack/react-query', () => ({
-  useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
-    const key = queryKey[0];
-    if (key === 'community-feed') {
-      return {
-        data: mockFeed.data,
-        isLoading: mockFeed.isLoading,
-        isError: mockFeed.isError,
-        refetch: mockRefetch,
+// The like API call the mutationFn invokes — a mutable spy each optimistic test
+// resolves (success/reconcile) or rejects (rollback). Defaults to a resolved
+// success so the loaded-branch Test D press settles cleanly.
+const mockLikePost = jest.fn((..._args: any[]) => Promise.resolve(true));
+
+// react-query: a STATEFUL stub. `useQuery(['community-feed'])` reads the mutable
+// holder + registers a re-render subscriber; `useMutation(opts)` runs the real
+// onMutate/onError/onSettled lifecycle against the holder (so the optimistic
+// bump, rollback and reconcile actually happen); `useQueryClient` is the cache
+// API over that same holder. Branching on queryKey[0] keeps the challenges query
+// inert.
+jest.mock('@tanstack/react-query', () => {
+  const React = require('react');
+
+  const getFeedData = () => mockFeed.data;
+  const setFeedData = (updater: any) => {
+    mockFeed.data = typeof updater === 'function' ? updater(mockFeed.data) : updater;
+    mockNotify();
+  };
+
+  const queryClient = {
+    cancelQueries: jest.fn(() => Promise.resolve()),
+    getQueryData: (key: readonly unknown[]) => (key[0] === 'community-feed' ? getFeedData() : undefined),
+    setQueryData: (key: readonly unknown[], updater: any) => {
+      if (key[0] === 'community-feed') setFeedData(updater);
+    },
+    invalidateQueries: jest.fn(() => {
+      // Reconcile = re-render against the cache's current (already-reconciled)
+      // value; the component never double-bumps, so the count stays put.
+      mockNotify();
+      return Promise.resolve();
+    }),
+  };
+
+  return {
+    useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
+      // Force-update subscription so cache writes re-render this consumer.
+      const [, forceTick] = React.useReducer((x: number) => x + 1, 0);
+      React.useEffect(() => {
+        mockListeners.add(forceTick);
+        return () => {
+          mockListeners.delete(forceTick);
+        };
+      }, []);
+
+      const key = queryKey[0];
+      if (key === 'community-feed') {
+        return {
+          data: mockFeed.data,
+          isLoading: mockFeed.isLoading,
+          isError: mockFeed.isError,
+          refetch: mockRefetch,
+        };
+      }
+      if (key === 'community-challenges') {
+        return { data: mockChallenges, isLoading: false, isError: false, refetch: jest.fn() };
+      }
+      return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
+    },
+    useMutation: (opts: any) => {
+      const mutate = (variables: any) => {
+        // Record the call first so Test D's call-count/arg assertions hold even
+        // before the async lifecycle settles.
+        mockLikeMutate(variables);
+        // Run the production optimistic lifecycle: onMutate (instant bump +
+        // snapshot) → mutationFn → onError(rollback) / onSuccess → onSettled.
+        Promise.resolve()
+          .then(() => opts?.onMutate?.(variables))
+          .then((ctx: any) =>
+            Promise.resolve()
+              .then(() => opts?.mutationFn?.(variables))
+              .then(
+                (data: any) => {
+                  opts?.onSuccess?.(data, variables, ctx);
+                  opts?.onSettled?.(data, null, variables, ctx);
+                },
+                (err: any) => {
+                  opts?.onError?.(err, variables, ctx);
+                  opts?.onSettled?.(undefined, err, variables, ctx);
+                },
+              ),
+          );
       };
-    }
-    if (key === 'community-challenges') {
-      return { data: mockChallenges, isLoading: false, isError: false, refetch: jest.fn() };
-    }
-    return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
-  },
-  useMutation: () => ({ mutate: mockLikeMutate, isPending: false, isError: false, reset: jest.fn() }),
-  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
-}));
+      return { mutate, isPending: false, isError: false, reset: jest.fn() };
+    },
+    useQueryClient: () => queryClient,
+  };
+});
 
 // API module the screen statically imports — stub to plain jest.fns so axios
-// (via @/api/client) never loads. useQuery / useMutation are fully stubbed above,
-// so these are never actually invoked; they only satisfy the import graph.
-// `Post` is a type-only import (erased by Babel), so no runtime export is needed.
+// (via @/api/client) never loads. `likePost` delegates to the mutable spy so the
+// optimistic tests control success vs failure; getFeed / getChallenges are never
+// invoked (useQuery is stubbed) and only satisfy the import graph. `Post` is a
+// type-only import (erased by Babel), so no runtime export is needed.
 jest.mock('@/api/community', () => ({
   getFeed: jest.fn(),
-  likePost: jest.fn(),
+  likePost: (...args: any[]) => mockLikePost(...args),
   getChallenges: jest.fn(),
 }));
 
@@ -172,8 +270,8 @@ jest.mock('expo-image', () => {
 
 // GlassCard wraps a SafeBlurView (expo-blur native). Replace SafeBlurView with a
 // passthrough View — forwarding props — so the real GlassCard (the feed-card
-// surface AND the loading skeleton's card placeholders) mounts cleanly and its
-// accessibility props survive.
+// surface, the loading skeleton's card placeholders AND the like-failure notice)
+// mounts cleanly and its accessibility props survive.
 jest.mock('@/components/SafeBlurView', () => {
   const RN = require('react-native');
   return { SafeBlurView: ({ children, ...props }: any) => <RN.View {...props}>{children}</RN.View> };
@@ -187,7 +285,8 @@ jest.mock('date-fns', () => ({
 
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
-import { render, fireEvent, screen } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { render, fireEvent, screen, act } from '@testing-library/react-native';
 import {
   ThemeContext,
   getThemeColors,
@@ -208,6 +307,17 @@ function renderScreen() {
   );
 }
 
+// Drain the optimistic mutation's microtask chain (onMutate → mutationFn →
+// onSuccess/onError → onSettled). The stateful useMutation stub runs the
+// lifecycle across several `.then` hops; awaiting a few microtask ticks settles
+// every resulting React state update INSIDE the surrounding act(), so no update
+// escapes the act boundary (silences the "not wrapped in act" warning).
+const flushMicrotasks = async () => {
+  for (let i = 0; i < 6; i++) {
+    await Promise.resolve();
+  }
+};
+
 // A single populated post for the loaded-branch case. `userId` is required by
 // the Post type; no image/avatar URL so the expo-image stub stays inert.
 const POST = {
@@ -220,14 +330,26 @@ const POST = {
   commentsCount: 1,
 };
 
+let alertSpy: jest.SpyInstance;
+
 describe('CommunityTab — feed loading / error / empty / loaded states', () => {
   beforeEach(() => {
     mockFeed.data = undefined;
     mockFeed.isLoading = false;
     mockFeed.isError = false;
+    mockListeners.clear();
     mockRefetch.mockClear();
     mockLikeMutate.mockClear();
+    mockLikePost.mockClear();
+    mockLikePost.mockImplementation(() => Promise.resolve(true));
     mockPush.mockClear();
+    // Spy on the destructive Alert so the optimistic-error test can prove it is
+    // NEVER called (the failure is now a NON-destructive inline notice).
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    alertSpy.mockRestore();
   });
 
   // ── Test A: loading → skeleton scaffold only (no bare spinner) ─────────────
@@ -285,7 +407,7 @@ describe('CommunityTab — feed loading / error / empty / loaded states', () => 
   });
 
   // ── Test D: loaded → post rows render + like mutation stays wired ──────────
-  test('loaded: renders the real post content/author, no edge-state copy, and the like button still calls mutate(postId)', () => {
+  test('loaded: renders the real post content/author, no edge-state copy, and the like button still calls mutate(postId)', async () => {
     mockFeed.data = [POST];
 
     renderScreen();
@@ -298,10 +420,13 @@ describe('CommunityTab — feed loading / error / empty / loaded states', () => 
     expect(screen.queryByText("Couldn't load the feed")).toBeNull();
     expect(screen.queryByLabelText('Loading the feed')).toBeNull();
 
-    // The like mutation is provably untouched by this spinner-debt change: the
-    // like button (accessibilityLabel "Like, <n> likes") still calls the mutation
-    // with THIS post's id.
-    fireEvent.press(screen.getByRole('button', { name: /^Like,/ }));
+    // The like button (accessibilityLabel "Like, <n> likes") still calls the
+    // mutation with THIS post's id. Drain the optimistic lifecycle inside act so
+    // the trailing onSettled reconcile doesn't update state outside the boundary.
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: /^Like,/ }));
+      await flushMicrotasks();
+    });
     expect(mockLikeMutate).toHaveBeenCalledTimes(1);
     expect(mockLikeMutate).toHaveBeenCalledWith('p1');
   });
@@ -332,5 +457,99 @@ describe('CommunityTab — feed loading / error / empty / loaded states', () => 
     // coverage change: exactly one push, to the create-post modal route.
     expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith('/(modals)/create-post');
+  });
+
+  // ── Test F: optimistic increment BEFORE the mutation resolves ──────────────
+  // The like is optimistic: onMutate bumps the cached post's `likes` immediately,
+  // so the rendered count moves from 2 → 3 the instant the heart is tapped —
+  // before likePost (kept pending here) ever resolves. The count is DERIVED from
+  // the ['community-feed'] cache (state-ground-truth.md), so the bump is a pure
+  // cache write reflected on the next render.
+  test('optimistic: pressing like increments the rendered count before the mutation resolves', async () => {
+    // Keep the network call pending for the whole test so the only count change
+    // can come from the OPTIMISTIC onMutate write, never from a settled response.
+    mockLikePost.mockImplementation(() => new Promise(() => {}));
+    mockFeed.data = [POST];
+
+    renderScreen();
+
+    // Ground truth before the tap: 2 likes (the like control surfaces the count
+    // in its a11y label, an unambiguous handle).
+    expect(screen.getByRole('button', { name: 'Like, 2 likes' })).toBeTruthy();
+
+    // Tap the heart — onMutate bumps the cache; flush the microtasks the stub
+    // runs onMutate on (the request stays pending, so onSettled never fires),
+    // then assert the optimistic value.
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Like, 2 likes' }));
+      await flushMicrotasks();
+    });
+
+    // The rendered count optimistically incremented to 3 with the request still
+    // in flight (likePost never resolved) — no network round-trip was awaited.
+    expect(screen.getByRole('button', { name: 'Like, 3 likes' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Like, 2 likes' })).toBeNull();
+
+    // No failure surfaced (the request is merely pending) and the destructive
+    // Alert is never used by the optimistic path.
+    expect(screen.queryByText("Couldn't like that post. Please try again.")).toBeNull();
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  // ── Test G: rollback on error + Alert NEVER called ─────────────────────────
+  // When likePost rejects, onError writes the pre-tap snapshot back to the cache
+  // (the count rolls 3 → 2, its true value) and surfaces a brief NON-destructive
+  // inline notice. The old destructive Alert.alert is gone — alertSpy proves it.
+  test('rollback: a like failure reverts the count to its prior value, shows an inline notice, and NEVER calls Alert.alert', async () => {
+    mockLikePost.mockImplementation(() => Promise.reject(new Error('boom')));
+    mockFeed.data = [POST];
+
+    renderScreen();
+
+    expect(screen.getByRole('button', { name: 'Like, 2 likes' })).toBeTruthy();
+
+    // Tap → optimistic bump to 3, then the rejection rolls it back to 2. Flush
+    // all the lifecycle microtasks (onMutate → mutationFn reject → onError →
+    // onSettled) inside act so React applies every resulting state update.
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Like, 2 likes' }));
+      await flushMicrotasks();
+    });
+
+    // The count is back to its pre-tap ground truth (the optimistic +1 was reverted).
+    expect(screen.getByRole('button', { name: 'Like, 2 likes' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Like, 3 likes' })).toBeNull();
+
+    // The failure is surfaced as a NON-destructive inline notice (role "alert")…
+    expect(screen.getByText("Couldn't like that post. Please try again.")).toBeTruthy();
+    // …and the old destructive Alert.alert is NEVER called.
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  // ── Test H: reconcile on success → no double-count ─────────────────────────
+  // On success the optimistic +1 stands and onSettled invalidates to reconcile.
+  // The component never bumps a second time, so the count lands on prior+1 (3),
+  // NOT prior+2 (4) — proving there is no double-count once the cache reconciles.
+  test('reconcile: on a successful like the optimistic value settles with no double-count', async () => {
+    mockLikePost.mockImplementation(() => Promise.resolve(true));
+    mockFeed.data = [POST];
+
+    renderScreen();
+
+    expect(screen.getByRole('button', { name: 'Like, 2 likes' })).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: 'Like, 2 likes' }));
+      await flushMicrotasks();
+    });
+
+    // After the success + onSettled reconcile, the count is exactly prior+1…
+    expect(screen.getByRole('button', { name: 'Like, 3 likes' })).toBeTruthy();
+    // …and crucially NOT prior+2 (no double-count from a second bump on success).
+    expect(screen.queryByRole('button', { name: 'Like, 4 likes' })).toBeNull();
+
+    // A successful like surfaces no failure notice and never touches Alert.
+    expect(screen.queryByText("Couldn't like that post. Please try again.")).toBeNull();
+    expect(alertSpy).not.toHaveBeenCalled();
   });
 });

@@ -469,4 +469,65 @@ describe('CircadianScreen', () => {
       expect(alertSpy).not.toHaveBeenCalled();
     });
   });
+
+  // ── Test group F: entrainment-score resolution (line-300 dual-key read) ────
+  // Pins the `resolvedEntrainmentScore` resolution the screen renders into the
+  // Entrainment Score gauge:
+  //   resolvedEntrainmentScore = profileMetrics?.entrainmentScore
+  //                            ?? circadianModel?.entrainmentScore ?? null
+  // This is a BINDING test for the score number itself (group D pins the advice
+  // COPY + the window tiles; this group pins the rendered NUMBER and its '--'
+  // placeholder). It turns RED if the resolution rebinds to a stray/phantom
+  // field (e.g. the old untyped `(circadianModel as any)?.score`, which no
+  // producer ever sets) instead of the model's real `entrainmentScore`.
+  describe('entrainment score resolution', () => {
+    // The gauge renders the resolved score and a "/100" suffix as children of the
+    // SAME outer <Text>, so RNTL's text content for that node is the CONCATENATION
+    // ("73/100"). We assert that composite (exact match) — it uniquely identifies
+    // the score gauge ("/100" appears nowhere else) and binds to the rendered
+    // number, turning RED if the resolution rebinds to a stray/phantom field.
+    test('model-present: renders the resolved entrainment score number', () => {
+      mockCurrentShift.data = ACTIVE_SHIFT;
+      mockCircadianModel.data = { entrainmentScore: 73 };
+
+      renderScreen();
+
+      expect(screen.getByText('Entrainment Score')).toBeTruthy();
+      // 73 resolves off the model (via profileMetrics' model-present branch); a
+      // rebind to a non-existent key would render the "--/100" placeholder here.
+      expect(screen.getByText('73/100')).toBeTruthy();
+      expect(screen.queryByText('--/100')).toBeNull();
+    });
+
+    // (F2) Model-present score of 0 still renders "0/100" (NOT the placeholder):
+    // the resolution uses `??` (nullish), so a falsy-but-valid 0 is preserved and
+    // is NOT swallowed into the '--' placeholder. Guards the rendering-no-falsy
+    // rule — a `||` regression would render "--/100" and fail this.
+    test('model-present: a zero score renders "0", not the placeholder', () => {
+      mockCurrentShift.data = ACTIVE_SHIFT;
+      mockCircadianModel.data = { entrainmentScore: 0 };
+
+      renderScreen();
+
+      expect(screen.getByText('Entrainment Score')).toBeTruthy();
+      expect(screen.getByText('0/100')).toBeTruthy();
+      expect(screen.queryByText('--/100')).toBeNull();
+    });
+
+    // (F3) Model-absent (no circadianModel, present shift) → profileMetrics'
+    // no-model fallback yields a null score AND circadianModel?.entrainmentScore
+    // is undefined, so the resolution collapses to null → the gauge renders the
+    // "--/100" placeholder. (The four window tiles use the distinct '--:--'
+    // placeholder string, and here render real HH:MM values anyway.)
+    test('model-absent: renders the "--" placeholder when no score resolves', () => {
+      mockCurrentShift.data = ACTIVE_SHIFT;
+      mockCircadianModel.data = undefined; // no model ⇒ no score anywhere
+
+      renderScreen();
+
+      expect(screen.getByText('Entrainment Score')).toBeTruthy();
+      expect(screen.getByText('--/100')).toBeTruthy();
+      expect(screen.queryByText('73/100')).toBeNull();
+    });
+  });
 });

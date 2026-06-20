@@ -280,4 +280,138 @@ describe('TodayCircadianTimeline', () => {
       expect(affordance).toBeTruthy();
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Time-aware behaviour: the OPTIONAL `now` prop adds a now-marker (per-row
+  // past/current/upcoming classification) and a single countdown to the next
+  // instant. These cases inject a FIXED clock so they are deterministic; they
+  // assert classification via accessibilityState / accessibilityLabel / testID
+  // (NOT styling), and assert the countdown text equals `formatRelative` applied
+  // to the SAME helper instant minus the SAME fixed clock — so the surface is
+  // proven to derive purely from the helpers' getTime(), never NaN/Invalid Date.
+  //
+  // For the SHIFT fixture (22:00 → 06:00 UTC) the helpers yield (UTC):
+  //   seekLight      22:00 … 00:00   caffeineCutoff 00:00 (instant)
+  //   avoidLight     05:00 … 07:00   anchor         07:00 … 11:00
+  //   fullSleep      07:00 … 15:00
+  // so a clock of 06:00 sits INSIDE exactly one window (avoidLight): the two
+  // earlier rows are past and the two later rows are upcoming.
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('time-aware (fixed now)', () => {
+    // Mirror of the component's module-scope formatRelative (pure integer math),
+    // exactly as this suite mirrors formatTime via `fmt`. Asserting against a
+    // re-derivation from the SAME helper instant + SAME clock proves the rendered
+    // countdown is the helper's, not a hand-rolled copy.
+    const formatRelative = (ms: number) => {
+      if (!Number.isFinite(ms) || ms <= 0) return '0m';
+      const totalMinutes = Math.floor(ms / 60_000);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    };
+
+    // 06:00 UTC: past=[seek-light, caffeine-cutoff], current=[avoid-light],
+    // upcoming=[anchor-sleep, full-sleep].
+    const NOW_MID = new Date('2026-01-03T06:00:00.000Z');
+
+    test('(a) marks exactly the in-progress row current, earlier rows past, later rows upcoming', () => {
+      renderWithTheme(<TodayCircadianTimeline shift={SHIFT} now={NOW_MID} />);
+
+      // The single current row is the avoid-light window (05:00 ≤ 06:00 < 07:00).
+      const current = screen.getByTestId('today-timeline-row-avoid-light');
+      expect(current.props.accessibilityState).toEqual({ selected: true, disabled: false });
+      expect(String(current.props.accessibilityLabel)).toContain(', current');
+
+      // Earlier rows (their window already closed / instant already passed) are past.
+      for (const key of ['seek-light', 'caffeine-cutoff']) {
+        const node = screen.getByTestId(`today-timeline-row-${key}`);
+        expect(node.props.accessibilityState).toEqual({ selected: false, disabled: true });
+        expect(String(node.props.accessibilityLabel)).toContain(', past');
+      }
+
+      // Later rows (start strictly after now) are upcoming.
+      for (const key of ['anchor-sleep', 'full-sleep']) {
+        const node = screen.getByTestId(`today-timeline-row-${key}`);
+        expect(node.props.accessibilityState).toEqual({ selected: false, disabled: false });
+        expect(String(node.props.accessibilityLabel)).toContain(', upcoming');
+      }
+
+      // EXACTLY one current row across the whole timeline.
+      const currentRows = screen
+        .getAllByTestId(/^today-timeline-row-/)
+        .filter((n) => n.props.accessibilityState?.selected === true);
+      expect(currentRows).toHaveLength(1);
+    });
+
+    test('(b) countdown — before all rows — counts to the first instant via the SAME helper', () => {
+      // 20:00 UTC, before seekLight.start (22:00). Next instant = seekLight.start.
+      const now = new Date('2026-01-02T20:00:00.000Z');
+      const seekStart = computeLightPlan(SHIFT).seekLight.start;
+      const expected = `Seek bright light in ${formatRelative(seekStart.getTime() - now.getTime())}`;
+
+      renderWithTheme(<TodayCircadianTimeline shift={SHIFT} now={now} />);
+      // The countdown container is present, and its text is the exact helper-derived label.
+      expect(screen.getByTestId('today-timeline-countdown')).toBeTruthy();
+      expect(screen.getByText(expected)).toBeTruthy();
+      expect(expected).not.toMatch(/NaN|Invalid Date/);
+      // Sanity: with this clock every row is still upcoming (nothing has passed).
+      const past = screen
+        .getAllByTestId(/^today-timeline-row-/)
+        .filter((n) => n.props.accessibilityState?.disabled === true);
+      expect(past).toHaveLength(0);
+    });
+
+    test('(b) countdown — between two rows — counts to the next instant via the SAME helper', () => {
+      // 06:00 UTC is inside avoidLight, so the next future instant is that
+      // window's CLOSE (avoidLight.end = 07:00) — the moment the in-progress
+      // window ends — counted from the SAME helper instant.
+      const avoidEnd = computeLightPlan(SHIFT).avoidLight.end;
+      const expected = `Avoid light / blue-blockers in ${formatRelative(avoidEnd.getTime() - NOW_MID.getTime())}`;
+
+      renderWithTheme(<TodayCircadianTimeline shift={SHIFT} now={NOW_MID} />);
+      expect(screen.getByTestId('today-timeline-countdown')).toBeTruthy();
+      expect(screen.getByText(expected)).toBeTruthy();
+      expect(expected).not.toMatch(/NaN|Invalid Date/);
+    });
+
+    test('(b) countdown — after all rows — shows the terminal copy, never NaN/Invalid Date', () => {
+      // 18:00 UTC, after fullSleep.end (15:00): nothing remains.
+      const now = new Date('2026-01-03T18:00:00.000Z');
+      renderWithTheme(<TodayCircadianTimeline shift={SHIFT} now={now} />);
+      expect(screen.getByTestId('today-timeline-countdown')).toBeTruthy();
+      // Terminal copy — defined, human, never a NaN/Invalid-Date leak.
+      expect(screen.getByText('Day plan complete')).toBeTruthy();
+      expect(screen.queryByText(/NaN|Invalid Date/)).toBeNull();
+      // Every row is in the past once the whole plan has elapsed.
+      const rows = screen.getAllByTestId(/^today-timeline-row-/);
+      for (const n of rows) {
+        expect(n.props.accessibilityState?.disabled).toBe(true);
+        expect(n.props.accessibilityState?.selected).toBe(false);
+      }
+    });
+
+    test('(c) classification derives only from the helpers — current row matches computeLightPlan.avoidLight', () => {
+      // Prove the rendered "current" decision is the helpers' getTime() and not
+      // an independent recomputation: avoidLight from the helper brackets NOW_MID
+      // (start ≤ now < end), and that is exactly the row the surface marks current.
+      const { avoidLight } = computeLightPlan(SHIFT);
+      expect(avoidLight.start.getTime()).toBeLessThanOrEqual(NOW_MID.getTime());
+      expect(NOW_MID.getTime()).toBeLessThan(avoidLight.end.getTime());
+
+      renderWithTheme(<TodayCircadianTimeline shift={SHIFT} now={NOW_MID} />);
+      const current = screen.getByTestId('today-timeline-row-avoid-light');
+      expect(current.props.accessibilityState?.selected).toBe(true);
+    });
+
+    test('omitting `now` adds NEITHER a countdown NOR any now-state to the rows (default-safe)', () => {
+      // The additive contract: with no clock the surface is the time-blind render
+      // — no countdown node, and rows carry no accessibilityState and no ", past/
+      // current/upcoming" suffix on their label.
+      renderWithTheme(<TodayCircadianTimeline shift={SHIFT} />);
+      expect(screen.queryByTestId('today-timeline-countdown')).toBeNull();
+      const seek = screen.getByTestId('today-timeline-row-seek-light');
+      expect(seek.props.accessibilityState).toBeUndefined();
+      expect(String(seek.props.accessibilityLabel)).not.toMatch(/, (past|current|upcoming)$/);
+    });
+  });
 });

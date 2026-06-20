@@ -15,8 +15,14 @@ export function SetLogger({ exerciseName, targetSets, onLogSet }: SetLoggerProps
     const [loggedSets, setLoggedSets] = useState<Array<{ reps: number; weightKg: number }>>([]);
 
     const handleLog = () => {
-        if (!reps || !weight) return;
-        const setData = { reps: parseInt(reps), weightKg: parseFloat(weight) };
+        const repsN = parseInt(reps, 10);
+        const weightN = parseFloat(weight);
+        // Reject junk: reps must be a finite integer >= 1; weight a finite number
+        // >= 0 (bodyweight moves log 0kg). Bare parseInt/parseFloat turn 'abc' into
+        // NaN and '0'/'-5' into 0/negatives — none of which should reach onLogSet
+        // or the loggedSets list.
+        if (!Number.isFinite(repsN) || repsN < 1 || !Number.isFinite(weightN) || weightN < 0) return;
+        const setData = { reps: repsN, weightKg: weightN };
         setLoggedSets((prev) => [...prev, setData]);
         onLogSet(setData);
         setReps('');
@@ -41,9 +47,9 @@ export function SetLogger({ exerciseName, targetSets, onLogSet }: SetLoggerProps
             {/* Input Row */}
             {loggedSets.length < targetSets && (
                 <View style={styles.inputRow}>
-                    <TextInput style={styles.input} placeholder="Reps" placeholderTextColor={colors.text.tertiary} keyboardType="numeric" value={reps} onChangeText={setReps} />
-                    <TextInput style={styles.input} placeholder="Weight (kg)" placeholderTextColor={colors.text.tertiary} keyboardType="decimal-pad" value={weight} onChangeText={setWeight} />
-                    <TouchableOpacity style={styles.logBtn} onPress={handleLog} activeOpacity={0.85}>
+                    <TextInput accessibilityLabel="Reps" style={styles.input} placeholder="Reps" placeholderTextColor={colors.text.tertiary} keyboardType="numeric" value={reps} onChangeText={setReps} />
+                    <TextInput accessibilityLabel="Weight in kilograms" style={styles.input} placeholder="Weight (kg)" placeholderTextColor={colors.text.tertiary} keyboardType="decimal-pad" value={weight} onChangeText={setWeight} />
+                    <TouchableOpacity accessibilityRole="button" accessibilityLabel="Log set" hitSlop={8} style={styles.logBtn} onPress={handleLog} activeOpacity={0.85}>
                         <Ionicons name="checkmark" size={22} color="#FFFFFF" />
                     </TouchableOpacity>
                 </View>

@@ -508,6 +508,7 @@ export default function DashboardScreen() {
                     loading={shiftLoading}
                     error={shiftError}
                     onRetry={() => shiftRefetch()}
+                    now={new Date()}
                 />
 
                 {/* ══ SLEEP + HYDRATION + CAFFEINE MINI CARDS ════════════════ */

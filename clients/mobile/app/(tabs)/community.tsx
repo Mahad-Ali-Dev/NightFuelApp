@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl, ImageBackground, Share } from 'react-native';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl, ImageBackground, Share } from 'react-native';
 import { GlassCard, EmptyState, Skeleton, SkeletonCard } from '@/components/ui';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -71,12 +71,32 @@ const FeedSkeleton = React.memo(function FeedSkeleton() {
 });
 
 export default function CommunityTab() {
-    const { colors, typography, borderRadius } = useTheme();
+    const { colors, typography, borderRadius, spacing } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
 
     const [refreshing, setRefreshing] = useState(false);
+
+    // ── Like-failure ground truth ────────────────────────────────────────────
+    // The OPTIMISTIC like (the bumped heart count) lives in the ['community-feed']
+    // react-query CACHE — that cache is the single source of truth for the feed
+    // (state-ground-truth.md), so the rendered count is DERIVED from it and the
+    // optimistic bump is reverted by writing the snapshot back on error. This
+    // `likeError` holds only the transient, NON-destructive failure message that
+    // replaces the old destructive Alert.alert — a brief inline notice that
+    // auto-dismisses; it is not itself the like state.
+    const [likeError, setLikeError] = useState<string | null>(null);
+
+    // Auto-dismiss the inline like-failure notice after a short window so it
+    // behaves like a toast (the feed has already rolled back to the truth). Keyed
+    // on the message so each fresh failure restarts the timer; the cleanup clears
+    // any in-flight timer on unmount or before the next message.
+    useEffect(() => {
+        if (!likeError) return;
+        const t = setTimeout(() => setLikeError(null), 4000);
+        return () => clearTimeout(t);
+    }, [likeError]);
 
     // ── Queries ─────────────────────────────────────────────────────────────
     const { data: feed, isLoading: isFeedLoading, isError: isFeedError, refetch } = useQuery({
@@ -89,12 +109,42 @@ export default function CommunityTab() {
         queryFn: getChallenges,
     });
 
+    // Optimistic like with rollback. The ['community-feed'] cache is ground truth
+    // (state-ground-truth.md): onMutate bumps the matching post's `likes` in the
+    // cached array so the heart count updates INSTANTLY (no network round-trip),
+    // keeping a snapshot to revert to; onError writes that snapshot back (the
+    // optimistic bump was derived, so reverting is a single setQueryData) and
+    // surfaces a brief NON-destructive inline notice instead of a destructive
+    // Alert; onSettled reconciles with the server. We do NOT touch a per-viewer
+    // `likedByMe` flag — the feed Post shape has none, so only the count moves.
     const likeMutation = useMutation({
         mutationFn: (postId: string) => likePost(postId),
-        onError: (err: any) => { Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Something went wrong'); },
-        onSuccess: () => {
+        onMutate: async (postId: string) => {
+            // Stop any in-flight feed refetch from clobbering the optimistic write.
+            await queryClient.cancelQueries({ queryKey: ['community-feed'] });
+            const previous = queryClient.getQueryData<Post[]>(['community-feed']);
+            // Derive the optimistic feed from the snapshot — bump only the tapped
+            // post's count, leaving every other row's element identity intact.
+            queryClient.setQueryData<Post[]>(['community-feed'], (current) =>
+                current?.map((p) => (p.id === postId ? { ...p, likes: p.likes + 1 } : p)),
+            );
+            // A fresh attempt clears any stale failure notice from a prior tap.
+            setLikeError(null);
+            return { previous };
+        },
+        onError: (_err, _postId, ctx) => {
+            // Roll the cache back to the pre-tap snapshot — the heart count returns
+            // to its true value — and show a transient inline notice (no Alert).
+            if (ctx?.previous !== undefined) {
+                queryClient.setQueryData(['community-feed'], ctx.previous);
+            }
+            setLikeError("Couldn't like that post. Please try again.");
+        },
+        onSettled: () => {
+            // Reconcile the optimistic value with the server so there is no
+            // double-count and the cache re-converges on ground truth.
             queryClient.invalidateQueries({ queryKey: ['community-feed'] });
-        }
+        },
     });
 
     const onRefresh = useCallback(async () => {
@@ -220,6 +270,35 @@ export default function CommunityTab() {
                     </GlassCard>
                 </TouchableOpacity>
 
+                {/* Transient, NON-destructive like-failure notice — replaces the
+                    old destructive Alert.alert. Shown only after a like rolls back;
+                    auto-dismisses (see the effect above) or on tap. A GlassCard
+                    (the sanctioned Aurora surface — no inline glass) with a coral
+                    hairline + `alert` role; no coral CTA is manufactured. */}
+                {!!likeError && (
+                    <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+                        <GlassCard
+                            intensity={40}
+                            style={{ borderColor: withAlpha(colors.accent.coral, 0.35) }}
+                        >
+                            <TouchableOpacity
+                                activeOpacity={0.85}
+                                accessibilityRole="alert"
+                                accessibilityLabel={likeError}
+                                onPress={() => setLikeError(null)}
+                            >
+                                <View style={styles.likeNotice}>
+                                    <Ionicons name="alert-circle" size={20} color={colors.accent.coral} style={{ marginTop: 1 }} />
+                                    <Text style={[typography.caption, { color: colors.text.secondary, flex: 1, marginLeft: spacing.sm + 2, lineHeight: 18 }]} maxFontSizeMultiplier={1.4}>
+                                        {likeError}
+                                    </Text>
+                                    <Ionicons name="close" size={16} color={colors.text.tertiary} style={{ marginLeft: spacing.sm }} />
+                                </View>
+                            </TouchableOpacity>
+                        </GlassCard>
+                    </View>
+                )}
+
                 {/* Feed Items */}
                 <View style={{ paddingHorizontal: 20 }}>
                     {isFeedLoading ? (
@@ -333,6 +412,9 @@ const styles = StyleSheet.create({
     // defaults to full width + a bottom margin) so the loading scaffold lines up
     // with the loaded PostItem header.
     skeletonAvatar: { width: 32, marginBottom: 0 },
+    // Inline like-failure notice row (rendered inside a GlassCard — replaces the
+    // old destructive Alert). Token-driven; no coral-CTA gradient / inline glass.
+    likeNotice: { flexDirection: 'row', alignItems: 'center', padding: 16 },
     postHeader: { flexDirection: 'row', alignItems: 'center' },
     postImg: { width: '100%', height: 220, marginBottom: 12 },
     postActions: { flexDirection: 'row', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, gap: 24 },

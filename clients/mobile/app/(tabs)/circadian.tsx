@@ -297,7 +297,14 @@ export default function CircadianScreen() {
         ];
     }, [plan, profileMetrics, shiftType]);
 
-    const entrainmentScore = profileMetrics?.entrainmentScore ?? (circadianModel as any)?.score ?? null;
+    // Resolved entrainment score — SINGLE source of truth, typed (no `as any`).
+    // `profileMetrics.entrainmentScore` already folds in the model's score in its
+    // model-present branch (and is null in the no-model fallback). The second read
+    // is a typed defensive fallthrough on the SAME field — `circadianModel`'s
+    // `entrainmentScore?: number` (src/api/circadian.ts), the ONLY entrainment key
+    // the model carries (there is no `score`). Same precedence, same null fallback.
+    const resolvedEntrainmentScore: number | null =
+        profileMetrics?.entrainmentScore ?? circadianModel?.entrainmentScore ?? null;
 
     // ── Metric tiles config (keeps bindings identical, removes repetition) ──
     const metricTiles = [
@@ -533,7 +540,7 @@ export default function CircadianScreen() {
                                         style={[typography.statLarge, { color: colors.accent.cyan, textAlign: 'center', marginVertical: spacing.sm }]}
                                         maxFontSizeMultiplier={1.3}
                                     >
-                                        {entrainmentScore ?? '--'}
+                                        {resolvedEntrainmentScore ?? '--'}
                                         <Text style={[typography.statSmall, { color: colors.text.secondary }]}>/100</Text>
                                     </Text>
                                     {/* Advice copy from the shared helper — ENTRAINMENT_ADVICE is the
@@ -541,7 +548,7 @@ export default function CircadianScreen() {
                                         always returns a non-empty string, so this Text child can't leak a
                                         falsy number outside <Text> (rendering-no-falsy-and.md). */}
                                     <Text style={[typography.bodySm, { color: colors.text.secondary, textAlign: 'center', paddingHorizontal: spacing.lg }]}>
-                                        {entrainmentAdvice(entrainmentScore)}
+                                        {entrainmentAdvice(resolvedEntrainmentScore)}
                                     </Text>
                                 </GlassCard>
                             </>
