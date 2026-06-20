@@ -1,15 +1,22 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    TextInput, Alert, Modal, Dimensions,
+    Alert, Modal, Dimensions,
     KeyboardAvoidingView, Platform
 } from 'react-native';
 
 import { useTheme } from '@/theme';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Skeleton, EmptyState } from '@/components/ui';
+// F10-hardened workout primitives. RestTimer owns a single self-resetting
+// countdown interval (fixing the resume / double-interval bug the old inline
+// effect in THIS screen had); SetLogger validates set entry with
+// Number.isFinite + reps>=1 / weight>=0 so junk ('abc', '0', negative) can never
+// reach the log path (the bare parseInt(v)||0 / parseFloat(v)||0 this screen
+// used had no such guard). Both live under src/, reached via the @/ alias.
+import { RestTimer } from '@/components/workout/RestTimer';
+import { SetLogger } from '@/components/workout/SetLogger';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -174,8 +181,9 @@ export default function ActiveWorkoutScreen() {
     const [startupCountdown, setStartupCountdown] = useState<number | null>(null);
 
     // ── Refs ────────────────────────────────────────────────────────────────
+    // The rest countdown lives entirely inside <RestTimer/> now (its own single
+    // self-resetting interval), so this screen no longer owns a restTimerRef.
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const restTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const persistenceRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // ── Fetch Session ───────────────────────────────────────────────────────
@@ -393,24 +401,12 @@ export default function ActiveWorkoutScreen() {
     }, [isInitialized, isFinished, exerciseStates, elapsedSeconds, startedAt, sessionId]);
 
     // ── Rest Timer Logic ────────────────────────────────────────────────────
-    useEffect(() => {
-        if (showRestTimer && restSeconds > 0) {
-            restTimerRef.current = setInterval(() => {
-                setRestSeconds(prev => {
-                    if (prev <= 1) {
-                        setShowRestTimer(false);
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
-        } else {
-            if (restTimerRef.current) clearInterval(restTimerRef.current);
-        }
-        return () => {
-            if (restTimerRef.current) clearInterval(restTimerRef.current);
-        };
-    }, [showRestTimer, restSeconds]);
+    // The per-tick countdown is no longer driven here. <RestTimer/> (rendered in
+    // the rest modal below) owns exactly one self-resetting interval and calls
+    // back via onFinish — replacing the old effect that recreated its interval on
+    // every [showRestTimer, restSeconds] change (the resume / double-interval
+    // bug). This screen only toggles `showRestTimer` and seeds `restSeconds` (the
+    // rest length), which RestTimer consumes as its `durationSeconds`.
 
     // ── Handlers ────────────────────────────────────────────────────────────
 
@@ -422,56 +418,31 @@ export default function ActiveWorkoutScreen() {
         if (libraryId) router.push(`/(exercises)/${libraryId}` as any);
     }, [router]);
 
-    const updateSet = (eIdx: number, sIdx: number, field: keyof SetData, value: any) => {
+    // Record one validated set for an exercise. Set entry now flows through the
+    // hardened <SetLogger/> (Number.isFinite + reps>=1 / weight>=0), so the
+    // { reps, weightKg } that reaches here is already clean — no bare
+    // parseInt(v)||0 / parseFloat(v)||0 on the render path any longer. We mark the
+    // next still-incomplete planned set as completed with the logged numbers
+    // (keeping the ExerciseState.sets[].completed model handleEnd already logs
+    // from), then fire the SAME rest-trigger toggleSetComplete used to:
+    // seed restSeconds from the exercise, point restExerciseIdx at it, and open
+    // the rest modal. If every planned set is already logged we no-op (and skip
+    // the rest trigger) rather than appending past targetSets.
+    const logSet = (eIdx: number, data: { reps: number; weightKg: number }) => {
         setExerciseStates(prev => {
-            const next = [...prev];
-            if (!next[eIdx]?.sets?.[sIdx]) return prev;
-            next[eIdx].sets[sIdx] = { ...next[eIdx].sets[sIdx], [field]: value };
-            return next;
-        });
-    };
-
-    const toggleSetComplete = (eIdx: number, sIdx: number) => {
-        setExerciseStates(prev => {
-            const next = [...prev];
-            if (!next[eIdx]?.sets?.[sIdx]) return prev;
-            const isCompleting = !next[eIdx].sets[sIdx].completed;
-            next[eIdx].sets[sIdx].completed = isCompleting;
-
-            if (isCompleting) {
-                // Trigger rest timer
-                setRestSeconds(next[eIdx].restSeconds);
-                setRestExerciseIdx(eIdx);
-                setShowRestTimer(true);
-            }
-
-            return next;
-        });
-    };
-
-    const addSet = (eIdx: number) => {
-        setExerciseStates(prev => {
-            const next = [...prev];
+            // Deep-clone the touched structures so we never mutate prior state.
+            const next = prev.map(ex => ({ ...ex, sets: ex.sets.map(s => ({ ...s })) }));
             const exercise = next[eIdx];
             if (!exercise) return prev;
-            const lastSet = exercise.sets[exercise.sets.length - 1];
-            exercise.sets.push({
-                kg: lastSet?.kg || 0,
-                reps: lastSet?.reps || 10,
-                completed: false,
-            });
-            return next;
-        });
-    };
+            const sIdx = exercise.sets.findIndex(s => !s.completed);
+            if (sIdx === -1) return prev; // all planned sets already logged
+            exercise.sets[sIdx] = { kg: data.weightKg, reps: data.reps, completed: true };
 
-    const removeSet = (eIdx: number, sIdx: number) => {
-        setExerciseStates(prev => {
-            const next = prev.map(ex => ({ ...ex, sets: [...ex.sets] })); // Deep clone to be safe
-            const exercise = next[eIdx];
-            if (!exercise) return prev;
-            if (exercise.sets.length > 1) {
-                exercise.sets.splice(sIdx, 1);
-            }
+            // Same rest-trigger the old toggleSetComplete fired on completion.
+            setRestSeconds(exercise.restSeconds);
+            setRestExerciseIdx(eIdx);
+            setShowRestTimer(true);
+
             return next;
         });
     };
@@ -480,9 +451,11 @@ export default function ActiveWorkoutScreen() {
         // Immediately mark as finished to stop persistence & timers
         setIsFinished(true);
 
-        // Stop all intervals immediately
+        // Stop all intervals immediately. The rest countdown is owned by
+        // <RestTimer/> and tears its own interval down on unmount, so there is no
+        // restTimerRef to clear here — finishing hides the modal (showRestTimer is
+        // moot post-navigation) and RestTimer unmounts with the screen.
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-        if (restTimerRef.current) { clearInterval(restTimerRef.current); restTimerRef.current = null; }
         if (persistenceRef.current) { clearInterval(persistenceRef.current); persistenceRef.current = null; }
 
         // Capture the final elapsed time before any async work
@@ -668,12 +641,6 @@ export default function ActiveWorkoutScreen() {
 
     const isStarting = startupCountdown !== null && startupCountdown > 0;
 
-    // The ring fraction is restSeconds over the rest period the timer opened with.
-    // toggleSetComplete seeds `restSeconds` from the active exercise's `restSeconds`,
-    // so we read it back from that exercise (no handler change needed). +15s can push
-    // restSeconds past the initial value; CircularProgress clamps the fraction to 1.
-    const initialRest = exerciseStates[restExerciseIdx]?.restSeconds || DEFAULT_REST_SECONDS;
-
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -690,7 +657,6 @@ export default function ActiveWorkoutScreen() {
                     {exerciseStates.map((ex, eIdx) => {
                         const isExpanded = expandedIndex === eIdx;
                         const completedCount = ex.sets.filter(s => s.completed).length;
-                        const firstIncompleteIndex = ex.sets.findIndex(s => !s.completed);
                         // Resolved → seeded LibraryExercise: render the rich, tappable
                         // card (thumbnail + sets×reps + equipment + deep-link). Null →
                         // a clean text-only card. Never drops/hides the exercise.
@@ -745,13 +711,22 @@ export default function ActiveWorkoutScreen() {
                                             </View>
                                         )}
                                         <View style={{ flex: 1, marginLeft: spacing.md }}>
-                                            <Text
-                                                style={[typography.subhead, { color: colors.text.primary, fontWeight: '600' }]}
-                                                numberOfLines={1}
-                                                ellipsizeMode="tail"
-                                            >
-                                                {ex.name}
-                                            </Text>
+                                            {/* When expanded, the SetLogger below owns the
+                                                exercise-name heading, so the header shows the
+                                                title only while collapsed — the name stays
+                                                visible in both states without being rendered
+                                                (and read by a screen reader) twice. The
+                                                touchable's accessibilityLabel still carries
+                                                the name in either state. */}
+                                            {isExpanded ? null : (
+                                                <Text
+                                                    style={[typography.subhead, { color: colors.text.primary, fontWeight: '600' }]}
+                                                    numberOfLines={1}
+                                                    ellipsizeMode="tail"
+                                                >
+                                                    {ex.name}
+                                                </Text>
+                                            )}
                                             <Text style={[typography.caption, { color: colors.text.secondary }]}>
                                                 {completedCount}/{ex.sets.length} Sets Done
                                                 {isResolved && targetReps > 0
@@ -781,102 +756,33 @@ export default function ActiveWorkoutScreen() {
                                     </View>
                                 </TouchableOpacity>
 
-                                {isExpanded && (
+                                {/* Ternary-null (rendering-no-falsy-and): never `{isExpanded && …}`. */}
+                                {isExpanded ? (
                                     <View style={styles.exContent}>
-                                        <View style={styles.rowLabel}>
-                                            <Text style={[styles.label, { color: colors.text.secondary, width: 36 }]}>SET</Text>
-                                            <Text style={[styles.label, { color: colors.text.secondary, flex: 1, textAlign: 'center' }]}>KG</Text>
-                                            <Text style={[styles.label, { color: colors.text.secondary, flex: 1, textAlign: 'center' }]}>REPS</Text>
-                                            <Text style={[styles.label, { color: colors.text.secondary, width: 44, textAlign: 'right' }]}>DONE</Text>
-                                        </View>
-
-                                        {ex.sets.map((set, sIdx) => {
-                                            const numberColor = set.completed
-                                                ? colors.accent.cyan
-                                                : (firstIncompleteIndex === sIdx ? colors.accent.coral : colors.text.secondary);
-                                            const inputDisabledStyle = set.completed
-                                                ? { opacity: 0.55, color: colors.text.secondary }
-                                                : null;
-
-                                            return (
-                                                <View key={sIdx} style={styles.setRow}>
-                                                    <View style={[styles.setNum, { backgroundColor: colors.background.tertiary }]}>
-                                                        <Text
-                                                            style={[styles.setNumText, { color: numberColor }]}
-                                                            maxFontSizeMultiplier={1.2}
-                                                        >
-                                                            {sIdx + 1}
-                                                        </Text>
-                                                    </View>
-
-                                                    <TextInput
-                                                        style={[styles.setInput, { color: colors.text.primary, backgroundColor: colors.background.tertiary, borderColor: colors.border.default }, inputDisabledStyle]}
-                                                        keyboardType="numeric"
-                                                        value={set.kg.toString()}
-                                                        onChangeText={(v) => updateSet(eIdx, sIdx, 'kg', parseFloat(v) || 0)}
-                                                        editable={!set.completed}
-                                                        selectionColor={colors.accent.coral}
-                                                        maxFontSizeMultiplier={1.3}
-                                                    />
-
-                                                    <TextInput
-                                                        style={[styles.setInput, { color: colors.text.primary, backgroundColor: colors.background.tertiary, borderColor: colors.border.default }, inputDisabledStyle]}
-                                                        keyboardType="numeric"
-                                                        value={set.reps.toString()}
-                                                        onChangeText={(v) => updateSet(eIdx, sIdx, 'reps', parseInt(v) || 0)}
-                                                        editable={!set.completed}
-                                                        selectionColor={colors.accent.coral}
-                                                        maxFontSizeMultiplier={1.3}
-                                                    />
-
-                                                    <TouchableOpacity
-                                                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                                        accessibilityRole="button"
-                                                        accessibilityLabel={set.completed ? 'Mark set incomplete' : 'Complete set'}
-                                                        accessibilityState={{ checked: set.completed }}
-                                                        style={[
-                                                            styles.checkBtn,
-                                                            set.completed
-                                                                ? { backgroundColor: colors.accent.emerald, ...shadows.glow(colors.accent.emerald) }
-                                                                : { backgroundColor: colors.background.tertiary, borderWidth: 1, borderColor: colors.border.light },
-                                                        ]}
-                                                        onPress={() => toggleSetComplete(eIdx, sIdx)}
-                                                    >
-                                                        <Ionicons name="checkmark" size={18} color={set.completed ? '#FFF' : colors.text.tertiary} />
-                                                    </TouchableOpacity>
-
-                                                    {ex.sets.length > 1 && (
-                                                        <TouchableOpacity
-                                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                                            accessibilityRole="button"
-                                                            accessibilityLabel="Remove set"
-                                                            style={styles.removeSetBtn}
-                                                            onPress={() => removeSet(eIdx, sIdx)}
-                                                        >
-                                                            <Ionicons name="close" size={16} color={colors.text.tertiary} />
-                                                        </TouchableOpacity>
-                                                    )}
-                                                </View>
-                                            );
-                                        })}
-
-                                        <TouchableOpacity
-                                            activeOpacity={0.7}
-                                            accessibilityRole="button"
-                                            accessibilityLabel="Add set"
-                                            style={[styles.addSetBtn, { borderColor: colors.border.light }]}
-                                            onPress={() => addSet(eIdx)}
-                                        >
-                                            <Ionicons name="add" size={16} color={colors.text.secondary} />
-                                            <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: '600' }]}>ADD SET</Text>
-                                        </TouchableOpacity>
+                                        {/* Set entry routes through the F10-hardened SetLogger:
+                                            its Number.isFinite + reps>=1 / weight>=0 guard
+                                            rejects junk ('abc', '0', negative) BEFORE it reaches
+                                            onLogSet — the unguarded parseFloat(v)||0 /
+                                            parseInt(v)||0 TextInputs this screen used are gone.
+                                            Each accepted set marks the next planned set complete
+                                            and fires the rest cycle (logSet), so handleEnd's
+                                            completed-set logging + AsyncStorage persistence are
+                                            unchanged. */}
+                                        <SetLogger
+                                            exerciseName={ex.name}
+                                            targetSets={ex.sets.length}
+                                            onLogSet={(data) => logSet(eIdx, data)}
+                                        />
                                     </View>
-                                )}
+                                ) : null}
                             </Card>
                         );
                     })}
 
-                    {exerciseStates.length === 0 && (
+                    {/* Ternary-null (rendering-no-falsy-and): `length === 0` is a boolean
+                        here, but we keep the explicit ternary so a future numeric edit
+                        can't leak a falsy 0 into the tree. */}
+                    {exerciseStates.length === 0 ? (
                         <View style={{ alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 }}>
                             <Ionicons name="barbell-outline" size={56} color={colors.text.tertiary} />
                             <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 16, textAlign: 'center' }]}>
@@ -886,7 +792,7 @@ export default function ActiveWorkoutScreen() {
                                 Add your first exercise to this session using the button below.
                             </Text>
                         </View>
-                    )}
+                    ) : null}
 
                     <TouchableOpacity
                         activeOpacity={0.7}
@@ -950,24 +856,26 @@ export default function ActiveWorkoutScreen() {
                             ...shadows.xl,
                         }}
                         accessibilityViewIsModal={true}
-                        accessibilityLabel={`Rest timer, ${restSeconds} seconds remaining. Up next: ${exerciseStates[restExerciseIdx]?.name ?? 'next exercise'}`}
+                        accessibilityLabel={`Rest timer. Up next: ${exerciseStates[restExerciseIdx]?.name ?? 'next exercise'}`}
                     >
-                        <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 16 }]}>REST</Text>
-
-                        <CircularProgress
-                            size={180}
-                            strokeWidth={10}
-                            progress={initialRest > 0 ? restSeconds / initialRest : 0}
-                            color={colors.accent.coral}
-                            trackColor={withAlpha(colors.text.primary, 0.08)}
-                        >
-                            <Text
-                                style={{ fontFamily: typography.statLarge.fontFamily, fontSize: 48, lineHeight: 56, color: colors.text.primary }}
-                                maxFontSizeMultiplier={1.2}
-                            >
-                                {formatTime(restSeconds)}
-                            </Text>
-                        </CircularProgress>
+                        {/* The hardened RestTimer owns the single self-resetting
+                            countdown interval (no parent interval) and announces the
+                            live remaining time via its own accessibilityRole="timer".
+                            durationSeconds is `restSeconds` — the rest length seeded by
+                            logSet and bumped by the +15s chip below; RestTimer re-arms
+                            from the new total whenever that prop changes, and onFinish
+                            closes the modal at zero. Gated on the same condition as the
+                            Modal's `visible`, so each new rest cycle mounts a fresh timer
+                            (remaining = durationSeconds) and it tears down when the modal
+                            hides — no stale 00:00 on reopen. */}
+                        {showRestTimer && !isStarting ? (
+                            <RestTimer
+                                durationSeconds={restSeconds}
+                                isRunning={showRestTimer && !isStarting}
+                                onFinish={() => setShowRestTimer(false)}
+                                size={180}
+                            />
+                        ) : null}
 
                         <Text style={[typography.subhead, { color: colors.text.secondary, marginTop: spacing.lg }]} numberOfLines={1}>
                             Up next: {exerciseStates[restExerciseIdx]?.name ?? 'next exercise'}

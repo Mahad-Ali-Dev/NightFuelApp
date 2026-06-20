@@ -56,7 +56,10 @@ export default function WorkoutCompleteScreen() {
                     <Ionicons name="trophy" size={56} color={colors.accent.cyan} />
                 </View>
 
-                <Text style={[typography.display, { color: colors.text.primary, fontSize: 40, marginTop: 24, textAlign: 'center' }]}>
+                <Text
+                    style={[typography.display, { color: colors.text.primary, fontSize: 40, marginTop: 24, textAlign: 'center' }]}
+                    maxFontSizeMultiplier={1.2}
+                >
                     Session{'\n'}Complete
                 </Text>
 
@@ -68,17 +71,17 @@ export default function WorkoutCompleteScreen() {
                     <Card variant="glass" style={styles.statBox}>
                         <Ionicons name="flash-outline" size={24} color={colors.accent.coral} style={{ marginBottom: 8 }} />
                         <Text style={[typography.caption, { color: colors.text.secondary }]}>Volume</Text>
-                        <Text style={[styles.statValue, { color: colors.text.primary }]}>{totalVolume.toLocaleString()} <Text style={[styles.statUnit, { color: colors.text.secondary }]}>kg</Text></Text>
+                        <Text style={[styles.statValue, { color: colors.text.primary }]} maxFontSizeMultiplier={1.3}>{totalVolume.toLocaleString()} <Text style={[styles.statUnit, { color: colors.text.secondary }]}>kg</Text></Text>
                     </Card>
                     <Card variant="glass" style={styles.statBox}>
                         <Ionicons name="time-outline" size={24} color={colors.accent.cyan} style={{ marginBottom: 8 }} />
                         <Text style={[typography.caption, { color: colors.text.secondary }]}>Time</Text>
-                        <Text style={[styles.statValue, { color: colors.text.primary }]}>{displayTime}</Text>
+                        <Text style={[styles.statValue, { color: colors.text.primary }]} maxFontSizeMultiplier={1.3}>{displayTime}</Text>
                     </Card>
                     <Card variant="glass" style={styles.statBox}>
                         <Ionicons name="flame-outline" size={24} color={colors.accent.amber} style={{ marginBottom: 8 }} />
                         <Text style={[typography.caption, { color: colors.text.secondary }]}>Burn</Text>
-                        <Text style={[styles.statValue, { color: colors.text.primary }]}>{totalKcal} <Text style={[styles.statUnit, { color: colors.text.secondary }]}>kcal</Text></Text>
+                        <Text style={[styles.statValue, { color: colors.text.primary }]} maxFontSizeMultiplier={1.3}>{totalKcal} <Text style={[styles.statUnit, { color: colors.text.secondary }]}>kcal</Text></Text>
                     </Card>
                 </View>
 
@@ -88,6 +91,8 @@ export default function WorkoutCompleteScreen() {
                     style={[styles.returnBtn, shadows.glow(colors.accent.cyan)]}
                     onPress={handleReturn}
                     activeOpacity={0.9}
+                    accessibilityRole="button"
+                    accessibilityLabel="Return to dashboard"
                 >
                     <LinearGradient
                         colors={colors.gradients.cyan}

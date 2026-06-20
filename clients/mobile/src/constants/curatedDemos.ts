@@ -1042,6 +1042,43 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'Hip Lift with Band': 'Hip_Lift_with_Band',
   'External Rotation with Band': 'External_Rotation_with_Band',
   'Lateral Raise with Bands': 'Lateral_Raise_-_With_Bands',
+
+  // ── Widened FEDB-backed tranche #16 (data-only, zero new fetch) ──────────────
+  // A further slice of distinct catalogue movements — this tranche leans into the
+  // agility/plyometric, sled & strongman loaded-carry, medicine-ball and stationary
+  // cardio/mobility work the earlier tranches still under-covered. Every KEY below
+  // is NEW — absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries above
+  // (tranches #1-#15), YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos()
+  // admits each one as kind:'fedb_frames', verified:false (precedence: an
+  // already-set name is skipped). Every slug VALUE was machine-verified to be
+  // present in BOTH FEDB_SLUGS (exerciseDemos.ts) AND __tests__/fixtures/
+  // fedb-catalog-slugs.json (the shipped 873-slug catalogue), and each is a fresh
+  // slug dir not already referenced by an earlier tranche — so every entry resolves
+  // to an ordered 2-frame [0.jpg, 1.jpg] HTTPS pair via fedbPair() with NO new HTTP
+  // call. Strictly additive: the kind:'youtube'-only sync guard
+  // (scripts/check-demo-maps-in-sync.js) and pendingHumanReviewIds.json (YouTube
+  // ids only) are both untouched, so check-demo-maps-in-sync stays green. A 200-ok
+  // URL is NOT a movement review, so nothing here is verified:true — that remains a
+  // human-gated step.
+
+  // Agility / plyometric / conditioning
+  'Lateral Bound': 'Lateral_Bound',
+  'Lateral Cone Hops': 'Lateral_Cone_Hops',
+  'Hurdle Hops': 'Hurdle_Hops',
+  'Split Jump': 'Split_Jump',
+  'Scissors Jump': 'Scissors_Jump',
+  'Frog Hops': 'Frog_Hops',
+  // Sled / strongman loaded carries
+  'Backward Drag': 'Backward_Drag',
+  'Conans Wheel': 'Conans_Wheel',
+  'Rickshaw Carry': 'Rickshaw_Carry',
+  'Sandbag Load': 'Sandbag_Load',
+  // Medicine ball / power
+  'Medicine Ball Chest Pass': 'Medicine_Ball_Chest_Pass',
+  'Overhead Slam': 'Overhead_Slam',
+  // Stationary cardio / mobility
+  'Recumbent Bike': 'Recumbent_Bike',
+  'Arm Circles': 'Arm_Circles',
 };
 
 /**

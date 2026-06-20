@@ -14,8 +14,14 @@ import { typography as themeTypography } from '@/theme/typography';
 import { useQuery } from '@tanstack/react-query';
 import { getActiveSession, getLastSet, LastSet, SessionExercise } from '@/api/exercises';
 import { ExerciseDemo } from '@/components/exercise/ExerciseDemo';
+import { RestTimer } from '@/components/workout/RestTimer';
+import { SetLogger } from '@/components/workout/SetLogger';
 import { resolveDemo, resolveDemoFrames } from '@/constants/exerciseDemos';
 import { getCuratedDemo, getCuratedDemoFrames } from '@/constants/curatedDemos';
+
+// Default rest length started when a set is completed/logged. Drives the
+// hardened <RestTimer/> in the rest banner (which owns its own countdown).
+const REST_SECONDS = 90;
 
 // Bundled neutral placeholder shown when an exercise has no demo media (no
 // network hit). Reuses the SAME bundled asset the exercise-detail screen
@@ -93,6 +99,12 @@ type ExerciseCardProps = {
     lastSet: LastSet | null;
     onToggleSet: (exIndex: number, setIndex: number) => void;
     onUpdateSet: (exIndex: number, setIndex: number, field: 'weight' | 'reps', val: string) => void;
+    /**
+     * Append a VALIDATED extra set to this exercise. Routed from the hardened
+     * <SetLogger/> (revealed by "Add Set"), so junk never reaches here — only a
+     * finite reps>=1 / weightKg>=0 entry that passed SetLogger's guard.
+     */
+    onLogExtraSet: (exIndex: number, setData: { reps: number; weightKg: number }) => void;
 };
 
 /**
@@ -100,14 +112,16 @@ type ExerciseCardProps = {
  * pair, curated still + "Full tutorial" link, or the honest "coming soon" state —
  * resolved via {@link resolveDemoInputs}, the SAME precedence the exercise-detail
  * screen uses) followed by the set-logging rows, the previous-set hints, and the
- * "Add Set" control. Behaviour of the rows/timers/handlers is unchanged — only
- * the demo player is new.
+ * "Add Set" control — which reveals the hardened <SetLogger/> (validated entry).
  */
-function ExerciseCard({ exercise: ex, exIndex, lastSet, onToggleSet, onUpdateSet }: ExerciseCardProps) {
+function ExerciseCard({ exercise: ex, exIndex, lastSet, onToggleSet, onUpdateSet, onLogExtraSet }: ExerciseCardProps) {
     const { colors, typography } = useTheme();
     // Memoize the per-exercise demo resolution so the precedence walk + curated
     // lookup only re-runs when the exercise NAME changes (the resolvers key on it).
     const demo = useMemo(() => resolveDemoInputs(ex.name), [ex.name]);
+    // "Add Set" reveals the validated <SetLogger/> for THIS card (collapsed by
+    // default so the card stays scannable and no duplicate exercise title shows).
+    const [adding, setAdding] = useState(false);
 
     return (
         <Card variant="glass" style={styles.exerciseCard}>
@@ -198,9 +212,34 @@ function ExerciseCard({ exercise: ex, exIndex, lastSet, onToggleSet, onUpdateSet
                 );
             })}
 
-            <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Add set" style={styles.addSetBtn}>
-                <Text style={[typography.subhead, { color: colors.text.secondary, textAlign: 'center' }]}>+ Add Set</Text>
+            <TouchableOpacity
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={adding ? 'Hide add set' : 'Add set'}
+                accessibilityState={{ expanded: adding }}
+                onPress={() => setAdding(v => !v)}
+                style={styles.addSetBtn}
+            >
+                <Text style={[typography.subhead, { color: adding ? colors.accent.cyan : colors.text.secondary, textAlign: 'center' }]}>
+                    {adding ? 'Done adding' : '+ Add Set'}
+                </Text>
             </TouchableOpacity>
+
+            {/* Validated set entry. The hardened <SetLogger/> rejects junk
+                (Number.isFinite + reps>=1 / weightKg>=0) before its onLogSet
+                fires, so only a valid set reaches onLogExtraSet. Remounted by a
+                key tied to the current set count so its transient buffer never
+                double-lists what we've already appended to the card rows. */}
+            {adding ? (
+                <View style={styles.addSetLogger}>
+                    <SetLogger
+                        key={`setlogger-${ex.loggedSets.length}`}
+                        exerciseName={ex.name}
+                        targetSets={Math.max(1, ex.sets)}
+                        onLogSet={(setData) => onLogExtraSet(exIndex, setData)}
+                    />
+                </View>
+            ) : null}
         </Card>
     );
 }
@@ -211,7 +250,12 @@ export default function ActiveWorkoutScreen() {
     const insets = useSafeAreaInsets();
 
     const [timer, setTimer] = useState(0);
-    const [restRemaining, setRestRemaining] = useState(0);
+    // Rest state as GROUND TRUTH (state-ground-truth): `restActive` is whether a
+    // rest is in progress; the per-second countdown + MM:SS are owned by the
+    // hardened <RestTimer/> in the banner, not mirrored here. `restKey` bumps on
+    // each new set so the banner timer remounts and re-arms a fresh REST_SECONDS.
+    const [restActive, setRestActive] = useState(false);
+    const [restKey, setRestKey] = useState(0);
     const [exercises, setExercises] = useState<LocalExercise[]>([]);
 
     const { data: session, isLoading: sessionLoading, isError: sessionError, refetch: refetchSession } = useQuery({
@@ -263,37 +307,76 @@ export default function ActiveWorkoutScreen() {
         return () => clearInterval(interval);
     }, []);
 
-    // Rest timer
-    useEffect(() => {
-        if (restRemaining > 0) {
-            const interval = setInterval(() => {
-                setRestRemaining(r => r - 1);
-            }, 1000);
-            return () => clearInterval(interval);
-        }
-    }, [restRemaining]);
+    // Rest is driven by the hardened <RestTimer/> rendered in the banner below —
+    // it owns the per-second countdown and fires onFinish at zero. No local
+    // interval here (the previous inline effect registered its cleanup INSIDE the
+    // `if (restRemaining > 0)` branch, leaking the last tick).
+    const startRest = () => {
+        // Bump the key so the banner <RestTimer/> remounts and re-arms a fresh
+        // REST_SECONDS even when a previous rest had already finished.
+        setRestKey(k => k + 1);
+        setRestActive(true);
+    };
+    const stopRest = () => setRestActive(false);
+    // RestTimer fires onFinish from INSIDE its own state updater (it calls the
+    // callback within setRemaining as it crosses zero). Updating our state
+    // straight from there would be a setState-during-another-component's-render
+    // ("Cannot update a component while rendering a different component"), so we
+    // defer the stop to the next macrotask — out of RestTimer's render phase.
+    const handleRestFinish = () => {
+        setTimeout(stopRest, 0);
+    };
 
     const toggleSet = (exIndex: number, setIndex: number) => {
-        const newEx = [...exercises];
-        const targetSet = newEx[exIndex]?.loggedSets?.[setIndex];
-        if (!targetSet) return;
-        targetSet.done = !targetSet.done;
-        setExercises(newEx);
-
-        if (targetSet.done) {
-            // Start 90s rest timer on set completion
-            setRestRemaining(90);
-        } else {
-            setRestRemaining(0);
-        }
+        // The rest decision reads the current render's snapshot (a tap handler is
+        // recreated each render with fresh `exercises`); the STATE change goes
+        // through a pure updater that rebuilds the touched exercise AND its sets
+        // array — no in-place mutation of the shared set object — per
+        // react-state-dispatcher / state-ground-truth.
+        const willBeDone = !exercises[exIndex]?.loggedSets?.[setIndex]?.done;
+        setExercises(prev => prev.map((ex, i) => {
+            if (i !== exIndex) return ex;
+            if (!ex.loggedSets[setIndex]) return ex;
+            return {
+                ...ex,
+                loggedSets: ex.loggedSets.map((s, j) =>
+                    j === setIndex ? { ...s, done: !s.done } : s,
+                ),
+            };
+        }));
+        // Completing a set starts a rest cycle; un-completing stops it.
+        if (willBeDone) startRest();
+        else stopRest();
     };
 
     const updateSet = (exIndex: number, setIndex: number, field: 'weight' | 'reps', val: string) => {
-        const newEx = [...exercises];
-        const targetSet = newEx[exIndex]?.loggedSets?.[setIndex];
-        if (!targetSet) return;
-        targetSet[field] = val;
-        setExercises(newEx);
+        setExercises(prev => prev.map((ex, i) => {
+            if (i !== exIndex) return ex;
+            if (!ex.loggedSets[setIndex]) return ex;
+            return {
+                ...ex,
+                loggedSets: ex.loggedSets.map((s, j) =>
+                    j === setIndex ? { ...s, [field]: val } : s,
+                ),
+            };
+        }));
+    };
+
+    // Append a VALIDATED extra set (from <SetLogger/>) to an exercise as a done
+    // row, then start a rest cycle — same "completed a set" semantics as the
+    // checkmark. SetLogger has already rejected junk, so the numbers are sound.
+    const logExtraSet = (exIndex: number, setData: { reps: number; weightKg: number }) => {
+        setExercises(prev => prev.map((ex, i) => {
+            if (i !== exIndex) return ex;
+            return {
+                ...ex,
+                loggedSets: [
+                    ...ex.loggedSets,
+                    { weight: String(setData.weightKg), reps: String(setData.reps), done: true },
+                ],
+            };
+        }));
+        startRest();
     };
 
     const formatTime = (secs: number) => {
@@ -317,21 +400,31 @@ export default function ActiveWorkoutScreen() {
                 <Button title="Finish" onPress={() => router.back()} size="sm" style={{ paddingHorizontal: 16 }} />
             </View>
 
-            {/* Rest Timer Overlay */}
-            {restRemaining > 0 && (
+            {/* Rest banner — the per-second countdown + MM:SS are owned by the
+                hardened <RestTimer/> (it fires onFinish at zero, which clears the
+                rest). Same Aurora cyan banner styling/position; the timer icon and
+                Close control are preserved (Close stops the rest cycle). */}
+            {restActive ? (
                 <View style={[styles.restBanner, { backgroundColor: withAlpha(colors.accent.cyan, 0.1), borderBottomColor: withAlpha(colors.accent.cyan, 0.25) }, shadows.glow(colors.accent.cyan)]}>
                     <Ionicons name="timer" size={24} color={colors.accent.cyan} />
-                    <Text style={[typography.statTiny, { color: colors.accent.cyan, marginLeft: 12, flex: 1 }]}>
-                        Resting: {formatTime(restRemaining)}
-                    </Text>
-                    <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close" onPress={() => setRestRemaining(0)} style={{ padding: 8 }}>
+                    <Text style={[typography.statTiny, { color: colors.accent.cyan, marginLeft: 12 }]}>Rest</Text>
+                    <View style={styles.restTimerWrap}>
+                        <RestTimer
+                            key={`rest-${restKey}`}
+                            durationSeconds={REST_SECONDS}
+                            isRunning={restActive}
+                            onFinish={handleRestFinish}
+                            size={92}
+                        />
+                    </View>
+                    <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Close" onPress={stopRest} style={{ padding: 8 }}>
                         <Ionicons name="close" size={20} color={colors.accent.cyan} />
                     </TouchableOpacity>
                 </View>
-            )}
+            ) : null}
 
             <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}>
-                {sessionLoading && exercises.length === 0 && (
+                {sessionLoading && exercises.length === 0 ? (
                     Array.from({ length: 3 }).map((_, i) => (
                         <Card key={`ex-skeleton-${i}`} variant="glass" style={styles.exerciseCard}>
                             <View style={styles.exHeader}>
@@ -343,9 +436,9 @@ export default function ActiveWorkoutScreen() {
                             <Skeleton width="100%" height={36} />
                         </Card>
                     ))
-                )}
+                ) : null}
 
-                {sessionError && exercises.length === 0 && (
+                {sessionError && exercises.length === 0 ? (
                     <EmptyState
                         icon="cloud-offline-outline"
                         title="Couldn't load workout"
@@ -353,15 +446,15 @@ export default function ActiveWorkoutScreen() {
                         actionLabel="Retry"
                         onAction={() => refetchSession()}
                     />
-                )}
+                ) : null}
 
-                {!sessionLoading && !sessionError && exercises.length === 0 && (
+                {!sessionLoading && !sessionError && exercises.length === 0 ? (
                     <EmptyState
                         icon="barbell-outline"
                         title="No exercises yet"
                         subtitle="Add your first exercise to start logging this workout."
                     />
-                )}
+                ) : null}
 
                 {exercises.map((ex, exIndex) => (
                     <ExerciseCard
@@ -371,14 +464,18 @@ export default function ActiveWorkoutScreen() {
                         lastSet={lastSets?.[ex.name] ?? null}
                         onToggleSet={toggleSet}
                         onUpdateSet={updateSet}
+                        onLogExtraSet={logExtraSet}
                     />
                 ))}
 
+                {/* Honest, functional action: browse the exercise catalogue to add
+                    one (same destination the routed workout screen uses) — never a
+                    silent no-op handler. */}
                 <Button
                     title="Add Exercise"
                     variant="outline"
                     icon={<Ionicons name="add" size={20} color={colors.text.primary} />}
-                    onPress={() => { }}
+                    onPress={() => router.push('/(exercises)')}
                     style={{ marginTop: 8 }}
                 />
             </ScrollView>
@@ -412,6 +509,12 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         borderBottomWidth: 1,
         borderBottomColor: 'transparent',
+    },
+    // Centers the <RestTimer/> ring in the banner, taking the slack between the
+    // leading icon/label and the trailing Close control.
+    restTimerWrap: {
+        flex: 1,
+        alignItems: 'center',
     },
     exerciseCard: {
         padding: 16,
@@ -474,5 +577,10 @@ const styles = StyleSheet.create({
     addSetBtn: {
         marginTop: 12,
         paddingVertical: 12,
-    }
+    },
+    // Spacing wrapper for the revealed <SetLogger/> (the component owns its own
+    // card surface, padding, and border).
+    addSetLogger: {
+        marginTop: 8,
+    },
 });

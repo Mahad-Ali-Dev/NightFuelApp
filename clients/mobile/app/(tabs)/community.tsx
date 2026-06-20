@@ -99,7 +99,10 @@ export default function CommunityTab() {
     }, [likeError]);
 
     // ── Queries ─────────────────────────────────────────────────────────────
-    const { data: feed, isLoading: isFeedLoading, isError: isFeedError, refetch } = useQuery({
+    // `isFetching` is react-query's ground truth for "a fetch (initial OR
+    // refetch) is in flight" — we gate pull-to-refresh on it (below) so a second
+    // pull can't kick off an overlapping getFeed while one is already running.
+    const { data: feed, isLoading: isFeedLoading, isError: isFeedError, isFetching: isFeedFetching, refetch } = useQuery({
         queryKey: ['community-feed'],
         queryFn: () => getFeed(20),
     });
@@ -148,10 +151,22 @@ export default function CommunityTab() {
     });
 
     const onRefresh = useCallback(async () => {
+        // Refetch-in-flight guard: a pull-to-refresh must NOT issue a second
+        // getFeed while one is already running. Gate on react-query's `isFetching`
+        // ground truth (a refetch already in flight) AND our own `refreshing` flag
+        // (a pull already underway) — if either is set, early-return so the gesture
+        // is a no-op instead of stacking an overlapping fetch (which would race the
+        // optimistic like cache and waste a round-trip).
+        if (isFeedFetching || refreshing) return;
         setRefreshing(true);
-        await Promise.all([refetch(), queryClient.invalidateQueries({ queryKey: ['community-challenges'] })]);
-        setRefreshing(false);
-    }, [refetch, queryClient]);
+        try {
+            await Promise.all([refetch(), queryClient.invalidateQueries({ queryKey: ['community-challenges'] })]);
+        } finally {
+            // Always clear the flag — even if refetch rejects — so a failed refresh
+            // can't wedge the guard permanently shut.
+            setRefreshing(false);
+        }
+    }, [isFeedFetching, refreshing, refetch, queryClient]);
 
     // Memoized feed rows — rebuilt only when the feed data itself changes, so
     // unrelated re-renders (e.g. pull-to-refresh state) don't recreate every card.
@@ -365,16 +380,20 @@ const PostItem = React.memo(function PostItem({ post, onLike, onComment, onPress
                     {post.content}
                 </Text>
 
-                {post.imageUrl && (
+                {post.imageUrl ? (
+                    // Ternary-null, not `&&` (rendering-no-falsy-and): an EMPTY-string
+                    // imageUrl is falsy-but-renderable, so `post.imageUrl && …` would
+                    // try to render '' as a raw <View> child and crash. The ternary
+                    // yields `null` instead, never a stray string.
                     <Image source={{ uri: post.imageUrl }} style={[styles.postImg, { borderRadius: borderRadius.xl }]} contentFit="cover" cachePolicy="memory-disk" transition={200} accessibilityLabel="Post image" />
-                )}
+                ) : null}
 
                 <View style={[styles.postActions, { borderTopColor: colors.border.default }]}>
-                    <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button" accessibilityState={{ selected: liked }} accessibilityLabel={`Like, ${post.likes} likes`} style={styles.actionItem} onPress={onLike}>
+                    <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button" accessibilityState={{ selected: liked }} accessibilityLabel={`Like, ${post.likes} ${post.likes === 1 ? 'like' : 'likes'}`} style={styles.actionItem} onPress={onLike}>
                         <Ionicons name={liked ? 'heart' : 'heart-outline'} size={20} color={liked ? colors.accent.coral : colors.text.secondary} />
                         <Text style={[typography.caption, { color: liked ? colors.accent.coral : colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]} maxFontSizeMultiplier={1.4}>{post.likes}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`Comment, ${post.commentsCount} comments`} style={styles.actionItem} onPress={onComment}>
+                    <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`Comment, ${post.commentsCount} ${post.commentsCount === 1 ? 'comment' : 'comments'}`} style={styles.actionItem} onPress={onComment}>
                         <Ionicons name="chatbubble-outline" size={18} color={colors.text.secondary} />
                         <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]} maxFontSizeMultiplier={1.4}>{post.commentsCount}</Text>
                     </TouchableOpacity>

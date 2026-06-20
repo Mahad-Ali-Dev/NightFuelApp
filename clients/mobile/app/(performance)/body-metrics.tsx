@@ -17,19 +17,56 @@ import { typography as typo } from '@/theme/typography';
 
 const { width } = Dimensions.get('window');
 
-const MeasurementInput = ({ label, value, onChange, placeholder }: any) => {
+// Client-side mirror of the user-service updateProfileSchema bounds
+// (services/user-service/src/schemas.ts):
+//   heightCm: z.coerce.number().positive().max(300)  → (0, 300]
+//   weightKg: z.coerce.number().positive().max(600)  → (0, 600]
+// Keep these IDENTICAL to the server. `.positive()` means strictly > 0, so 0 is
+// rejected; NaN (a non-numeric entry) is rejected too. These are a fast, accessible
+// pre-check — the server stays the source of truth.
+export const HEIGHT_CM_MAX = 300;
+export const WEIGHT_KG_MAX = 600;
+
+// Validate an OPTIONAL numeric field (empty string = "not provided" = valid, since
+// the server marks both fields .optional()). When provided it must parse to a finite
+// number in (0, max]. Returns inline validation copy, or null when valid.
+export function validateMeasurement(raw: string, max: number, label: string): string | null {
+    if (raw.trim() === '') return null; // optional — omitting it is fine
+    const n = parseFloat(raw);
+    if (!Number.isFinite(n) || n <= 0) {
+        return `Enter a valid ${label} greater than 0.`;
+    }
+    if (n > max) {
+        return `${label} must be ${max} or less.`;
+    }
+    return null;
+}
+
+const MeasurementInput = ({ label, value, onChange, placeholder, error }: any) => {
     const { colors, typography, borderRadius } = useTheme();
+    const hasError = !!error;
     return (
         <View style={{ marginBottom: 16 }}>
             <Text style={[typography.captionMedium, { color: colors.text.secondary, marginBottom: 8 }]}>{label}</Text>
             <TextInput
-                style={[styles.input, { color: colors.text.primary, backgroundColor: colors.background.tertiary, borderRadius: borderRadius.lg, borderColor: colors.border.default }]}
+                style={[styles.input, { color: colors.text.primary, backgroundColor: colors.background.tertiary, borderRadius: borderRadius.lg, borderColor: hasError ? colors.accent.red : colors.border.default }]}
                 placeholder={placeholder}
                 placeholderTextColor={colors.text.tertiary}
                 keyboardType="numeric"
                 value={value}
                 onChangeText={onChange}
+                accessibilityLabel={label}
             />
+            {hasError ? (
+                <Text
+                    accessibilityRole="alert"
+                    accessibilityLiveRegion="polite"
+                    accessibilityLabel={error}
+                    style={[typography.caption, { color: colors.accent.red, marginTop: 6 }]}
+                >
+                    {error}
+                </Text>
+            ) : null}
         </View>
     );
 };
@@ -72,8 +109,18 @@ export default function BodyMetricsScreen() {
         },
     });
 
+    // Derived (never stored — see react-state-minimize): inline validation copy for
+    // the weight field, mirroring the server weightKg bound (0, 600]. `hasErrors`
+    // gates the Save control so we never fire a body-metrics PATCH the API will 400.
+    const weightError = validateMeasurement(weight, WEIGHT_KG_MAX, 'weight');
+    const hasErrors = weightError !== null;
+    const saveDisabled = mutation.isPending || hasErrors;
+
     const handleLog = () => {
         if (!weight && !bodyFat && !chest && !arm && !waist && !hips && !thigh && !calf) return;
+        // Block the mutation if any provided value is out of the server bounds —
+        // even if a control somehow fires while invalid.
+        if (hasErrors) return;
         mutation.mutate({
             weightKg: weight ? parseFloat(weight) : undefined,
             bodyFatPct: bodyFat ? parseFloat(bodyFat) : undefined,
@@ -127,7 +174,7 @@ export default function BodyMetricsScreen() {
                         <View style={styles.formBody}>
                         <Text style={[typography.h3, { color: colors.text.primary, marginBottom: 20 }]}>Log Today's Metrics</Text>
 
-                        <MeasurementInput label="Weight (kg)" value={weight} onChange={setWeight} placeholder="e.g. 82.5" />
+                        <MeasurementInput label="Weight (kg)" value={weight} onChange={setWeight} placeholder="e.g. 82.5" error={weightError} />
                         <MeasurementInput label="Body Fat %" value={bodyFat} onChange={setBodyFat} placeholder="e.g. 15.2" />
 
                         <TouchableOpacity
@@ -164,10 +211,10 @@ export default function BodyMetricsScreen() {
                         <TouchableOpacity
                             accessibilityRole="button"
                             accessibilityLabel="Save snapshot"
-                            accessibilityState={{ disabled: mutation.isPending, busy: mutation.isPending }}
-                            style={[styles.submitBtn, { backgroundColor: colors.accent.purple, borderRadius: borderRadius.xl, marginTop: 24 }, !mutation.isPending && shadows.glow(colors.accent.purple)]}
+                            accessibilityState={{ disabled: saveDisabled, busy: mutation.isPending }}
+                            style={[styles.submitBtn, { backgroundColor: colors.accent.purple, borderRadius: borderRadius.xl, marginTop: 24 }, saveDisabled && { opacity: 0.5 }, !saveDisabled && shadows.glow(colors.accent.purple)]}
                             onPress={handleLog}
-                            disabled={mutation.isPending}
+                            disabled={saveDisabled}
                             activeOpacity={0.9}
                         >
                             {mutation.isPending ? (

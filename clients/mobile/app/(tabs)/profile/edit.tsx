@@ -13,6 +13,27 @@ import { Button, Skeleton } from '@/components/ui';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 
+// Client-side mirror of the user-service updateProfileSchema bounds for
+// `displayName` (services/user-service/src/schemas.ts → z.string().min(2).max(64)).
+// Keep these IDENTICAL to the server: the server is the source of truth; this is a
+// fast, accessible pre-check so we don't fire a PUT we know the API will 400.
+export const DISPLAY_NAME_MIN = 2;
+export const DISPLAY_NAME_MAX = 64;
+
+// Returns inline validation copy for the display name, or null when valid.
+// Mirrors the server contract: trimmed length must be DISPLAY_NAME_MIN..MAX
+// (all-whitespace collapses to length 0 → rejected, same as the server min(2)).
+export function validateDisplayName(name: string): string | null {
+    const trimmed = name.trim();
+    if (trimmed.length < DISPLAY_NAME_MIN) {
+        return `Name must be at least ${DISPLAY_NAME_MIN} characters.`;
+    }
+    if (trimmed.length > DISPLAY_NAME_MAX) {
+        return `Name must be ${DISPLAY_NAME_MAX} characters or fewer.`;
+    }
+    return null;
+}
+
 export default function EditProfileScreen() {
     const { colors, typography, spacing, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
@@ -55,6 +76,19 @@ export default function EditProfileScreen() {
             Alert.alert('Error', err.message || 'Failed to update profile');
         }
     });
+
+    // Derived (never stored — see react-state-minimize): the inline validation copy
+    // for the display name, and whether Save should be blocked. Save is disabled
+    // while the mutation is in flight OR the name is out of the server bounds.
+    const nameError = validateDisplayName(form.name);
+    const saveDisabled = updateMutation.isPending || nameError !== null;
+
+    const handleSave = () => {
+        // Guard the mutation itself too: even if a control somehow fires while
+        // invalid, never send a PUT the server will reject.
+        if (saveDisabled) return;
+        updateMutation.mutate(form);
+    };
 
     const handlePickImage = async () => {
         const result = await ImagePicker.launchImageLibraryAsync({
@@ -114,12 +148,13 @@ export default function EditProfileScreen() {
                 <Text style={[typography.h3, { color: colors.text.primary }]}>Edit Profile</Text>
                 <TouchableOpacity
                     accessibilityRole="button"
-                    accessibilityState={{ disabled: updateMutation.isPending }}
-                    onPress={() => updateMutation.mutate(form)}
-                    disabled={updateMutation.isPending}
+                    accessibilityLabel="Save"
+                    accessibilityState={{ disabled: saveDisabled, busy: updateMutation.isPending }}
+                    onPress={handleSave}
+                    disabled={saveDisabled}
                     activeOpacity={0.85}
                 >
-                    <Text style={[typography.subhead, { color: colors.accent.purple, fontWeight: 'bold', opacity: updateMutation.isPending ? 0.5 : 1 }]}>Save</Text>
+                    <Text style={[typography.subhead, { color: colors.accent.purple, fontWeight: 'bold', opacity: saveDisabled ? 0.5 : 1 }]}>Save</Text>
                 </TouchableOpacity>
             </View>
 
@@ -148,6 +183,7 @@ export default function EditProfileScreen() {
                         value={form.name}
                         onChangeText={(t: string) => setForm(p => ({ ...p, name: t }))}
                         placeholder="Your full name"
+                        error={nameError}
                     />
                     <InputGroup
                         label="PROFESSION"
@@ -169,16 +205,20 @@ export default function EditProfileScreen() {
                     title={updateMutation.isPending ? 'SAVING...' : 'SAVE CHANGES'}
                     variant="primary"
                     style={{ marginTop: 40, height: 60 }}
-                    onPress={() => updateMutation.mutate(form)}
-                    disabled={updateMutation.isPending}
+                    onPress={handleSave}
+                    disabled={saveDisabled}
+                    accessibilityRole="button"
+                    accessibilityLabel={updateMutation.isPending ? 'Saving changes' : 'Save changes'}
+                    accessibilityState={{ disabled: saveDisabled, busy: updateMutation.isPending }}
                 />
             </ScrollView>
         </KeyboardAvoidingView>
     );
 }
 
-function InputGroup({ label, value, onChangeText, placeholder, multiline, numberOfLines }: any) {
+function InputGroup({ label, value, onChangeText, placeholder, multiline, numberOfLines, error }: any) {
     const { colors, typography, borderRadius } = useTheme();
+    const hasError = !!error;
     return (
         <View style={styles.inputGroup}>
             <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 10 }]}>{label}</Text>
@@ -189,7 +229,9 @@ function InputGroup({ label, value, onChangeText, placeholder, multiline, number
                         color: colors.text.primary,
                         backgroundColor: colors.background.secondary,
                         borderRadius: borderRadius.xl,
-                        borderColor: colors.border.default,
+                        // Surface the invalid state on the field outline too (not colour alone —
+                        // the inline alert below carries the same meaning for AT).
+                        borderColor: hasError ? colors.accent.red : colors.border.default,
                         textAlignVertical: multiline ? 'top' : 'center',
                         height: multiline ? 120 : 56
                     }
@@ -200,7 +242,18 @@ function InputGroup({ label, value, onChangeText, placeholder, multiline, number
                 placeholderTextColor={colors.text.tertiary}
                 multiline={multiline}
                 numberOfLines={numberOfLines}
+                accessibilityLabel={label}
             />
+            {hasError ? (
+                <Text
+                    accessibilityRole="alert"
+                    accessibilityLiveRegion="polite"
+                    accessibilityLabel={error}
+                    style={[typography.caption, { color: colors.accent.red, marginTop: 8 }]}
+                >
+                    {error}
+                </Text>
+            ) : null}
         </View>
     );
 }

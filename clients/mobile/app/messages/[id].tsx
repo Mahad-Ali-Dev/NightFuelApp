@@ -523,44 +523,60 @@ export default function UnifiedChatScreen() {
                 </View>
             ) : (
                 /* Input Bar */
-                <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8, borderTopColor: colors.border.default, backgroundColor: colors.background.primary }]}>
-                    <TextInput
-                        style={[styles.textInput, { backgroundColor: colors.background.secondary, color: colors.text.primary, borderColor: colors.border.default }]}
-                        placeholder={isRecipientPending ? 'Accept the request to reply…' : 'Type a message…'}
-                        placeholderTextColor={colors.text.tertiary}
-                        value={inputText}
-                        onChangeText={handleChangeText}
-                        onSubmitEditing={handleSend}
-                        editable={!composerDisabled}
-                        returnKeyType="send"
-                        multiline
-                        maxLength={4000}
-                    />
-                    <TouchableOpacity
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        accessibilityRole="button"
-                        accessibilityLabel="Send message"
-                        onPress={handleSend}
-                        style={[styles.sendBtn, inputText.trim() && !composerDisabled ? shadows.glow(colors.accent.coral) : undefined]}
-                        disabled={!inputText.trim() || composerDisabled}
-                        activeOpacity={0.85}
-                    >
-                        {inputText.trim() && !composerDisabled ? (
-                            <LinearGradient
-                                colors={colors.gradients.coral}
-                                start={{ x: 0, y: 0 }}
-                                end={{ x: 1, y: 1 }}
-                                style={styles.sendBtnInner}
+                (() => {
+                    // Single source of truth for the Send affordance — the SAME guard
+                    // handleSend enforces (empty/whitespace-only input OR a locked
+                    // composer). Derived here so the `disabled` prop, the glow, the
+                    // fill ternary, AND the honest accessibilityState/label can never
+                    // drift apart. `!sendDisabled` is the exact De Morgan twin of the
+                    // prior `inputText.trim() && !composerDisabled`, so the rendered
+                    // behaviour is unchanged.
+                    const sendDisabled = !inputText.trim() || composerDisabled;
+                    return (
+                        <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8, borderTopColor: colors.border.default, backgroundColor: colors.background.primary }]}>
+                            <TextInput
+                                style={[styles.textInput, { backgroundColor: colors.background.secondary, color: colors.text.primary, borderColor: colors.border.default }]}
+                                placeholder={isRecipientPending ? 'Accept the request to reply…' : 'Type a message…'}
+                                placeholderTextColor={colors.text.tertiary}
+                                value={inputText}
+                                onChangeText={handleChangeText}
+                                onSubmitEditing={handleSend}
+                                editable={!composerDisabled}
+                                returnKeyType="send"
+                                multiline
+                                maxLength={4000}
+                            />
+                            <TouchableOpacity
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                accessibilityRole="button"
+                                // Honest label + state: a screen reader announces the
+                                // disabled affordance, and the label tells WHY there's
+                                // nothing to send yet (mirrors the hardened Ria composer).
+                                accessibilityLabel={sendDisabled ? 'Send message, disabled' : 'Send message'}
+                                accessibilityState={{ disabled: sendDisabled }}
+                                onPress={handleSend}
+                                style={[styles.sendBtn, sendDisabled ? undefined : shadows.glow(colors.accent.coral)]}
+                                disabled={sendDisabled}
+                                activeOpacity={0.85}
                             >
-                                <Ionicons name="send" size={20} color={colors.text.primary} />
-                            </LinearGradient>
-                        ) : (
-                            <View style={[styles.sendBtnInner, { backgroundColor: colors.background.secondary, borderWidth: 1, borderColor: colors.border.default }]}>
-                                <Ionicons name="send" size={20} color={colors.text.tertiary} />
-                            </View>
-                        )}
-                    </TouchableOpacity>
-                </View>
+                                {sendDisabled ? (
+                                    <View style={[styles.sendBtnInner, { backgroundColor: colors.background.secondary, borderWidth: 1, borderColor: colors.border.default }]}>
+                                        <Ionicons name="send" size={20} color={colors.text.tertiary} />
+                                    </View>
+                                ) : (
+                                    <LinearGradient
+                                        colors={colors.gradients.coral}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={styles.sendBtnInner}
+                                    >
+                                        <Ionicons name="send" size={20} color={colors.text.primary} />
+                                    </LinearGradient>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    );
+                })()
             )}
         </KeyboardAvoidingView>
     );

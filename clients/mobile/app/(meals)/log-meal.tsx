@@ -20,6 +20,23 @@ const MT = [
     { id:'SNACK', label:'Snack', img:require('../../assets/images/meal-snack.png'), color:'#00D4FF' },
 ];
 type PlateItem = {name:string;calories:number;protein:number;carbs:number;fat:number;qty:number};
+// Plate quantity is button-driven (+/- 0.5, floored at 0.5) but a barcode
+// prefill or a corrupted param could still seed a non-finite/non-positive qty
+// that would multiply through into fabricated macros and the log payload.
+// (Number.isFinite discipline, no new dep.)
+const QTY_FLOOR = 0.5;
+// A qty is "usable" only when it's a finite number > 0. Anything else (NaN,
+// 0, negative, Infinity) is never multiplied into a real macro.
+const isUsableQty = (n:number):boolean => Number.isFinite(n) && n > 0;
+// For the +/- buttons: clamp the live qty back to the 0.5 floor if it ever drifts
+// non-usable, so the on-screen stepper always shows a sane positive value.
+const safeQty = (n:number):number => (isUsableQty(n) ? n : QTY_FLOOR);
+// For macro MATH (totals + payload): an unusable qty contributes ZERO rather than
+// a fabricated/floored number — so a corrupt qty yields no macro output at all.
+const qtyForMath = (n:number):number => (isUsableQty(n) ? n : 0);
+// Coerce a possibly-NaN macro (e.g. Number(params.barcodeCalories)) to 0 so a
+// non-numeric param can never propagate a NaN into the macro math or the payload.
+const safeNum = (n:number):number => (Number.isFinite(n) ? n : 0);
 export default function LogMealScreen() {
     const { colors, typography } = useTheme();
     const insets = useSafeAreaInsets();
@@ -47,7 +64,7 @@ export default function LogMealScreen() {
         onSuccess:()=>{ qc.invalidateQueries({queryKey:['meal-logs']}); qc.invalidateQueries({queryKey:['daily-progress']}); router.push('/(tabs)/nutrition' as any); },
         onError:(err:any)=>Alert.alert('Error', getErrorMessage(err)),
     });
-    const totals = useMemo(()=>plate.reduce((a,i)=>({calories:a.calories+i.calories*i.qty,protein:a.protein+i.protein*i.qty,carbs:a.carbs+i.carbs*i.qty,fat:a.fat+i.fat*i.qty}),{calories:0,protein:0,carbs:0,fat:0}),[plate]);
+    const totals = useMemo(()=>plate.reduce((a,i)=>{const q=qtyForMath(i.qty);return {calories:a.calories+safeNum(i.calories)*q,protein:a.protein+safeNum(i.protein)*q,carbs:a.carbs+safeNum(i.carbs)*q,fat:a.fat+safeNum(i.fat)*q};},{calories:0,protein:0,carbs:0,fat:0}),[plate]);
     const addToPlate = (item:FoodItem) => {
         if(plate.find(p=>p.name===item.name)) return;
         setPlate(prev=>[...prev,{name:item.name,calories:item.calories,protein:item.protein,carbs:item.carbs,fat:item.fat,qty:1}]);
@@ -67,10 +84,10 @@ export default function LogMealScreen() {
         if(params.barcodeName && plate.length===0){
             setPlate([{
                 name:     params.barcodeName,
-                calories: Number(params.barcodeCalories ?? 0),
-                protein:  Number(params.barcodeProtein  ?? 0),
-                carbs:    Number(params.barcodeCarbs    ?? 0),
-                fat:      Number(params.barcodeFat      ?? 0),
+                calories: safeNum(Number(params.barcodeCalories ?? 0)),
+                protein:  safeNum(Number(params.barcodeProtein  ?? 0)),
+                carbs:    safeNum(Number(params.barcodeCarbs    ?? 0)),
+                fat:      safeNum(Number(params.barcodeFat      ?? 0)),
                 qty:      1,
             }]);
         }
@@ -79,7 +96,16 @@ export default function LogMealScreen() {
     const mc = MT.find(m=>m.id===mealType)!;
     const handleLog = () => {
         if(!mc||plate.length===0) return;
-        logM.mutate({ mealType, foodItems:plate.map(i=>({name:i.name,quantity:i.qty,calories:i.calories*i.qty,protein:i.protein*i.qty,carbs:i.carbs*i.qty,fat:i.fat*i.qty})) });
+        // Build the payload from guarded numbers so a non-finite/non-positive qty
+        // or a NaN macro can never be logged as a fabricated value: EXCLUDE any item
+        // whose qty isn't a finite number > 0 (no fabricated entry), then coerce each
+        // macro finite before multiplying. If nothing usable remains, don't fire the
+        // mutation at all (no silent empty/garbage log).
+        const foodItems = plate
+            .filter(i=>i.name && isUsableQty(i.qty))
+            .map(i=>({name:i.name,quantity:i.qty,calories:safeNum(i.calories)*i.qty,protein:safeNum(i.protein)*i.qty,carbs:safeNum(i.carbs)*i.qty,fat:safeNum(i.fat)*i.qty}));
+        if(foodItems.length===0) return;
+        logM.mutate({ mealType, foodItems });
     };
     return (
         <View style={[s.container,{backgroundColor:colors.background.primary}]}>
@@ -106,17 +132,17 @@ export default function LogMealScreen() {
                     <View style={s.searchBox}>
                         <Ionicons name="search" size={18} color={colors.text.tertiary} />
                         <TextInput style={[s.searchIn,{color:colors.text.primary}]} placeholder="Search food..." placeholderTextColor={colors.text.tertiary} value={sq} onChangeText={setSq} />
-                        {sq.length>0&&<TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Clear" onPress={()=>setSq('')}><Ionicons name="close-circle" size={18} color={colors.text.tertiary} /></TouchableOpacity>}
+                        {sq.length>0?<TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Clear" onPress={()=>setSq('')}><Ionicons name="close-circle" size={18} color={colors.text.tertiary} /></TouchableOpacity>:null}
                     </View>
                 </GlassCard>
-                {searchQ.isLoading&&(
+                {searchQ.isLoading?(
                     <View style={{marginHorizontal:20,marginBottom:16}}>
                         {[0,1,2].map((i)=>(
                             <Skeleton key={i} width="100%" height={62} radius={borderRadius.md} style={{marginBottom:8}} />
                         ))}
                     </View>
-                )}
-                {sq.length>2&&!searchQ.isLoading&&searchQ.isError&&(
+                ):null}
+                {sq.length>2&&!searchQ.isLoading&&searchQ.isError?(
                     <View style={{marginHorizontal:20,marginBottom:16}}>
                         <EmptyState
                             icon="cloud-offline-outline"
@@ -126,8 +152,8 @@ export default function LogMealScreen() {
                             onAction={()=>searchQ.refetch()}
                         />
                     </View>
-                )}
-                {sq.length>2&&(searchQ.data as FoodItem[]||[]).length>0&&(
+                ):null}
+                {sq.length>2&&(searchQ.data as FoodItem[]||[]).length>0?(
                     <View style={{marginHorizontal:20,marginBottom:16}}>
                         {(searchQ.data as FoodItem[]).slice(0,6).map((item)=>(
                             <TouchableOpacity key={item.id} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`Add ${item.name}`} style={[s.searchResult,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]} onPress={()=>addToPlate(item)}>
@@ -139,8 +165,8 @@ export default function LogMealScreen() {
                             </TouchableOpacity>
                         ))}
                     </View>
-                )}
-                {plate.length>0&&(
+                ):null}
+                {plate.length>0?(
                     <View style={{paddingHorizontal:20}}>
                         <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
                             <Text style={[typography.h3,{color:colors.text.primary}]}>Your Plate</Text>
@@ -151,12 +177,12 @@ export default function LogMealScreen() {
                                 <View style={[s.plateAccent,{backgroundColor:mc?.color||colors.accent.coral}]} />
                                 <View style={{flex:1,paddingLeft:12}}>
                                     <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold'}]} numberOfLines={1}>{item.name}</Text>
-                                    <Text style={[typography.caption,{color:colors.text.secondary}]}>{Math.round(item.calories*item.qty)} kcal • P:{Math.round(item.protein*item.qty)}g</Text>
+                                    <Text style={[typography.caption,{color:colors.text.secondary}]}>{Math.round(safeNum(item.calories)*qtyForMath(item.qty))} kcal • P:{Math.round(safeNum(item.protein)*qtyForMath(item.qty))}g</Text>
                                 </View>
                                 <View style={s.qtyRow}>
-                                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Decrease" onPress={()=>setPlate(plate.map((p,i)=>i===idx?{...p,qty:Math.max(0.5,p.qty-0.5)}:p))}><Ionicons name="remove-circle-outline" size={20} color={colors.text.tertiary} /></TouchableOpacity>
-                                    <Text style={[typography.caption,{color:colors.text.primary,fontWeight:'bold',marginHorizontal:6}]}>{item.qty}x</Text>
-                                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Increase" onPress={()=>setPlate(plate.map((p,i)=>i===idx?{...p,qty:p.qty+0.5}:p))}><Ionicons name="add-circle-outline" size={20} color={colors.accent.coral} /></TouchableOpacity>
+                                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Decrease" onPress={()=>setPlate(plate.map((p,i)=>i===idx?{...p,qty:Math.max(QTY_FLOOR,safeQty(p.qty)-0.5)}:p))}><Ionicons name="remove-circle-outline" size={20} color={colors.text.tertiary} /></TouchableOpacity>
+                                    <Text style={[typography.caption,{color:colors.text.primary,fontWeight:'bold',marginHorizontal:6}]}>{safeQty(item.qty)}x</Text>
+                                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Increase" onPress={()=>setPlate(plate.map((p,i)=>i===idx?{...p,qty:safeQty(p.qty)+0.5}:p))}><Ionicons name="add-circle-outline" size={20} color={colors.accent.coral} /></TouchableOpacity>
                                 </View>
                                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Delete" style={{paddingLeft:8}} onPress={()=>setPlate(plate.filter((_,i)=>i!==idx))}><Ionicons name="trash-outline" size={18} color={colors.accent.coral} /></TouchableOpacity>
                             </View>
@@ -172,14 +198,14 @@ export default function LogMealScreen() {
                             </View>
                         </GlassCard>
                     </View>
-                )}
-                {plate.length===0&&sq.length===0&&(
+                ):null}
+                {plate.length===0&&sq.length===0?(
                     <EmptyState
                         icon="restaurant-outline"
                         title="Build your plate"
                         subtitle="Search for a food above to start adding items, then log them all at once."
                     />
-                )}
+                ):null}
             </ScrollView>
             <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,20)}]}>
                 <CtaButton
