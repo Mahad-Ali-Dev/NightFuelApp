@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Alert, Dimensions, FlatList
+    ActivityIndicator, Dimensions, FlatList
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -19,6 +19,29 @@ import { typography as typo } from '@/theme/typography';
 
 const { width } = Dimensions.get('window');
 
+// Hoisted Intl formatter (js-hoist-intl): the history-tab dates use a static
+// locale/style, so the DateTimeFormat is built once at module scope rather than
+// per render. Used only behind the parse guard below so an unparseable
+// `item.date` never reaches it.
+const historyDateFmt = new Intl.DateTimeFormat(undefined, { dateStyle: 'short' });
+
+// Render a calendar date for the history tab, or '' when the value is missing /
+// unparseable — so a malformed `item.date` prints nothing instead of leaking
+// 'Invalid Date'. The empty string renders cleanly inside its <Text>.
+function formatHistoryDate(raw: string | null | undefined): string {
+    if (!raw) return '';
+    const t = new Date(raw).getTime();
+    return Number.isNaN(t) ? '' : historyDateFmt.format(t);
+}
+
+// Finite-guard a report score: a NaN/undefined/Infinity score collapses to 0 so
+// the numeral never renders 'NaN'/'undefined'/'Infinity' and the colour
+// threshold below stays deterministic (a non-finite score would otherwise fall
+// through every `>=` comparison to red AND print garbage in the badge).
+function safeScore(score: number | null | undefined): number {
+    return Number.isFinite(score) ? Math.round(score as number) : 0;
+}
+
 export default function AIReportsScreen() {
     const { colors, typography, spacing, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
@@ -26,6 +49,10 @@ export default function AIReportsScreen() {
     const queryClient = useQueryClient();
 
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    // Outcome of the last generate-audit run, driving the inline accessible
+    // banner below (replaces the old native alert pop-ups). `null` = nothing to
+    // announce; 'success'/'error' surface the matching role="alert" copy.
+    const [auditStatus, setAuditStatus] = useState<null | 'success' | 'error'>(null);
 
     const { data: reports = [], isLoading, isError, refetch } = useQuery({
         queryKey: ['performance-reports'],
@@ -36,10 +63,17 @@ export default function AIReportsScreen() {
         mutationFn: generateWeeklyAudit,
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['performance-reports'] });
-            Alert.alert('Success', 'New weekly audit generated!');
+            setAuditStatus('success');
         },
-        onError: () => Alert.alert('Error', 'Failed to generate audit. Try again later.'),
+        onError: () => setAuditStatus('error'),
     });
+
+    // Clear any prior outcome, then kick off generation (used by the header
+    // affordance, the empty-state CTA, and the inline error Retry).
+    const runGenerate = useCallback(() => {
+        setAuditStatus(null);
+        generateMutation.mutate();
+    }, [generateMutation]);
 
     const activeReport = reports.find(r => r.id === selectedId) || reports[0];
 
@@ -49,6 +83,67 @@ export default function AIReportsScreen() {
             setSelectedId(reports[0].id);
         }
     }, [reports, selectedId]);
+
+    // Inline, accessible outcome banner for the generate-audit mutation — the
+    // honest-state replacement for the old native alert pop-ups. Driven by genuine
+    // mutation state (`auditStatus`), it announces success/failure in-tree via a
+    // role="alert" live region (verbatim copy) and offers a Retry on failure that
+    // re-invokes the mutation. Rendered with explicit ternary-null so the empty
+    // string / null case never leaks a stray child. Hidden while a run is in
+    // flight (the header/ CTA spinner already signals "working"). Mounted in BOTH
+    // the empty and loaded states so the affordance's feedback is always present.
+    const auditBanner = auditStatus && !generateMutation.isPending ? (
+        <GlassCard
+            glow={auditStatus === 'success' ? colors.accent.emerald : colors.accent.red}
+            style={styles.auditBanner}
+        >
+            <View style={styles.auditBannerInner}>
+                {/* The role="alert" live region wraps ONLY the message (icon +
+                    copy) and is marked `accessible` so screen readers announce it
+                    as one node. The Retry below is a SIBLING (outside the
+                    accessible container) so it stays independently focusable on
+                    iOS — a control nested inside an `accessible` View is collapsed
+                    away from VoiceOver. */}
+                <View
+                    accessible
+                    accessibilityRole="alert"
+                    accessibilityLiveRegion="polite"
+                    style={{ flexDirection: 'row', alignItems: 'flex-start' }}
+                >
+                    <Ionicons
+                        name={auditStatus === 'success' ? 'checkmark-circle' : 'alert-circle'}
+                        size={20}
+                        color={auditStatus === 'success' ? colors.accent.emerald : colors.accent.red}
+                        style={{ marginTop: 1 }}
+                    />
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>
+                            {auditStatus === 'success' ? 'Audit ready' : 'Generation failed'}
+                        </Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2, lineHeight: 18 }]}>
+                            {auditStatus === 'success'
+                                ? 'New weekly audit generated!'
+                                : 'Failed to generate audit. Try again later.'}
+                        </Text>
+                    </View>
+                </View>
+                {auditStatus === 'error' ? (
+                    <TouchableOpacity
+                        style={[styles.retryBtn, { borderColor: colors.accent.red }]}
+                        onPress={runGenerate}
+                        accessibilityRole="button"
+                        accessibilityLabel="Try again"
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="refresh" size={16} color={colors.accent.red} />
+                        <Text style={[typography.caption, { color: colors.accent.red, fontWeight: '700', marginLeft: 6 }]}>
+                            Try Again
+                        </Text>
+                    </TouchableOpacity>
+                ) : null}
+            </View>
+        </GlassCard>
+    ) : null;
 
     const keyExtractor = useCallback((item: PerformanceReport) => item.id, []);
 
@@ -73,7 +168,7 @@ export default function AIReportsScreen() {
                 {item.weekRange}
             </Text>
             <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>
-                {new Date(item.date).toLocaleDateString()}
+                {formatHistoryDate(item.date)}
             </Text>
         </TouchableOpacity>
     ), [selectedId, colors, typography, borderRadius, shadows]);
@@ -152,7 +247,7 @@ export default function AIReportsScreen() {
                 <Text style={[typography.h3, { color: colors.text.primary }]}>AI Performance Reports</Text>
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Generate with AI"
                     activeOpacity={0.85}
-                    onPress={() => generateMutation.mutate()}
+                    onPress={runGenerate}
                     disabled={generateMutation.isPending}
                     style={[styles.headerBtn, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.3) }]}
                 >
@@ -173,10 +268,11 @@ export default function AIReportsScreen() {
                     />
                     <Button
                         title="Generate First Audit"
-                        onPress={() => generateMutation.mutate()}
+                        onPress={runGenerate}
                         disabled={generateMutation.isPending}
                         style={{ marginTop: spacing.sm, minWidth: 220 }}
                     />
+                    {auditBanner}
                 </View>
             ) : (
                 <View style={{ flex: 1 }}>
@@ -195,11 +291,14 @@ export default function AIReportsScreen() {
                         />
                     </View>
 
+                    {auditBanner}
+
                     {activeReport && (
                         <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}>
                             {/* Score Banner */}
                             {(() => {
-                                const scoreColor = activeReport.score >= 80 ? colors.accent.emerald : activeReport.score >= 60 ? colors.accent.amber : colors.accent.red;
+                                const score = safeScore(activeReport.score);
+                                const scoreColor = score >= 80 ? colors.accent.emerald : score >= 60 ? colors.accent.amber : colors.accent.red;
                                 return (
                                     <GlassCard glow={scoreColor} style={styles.scoreCard}>
                                         <LinearGradient
@@ -214,7 +313,7 @@ export default function AIReportsScreen() {
                                             </View>
                                             <View style={[styles.scoreBadge, { backgroundColor: withAlpha(scoreColor, 0.16), borderColor: withAlpha(scoreColor, 0.4) }]}>
                                                 <Text style={[styles.scoreText, { color: scoreColor }]}>
-                                                    {activeReport.score}
+                                                    {score}
                                                 </Text>
                                             </View>
                                         </LinearGradient>
@@ -291,4 +390,7 @@ const styles = StyleSheet.create({
     sectionTitleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
     bulletItem: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
     focusCard: { padding: 20, borderWidth: 1 },
+    auditBanner: { marginHorizontal: 20, marginTop: 16 },
+    auditBannerInner: { padding: 16 },
+    retryBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginTop: 12, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderRadius: 999 },
 });

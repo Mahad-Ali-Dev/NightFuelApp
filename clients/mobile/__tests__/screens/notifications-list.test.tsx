@@ -28,6 +28,15 @@
  *      ("Unread. <title>. <body>"); tapping an UNREAD row calls markRead's mutate
  *      once with that row's id, while tapping a READ row calls it zero times (the
  *      onPress is guarded by `!item.read`).
+ *   6. MARK-READ FAILURE → inline GlassCard alert (replaces Alert.alert) — when the
+ *      markRead mutation FAILS, the screen surfaces the inline GlassCard status
+ *      (testID `mark-read-error`) announced via accessibilityRole="alert" + a
+ *      polite live region (NOT Alert.alert), and its Retry re-invokes markRead's
+ *      mutate exactly once with the failed id (a genuine retry, never a fabricated
+ *      success).
+ *   7. MARK-READ SUCCESS → no alert, invalidates ['notifications'] — when the
+ *      markRead mutation SUCCEEDS, NO inline alert renders and the screen
+ *      invalidates the ['notifications'] query so the list refetches.
  *
  * react-native-skills cited & how this suite locks them:
  *   - state-ground-truth: the screen renders straight off the query's
@@ -70,13 +79,33 @@ const mockRefetch = jest.fn();
 type NotifQueryState = { data: any; isLoading: boolean; isError: boolean };
 const mockNotifQuery: NotifQueryState = { data: undefined, isLoading: false, isError: false };
 
-// The markRead mutation's `mutate` spy — the row's onPress calls this with the
-// row id (guarded by `!item.read`). A plain spy is enough to prove the wiring.
+// The markRead mutation's `mutate` spy — the row's onPress (and the inline-error
+// Retry) call this with the row id (guarded by `!item.read`). It records every
+// call so the unread-only wiring AND the Retry re-invoke (with the failed id) are
+// assertable.
 const mockMutate = jest.fn();
 
+// Controllable mark-read mutation outcome (mirrors notification-preferences.test).
+// 'idle' → mutate captures the call but drives no callback (tests 1-5 want this so
+// onSuccess/onError don't fire); 'success' → mutate runs the screen's onSuccess;
+// 'error' → mutate runs the screen's onError with the passed id as the variables
+// arg (TanStack onError signature is (error, variables, context)) — that id is
+// what the screen stores as the failed id.
+type MutationMode = 'idle' | 'success' | 'error';
+const mockMutation: { mode: MutationMode; isPending: boolean } = { mode: 'idle', isPending: false };
+
+// Stable invalidateQueries spy so the success-path test can assert the screen
+// invalidates the ['notifications'] query (a fresh jest.fn per call would not be
+// observable across the render).
+const mockInvalidate = jest.fn(() => Promise.resolve());
+
 // react-query: branch useQuery on queryKey[0] so ['notifications'] reads the
-// holder above + the shared refetch spy. useMutation returns the markRead spy;
-// useQueryClient exposes an inert invalidateQueries (called in onSuccess).
+// holder above + the shared refetch spy. useMutation CAPTURES the screen's
+// onSuccess/onError config and drives them synchronously per mockMutation.mode so
+// the screen's REAL mark-read feedback logic (setMarkReadError / invalidate) runs
+// without pulling in real react-query; `mockMutate` records each (vars) so the
+// unread-only wiring + the Retry re-invoke are assertable. useQueryClient exposes
+// the stable invalidate spy (called in onSuccess).
 jest.mock('@tanstack/react-query', () => ({
     useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
         if (queryKey[0] === 'notifications') {
@@ -89,8 +118,20 @@ jest.mock('@tanstack/react-query', () => ({
         }
         return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
     },
-    useMutation: () => ({ mutate: mockMutate, isPending: false, isError: false, reset: jest.fn() }),
-    useQueryClient: () => ({ invalidateQueries: jest.fn(() => Promise.resolve()) }),
+    useMutation: (config: any) => ({
+        isPending: mockMutation.isPending,
+        isError: false,
+        reset: jest.fn(),
+        mutate: (vars: unknown) => {
+            mockMutate(vars);
+            if (mockMutation.mode === 'success') {
+                config?.onSuccess?.(undefined, vars, undefined);
+            } else if (mockMutation.mode === 'error') {
+                config?.onError?.(new Error('mark-read failed'), vars, undefined);
+            }
+        },
+    }),
+    useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
 }));
 
 // The api module the screen statically imports. Plain jest.fns: useQuery /
@@ -196,6 +237,10 @@ beforeEach(() => {
     mockNotifQuery.data = undefined;
     mockNotifQuery.isLoading = false;
     mockNotifQuery.isError = false;
+    // Default the mutation to idle so tests 1-5 capture mutate() calls WITHOUT
+    // firing the screen's onSuccess/onError (the failure/success suites opt in).
+    mockMutation.mode = 'idle';
+    mockMutation.isPending = false;
 });
 
 describe('NotificationsScreen (in-app notification list)', () => {
@@ -326,5 +371,70 @@ describe('NotificationsScreen (in-app notification list)', () => {
         // so markRead is never fired again.
         fireEvent.press(readRow);
         expect(mockMutate).toHaveBeenCalledTimes(1);
+    });
+
+    // ── State 6: MARK-READ FAILURE → inline GlassCard alert (no Alert.alert) ────
+    it('mark-read failure: surfaces the inline GlassCard alert (role=alert, polite live region) and its Retry re-invokes markRead once with the failed id', async () => {
+        // The mutation will FAIL: the screen's onError fires with the tapped id as
+        // the variables arg, and the screen stores it as the failed id.
+        mockMutation.mode = 'error';
+        mockNotifQuery.data = [
+            makeNotification({ id: 'unread-1', title: 'New PR', body: 'You hit a new best.', read: false }),
+        ];
+
+        renderScreen();
+
+        // No inline alert before any mark-read attempt.
+        expect(screen.queryByTestId('mark-read-error')).toBeNull();
+        expect(screen.queryByRole('alert')).toBeNull();
+
+        // Tap the unread row → markRead fires (recorded) and, because the mutation
+        // fails, the screen's onError sets the failed id.
+        fireEvent.press(screen.getByLabelText('Unread. New PR. You hit a new best.'));
+        expect(mockMutate).toHaveBeenCalledTimes(1);
+        expect(mockMutate).toHaveBeenCalledWith('unread-1');
+
+        // The INLINE GlassCard failure surface renders (testID-addressable),
+        // announced as a polite alert region — NOT Alert.alert.
+        const errorCard = await screen.findByTestId('mark-read-error');
+        expect(errorCard).toBeTruthy();
+        expect(screen.getByText("Couldn't mark as read")).toBeTruthy();
+        const alert = screen.getByRole('alert');
+        expect(alert.props.accessibilityLiveRegion).toBe('polite');
+
+        // The Retry affordance is an independently-focusable button that re-invokes
+        // markRead's mutate exactly once MORE with the SAME failed id — a genuine
+        // retry of the failed id, never a fabricated success.
+        const retry = screen.getByTestId('mark-read-error-retry');
+        expect(retry.props.accessibilityRole).toBe('button');
+        fireEvent.press(retry);
+        expect(mockMutate).toHaveBeenCalledTimes(2);
+        expect(mockMutate).toHaveBeenNthCalledWith(2, 'unread-1');
+    });
+
+    // ── State 7: MARK-READ SUCCESS → no alert, invalidates ['notifications'] ────
+    it('mark-read success: renders NO inline alert and invalidates the ["notifications"] query', () => {
+        // The mutation will SUCCEED: the screen's onSuccess clears any failed id and
+        // invalidates the list query.
+        mockMutation.mode = 'success';
+        mockNotifQuery.data = [
+            makeNotification({ id: 'unread-1', title: 'New PR', body: 'You hit a new best.', read: false }),
+        ];
+
+        renderScreen();
+
+        // Tap the unread row → markRead fires and succeeds.
+        fireEvent.press(screen.getByLabelText('Unread. New PR. You hit a new best.'));
+        expect(mockMutate).toHaveBeenCalledTimes(1);
+        expect(mockMutate).toHaveBeenCalledWith('unread-1');
+
+        // NO inline failure alert on the success path.
+        expect(screen.queryByTestId('mark-read-error')).toBeNull();
+        expect(screen.queryByRole('alert')).toBeNull();
+        expect(screen.queryByText("Couldn't mark as read")).toBeNull();
+
+        // The screen invalidated the ['notifications'] query so the list refetches.
+        expect(mockInvalidate).toHaveBeenCalledTimes(1);
+        expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['notifications'] });
     });
 });

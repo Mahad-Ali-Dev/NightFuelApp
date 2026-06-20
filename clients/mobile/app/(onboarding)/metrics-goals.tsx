@@ -17,6 +17,14 @@ const SEX_OPTIONS = [
     { value: 'PREFER_NOT_TO_SAY', label: 'Prefer not to say', icon: 'help-circle' },
 ];
 
+// Hard cap on the raw characters the numeric weight/height TextInputs accept.
+// The backend range is weightKg (0, 600] / heightCm (0, 300] (user-service
+// schema), so the longest legitimate entry is a one-decimal value like "600.5"
+// / "180.5" — well under 6 chars. The cap stops a worker pasting an arbitrarily
+// long string into the field (the Input spreads ...props to its TextInput, so
+// passing maxLength is purely additive — the shared Input is NOT modified).
+export const MEASUREMENT_MAX_LENGTH = 6;
+
 export default function BiologicalDataScreen() {
     const { colors, typography, spacing, borderRadius } = useTheme();
     const router = useRouter();
@@ -52,6 +60,16 @@ export default function BiologicalDataScreen() {
     const heightError = height.length > 0 && !(heightNum > 0)
         ? 'Enter a height greater than 0'
         : undefined;
+
+    // Single live-region summary of whichever inline errors are currently
+    // active. The shared Input renders its OWN per-field error <Text> (which has
+    // no alert role — Input.tsx is left untouched), so this sibling node is the
+    // accessible announcement: a polite alert that a screen reader speaks when
+    // an entry becomes invalid. Reuses the already-computed *Error strings — no
+    // duplicate validation.
+    const validationSummary = [dobError, weightError, heightError]
+        .filter(Boolean)
+        .join('. ');
 
     const handleNext = () => {
         updateData({
@@ -92,10 +110,12 @@ export default function BiologicalDataScreen() {
                     <View style={{ flex: 1 }}>
                         <Input
                             label="Weight (kg)"
+                            accessibilityLabel="Weight (kg)"
                             placeholder="75"
                             value={weight}
                             onChangeText={setWeight}
                             keyboardType="numeric"
+                            maxLength={MEASUREMENT_MAX_LENGTH}
                             error={weightError}
                         />
                     </View>
@@ -103,10 +123,12 @@ export default function BiologicalDataScreen() {
                     <View style={{ flex: 1 }}>
                         <Input
                             label="Height (cm)"
+                            accessibilityLabel="Height (cm)"
                             placeholder="180"
                             value={height}
                             onChangeText={setHeight}
                             keyboardType="numeric"
+                            maxLength={MEASUREMENT_MAX_LENGTH}
                             error={heightError}
                         />
                     </View>
@@ -146,6 +168,21 @@ export default function BiologicalDataScreen() {
                         )
                     })}
                 </GlassCard>
+
+                {validationSummary ? (
+                    <Text
+                        accessible
+                        accessibilityRole="alert"
+                        accessibilityLiveRegion="polite"
+                        accessibilityLabel={validationSummary}
+                        style={[
+                            typography.caption,
+                            { color: colors.error, marginTop: spacing.md },
+                        ]}
+                    >
+                        {validationSummary}
+                    </Text>
+                ) : null}
             </ScrollView>
 
             <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: spacing['2xl'] }]}>

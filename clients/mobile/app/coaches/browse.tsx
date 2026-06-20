@@ -75,8 +75,8 @@ export default function CoachesBrowseScreen() {
                                     <Text style={[typography.captionMedium, { color: colors.accent.cyan, marginTop: 4 }]}>{coach.speciality}</Text>
                                     <View style={styles.statsRow}>
                                         <Ionicons name="star" size={14} color={colors.accent.amber} />
-                                        <Text style={[typography.captionMedium, { color: colors.text.primary, marginLeft: 4 }]}>{coach.rating?.toFixed(1) || '5.0'}</Text>
-                                        <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 8 }]}>• {coach.clients || 0} active clients</Text>
+                                        <Text style={[typography.captionMedium, { color: colors.text.primary, marginLeft: 4 }]}>{Number.isFinite(coach.rating) ? coach.rating.toFixed(1) : '5.0'}</Text>
+                                        <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 8 }]}>• {Number.isFinite(coach.clients) ? coach.clients : 0} active clients</Text>
                                     </View>
                                 </View>
                             </View>

@@ -1240,6 +1240,58 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   'One-Arm Kettlebell Split Jerk': 'One-Arm_Kettlebell_Split_Jerk',
   'One-Arm Kettlebell Split Snatch': 'One-Arm_Kettlebell_Split_Snatch',
   'One-Arm Kettlebell Clean and Jerk': 'One-Arm_Kettlebell_Clean_and_Jerk',
+
+  // ── Widened FEDB-backed tranche #20 (data-only, zero new fetch) ──────────────
+  // A further slice of distinct catalogue movements — this tranche leans into the
+  // medicine-ball throws, plyometric/agility/sprint drills, kettlebell get-up &
+  // windmill accessory work, banded resistance accessories and neck/wrist
+  // isolation the earlier tranches still under-covered. Every KEY below is NEW —
+  // absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries above (tranches
+  // #1-#19), YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos() admits each
+  // one as kind:'fedb_frames', verified:false (precedence: an already-set name is
+  // skipped). Every slug VALUE was machine-verified to be present in BOTH
+  // FEDB_SLUGS (exerciseDemos.ts) AND __tests__/fixtures/fedb-catalog-slugs.json
+  // (the shipped 873-slug catalogue), and each is a fresh slug dir not already
+  // referenced by an earlier tranche — so every entry resolves to an ordered
+  // 2-frame [0.jpg, 1.jpg] HTTPS pair via fedbPair() with NO new HTTP call.
+  // Strictly additive: the kind:'youtube'-only sync guard
+  // (scripts/check-demo-maps-in-sync.js) and pendingHumanReviewIds.json (YouTube
+  // ids only) are both untouched, so check-demo-maps-in-sync stays green. A 200-ok
+  // URL is NOT a movement review, so nothing here is verified:true — that remains
+  // a human-gated step.
+
+  // Medicine-ball throws / power
+  'Backward Medicine Ball Throw': 'Backward_Medicine_Ball_Throw',
+  'Medicine Ball Scoop Throw': 'Medicine_Ball_Scoop_Throw',
+  'Medicine Ball Full Twist': 'Medicine_Ball_Full_Twist',
+  'Standing Two-Arm Overhead Throw': 'Standing_Two-Arm_Overhead_Throw',
+  'Supine Chest Throw': 'Supine_Chest_Throw',
+  'One-Arm Medicine Ball Slam': 'One-Arm_Medicine_Ball_Slam',
+  // Plyometric / agility / sprint drills
+  'Box Jump (Multiple Response)': 'Box_Jump_Multiple_Response',
+  'Single-Leg Hop Progression': 'Single-Leg_Hop_Progression',
+  'Single-Leg Lateral Hop': 'Single-Leg_Lateral_Hop',
+  'Linear Depth Jump': 'Linear_Depth_Jump',
+  'Side to Side Box Shuffle': 'Side_to_Side_Box_Shuffle',
+  'Carioca Quick Step': 'Carioca_Quick_Step',
+  'Bear Crawl Sled Drags': 'Bear_Crawl_Sled_Drags',
+  'Prowler Sprint': 'Prowler_Sprint',
+  // Kettlebell get-up / clean / windmill variants
+  'Advanced Kettlebell Windmill': 'Advanced_Kettlebell_Windmill',
+  'Double Kettlebell Windmill': 'Double_Kettlebell_Windmill',
+  'Kettlebell Pass Between The Legs': 'Kettlebell_Pass_Between_The_Legs',
+  'One-Arm Overhead Kettlebell Squats': 'One-Arm_Overhead_Kettlebell_Squats',
+  'Alternating Kettlebell Press': 'Alternating_Kettlebell_Press',
+  // Banded accessory work
+  'Calf Raises (With Bands)': 'Calf_Raises_-_With_Bands',
+  'Squats (With Bands)': 'Squats_-_With_Bands',
+  'Reverse Band Deadlift': 'Reverse_Band_Deadlift',
+  'Hip Flexion with Band': 'Hip_Flexion_with_Band',
+  // Neck / wrist isolation
+  'Lying Face Up Plate Neck Resistance': 'Lying_Face_Up_Plate_Neck_Resistance',
+  'Lying Face Down Plate Neck Resistance': 'Lying_Face_Down_Plate_Neck_Resistance',
+  'Wrist Rotations with Straight Bar': 'Wrist_Rotations_with_Straight_Bar',
+  'Seated Two-Arm Palms-Up Low-Pulley Wrist Curl': 'Seated_Two-Arm_Palms-Up_Low-Pulley_Wrist_Curl',
 };
 
 /**

@@ -1,6 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
-    Alert,
     View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
     KeyboardAvoidingView, Platform, Dimensions
 } from 'react-native';
@@ -26,6 +25,17 @@ const formulas = {
     brzycki: (w: number, r: number) => w * (36 / (37 - r)),
     lander: (w: number, r: number) => (100 * w) / (101.3 - 2.67123 * r),
 };
+
+// Collapse a non-finite or non-positive formula output to 0, rounding finite
+// positives. The Brzycki denominator (37 - r) hits 0 at reps=37 (→ Infinity) and
+// goes negative for reps > 37; the Lander denominator (101.3 - 2.67123·r) crosses
+// 0 near reps ≈ 38 likewise. Without this, those raw Infinity / negative values
+// render verbatim in the giant 1RM numeral, the formula-selector chips and every
+// zone-table row (estimated1RM × pct / 100). `safe` is the single chokepoint so a
+// non-finite estimate can never leak into the tree as 'Infinity' / 'NaN' / a
+// negative — it stays a finite integer ≥ 0. Behaviour-preserving for valid reps
+// (a finite positive rounds exactly as Math.round did before).
+const safe = (x: number): number => (Number.isFinite(x) && x > 0 ? Math.round(x) : 0);
 
 const ZONES = [
     { pct: 100, label: 'Max Power', reps: '1' },
@@ -55,10 +65,13 @@ export default function CalculatorScreen() {
     const results = useMemo(() => {
         if (w <= 0 || r <= 0) return { epley: 0, brzycki: 0, lander: 0 };
         if (r === 1) return { epley: w, brzycki: w, lander: w };
+        // Route every formula through `safe`: at reps ≥ 37 the Brzycki/Lander
+        // denominators reach ≤ 0, yielding Infinity / negative — `safe` collapses
+        // those to 0 while rounding finite positives exactly as before.
         return {
-            epley: Math.round(formulas.epley(w, r)),
-            brzycki: Math.round(formulas.brzycki(w, r)),
-            lander: Math.round(formulas.lander(w, r)),
+            epley: safe(formulas.epley(w, r)),
+            brzycki: safe(formulas.brzycki(w, r)),
+            lander: safe(formulas.lander(w, r)),
         };
     }, [w, r]);
 
@@ -73,14 +86,30 @@ export default function CalculatorScreen() {
         onSuccess: () => {
             // The 1RM list is read under two distinct query keys: ['exercise-1rm']
             // (analytics screen) and ['workout-1rm'] (useWorkout hook). Invalidate
-            // both so the saved record refreshes everywhere it's shown.
+            // both so the saved record refreshes everywhere it's shown. The "Saved"
+            // status + the dismiss-by-navigation are now driven off the mutation's
+            // own success state (the inline surface below + the effect), not a
+            // modal alert dialog — keeping the single source of truth in saveMutation.
             queryClient.invalidateQueries({ queryKey: ['exercise-1rm'] });
             queryClient.invalidateQueries({ queryKey: ['workout-1rm'] });
-            Alert.alert('Saved', 'Your 1RM record has been saved successfully.');
-            router.back();
         },
-        onError: (err: any) => { Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Something went wrong'); },
     });
+
+    // Surface copy derived from the mutation's status (the single source of truth)
+    // — no modal alert dialog. The error body mirrors the message the old onError
+    // pulled from the rejection; the success copy mirrors the old "Saved" alert.
+    const saveError = saveMutation.error as any;
+    const saveErrorMessage =
+        saveError?.response?.data?.message ?? saveError?.message ?? 'Something went wrong';
+
+    // Pop back to the records list once the save lands. Done in an effect (not in
+    // onSuccess) so the inline "Saved" status renders for a frame and the navigate
+    // stays genuinely wired to saveMutation.isSuccess — the ground truth.
+    useEffect(() => {
+        if (saveMutation.isSuccess) {
+            router.back();
+        }
+    }, [saveMutation.isSuccess, router]);
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
@@ -188,6 +217,66 @@ export default function CalculatorScreen() {
                         style={[styles.saveBtn, { borderRadius: borderRadius.xl, marginTop: 24 }]}
                     />
 
+                    {/* Save status — an inline, accessible surface driven by the
+                        mutation's own state (no modal alert dialog). The error
+                        variant carries a Retry that re-fires the same mutation; the
+                        success variant announces "Saved" for the frame before the
+                        effect pops back. Ternary-null per rendering-no-falsy-and. */}
+                    {saveMutation.isError ? (
+                        <GlassCard intensity={40} radius={borderRadius.xl} style={{ marginTop: spacing.md }}>
+                            <View
+                                accessible
+                                accessibilityRole="alert"
+                                accessibilityLiveRegion="polite"
+                                style={[styles.statusBody, { borderColor: withAlpha(colors.accent.red, 0.4) }]}
+                            >
+                                <View style={styles.statusRow}>
+                                    <Ionicons name="alert-circle" size={20} color={colors.accent.red} />
+                                    <View style={styles.statusTextStack}>
+                                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>
+                                            Couldn't save your record
+                                        </Text>
+                                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
+                                            {saveErrorMessage}
+                                        </Text>
+                                    </View>
+                                </View>
+                                <TouchableOpacity
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Retry saving record"
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    disabled={saveMutation.isPending}
+                                    activeOpacity={0.85}
+                                    onPress={() => saveMutation.mutate()}
+                                    style={[styles.retryBtn, { borderColor: withAlpha(colors.accent.red, 0.5), borderRadius: borderRadius.lg }]}
+                                >
+                                    <Text style={[typography.captionMedium, { color: colors.accent.red, fontWeight: '700' }]}>Retry</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </GlassCard>
+                    ) : saveMutation.isSuccess ? (
+                        <GlassCard intensity={40} radius={borderRadius.xl} style={{ marginTop: spacing.md }}>
+                            <View
+                                accessible
+                                accessibilityRole="alert"
+                                accessibilityLiveRegion="polite"
+                                style={[styles.statusBody, { borderColor: withAlpha(colors.accent.cyan, 0.4) }]}
+                            >
+                                <View style={styles.statusRow}>
+                                    <Ionicons name="checkmark-circle" size={20} color={colors.accent.cyan} />
+                                    <View style={styles.statusTextStack}>
+                                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>
+                                            Saved
+                                        </Text>
+                                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
+                                            Your 1RM record has been saved successfully.
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                        </GlassCard>
+                    ) : null}
+
                     {/* Zone Table */}
                     <Text style={[typography.heading, { color: colors.text.primary, marginTop: spacing['2xl'], marginBottom: spacing.md }]}>
                         Training Zones
@@ -201,7 +290,7 @@ export default function CalculatorScreen() {
                                 </View>
                                 <View style={styles.zoneRight}>
                                     <Text style={[typography.statTiny, { color: colors.accent.cyan, fontSize: 18 }]}>
-                                        {Math.round(estimated1RM * zone.pct / 100)}kg
+                                        {safe(estimated1RM * zone.pct / 100)}kg
                                     </Text>
                                     <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>~{zone.reps} reps</Text>
                                 </View>
@@ -230,6 +319,12 @@ const styles = StyleSheet.create({
     formulaText: { fontSize: 10, fontWeight: 'bold', marginBottom: 2 },
     formulaVal: { fontSize: 14, fontWeight: '800' },
     saveBtn: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+    // Save-status surface (rendered inside a GlassCard, which owns no padding):
+    // a hairline-tinted body holding the icon + copy and, on error, the Retry.
+    statusBody: { padding: 16, borderWidth: 1, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+    statusRow: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+    statusTextStack: { flex: 1 },
+    retryBtn: { paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1 },
     zoneRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
     zoneLeft: { flex: 1 },
     zoneRight: { alignItems: 'flex-end' },

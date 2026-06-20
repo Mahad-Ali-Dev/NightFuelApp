@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react';
-import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, Platform } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity, FlatList, Platform } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -10,13 +10,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAll, markRead, Notification } from '@/api/notifications';
-import { EmptyState, Skeleton } from '@/components/ui';
+import { EmptyState, Skeleton, GlassCard } from '@/components/ui';
 
 export default function NotificationsScreen() {
     const { colors, typography, spacing, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
+
+    // Holds the id of the row whose mark-read FAILED — genuine error state (the
+    // real outcome of the mutation), null = no failure. We surface the failure
+    // INLINE (a GlassCard the screen reader announces via role="alert" + a polite
+    // live region) instead of an imperative system dialog, matching the
+    // inline-notice pattern notification-preferences.tsx already ships. The banner
+    // JSX is derived from this; the Retry re-invokes mutate(markReadError.id) — a
+    // genuine retry of the failed id, never a fabricated success.
+    const [markReadError, setMarkReadError] = useState<{ id: string } | null>(null);
 
     const { data: notifications, isLoading, isError, refetch } = useQuery({
         queryKey: ['notifications'],
@@ -25,8 +34,9 @@ export default function NotificationsScreen() {
 
     const markReadMutation = useMutation({
         mutationFn: (id: string) => markRead(id),
-        onError: (err: any) => { Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Something went wrong'); },
+        onError: (_err, id) => { setMarkReadError({ id }); },
         onSuccess: () => {
+            setMarkReadError(null);
             queryClient.invalidateQueries({ queryKey: ['notifications'] });
         }
     });
@@ -114,23 +124,76 @@ export default function NotificationsScreen() {
                     onAction={() => refetch()}
                 />
             ) : (
-                <FlatList
-                    data={notifications || []}
-                    keyExtractor={keyExtractor}
-                    renderItem={renderItem}
-                    contentContainerStyle={{ paddingBottom: 100, flexGrow: 1 }}
-                    removeClippedSubviews={Platform.OS === 'android'}
-                    initialNumToRender={10}
-                    maxToRenderPerBatch={10}
-                    windowSize={11}
-                    ListEmptyComponent={
-                        <EmptyState
-                            icon="notifications-off-outline"
-                            title="No notifications yet"
-                            subtitle="You're all caught up. New workout, meal, and coach alerts will show up here."
-                        />
-                    }
-                />
+                <>
+                    {/* Inline mark-read failure surface (replaces the old imperative
+                        system dialog on markReadMutation.onError). Rendered with an
+                        explicit ternary-null per rules/rendering-no-falsy-and.md — markReadError
+                        is { id } | null, never a falsy 0/"" that could leak into the
+                        JSX tree. As a GlassCard from @/components/ui (no inline glass),
+                        it carries accessibilityRole="alert" + a polite live region on
+                        its inner content View so a screen reader announces the failure.
+                        The Retry Pressable is a SIBLING (independently focusable) and
+                        re-invokes markReadMutation.mutate(markReadError.id) — the
+                        genuine retry of the failed id, never a fabricated success.
+                        Mirrors notification-preferences.tsx's statusCard recipe. */}
+                    {markReadError ? (
+                        <GlassCard radius={br.lg} style={styles.statusCard} testID="mark-read-error">
+                            <View style={styles.statusRow}>
+                                <View
+                                    style={styles.statusContent}
+                                    accessible
+                                    accessibilityRole="alert"
+                                    accessibilityLiveRegion="polite"
+                                    accessibilityLabel="Couldn't mark as read"
+                                >
+                                    <Ionicons name="alert-circle" size={20} color={colors.accent.coral} />
+                                    <Text style={[typography.subhead, styles.statusText, { color: colors.text.primary }]}>
+                                        Couldn't mark as read
+                                    </Text>
+                                </View>
+                                <Pressable
+                                    onPress={() => markReadMutation.mutate(markReadError.id)}
+                                    disabled={markReadMutation.isPending}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Retry"
+                                    accessibilityState={{ disabled: markReadMutation.isPending, busy: markReadMutation.isPending }}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    style={({ pressed }) => [
+                                        styles.retryBtn,
+                                        {
+                                            borderColor: withAlpha(colors.accent.coral, 0.4),
+                                            backgroundColor: withAlpha(colors.accent.coral, pressed ? 0.16 : 0.08),
+                                        },
+                                    ]}
+                                    testID="mark-read-error-retry"
+                                >
+                                    <Ionicons name="refresh-outline" size={15} color={colors.accent.coral} />
+                                    <Text style={[typography.caption, styles.retryLabel, { color: colors.accent.coral }]}>
+                                        Retry
+                                    </Text>
+                                </Pressable>
+                            </View>
+                        </GlassCard>
+                    ) : null}
+
+                    <FlatList
+                        data={notifications || []}
+                        keyExtractor={keyExtractor}
+                        renderItem={renderItem}
+                        contentContainerStyle={{ paddingBottom: 100, flexGrow: 1 }}
+                        removeClippedSubviews={Platform.OS === 'android'}
+                        initialNumToRender={10}
+                        maxToRenderPerBatch={10}
+                        windowSize={11}
+                        ListEmptyComponent={
+                            <EmptyState
+                                icon="notifications-off-outline"
+                                title="No notifications yet"
+                                subtitle="You're all caught up. New workout, meal, and coach alerts will show up here."
+                            />
+                        }
+                    />
+                </>
             )}
         </View>
     );
@@ -142,4 +205,42 @@ const styles = StyleSheet.create({
     notificationCard: { flexDirection: 'row', padding: spacing.xl, borderBottomWidth: 1 },
     iconBox: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     unreadDot: { width: 8, height: 8, borderRadius: 4, marginLeft: spacing.sm, marginTop: spacing.xs },
+    // Inline mark-read failure surface (GlassCard wrapper margins; the GlassCard
+    // owns the frosted fill + hairline border + radius). Mirrors the statusCard
+    // recipe in notification-preferences.tsx.
+    statusCard: {
+        marginHorizontal: spacing.xl,
+        marginTop: spacing.lg,
+    },
+    statusRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: spacing.lg,
+    },
+    // The announced alert content (icon + copy). Flexes to fill the row so the
+    // trailing Retry sibling sits flush right.
+    statusContent: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    statusText: {
+        flex: 1,
+        marginLeft: spacing.md,
+        fontWeight: '600',
+        lineHeight: 19,
+    },
+    retryBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xs,
+        marginLeft: spacing.sm,
+        minHeight: 44,
+        paddingHorizontal: spacing.lg,
+        borderRadius: br.lg,
+        borderWidth: 1,
+    },
+    retryLabel: {
+        fontWeight: '700',
+    },
 });

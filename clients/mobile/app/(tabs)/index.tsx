@@ -15,7 +15,7 @@ import { Skeleton, EmptyState, GlassCard, CtaButton } from '@/components/ui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { getCurrent as getCurrentShift } from '@/api/shifts';
+import { getCurrent as getCurrentShift, list as listShifts } from '@/api/shifts';
 import { getToday as getTodayPlan, PlanMeal } from '@/api/plans';
 import { getToday as getTodayProgress, logHydration } from '@/api/progress';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -25,6 +25,7 @@ import { withAlpha } from '@/theme/utils';
 import { WeeklyRecap } from '@/components/WeeklyRecap';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { searchLibrary } from '@/api/exercises';
+import NextShiftCard from '@/components/home/NextShiftCard';
 import ShiftTransitionCard from '@/components/home/ShiftTransitionCard';
 import LightPlanCard from '@/components/home/LightPlanCard';
 import AnchorSleepCard from '@/components/home/AnchorSleepCard';
@@ -203,6 +204,12 @@ export default function DashboardScreen() {
     // empty) and re-fire the request on tap.
     const { data: shift, isLoading: shiftLoading, isError: shiftError, refetch: shiftRefetch } =
         useQuery({ queryKey: ['current-shift'], queryFn: getCurrentShift, retry: 1 });
+    // The user's shifts (±366d window) — drives the NextShiftCard countdown to
+    // the soonest UPCOMING clock-in. Separate from ['current-shift'] (which is
+    // the ACTIVE shift powering the hero); this activates the previously-dormant
+    // api/shifts.list query. The card owns its own loading/error/empty branches.
+    const { data: upcomingShifts, isLoading: upcomingLoading, isError: upcomingError, refetch: upcomingRefetch } =
+        useQuery({ queryKey: ['shifts-upcoming'], queryFn: listShifts, retry: 1 });
     const { data: progress, isLoading: progressLoading, isError: progressError, refetch: progressRefetch } =
         useQuery({ queryKey: ['today-progress'], queryFn: getTodayProgress, retry: 1 });
     const { data: plan, isLoading: planLoading, isError: planError, refetch: planRefetch } =
@@ -477,6 +484,14 @@ export default function DashboardScreen() {
                         />
                     </View>
                 )}
+
+                {/* ══ NEXT SHIFT (countdown to the soonest upcoming clock-in) ══ */}
+                <NextShiftCard
+                    shifts={upcomingShifts ?? null}
+                    loading={upcomingLoading}
+                    error={upcomingError}
+                    onRetry={() => upcomingRefetch()}
+                />
 
                 {/* ══ NEXT SHIFT TRANSITION (circadian readiness) ══════════════ */}
                 <ShiftTransitionCard
