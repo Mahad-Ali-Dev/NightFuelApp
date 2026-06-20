@@ -16,6 +16,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    # Without this, a Docker daemon restart (e.g. unattended-upgrades upgrading
+    # docker/containerd, or a reboot) leaves Postgres DOWN while the app services
+    # — which DO carry restart:unless-stopped — come back and crash-loop on
+    # `P1001 Can't reach postgres`. Match the services so the datastore returns too.
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
@@ -25,6 +30,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    # Same reason as postgres above: survive a daemon restart / reboot so the
+    # services that depend on Redis don't crash-loop after an auto-upgrade.
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
