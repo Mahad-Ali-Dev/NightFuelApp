@@ -10,6 +10,10 @@ import routes from '../src/routes';
  *   - POST /v1/community/post      body.imageUrl  z.string().url().max(2048)
  *   - PUT  /v1/community/post/:id  body.content   z.string().min(1).max(5000)
  *   - POST .../post/:id/comment    body.text      z.string().min(1).max(2000)
+ *   - GET  /v1/community/feed      query.limit    z.coerce.number().int().min(1).max(100).default(20)
+ *   - GET  /v1/community/feed      query.cursor   z.string().max(200).optional()
+ *   - POST /v1/community/badges/award body.userId   z.string().min(1).max(200)
+ *   - POST /v1/community/badges/award body.badgeKey z.string().min(1).max(120)
  *
  * Every request below carries a VALID Bearer token, so the auth gate is open and
  * any 400 originates from the zod body schema, NOT from auth. A real UUID is used
@@ -224,6 +228,158 @@ describe('community-service input bounds (valid token, schema-lock)', () => {
 
             expect(res.statusCode).not.toBe(400);
             expect(svc.createPost).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    // ── GET /v1/community/feed — limit .int().min(1).max(100).default(20) ─────
+    describe('GET /v1/community/feed limit bound (int, 1..100, default 20)', () => {
+        it('limit omitted -> not 400 and getFeed receives the default 20', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/feed',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).not.toBe(400);
+            expect(svc.getFeed).toHaveBeenCalledTimes(1);
+            // Default page size is preserved: first positional arg is 20.
+            expect(svc.getFeed).toHaveBeenCalledWith(20, undefined);
+        });
+
+        it('limit=101 (above max) -> 400 and getFeed NOT called', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/feed?limit=101',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.getFeed).not.toHaveBeenCalled();
+        });
+
+        it('limit=999999999 (far above max) -> 400 and getFeed NOT called', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/feed?limit=999999999',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.getFeed).not.toHaveBeenCalled();
+        });
+
+        it('limit=100 (at the boundary) -> not 400 (reaches service with 100)', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/feed?limit=100',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).not.toBe(400);
+            expect(svc.getFeed).toHaveBeenCalledTimes(1);
+            expect(svc.getFeed).toHaveBeenCalledWith(100, undefined);
+        });
+
+        it('limit=0 (below min) -> 400 and getFeed NOT called', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/community/feed?limit=0',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.getFeed).not.toHaveBeenCalled();
+        });
+
+        it('cursor longer than 200 chars -> 400 and getFeed NOT called', async () => {
+            const longCursor = 'c'.repeat(201);
+            const res = await app.inject({
+                method: 'GET',
+                url: `/v1/community/feed?cursor=${longCursor}`,
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.getFeed).not.toHaveBeenCalled();
+        });
+
+        it('valid limit + cursor (in range) -> not 400 (reaches service with both)', async () => {
+            const cursor = '33333333-3333-4333-8333-333333333333';
+            const res = await app.inject({
+                method: 'GET',
+                url: `/v1/community/feed?limit=10&cursor=${cursor}`,
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).not.toBe(400);
+            expect(svc.getFeed).toHaveBeenCalledTimes(1);
+            expect(svc.getFeed).toHaveBeenCalledWith(10, cursor);
+        });
+    });
+
+    // ── POST /v1/community/badges/award — userId/badgeKey length bounds ───────
+    describe('POST /v1/community/badges/award body bounds (userId<=200, badgeKey 1..120)', () => {
+        it('badgeKey longer than 120 chars -> 400 and awardBadgeByKey NOT called', async () => {
+            const res = await app.inject({
+                method: 'POST',
+                url: '/v1/community/badges/award',
+                headers: AUTH,
+                payload: { userId: '44444444-4444-4444-8444-444444444444', badgeKey: 'k'.repeat(121) },
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.awardBadgeByKey).not.toHaveBeenCalled();
+        });
+
+        it('empty badgeKey -> 400 (min 1) and awardBadgeByKey NOT called', async () => {
+            const res = await app.inject({
+                method: 'POST',
+                url: '/v1/community/badges/award',
+                headers: AUTH,
+                payload: { userId: '44444444-4444-4444-8444-444444444444', badgeKey: '' },
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.awardBadgeByKey).not.toHaveBeenCalled();
+        });
+
+        it('userId longer than 200 chars -> 400 and awardBadgeByKey NOT called', async () => {
+            const res = await app.inject({
+                method: 'POST',
+                url: '/v1/community/badges/award',
+                headers: AUTH,
+                payload: { userId: 'u'.repeat(201), badgeKey: 'first_post' },
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.awardBadgeByKey).not.toHaveBeenCalled();
+        });
+
+        it('empty userId -> 400 (min 1) and awardBadgeByKey NOT called', async () => {
+            const res = await app.inject({
+                method: 'POST',
+                url: '/v1/community/badges/award',
+                headers: AUTH,
+                payload: { userId: '', badgeKey: 'first_post' },
+            });
+
+            expect(res.statusCode).toBe(400);
+            expect(svc.awardBadgeByKey).not.toHaveBeenCalled();
+        });
+
+        it('valid in-range award -> 200 and awardBadgeByKey called once', async () => {
+            const userId = '44444444-4444-4444-8444-444444444444';
+            const res = await app.inject({
+                method: 'POST',
+                url: '/v1/community/badges/award',
+                headers: AUTH,
+                payload: { userId, badgeKey: 'first_post' },
+            });
+
+            expect(res.statusCode).toBe(200);
+            expect(svc.awardBadgeByKey).toHaveBeenCalledTimes(1);
+            expect(svc.awardBadgeByKey).toHaveBeenCalledWith(userId, 'first_post');
+            expect(res.json()).toEqual({ awarded: true, badgeKey: 'first_post' });
         });
     });
 });

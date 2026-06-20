@@ -93,13 +93,19 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/library', {
     onRequest: [(fastify as any).authenticate],
     schema: {
         querystring: z.object({
-            query: z.string().optional(),
-            equipment: z.string().optional(),
-            muscleGroup: z.string().optional(),
+            // Free-text filters flow into a DB `contains` (LIKE) where-clause, so
+            // bound their length: .trim() is additive/harmless (drops surrounding
+            // whitespace) and .max(120) is consistent with the other text caps in
+            // this service (muscleGroup/name elsewhere). This closes a cheap
+            // DoS / log-bloat vector where a multi-MB filter string would flow
+            // unbounded into the query; realistic filter values are a few words.
+            query: z.string().trim().max(120).optional(),
+            equipment: z.string().trim().max(120).optional(),
+            muscleGroup: z.string().trim().max(120).optional(),
             // bodyPart filter for the ExerciseDB body-part keys
             // (e.g. "upper arms", "waist", "upper legs", "hips")
-            bodyPart: z.string().optional(),
-            category: z.string().optional(),
+            bodyPart: z.string().trim().max(120).optional(),
+            category: z.string().trim().max(120).optional(),
             // Bumped max from 100 → 500. The seeded LibraryExercise table
             // can have many entries per muscle group; capping at 100 was
             // why the mobile app appeared to "miss" exercises.

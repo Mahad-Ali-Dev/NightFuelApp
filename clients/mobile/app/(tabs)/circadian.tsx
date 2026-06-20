@@ -19,6 +19,12 @@ import { generatePlan } from '@/api/plans';
 import { parseAiQuotaError, type AiQuotaError } from '@/api/ai';
 import { getModel } from '@/api/circadian';
 import { getErrorMessage } from '@/utils/validation';
+// Single source of truth for the entrainment-advice copy + the no-model
+// fallback biological-window math (src/lib/circadian/entrainment.ts). Adopting
+// the helper kills the inline advice ternary and the inline endTime±h
+// arithmetic so ENTRAINMENT_ADVICE / WINDOW_OFFSETS can't drift between this
+// screen and its sibling consumer (dashboard EntrainmentCard).
+import { entrainmentAdvice, deriveWindowsFromShift } from '@/lib/circadian/entrainment';
 
 // Staged status lines shown while the AI protocol is generated (10–30s).
 const PROTOCOL_GEN_STEPS = [
@@ -204,18 +210,40 @@ export default function CircadianScreen() {
             };
         }
 
-        const endTime = new Date(currentShift.endTime);
-        const melatoninStart = new Date(endTime.getTime() + 1 * 60 * 60 * 1000);
-        const caffeineCutoff = new Date(endTime.getTime() - 6 * 60 * 60 * 1000);
-        const insulinStart = new Date(currentShift.startTime);
-
-        return {
-            melatoninStart: melatoninStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            caffeineCutoff: caffeineCutoff.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            insulinStart: insulinStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            peakTemp: new Date(currentShift.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            entrainmentScore: null as number | null,
-        };
+        // No AI model yet → fall back to the shared window math (single source of
+        // truth: src/lib/circadian/entrainment.ts; mirrors the dashboard
+        // EntrainmentCard consumer). deriveWindowsFromShift THROWS on a malformed
+        // timestamp, so wrap it: a bad ISO yields the '--:--' placeholders instead
+        // of crashing the whole screen. entrainmentScore stays null in this branch
+        // (no model = no score), preserved across both the success and catch paths.
+        //
+        // Rules: js-hoist-intl.md — the helper owns the toLocaleTimeString
+        // formatting, so this branch adds NO per-render Intl/formatter allocation
+        // (formatResetsAt likewise stays hoisted at module scope). state-ground-
+        // truth.md — these windows are DERIVED from currentShift inside useMemo,
+        // not stored as state; the only ground-truth state here remains the
+        // mutually-exclusive quota/genError pair set by the mutation lifecycle.
+        try {
+            const windows = deriveWindowsFromShift({
+                startTime: currentShift.startTime,
+                endTime: currentShift.endTime,
+            });
+            return {
+                melatoninStart: windows.melatoninStart,
+                caffeineCutoff: windows.caffeineCutoff,
+                insulinStart: windows.insulinStart,
+                peakTemp: windows.peakTemp,
+                entrainmentScore: null as number | null,
+            };
+        } catch {
+            return {
+                melatoninStart: '--:--',
+                caffeineCutoff: '--:--',
+                insulinStart: '--:--',
+                peakTemp: '--:--',
+                entrainmentScore: null as number | null,
+            };
+        }
     }, [currentShift, circadianModel]);
 
     // Use AI plan data if available, otherwise estimate from shift.
@@ -508,12 +536,12 @@ export default function CircadianScreen() {
                                         {entrainmentScore ?? '--'}
                                         <Text style={[typography.statSmall, { color: colors.text.secondary }]}>/100</Text>
                                     </Text>
+                                    {/* Advice copy from the shared helper — ENTRAINMENT_ADVICE is the
+                                        single source of truth (no inline ternary). entrainmentAdvice
+                                        always returns a non-empty string, so this Text child can't leak a
+                                        falsy number outside <Text> (rendering-no-falsy-and.md). */}
                                     <Text style={[typography.bodySm, { color: colors.text.secondary, textAlign: 'center', paddingHorizontal: spacing.lg }]}>
-                                        {entrainmentScore != null && entrainmentScore >= 80
-                                            ? 'Good alignment. Try getting 15m of sunlight upon waking to improve this score.'
-                                            : entrainmentScore != null
-                                                ? 'Room for improvement. Focus on consistent sleep/wake times.'
-                                                : 'Log more shifts to calculate your score.'}
+                                        {entrainmentAdvice(entrainmentScore)}
                                     </Text>
                                 </GlassCard>
                             </>

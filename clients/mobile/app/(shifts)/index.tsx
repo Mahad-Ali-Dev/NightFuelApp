@@ -1,9 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useTheme, spacing, borderRadius } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { Card } from '@/components/ui/Card';
-import { Skeleton, EmptyState, GeneratingSteps } from '@/components/ui';
+import { Skeleton, EmptyState, GeneratingSteps, GlassCard, CtaButton } from '@/components/ui';
 
 // Staged status lines shown while the AI nutrition plan is generated (10–30s).
 const NUTRITION_GEN_STEPS = [
@@ -45,14 +45,44 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { getCurrent } from '@/api/shifts';
 import { getScheduledSessionsForShift, type ScheduledSession } from '@/api/training';
 import { generatePlan } from '@/api/plans';
+// This screen drives the METERED plan-service generate (POST /v1/plans/generate
+// via `@/api/plans` generatePlan), so a daily-cap failure arrives as the SHARED
+// 429 { error:'ai_quota_exceeded', limit, plan, resetsAt }. We REUSE the
+// canonical parser from '@/api/ai' (the single, endpoint-agnostic home of the
+// AiQuotaError contract) to flip into the distinct upgrade state instead of the
+// old destructive Alert — same pattern as (meals)/planner.tsx / ai-planner.tsx.
+import { parseAiQuotaError, type AiQuotaError } from '@/api/ai';
+import { getErrorMessage } from '@/utils/validation';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
+
+// Human-readable "resets" line for the daily-limit upgrade block. Renders a
+// short local clock time ("Resets at 6:00 AM") when `resetsAt` is a parseable
+// ISO timestamp, else a sensible fallback so the block never shows a raw date
+// or "Invalid Date". Hoisted to module scope (no per-render Intl alloc); copied
+// verbatim from (meals)/planner.tsx / ai-planner.tsx's formatResetsAt.
+function formatResetsAt(resetsAt: string): string {
+    if (!resetsAt) return 'Resets at midnight UTC';
+    const when = new Date(resetsAt);
+    if (Number.isNaN(when.getTime())) return 'Resets at midnight UTC';
+    const time = when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return `Resets at ${time}`;
+}
 
 export default function ShiftCalendarScreen() {
     const { colors, typography, spacing, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
+
+    // ── Plan-generation failure ground truth — two MUTUALLY-EXCLUSIVE vars ───
+    // `quota` holds the parsed daily-AI-limit 429 (the distinct upgrade state);
+    // `genError` holds any other failure message (the retryable inline notice).
+    // Exactly one is ever non-null — onMutate + onSuccess clear BOTH, and onError
+    // sets precisely one. The visible notices are DERIVED from whichever is set
+    // (state = ground truth, not the rendered output — state-ground-truth.md).
+    const [quota, setQuota] = useState<AiQuotaError | null>(null);
+    const [genError, setGenError] = useState<string | null>(null);
 
     const { data: currentShift, isLoading, isError, refetch } = useQuery({
         queryKey: ['current-shift'],
@@ -76,12 +106,43 @@ export default function ShiftCalendarScreen() {
 
     const generateMutation = useMutation({
         mutationFn: (payload: any) => generatePlan(payload),
-        onError: (err: any) => { Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Something went wrong'); },
+        // Clear BOTH failure surfaces the instant a (re)generation begins, so a
+        // stale upgrade/error notice never lingers under an in-flight request.
+        onMutate: () => { setQuota(null); setGenError(null); },
+        onError: (err: unknown) => {
+            // A 429 daily-AI-limit flips into the distinct upgrade state; any
+            // other error (network / 5xx / non-quota 4xx) takes the retryable
+            // inline error path. Set exactly one, clear the other — NO Alert.
+            const q = parseAiQuotaError(err);
+            if (q) { setQuota(q); setGenError(null); }
+            else { setQuota(null); setGenError(getErrorMessage(err)); }
+        },
         onSuccess: () => {
-            Alert.alert('Success', 'AI Plan generated successfully!');
+            // Success clears both notices and navigates to the nutrition tab so
+            // the freshly-generated plan is front-and-centre (the prior
+            // non-destructive success Alert is dropped — navigation is the
+            // confirmation). Mirrors the other generate callers' onSuccess reset.
+            setQuota(null);
+            setGenError(null);
             router.push('/(tabs)/nutrition' as any);
-        }
+        },
     });
+
+    // Clear any prior failure state and kick off generation against the active
+    // shift (used by BOTH the generate hero button and the inline "Try again").
+    // `onMutate` also resets the notices, so this stays correct even if called
+    // from elsewhere; building the payload here keeps the retry identical to the
+    // first attempt. Guarded on a present shift (the CTA only renders then).
+    const runGenerate = () => {
+        if (!currentShift) return;
+        setQuota(null);
+        setGenError(null);
+        generateMutation.mutate({
+            date: new Date().toISOString().slice(0, 10),
+            shiftId: currentShift.id,
+            shiftType: currentShift.type,
+        });
+    };
 
     // Hardcoded logic removed. Instead, user routes to the new modal to pick details.
 
@@ -200,6 +261,70 @@ export default function ShiftCalendarScreen() {
                                 <Text style={[typography.subhead, { color: colors.accent.purple, fontWeight: '700' }]}>Optimize Sleep Window</Text>
                             </TouchableOpacity>
 
+                            {/* ── Mutually-exclusive generate-failure notices ──
+                                Surfaced ONLY when no generation is in flight (the
+                                hero below shows GeneratingSteps while pending) and
+                                placed ABOVE the generate hero so the message sits
+                                next to the action it explains. Each surface is a
+                                GlassCard (imports-design-system-folder.md — the
+                                sanctioned Aurora surface; NO inline SafeBlurView /
+                                coral-CTA gradient) and the two are guarded with
+                                explicit `!!`-coercion so an empty-string value can
+                                never leak as a raw text child (rendering-no-falsy-
+                                and.md). The Upgrade action is the shared CtaButton
+                                (a Pressable under the hood — ui-pressable.md). The
+                                Try-again control reuses this screen's existing
+                                TouchableOpacity idiom (every other tappable here is
+                                a TouchableOpacity) for visual consistency, matching
+                                the proven ai-planner.tsx / (meals)/planner.tsx
+                                retry control. */}
+                            {!!quota && !generateMutation.isPending && (
+                                <GlassCard style={styles.noticeCard} glow={colors.accent.coral}>
+                                    <View style={styles.noticeInner} accessibilityRole="alert">
+                                        <View style={styles.noticeHeaderRow}>
+                                            <Ionicons name="flash-outline" size={20} color={colors.accent.coral} style={{ marginTop: 1 }} />
+                                            <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                                                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>Daily AI limit reached</Text>
+                                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2, lineHeight: 18 }]}>
+                                                    {`You've used all ${quota.limit} of your ${quota.plan === 'pro' ? 'Pro' : 'free'} daily AI plans. ${formatResetsAt(quota.resetsAt)}.`}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        <CtaButton
+                                            label="Upgrade"
+                                            icon="sparkles"
+                                            size="sm"
+                                            onPress={() => router.push('/(modals)/premium' as any)}
+                                            accessibilityLabel="Upgrade to remove the daily AI limit"
+                                            style={{ alignSelf: 'flex-start', marginTop: spacing.md }}
+                                        />
+                                    </View>
+                                </GlassCard>
+                            )}
+                            {!!genError && !generateMutation.isPending && (
+                                <GlassCard style={styles.noticeCard}>
+                                    <View style={styles.noticeInner} accessibilityRole="alert">
+                                        <View style={styles.noticeHeaderRow}>
+                                            <Ionicons name="alert-circle" size={20} color={colors.accent.coral} style={{ marginTop: 1 }} />
+                                            <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                                                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>Generation Failed</Text>
+                                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2, lineHeight: 18 }]}>{genError}</Text>
+                                            </View>
+                                        </View>
+                                        <TouchableOpacity
+                                            style={[styles.tryAgainBtn, { borderColor: withAlpha(colors.accent.coral, 0.5) }]}
+                                            onPress={runGenerate}
+                                            accessibilityRole="button"
+                                            accessibilityLabel="Try again"
+                                            activeOpacity={0.85}
+                                        >
+                                            <Ionicons name="refresh" size={16} color={colors.accent.coral} />
+                                            <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: '700', marginLeft: spacing.xs }]}>Try Again</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </GlassCard>
+                            )}
+
                             <TouchableOpacity
                                 activeOpacity={0.85}
                                 accessibilityRole="button"
@@ -207,13 +332,7 @@ export default function ShiftCalendarScreen() {
                                 accessibilityState={{ disabled: generateMutation.isPending, busy: generateMutation.isPending }}
                                 disabled={generateMutation.isPending}
                                 style={[styles.heroBtn, shadows.glow(colors.accent.coral)]}
-                                onPress={() => {
-                                    generateMutation.mutate({
-                                        date: new Date().toISOString().slice(0, 10),
-                                        shiftId: currentShift.id,
-                                        shiftType: currentShift.type
-                                    });
-                                }}
+                                onPress={runGenerate}
                             >
                                 <View style={styles.heroBtnGradient}>
                                     <LinearGradient
@@ -408,6 +527,26 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    // Generate-failure notice surfaces. The surface itself is a GlassCard (owns
+    // the radius + hairline + blur + Android<12 fallback), so `noticeCard` is only
+    // the outer wrapper spacing; `noticeInner` is the padded content View dropped
+    // inside the blur fill (GlassCard does not pad its children). Mirrors the
+    // errorCard/tryAgainBtn recipe from ai-planner.tsx / (meals)/planner.tsx,
+    // re-homed onto the sanctioned glass surface for this screen.
+    noticeCard: { marginTop: spacing.lg },
+    noticeInner: { padding: spacing.lg },
+    noticeHeaderRow: { flexDirection: 'row', alignItems: 'flex-start' },
+    tryAgainBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        alignSelf: 'flex-start',
+        marginTop: spacing.md,
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.sm,
+        borderRadius: borderRadius.full,
+        borderWidth: 1.5,
     },
     // Linked-session row visual language, re-implemented locally (NOT imported
     // from (performance)/calendar) to match its session-row look: a small accent

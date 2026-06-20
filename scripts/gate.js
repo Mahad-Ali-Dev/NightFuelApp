@@ -209,6 +209,22 @@ function buildReportingSteps() {
             cmd: NODE,
             args: [path.join(REPO_ROOT, 'scripts', 'check-aurora-coverage.js')],
         },
+        {
+            // Sampled curated demo-URL rot check over clients/mobile/src/constants/
+            // curatedDemos.ts — HEAD/GETs a small slice of the FEDB frame + YouTube
+            // URLs and prints any non-200 as a NOTE. INFORMATIONAL: the script
+            // ALWAYS exits 0 (offline → skip; dead URL → note; all 200 → OK) and
+            // runReportingStep ignores its exit code, so a rotted third-party CDN
+            // URL — or an offline CI box — can NEVER block the gate. Mirrors the
+            // aurora-coverage entry above and, like it, lives OUTSIDE buildSteps()
+            // so the gate-steps meta self-test (which forbids a `file:` field on
+            // on-disk buildSteps guards) is unaffected. This is the NON-blocking
+            // sibling of the standalone, deliberately-ungated scripts/check-demo-
+            // urls.js — we wire in the SAMPLE variant only, never the hard one.
+            name: 'demo-urls-sample (informational)',
+            cmd: NODE,
+            args: [path.join(REPO_ROOT, 'scripts', 'check-demo-urls-sample.js')],
+        },
     ];
 }
 

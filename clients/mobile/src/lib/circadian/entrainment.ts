@@ -222,3 +222,130 @@ export function deriveWindowsFromShift(
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Entrainment-score derivation (the genuine score SOURCE for item 3's hook)
+// ---------------------------------------------------------------------------
+//
+// Background: the live circadian model already derives a real entrainment score
+// inside src/api/circadian.ts (a PRIVATE `deriveEntrainmentScore` that maps the
+// circular clock gap between the engine's melatonin onset and the shift's end
+// onto 0–100). That score is surfaced as `CircadianModel.entrainmentScore` and
+// consumed via `useEntrainmentScore`. This module now exposes the SAME math as a
+// standalone, separately-importable, unit-tested pure function so a hook/screen
+// can derive a score from already-extracted model signals without reaching for
+// the API layer (and without scattering circadian math into a component).
+//
+// The formula is intentionally byte-for-byte the api-layer one so the two can
+// never drift: 0h gap → 100, linear decay to a floor at ~6h of melatonin/
+// shift-end drift, clamped to [0, 100].
+//
+// Rules applied:
+//   • state-ground-truth.md — the score is a DERIVED value, never stored state.
+//     This function computes it on demand from the ground-truth signals
+//     (melatonin onset vs shift end); callers must NOT cache a stale number as
+//     "state". Everything else is derived from the minimal truth.
+//   • js-hoist-intl.md — all thresholds/constants live at module scope
+//     (allocation-free); the function does no Intl/Date/RegExp/object allocation
+//     on the hot path beyond the unavoidable arithmetic.
+
+/** Minutes in a full 24h clock dial — the modulus for circular gap math. */
+const MINUTES_PER_DAY = 1440;
+
+/**
+ * Melatonin-onset / shift-end drift (in minutes) at which the alignment score
+ * decays to its floor (0). ~6h, identical to the api-layer derivation so the
+ * standalone helper and `CircadianModel.entrainmentScore` agree exactly.
+ */
+const ENTRAINMENT_HALF_LIFE_MIN = 360;
+
+/** The clamped bounds of a valid entrainment score. */
+const SCORE_MIN = 0;
+const SCORE_MAX = 100;
+
+/** Matches a `"HH:MM"` / `"H:MM"` 24h clock string (no seconds). */
+const CLOCK_RE = /^(\d{1,2}):(\d{2})$/;
+
+/**
+ * The circadian-model signals the entrainment score is derived from. Both are
+ * accepted as either a local 24h clock string (`"HH:MM"`) or a number of
+ * minutes-since-(local)-midnight in `[0, 1440)`, so a caller can pass the
+ * engine's raw `melatoninOnset` string straight through, or pre-computed
+ * minutes — whichever it already holds. A missing signal is `null`/`undefined`.
+ */
+export interface EntrainmentSignals {
+  /**
+   * Estimated melatonin onset — the engine places this close to the END of a
+   * well-entrained shift worker's shift. `"HH:MM"` clock string or minutes.
+   */
+  melatoninOnset?: string | number | null;
+  /**
+   * The shift's end clock time. `"HH:MM"` string or minutes-since-midnight.
+   * For a well-anchored body clock, melatonin onset falls near this instant.
+   */
+  shiftEnd?: string | number | null;
+}
+
+/**
+ * Coerce a clock signal (`"HH:MM"` string or minutes-since-midnight number)
+ * into minutes-since-midnight in `[0, 1440)`, or `null` when the value is
+ * missing / malformed / out of range / NaN. Pure and never throws.
+ */
+function signalToMinutes(value: string | number | null | undefined): number | null {
+  if (typeof value === 'number') {
+    // Reject NaN/±Infinity and out-of-dial values; accept any in-range minute.
+    if (!Number.isFinite(value) || value < 0 || value >= MINUTES_PER_DAY) return null;
+    return value;
+  }
+  if (typeof value !== 'string') return null;
+  const m = CLOCK_RE.exec(value.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min) || h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+/** Smallest absolute gap (in minutes) between two clock times on a 24h dial. */
+function circularGapMinutes(a: number, b: number): number {
+  const raw = Math.abs(a - b) % MINUTES_PER_DAY;
+  return Math.min(raw, MINUTES_PER_DAY - raw);
+}
+
+/**
+ * Derive a circadian entrainment/alignment score (0–100) from the model's
+ * melatonin-onset and shift-end signals, or `null` when the inputs are
+ * insufficient to compute an honest value.
+ *
+ * Biology / intent (mirrors src/api/circadian.ts's private derivation, so the
+ * standalone score and `CircadianModel.entrainmentScore` never diverge): for a
+ * well-entrained shift worker, melatonin onset should fall close to the END of
+ * the shift. The tighter that gap, the better the body clock is anchored. We
+ * map the circular clock gap between `melatoninOnset` and `shiftEnd` onto
+ * 0–100: a 0h gap → 100, decaying linearly to 0 by ~6h of drift.
+ *
+ * Contract (all enforced, all tested):
+ *   • PURE / dependency-free — no `Date.now()`, no I/O, no React/native imports;
+ *     deterministic for fixed inputs (same input → identical number).
+ *   • Returns `null` (NEVER throws) on missing/partial/malformed/NaN input —
+ *     only computes a number when BOTH signals parse to a valid clock minute.
+ *   • Result is always a finite integer clamped to [0, 100].
+ *
+ * @param input the melatonin-onset and shift-end signals (string `"HH:MM"` or
+ *   minutes-since-midnight); `null`/`undefined`/`{}` all yield `null`.
+ * @returns the entrainment score in [0, 100], or `null` when inputs are
+ *   insufficient. A score `>= GOOD_ALIGNMENT_THRESHOLD` is "good alignment".
+ */
+export function deriveEntrainmentScore(input: EntrainmentSignals | null | undefined): number | null {
+  if (input == null) return null;
+
+  const onset = signalToMinutes(input.melatoninOnset);
+  const end = signalToMinutes(input.shiftEnd);
+  if (onset == null || end == null) return null;
+
+  const gap = circularGapMinutes(onset, end);
+  const score = Math.round(SCORE_MAX * Math.max(0, 1 - gap / ENTRAINMENT_HALF_LIFE_MIN));
+  // Math already bounds the result, but clamp explicitly so the [0, 100]
+  // guarantee is local to this return and not dependent on the formula above.
+  return Math.min(SCORE_MAX, Math.max(SCORE_MIN, score));
+}

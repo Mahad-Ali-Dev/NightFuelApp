@@ -1,11 +1,11 @@
 /**
  * circadian.test.tsx
  *
- * Render coverage for the Aurora-restyled Circadian tab
+ * Render + behaviour coverage for the Aurora-restyled Circadian tab
  * (`app/(tabs)/circadian.tsx`). The screen had zero render tests, so a silent
  * restyle could break its navigation without a single suite turning red. This
- * file pins the three load-bearing behaviours so future restyle rounds can't
- * regress them:
+ * file pins the load-bearing behaviours so future restyle rounds can't regress
+ * them:
  *
  *   - Test A (loading): while ['current-shift'] is `isLoading`, the screen
  *     mounts its skeleton scaffold ONLY — the "Circadian"/"Optimizer" hero and
@@ -19,36 +19,61 @@
  *     slot's mealType + serialized plan params (the one-tap plan→meal flow that
  *     replaced the old data-less "Swap → build-plate" action).
  *
+ *   - Test group D (HELPER PARITY — the entrainment.ts single-source-of-truth):
+ *     the screen now consumes the shared `entrainmentAdvice` /
+ *     `deriveWindowsFromShift` helpers instead of an inline ternary + inline
+ *     endTime±h arithmetic. These tests assert that adoption is honest:
+ *       • for a present shift with NO circadianModel, the four biological-window
+ *         tiles equal `deriveWindowsFromShift(shift)` output (so the inline math
+ *         can't drift back in);
+ *       • the advice copy equals `entrainmentAdvice(score)` for score>=80, a
+ *         finite score<80, and `null` (so the inline advice ternary can't drift);
+ *       • a malformed shift ISO can NEVER crash the screen (the helper THROWS;
+ *         the screen's try/catch falls back to the '--:--' placeholders).
+ *
+ *   - Test group E (QUOTA UX — the shipped 429 split, mutation-driven):
+ *     the "Regenerate" action drives the METERED plan-service path; on the
+ *     SHARED `429 { error:'ai_quota_exceeded', … }` the screen flips into the
+ *     distinct "Daily AI limit reached" upgrade block whose CtaButton routes to
+ *     '/(modals)/premium' — and CRITICALLY does NOT raise a destructive
+ *     `Alert.alert`. Any other failure takes the retryable "Generation failed"
+ *     Try-Again path (also no Alert). The real `parseAiQuotaError` does the
+ *     429-vs-generic discrimination here (jest.requireActual).
+ *
  * Mock conventions mirror the sibling `(tabs)` screen suites
- * (nutrition.errorStates / dashboard.errorStates) and the hoisted-`mockPush`
- * holder in shift-detail.test.tsx:
+ * (nutrition.errorStates / dashboard.errorStates), the hoisted-`mockPush`
+ * holder in shift-detail.test.tsx, and the `alertSpy` posture in
+ * planner.quota.test.tsx:
  *
  *   - `@tanstack/react-query` is stubbed and branches on queryKey[0]: a mutable
  *     `mockCurrentShift` holder drives ['current-shift'] (so each test picks the
- *     loading / no-shift / populated branch before render); ['circadian-model']
- *     resolves `{ data: undefined }` so the screen uses its shift-based metric
- *     estimates; `useMutation` is a benign no-op (`isPending:false`,
- *     `data:undefined`) so the plan timeline — not the GeneratingSteps loader —
- *     renders, and the fallback protocol (which contains the meal rows) is used.
+ *     loading / no-shift / populated branch before render); a mutable
+ *     `mockCircadianModel` holder drives ['circadian-model'] (undefined → the
+ *     screen uses its shift-based window estimates; `{ entrainmentScore }` →
+ *     the model-present score path for the advice-parity cases). `useMutation`
+ *     is a controllable stub: it CAPTURES the screen's onMutate/onSuccess/onError
+ *     config and exposes a `mutate` that synchronously runs onMutate then either
+ *     onSuccess or onError(<configured error>) — so the screen's REAL onError
+ *     logic (parseAiQuotaError → setQuota/setGenError) is exercised without
+ *     pulling in real react-query. `isPending` is forced false so the timeline
+ *     (and the notices) render rather than the GeneratingSteps loader.
  *   - `expo-router` exposes a hoisted `mockPush` so the deep-links can be
  *     asserted by route + arity.
- *   - `../../app/(tabs)/_layout` is stubbed to just `{ TAB_BAR_H }` — the screen
- *     only needs that constant; the stub keeps the real tab navigator
- *     (expo-router <Tabs>, authStore, SafeBlurView) out of the render entirely.
- *   - api modules (`@/api/shifts` getCurrent, `@/api/plans` generatePlan,
- *     `@/api/circadian` getModel) are plain jest.fns so the real axios client /
- *     env config never load; useQuery/useMutation are fully stubbed, so these
- *     queryFns are never invoked. `@/api/ai` is mocked to a passthrough
- *     `parseAiQuotaError` (the only symbol the screen now imports from it) so the
- *     ai @/lib/aiSafety + sentry subtree never loads; it is never called on the
- *     render paths under test (it only fires inside the mutation's onError).
+ *   - `../../app/(tabs)/_layout` is stubbed to just `{ TAB_BAR_H }`.
+ *   - `@/api/ai` delegates to the REAL implementation (jest.requireActual) so
+ *     the genuine `parseAiQuotaError` does the 429-vs-generic discrimination; its
+ *     leaf deps (`@/api/client`, `@/lib/sentry`) are mocked so no axios/env or
+ *     native Sentry subtree loads. The other api modules (`@/api/shifts`,
+ *     `@/api/plans`, `@/api/circadian`) are plain jest.fns — useQuery/useMutation
+ *     are stubbed, so these queryFns/mutationFns are never invoked.
  *   - decorative glyphs, safe-area insets, the linear gradient and the status
  *     bar are stubbed the same way as the rest of the screen suites.
  *
  * The `@/components/ui` barrel is deliberately left REAL: the assertions ride on
- * the actual CtaButton (its accessibilityRole="button" + "Schedule a shift"
- * label) and EmptyState copy, and the real GlassCard / Skeleton / GeneratingSteps
- * render fine under the gradient/icon/blur stubs above.
+ * the actual CtaButton (its accessibilityRole="button" + label) and EmptyState
+ * copy, and the real GlassCard / Skeleton / GeneratingSteps render fine under the
+ * gradient/icon/blur stubs above. The REAL `@/lib/circadian/entrainment` is also
+ * imported directly so the parity assertions compare against the source of truth.
  */
 
 // ── jest.mock hoisting block (runs ABOVE the imports) ────────────────────────
@@ -67,12 +92,23 @@ jest.mock('expo-router', () => ({
 type ShiftState = { data: any; isLoading: boolean };
 const mockCurrentShift: ShiftState = { data: undefined, isLoading: false };
 
-// react-query: branch on queryKey[0]. ['current-shift'] reads the mutable holder
-// above; ['circadian-model'] resolves undefined so the screen estimates metrics
-// from the shift (and never calls the real getModel). useMutation is a benign
-// no-op: data:undefined → the screen uses its FALLBACK protocol (which carries
-// the meal rows under test); isPending:false → the timeline renders rather than
-// the GeneratingSteps loader.
+// Controlled state for the ['circadian-model'] query. `undefined` → the screen
+// falls back to the shift-based window estimate (the deriveWindowsFromShift
+// path); an object → the model-present branch (used to drive an entrainment
+// score for the advice-parity cases).
+const mockCircadianModel: { data: any } = { data: undefined };
+
+// Controllable mutation outcome. `mode:'idle'` → mutate is a no-op (Tests A–D
+// never (re)generate). `mode:'error'` → mutate runs onMutate then onError(err).
+// `mode:'success'` → mutate runs onMutate then onSuccess. The screen's REAL
+// onError (parseAiQuotaError → setQuota/setGenError) runs against `err`.
+type MutationOutcome = { mode: 'idle' | 'error' | 'success'; err?: unknown };
+const mockMutation: MutationOutcome = { mode: 'idle' };
+
+// react-query: branch on queryKey[0]. ['current-shift'] / ['circadian-model']
+// read the mutable holders above. useMutation captures the screen's lifecycle
+// config and returns a `mutate` that drives it synchronously per mockMutation.
+// isPending is forced false → the timeline + notices render (not the loader).
 jest.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     const key = queryKey[0];
@@ -80,22 +116,37 @@ jest.mock('@tanstack/react-query', () => ({
       return { data: mockCurrentShift.data, isLoading: mockCurrentShift.isLoading };
     }
     if (key === 'circadian-model') {
-      return { data: undefined };
+      return { data: mockCircadianModel.data };
     }
     return { data: undefined, isLoading: false };
   },
-  useMutation: () => ({ data: undefined, isPending: false, mutate: jest.fn() }),
+  useMutation: (config: any) => ({
+    data: undefined,
+    isPending: false,
+    mutate: () => {
+      config?.onMutate?.();
+      if (mockMutation.mode === 'error') {
+        config?.onError?.(mockMutation.err);
+      } else if (mockMutation.mode === 'success') {
+        config?.onSuccess?.(undefined);
+      }
+    },
+  }),
 }));
 
-// api modules the screen statically imports — stubbed so the real axios client
-// (via @/api/client) never loads. The plan now generates via the METERED
-// `@/api/plans` generatePlan; `@/api/ai` is reduced to a passthrough
-// parseAiQuotaError (the only symbol still imported from it) so its
-// @/lib/aiSafety + sentry subtree never loads. useQuery / useMutation are
-// stubbed above, so none of these are ever invoked on the paths under test.
+// api modules the screen statically imports. `@/api/ai` → the REAL module (so
+// parseAiQuotaError is genuine), with its leaf deps mocked below so the axios
+// client / native sentry never load. The metered `@/api/plans` generatePlan and
+// the query fns are plain jest.fns — never invoked (useQuery/useMutation stubbed).
 jest.mock('@/api/shifts', () => ({ getCurrent: jest.fn() }));
 jest.mock('@/api/plans', () => ({ generatePlan: jest.fn() }));
-jest.mock('@/api/ai', () => ({ parseAiQuotaError: jest.fn(() => null) }));
+jest.mock('@/api/ai', () => jest.requireActual('@/api/ai'));
+jest.mock('@/api/client', () => ({
+  apiClient: { get: jest.fn(), post: jest.fn() },
+  getAccessToken: jest.fn(() => Promise.resolve(null)),
+  resolveApiUrl: (p: string) => `http://test${p}`,
+}));
+jest.mock('@/lib/sentry', () => ({ captureException: jest.fn() }));
 jest.mock('@/api/circadian', () => ({ getModel: jest.fn() }));
 
 // _layout stub: circadian.tsx only needs the TAB_BAR_H constant from it.
@@ -129,6 +180,7 @@ jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
+import { Alert } from 'react-native';
 import { render, fireEvent, screen } from '@testing-library/react-native';
 import {
   ThemeContext,
@@ -138,6 +190,10 @@ import {
   borderRadius,
   shadows,
 } from '@/theme';
+// The REAL helper — parity assertions compare the rendered copy/windows against
+// the single source of truth, so any drift (copy edit, flipped threshold, math
+// change) turns this suite RED rather than passing on a hand-copied string.
+import { entrainmentAdvice, deriveWindowsFromShift } from '@/lib/circadian/entrainment';
 import CircadianScreen from '../../app/(tabs)/circadian';
 
 function renderScreen() {
@@ -159,11 +215,23 @@ const ACTIVE_SHIFT = {
   endTime: '2026-06-14T06:00:00.000Z',
 };
 
+let alertSpy: jest.SpyInstance;
+
 describe('CircadianScreen', () => {
   beforeEach(() => {
     mockCurrentShift.data = undefined;
     mockCurrentShift.isLoading = false;
+    mockCircadianModel.data = undefined;
+    mockMutation.mode = 'idle';
+    mockMutation.err = undefined;
     mockPush.mockClear();
+    // The shipped UX replaced a destructive Alert with inline GlassCard notices;
+    // spy so the quota/error tests can assert Alert.alert is NEVER raised.
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    alertSpy.mockRestore();
   });
 
   // ── Test A: loading → skeleton scaffold only ──────────────────────────────
@@ -243,5 +311,162 @@ describe('CircadianScreen', () => {
     const parsedPlan = JSON.parse(arg.params.plan!);
     expect(parsedPlan).toHaveProperty('plannedMacros');
     expect(parsedPlan).toHaveProperty('suggestedFoods');
+  });
+
+  // ── Test group D: helper parity (entrainment.ts single source of truth) ────
+  describe('entrainment helper parity', () => {
+    // (D1) The four biological-window tiles render EXACTLY what
+    // deriveWindowsFromShift(shift) returns — proving the inline endTime±h math
+    // was replaced by the shared helper (no drift between the two).
+    test('no-model fallback: the four window tiles equal deriveWindowsFromShift(shift)', () => {
+      mockCurrentShift.data = ACTIVE_SHIFT;
+      mockCircadianModel.data = undefined; // force the no-model fallback branch
+
+      renderScreen();
+
+      // Source of truth — same call the screen now makes (no options ⇒ helper
+      // defaults), so the expected strings are equal by construction regardless
+      // of the jest locale.
+      const w = deriveWindowsFromShift({
+        startTime: ACTIVE_SHIFT.startTime,
+        endTime: ACTIVE_SHIFT.endTime,
+      });
+
+      // Each tile label is present, and each helper-derived value renders at
+      // least once. We use getAllByText (length >= 1) rather than getByText for
+      // the values because two windows can format to the SAME HH:MM string in
+      // some timezones (e.g. insulinStart === peakTemp, both anchored at
+      // startTime) — a collision must not make the parity assertion throw.
+      expect(screen.getByText('Melatonin Onset')).toBeTruthy();
+      expect(screen.getAllByText(w.melatoninStart).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText('Caffeine Cutoff')).toBeTruthy();
+      expect(screen.getAllByText(w.caffeineCutoff).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText('Insulin Peak')).toBeTruthy();
+      expect(screen.getByText('Peak Temp')).toBeTruthy();
+      // insulinStart and peakTemp are both anchored at startTime → identical
+      // string; assert that exact value renders for BOTH tiles.
+      expect(w.peakTemp).toBe(w.insulinStart);
+      expect(screen.getAllByText(w.insulinStart).length).toBeGreaterThanOrEqual(2);
+    });
+
+    // (D2) A malformed shift ISO must NOT crash the screen: deriveWindowsFromShift
+    // THROWS on it, and the screen's try/catch falls back to the '--:--' tiles.
+    test('no-model fallback: a malformed shift ISO never throws and shows the --:-- placeholders', () => {
+      mockCurrentShift.data = { id: 'bad', type: 'night', startTime: 'not-a-date', endTime: '' };
+      mockCircadianModel.data = undefined;
+
+      expect(() => renderScreen()).not.toThrow();
+
+      // The grid still renders (populated branch), with the placeholder values.
+      expect(screen.getByText('Biological Windows')).toBeTruthy();
+      // All four tiles fall back to '--:--' → at least four occurrences.
+      expect(screen.getAllByText('--:--').length).toBeGreaterThanOrEqual(4);
+    });
+
+    // (D3) The advice copy equals entrainmentAdvice(score) for the three branches:
+    // a high score (>=80, model-present), a finite low score (<80, model-present),
+    // and no score (null, the no-model fallback). Asserting against the helper's
+    // return value (not a hand-copied string) pins the single source of truth.
+    test('advice copy equals entrainmentAdvice(score): score>=80', () => {
+      mockCurrentShift.data = ACTIVE_SHIFT;
+      mockCircadianModel.data = { entrainmentScore: 88 };
+
+      renderScreen();
+
+      const expected = entrainmentAdvice(88);
+      expect(expected).toBe(
+        'Good alignment. Try getting 15m of sunlight upon waking to improve this score.',
+      );
+      expect(screen.getByText(expected)).toBeTruthy();
+    });
+
+    test('advice copy equals entrainmentAdvice(score): a finite score < 80', () => {
+      mockCurrentShift.data = ACTIVE_SHIFT;
+      mockCircadianModel.data = { entrainmentScore: 42 };
+
+      renderScreen();
+
+      const expected = entrainmentAdvice(42);
+      expect(expected).toBe('Room for improvement. Focus on consistent sleep/wake times.');
+      expect(screen.getByText(expected)).toBeTruthy();
+    });
+
+    test('advice copy equals entrainmentAdvice(score): null (no model / no score)', () => {
+      mockCurrentShift.data = ACTIVE_SHIFT;
+      mockCircadianModel.data = undefined; // no-model fallback ⇒ entrainmentScore null
+
+      renderScreen();
+
+      const expected = entrainmentAdvice(null);
+      expect(expected).toBe('Log more shifts to calculate your score.');
+      expect(screen.getByText(expected)).toBeTruthy();
+    });
+  });
+
+  // ── Test group E: shipped 429 quota UX (Upgrade CTA vs Alert) ──────────────
+  describe('daily-AI-limit quota UX', () => {
+    // Reach the AI Protocol tab where the Regenerate action + the notices live.
+    function gotoProtocolTab() {
+      expect(screen.getByText('Biological Windows')).toBeTruthy();
+      fireEvent.press(screen.getByRole('tab', { name: /AI Protocol/ }));
+      expect(screen.getByText("Today's Protocol")).toBeTruthy();
+    }
+
+    // (E1) A 429 ai_quota_exceeded → the distinct upgrade block whose CtaButton
+    // routes to '/(modals)/premium' — and NO destructive Alert.alert.
+    test('a 429 ai_quota_exceeded renders the Upgrade CTA (routes to premium) and does NOT call Alert.alert', () => {
+      mockCurrentShift.data = ACTIVE_SHIFT;
+      mockMutation.mode = 'error';
+      mockMutation.err = {
+        response: {
+          status: 429,
+          data: { error: 'ai_quota_exceeded', limit: 5, plan: 'free', resetsAt: '2099-01-02T00:00:00.000Z' },
+        },
+      };
+
+      renderScreen();
+      gotoProtocolTab();
+
+      // Kick off a (re)generation → the stubbed mutate runs the screen's real
+      // onError(parseAiQuotaError → setQuota).
+      fireEvent.press(screen.getByRole('button', { name: /Regenerate protocol/ }));
+
+      // The distinct upgrade block appears (NOT the generic error / Alert).
+      expect(screen.getByText('Daily AI limit reached')).toBeTruthy();
+      expect(screen.getByText(/used all 5 of your free daily AI plans/i)).toBeTruthy();
+      expect(screen.queryByText('Generation failed')).toBeNull();
+      // The destructive Alert is gone — the quota case is an inline GlassCard.
+      expect(alertSpy).not.toHaveBeenCalled();
+
+      // Press the Upgrade CtaButton → routes to the premium modal, only that.
+      const upgrade = screen.getByRole('button', { name: /Upgrade to remove the daily AI limit/ });
+      fireEvent.press(upgrade);
+
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledWith('/(modals)/premium');
+    });
+
+    // (E2) A generic failure → the retryable "Generation failed" Try-Again
+    // notice (NOT the upgrade CTA, and — critically — no Alert).
+    test('a generic rejection renders the retryable "Generation failed" Try-Again notice, NOT the upgrade CTA, and no Alert', () => {
+      mockCurrentShift.data = ACTIVE_SHIFT;
+      mockMutation.mode = 'error';
+      mockMutation.err = { response: { status: 500, data: { message: 'Internal error' } } };
+
+      renderScreen();
+      gotoProtocolTab();
+
+      fireEvent.press(screen.getByRole('button', { name: /Regenerate protocol/ }));
+
+      // The retryable inline error — with a Try Again action — appears.
+      expect(screen.getByText('Generation failed')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /Try again/ })).toBeTruthy();
+
+      // NOT the upgrade state, no navigation, no Alert.
+      expect(screen.queryByText('Daily AI limit reached')).toBeNull();
+      expect(screen.queryByRole('button', { name: /Upgrade to remove the daily AI limit/ })).toBeNull();
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(alertSpy).not.toHaveBeenCalled();
+    });
   });
 });

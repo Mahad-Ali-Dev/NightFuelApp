@@ -766,6 +766,46 @@ const FEDB_BACKED_SLUGS: Readonly<Record<string, string>> = {
   // Calves
   'Calf Raise On A Dumbbell': 'Calf_Raise_On_A_Dumbbell',
   'Dumbbell Seated One-Leg Calf Raise': 'Dumbbell_Seated_One-Leg_Calf_Raise',
+
+  // ── Widened FEDB-backed tranche #10 (data-only, zero new fetch) ──────────────
+  // A further slice of distinct catalogue movements. Every KEY below is NEW —
+  // absent from GRANDFATHERED, the FEDB_BACKED_SLUGS entries above (tranches #1-#9),
+  // YOUTUBE_PENDING and GIF_PENDING — so buildCuratedDemos() admits each one as
+  // kind:'fedb_frames', verified:false (precedence: an already-set name is skipped).
+  // Every slug VALUE was machine-verified to be present in BOTH FEDB_SLUGS
+  // (exerciseDemos.ts) AND __tests__/fixtures/fedb-catalog-slugs.json (the shipped
+  // 873-slug catalogue), and each is a fresh slug dir not already referenced by an
+  // earlier tranche — so every entry resolves to an ordered 2-frame [0.jpg, 1.jpg]
+  // HTTPS pair via fedbPair() with NO new HTTP call. Strictly additive: the
+  // kind:'youtube'-only sync guard (scripts/check-demo-maps-in-sync.js) and
+  // pendingHumanReviewIds.json (YouTube ids only) are both untouched, so
+  // check-demo-maps-in-sync stays green.
+
+  // Forearms / wrist curls
+  'Palms-Down Wrist Curl Over A Bench': 'Palms-Down_Wrist_Curl_Over_A_Bench',
+  'Palms-Up Barbell Wrist Curl Over A Bench': 'Palms-Up_Barbell_Wrist_Curl_Over_A_Bench',
+  'Cable Wrist Curl': 'Cable_Wrist_Curl',
+  'Standing Palms-Up Barbell Behind The Back Wrist Curl': 'Standing_Palms-Up_Barbell_Behind_The_Back_Wrist_Curl',
+  'Seated Dumbbell Palms-Down Wrist Curl': 'Seated_Dumbbell_Palms-Down_Wrist_Curl',
+  // Grip / strongman
+  'Plate Pinch': 'Plate_Pinch',
+  "Farmer's Walk": 'Farmers_Walk',
+  'Atlas Stones': 'Atlas_Stones',
+  // Olympic / power — dumbbell clean
+  'Dumbbell Clean': 'Dumbbell_Clean',
+  'Bottoms-Up Clean From The Hang Position': 'Bottoms-Up_Clean_From_The_Hang_Position',
+  'Single-Arm Linear Jammer': 'Single-Arm_Linear_Jammer',
+  // Core / abs — rollouts & suspended/crawl variants
+  'Barbell Ab Rollout': 'Barbell_Ab_Rollout',
+  'Barbell Ab Rollout - On Knees': 'Barbell_Ab_Rollout_-_On_Knees',
+  'Spider Crawl': 'Spider_Crawl',
+  'Suspended Push-Up': 'Suspended_Push-Up',
+  'Suspended Row': 'Suspended_Row',
+  'Suspended Reverse Crunch': 'Suspended_Reverse_Crunch',
+  // Mobility / stretch staples
+  'Cat Stretch': 'Cat_Stretch',
+  "Child's Pose": 'Childs_Pose',
+  'Standing Hip Flexors': 'Standing_Hip_Flexors',
 };
 
 /**

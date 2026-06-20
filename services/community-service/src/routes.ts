@@ -20,7 +20,7 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
     });
 
     fastify.get('/v1/community/feed', {
-        schema: { querystring: z.object({ limit: z.coerce.number().default(20), cursor: z.string().optional() }) },
+        schema: { querystring: z.object({ limit: z.coerce.number().int().min(1).max(100).default(20), cursor: z.string().max(200).optional() }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const { limit, cursor } = request.query as any;
@@ -254,7 +254,9 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
     // POST /v1/community/badges/award — award a badge by key (internal / cross-service)
     fastify.post('/v1/community/badges/award', {
         schema: {
-            body: z.object({ userId: z.string(), badgeKey: z.string() })
+            // Internal / cross-service. award does NOT special-case 'me', so userId is
+            // bounded length-only (no .uuid() — callers are not guaranteed to pass a uuid).
+            body: z.object({ userId: z.string().min(1).max(200), badgeKey: z.string().min(1).max(120) })
         },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {

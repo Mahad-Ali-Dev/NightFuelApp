@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getUserScore } from '@/api/community';
 import { Skeleton, EmptyState } from '@/components/ui';
 import { EntrainmentCard } from '@/components/dashboard/EntrainmentCard';
+import { useEntrainmentScore } from '@/components/dashboard/useEntrainmentScore';
 import { TAB_BAR_H } from './_layout';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -41,6 +42,14 @@ export default function AnalyticsScreen() {
 
     const { weekly } = useProgress();
     const { analytics } = useSleep();
+
+    // The GENUINE circadian entrainment score + active shift for the
+    // EntrainmentCard below. This is the real model-derived score (sourced from
+    // getModel().entrainmentScore — melatonin-onset vs shift-end alignment), NOT
+    // the sleep<->performance `correlationScore` proxy used by the Correlation
+    // card. `score` is null-safe and `shift` undefined when there's no shift, so
+    // the card's honest "log more shifts" path renders without throwing.
+    const { score: entrainmentScore, shift: entrainmentShift } = useEntrainmentScore();
 
     // XP & Level from community/gamification
     const scoreQuery = useQuery({
@@ -319,14 +328,14 @@ export default function AnalyticsScreen() {
                 </View>
 
                 {/* ── Circadian Entrainment Insight ─────────────────────── */}
-                {/* First consumer of the F3 helper (src/lib/circadian/entrainment.ts):
-                    drives its advice copy from the user's alignment score. We
-                    reuse the analytics `correlationScore` (a finite 0–100 read,
-                    or null when there isn't enough data yet) as the entrainment
-                    score — null is default-safe and never throws. */}
-                <EntrainmentCard
-                    score={typeof correlationScore === 'number' ? correlationScore : null}
-                />
+                {/* Sources the REAL circadian entrainment score from the
+                    circadian model (useEntrainmentScore → getModel().
+                    entrainmentScore, derived from melatonin-onset vs shift-end
+                    alignment) — NOT the sleep<->performance `correlationScore`
+                    above. The active shift is passed so the card's Wind-down
+                    window hint renders live; both are null/undefined-safe, so
+                    the honest "log more shifts" path never throws. */}
+                <EntrainmentCard score={entrainmentScore} shift={entrainmentShift} />
 
                 {/* ── Weekly AI Report ─────────────────────────────────── */}
                 <TouchableOpacity
