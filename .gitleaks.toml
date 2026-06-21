@@ -91,10 +91,12 @@ paths = [
   '''.next/''',
   # Generated Prisma client files contain large binary-encoded blobs.
   '''services/.*/src/generated/''',
-  # Tree dumps and log files
+  # Tree dumps
   '''mobile_tree.*\.txt''',
   '''web_tree.*\.txt''',
-  '''.*\.log''',
+  # NOTE: the blanket '''.*\.log''' allowlist was REMOVED in F22 — it hid real
+  # leaked PII/secrets in committed *.log files from the scanner. *.log is now
+  # gitignored (so none should be committed); if one ever is, gitleaks must scan it.
 ]
 
 regexes = [

@@ -46,11 +46,14 @@ async def global_exception_handler(request: Request, exc: Exception):
     if isinstance(exc, RequestValidationError):
         logger.error(f"Validation Error: {exc}")
         return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    # Security: never reflect the exception message or traceback on the wire.
+    # The full traceback is logged server-side only; the client gets a fixed,
+    # redacted body — matching the TS services' redaction posture.
     tb = traceback.format_exc()
     logger.error(f"Unhandled exception: {exc}\n{tb}")
     return JSONResponse(
         status_code=500,
-        content={"detail": str(exc), "traceback": tb}
+        content={"detail": "Internal server error"}
     )
 
 app.add_middleware(

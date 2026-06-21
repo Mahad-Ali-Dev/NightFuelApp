@@ -95,20 +95,31 @@ describe('register', () => {
     shiftType: 'NIGHT',
   };
 
-  test('POSTs the full payload to /v1/auth/register and returns the body', async () => {
-    mockedPost.mockResolvedValueOnce({ data: authResponse });
+  test('POSTs the payload to /register, then logs in with the same creds and returns the login body', async () => {
+    // /register is enumeration-resistant and returns only a generic message (no
+    // tokens); register() completes the flow with an explicit /login.
+    mockedPost
+      .mockResolvedValueOnce({ data: { message: 'If this email is available, your account was created.' } })
+      .mockResolvedValueOnce({ data: authResponse });
 
     const result = await register(payload);
 
-    expect(mockedPost).toHaveBeenCalledWith('/v1/auth/register', payload);
-    expect(result).toBe(authResponse);
+    expect(mockedPost).toHaveBeenNthCalledWith(1, '/v1/auth/register', payload);
+    expect(mockedPost).toHaveBeenNthCalledWith(2, '/v1/auth/login', {
+      email: payload.email,
+      password: payload.password,
+    });
+    expect(result).toEqual(authResponse);
   });
 
-  test('persists tokens from the register response', async () => {
-    mockedPost.mockResolvedValueOnce({ data: authResponse });
+  test('persists tokens from the follow-up login (register itself returns no tokens)', async () => {
+    mockedPost
+      .mockResolvedValueOnce({ data: { message: 'ok' } })
+      .mockResolvedValueOnce({ data: authResponse });
 
     await register(payload);
 
+    expect(mockedSetTokens).toHaveBeenCalledTimes(1);
     expect(mockedSetTokens).toHaveBeenCalledWith('access-abc', 'refresh-xyz');
   });
 });

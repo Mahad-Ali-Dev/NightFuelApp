@@ -29,6 +29,7 @@ const MAX_QUANTITY = 10000;   // servings/grams for one item
 const MAX_CALORIES = 20000;   // kcal for one item
 const MAX_MACRO_GRAMS = 2000; // grams of protein / carbs / fat for one item
 const MAX_FOOD_NAME_LEN = 200; // a single food item's display name (custom or library)
+const MAX_FOOD_ITEMS = 50;    // food items in one logged meal (mirrors exercise-service's exercises[].max)
 
 export const logMealBodySchema = z.object({
     mealType: z.enum(['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK']),
@@ -40,7 +41,7 @@ export const logMealBodySchema = z.object({
         protein: z.number().min(0).max(MAX_MACRO_GRAMS),
         carbs: z.number().min(0).max(MAX_MACRO_GRAMS),
         fat: z.number().min(0).max(MAX_MACRO_GRAMS)
-    })).min(1, "Must include at least one food item"),
+    })).min(1, "Must include at least one food item").max(MAX_FOOD_ITEMS, "Too many food items in one meal"),
     // Optional provenance link: when a meal is logged straight from a planned
     // protocol slot (the circadian "Log this" flow), the client passes the
     // originating plan-meal id so the service can persist/echo it. Additive —

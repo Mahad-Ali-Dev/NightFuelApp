@@ -53,11 +53,16 @@ jest.mock('expo-router', () => ({
 }));
 
 // Onboarding store — a mutable holder the screen reads at mount. profile-summary
-// calls useOnboardingStore() with NO selector and destructures { data }.
+// calls useOnboardingStore() with NO selector and destructures { data }, and on
+// finish calls useOnboardingStore.getState().reset() to clear the persisted
+// health-PII draft (F22). The mock exposes both the hook and a static getState().
+const mockReset = jest.fn();
 const mockStore: { data: any } = { data: {} };
-jest.mock('@/store/onboardingStore', () => ({
-  useOnboardingStore: () => mockStore,
-}));
+jest.mock('@/store/onboardingStore', () => {
+  const hook: any = () => mockStore;
+  hook.getState = () => ({ data: mockStore.data, reset: mockReset });
+  return { useOnboardingStore: hook };
+});
 
 // Auth store — the screen destructures { updateUser }; a shared spy is enough.
 const mockUpdateUser = jest.fn();

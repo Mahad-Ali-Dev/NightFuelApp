@@ -11,6 +11,59 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { apiClient } from '@/api/client';
 import { useAuthStore } from '@/store/authStore';
+import { resolveDeepLink } from '@/lib/deepLinks';
+import { captureException } from '@/lib/sentry';
+
+/** Where we send a tapped notification when its target isn't allowlisted. */
+const NOTIFICATION_FALLBACK_ROUTE = '/(tabs)';
+
+/**
+ * Resolve a tapped-notification target to a safe in-app route, or `null` to
+ * fall back to home.
+ *
+ * A push payload is attacker-influenced, so `data.deepLink` must NEVER be
+ * handed to `router.push()` unchecked — that bypasses the deep-link allowlist
+ * (resolveDeepLink / DEEP_LINK_ROUTES) and lets a crafted push deep-link into
+ * any route. We:
+ *   1. run the raw deepLink through the shared allowlist (covers reset / verify
+ *      / coach-invite / subscription / share routes), and
+ *   2. additionally accept the one route the notification system itself emits —
+ *      `/messages/<conversationId>` — but only when the id is a safe token
+ *      (no slashes / traversal / query injection). This path is not in
+ *      DEEP_LINK_ROUTES because it is in-app-only and never arrives via an
+ *      external URL.
+ * Anything else is rejected.
+ */
+export function resolveNotificationTarget(
+    deepLink: string | undefined,
+    conversationId: string | undefined,
+): string | null {
+    // Only conversation ids matching a safe token are trusted (UUIDs in prod).
+    const SAFE_ID = /^[A-Za-z0-9_-]+$/;
+    const messagesRoute = (id: string) => `/messages/${id}`;
+
+    if (deepLink) {
+        // 1. Allowlisted external-style routes.
+        const resolved = resolveDeepLink(deepLink);
+        if (resolved.safe) return resolved.route;
+
+        // 2. The in-app messages route the notification service emits.
+        const m = deepLink.match(/^\/messages\/([^/?#]+)\/?$/);
+        if (m && SAFE_ID.test(m[1])) return messagesRoute(m[1]);
+
+        // Rejected: log a soft signal (path only — never the raw payload).
+        captureException(new Error('notification_deeplink_rejected'), {
+            reason: resolved.reason ?? 'unknown_path',
+        });
+        return null;
+    }
+
+    // No deepLink — fall back to building the messages route from a safe id.
+    if (conversationId && SAFE_ID.test(conversationId)) {
+        return messagesRoute(conversationId);
+    }
+    return null;
+}
 
 // Expo Go sets appOwnership to 'expo'; development/standalone builds set it to null.
 const IS_EXPO_GO = Constants.appOwnership === 'expo';
@@ -91,12 +144,15 @@ export function useNotifications() {
             // back to building the messages route from conversationId. expo-router
             // routes via the native stack (see react-native-skills:
             // navigation-native-navigators.md — use native navigators).
+            //
+            // The payload is attacker-influenced, so we validate the target
+            // through the deep-link allowlist before navigating (see
+            // resolveNotificationTarget) and fall back to home for anything
+            // that isn't allowlisted.
             const deepLink = typeof data?.deepLink === 'string' ? data.deepLink : undefined;
             const conversationId = typeof data?.conversationId === 'string' ? data.conversationId : undefined;
-            const target = deepLink ?? (conversationId ? `/messages/${conversationId}` : undefined);
-            if (target) {
-                router.push(target as any);
-            }
+            const target = resolveNotificationTarget(deepLink, conversationId) ?? NOTIFICATION_FALLBACK_ROUTE;
+            router.push(target as any);
         });
 
         return () => sub.remove();

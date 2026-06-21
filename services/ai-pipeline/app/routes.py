@@ -1,6 +1,6 @@
-from typing import Dict, Any, List
+from typing import Dict, Any
 from fastapi import APIRouter, Request
-from .models import DayPlanRequest, DayPlanResponse, GoalPreferences
+from .models import DayPlanRequest, DayPlanResponse, GoalPreferences, WeeklyAuditRequest
 from .validators import generate_skeleton
 from .chains.plan_generator import generate_plan_content, LLMProvider
 from .chains.audit_generator import generate_weekly_audit
@@ -59,29 +59,26 @@ async def generate_plan(request: DayPlanRequest, http_request: Request, provider
 
 @router.post("/weekly-audit")
 async def weekly_audit(
+    payload: WeeklyAuditRequest,
     http_request: Request,
-    userId: str,
-    stats: Dict[str, Any],
-    history: List[Dict[str, Any]],
-    preferences: Dict[str, Any],
     provider: str = "anthropic"
 ):
     """
     Generate a coaching summary/audit for the last 7 days.
     """
-    logger.info(f"Generating weekly audit for user {userId}")
-    await check_rate_limit(userId, category="generation", request=http_request)
-    
+    logger.info(f"Generating weekly audit for user {payload.userId}")
+    await check_rate_limit(payload.userId, category="generation", request=http_request)
+
     try:
         active_provider = LLMProvider(provider.lower())
     except ValueError:
         active_provider = LLMProvider.ANTHROPIC
 
     return await generate_weekly_audit(
-        userId=userId,
-        stats=stats,
-        history=history,
-        preferences=preferences,
+        userId=payload.userId,
+        stats=payload.stats,
+        history=payload.history,
+        preferences=payload.preferences,
         provider=active_provider
     )
 
@@ -166,7 +163,7 @@ async def chat_with_coach(
     response_text = await generate_chat_response(
         user_id=payload.userId,
         message=payload.message,
-        history=payload.history,
+        history=[h.model_dump() for h in payload.history],
         context=payload.context,
         provider=active_provider
     )
@@ -205,7 +202,7 @@ async def chat_with_coach_stream(payload: CoachChatRequest, http_request: Reques
         async for event in generate_chat_response_stream(
             user_id=payload.userId,
             message=payload.message,
-            history=payload.history,
+            history=[h.model_dump() for h in payload.history],
             context=payload.context,
             provider=active_provider,
         ):

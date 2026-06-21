@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+import * as SecureStore from 'expo-secure-store';
 import {
     ShiftType,
     DietaryPreference,
@@ -38,6 +38,22 @@ interface OnboardingState {
     reset: () => void;
 }
 
+/**
+ * SecureStore-backed persistence adapter.
+ *
+ * The onboarding draft holds health PII (weightKg / heightCm / dateOfBirth /
+ * biologicalSex / healthConditions). Persisting it to plaintext AsyncStorage
+ * leaves that PII readable on a compromised / rooted device, so we keep it in
+ * the OS keychain/keystore instead. The draft is a handful of scalars plus a
+ * short array — comfortably under SecureStore's size limit. On a successful
+ * profile submit `reset()` clears the value (see profile-summary.tsx).
+ */
+const secureStorage: StateStorage = {
+    getItem: (name) => SecureStore.getItemAsync(name),
+    setItem: (name, value) => SecureStore.setItemAsync(name, value),
+    removeItem: (name) => SecureStore.deleteItemAsync(name),
+};
+
 const initialState: OnboardingData = {
     shiftType: null,
     sleepTargetHours: null,
@@ -67,8 +83,9 @@ export const useOnboardingStore = create<OnboardingState>()(
             reset: () => set({ data: initialState }),
         }),
         {
+            // SecureStore key constraint: alphanumerics, '.', '-', '_' only.
             name: 'nf-onboarding-storage',
-            storage: createJSONStorage(() => AsyncStorage),
+            storage: createJSONStorage(() => secureStorage),
         }
     )
 );

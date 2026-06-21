@@ -41,8 +41,11 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import { authRoutes } from '../src/routes';
 
 // Per-route generic fallbacks (must match src/routes.ts exactly).
-const REGISTER_FALLBACK = 'Unable to complete request';
 const LOGIN_FALLBACK = 'Invalid credentials';
+// register's anti-enumeration response — identical for new, duplicate, AND
+// internal-error cases so none can be told apart (must match src/routes.ts).
+const GENERIC_REGISTER_MESSAGE =
+    "If this email isn't already registered, the account was created";
 // An allowlisted string the helper IS permitted to surface verbatim (src/routes.ts ALLOWED).
 const ALLOWLISTED_LOGIN_MESSAGE = 'Invalid credentials';
 // A raw, non-allowlisted message padded with attack-signal fragments that the
@@ -204,7 +207,7 @@ describe('auth-service credential routes — zod INPUT BOUNDS are enforced befor
     // ── INCLUSIVE boundaries pass validation and reach the (mocked) service ──────
     describe('inclusive boundaries are accepted (NOT 400) and the service is invoked once', () => {
         it('register: exactly-8-char strong password, displayName len 2, region len 2, valid email', async () => {
-            svc.register.mockResolvedValueOnce({ ok: true } as never);
+            svc.register.mockResolvedValueOnce({ message: GENERIC_REGISTER_MESSAGE } as never);
 
             const res = await app.inject({
                 method: 'POST',
@@ -212,10 +215,11 @@ describe('auth-service credential routes — zod INPUT BOUNDS are enforced befor
                 payload: validRegisterBody(), // all fields exactly at the inclusive bound
             });
 
-            // Boundary inputs are valid: the request reaches the handler (201 on
-            // the happy path), so it is emphatically NOT a 400 validation reject.
+            // Boundary inputs are valid: the request reaches the handler (200 with
+            // the generic anti-enumeration message on the happy path), so it is
+            // emphatically NOT a 400 validation reject.
             expect(res.statusCode).not.toBe(400);
-            expect(res.statusCode).toBe(201);
+            expect(res.statusCode).toBe(200);
             expect(svc.register).toHaveBeenCalledTimes(1);
         });
 
@@ -250,7 +254,11 @@ describe('auth-service credential routes — zod INPUT BOUNDS are enforced befor
 
     // ── 400/401 redaction: the catch funnels through the real safeMsg/ALLOWED ───
     describe('4xx body redaction — non-allowlisted throws collapse to the fixed fallback', () => {
-        it('register: a NON-allowlisted leaky throw -> 400 with ONLY the fixed fallback', async () => {
+        it('register: a NON-allowlisted leaky throw -> generic 200 message (anti-enumeration), no leak', async () => {
+            // register no longer surfaces a distinguishable 4xx error: even an
+            // internal failure collapses to the SAME generic 200 body a new /
+            // duplicate signup returns, so the three cases are indistinguishable
+            // (no account enumeration) and no internal detail leaks.
             svc.register.mockRejectedValueOnce(new Error(LEAKY_MESSAGE) as never);
 
             const res = await app.inject({
@@ -259,9 +267,8 @@ describe('auth-service credential routes — zod INPUT BOUNDS are enforced befor
                 payload: validRegisterBody(),
             });
 
-            expect(res.statusCode).toBe(400);
-            // Exactly the per-route generic fallback — nothing else.
-            expect(res.json()).toEqual({ error: REGISTER_FALLBACK });
+            expect(res.statusCode).toBe(200);
+            expect(res.json()).toEqual({ message: GENERIC_REGISTER_MESSAGE });
             // Hard guard: none of the raw fragments may reach the wire.
             expect(res.body).not.toContain(LEAKY_MESSAGE);
             expect(res.body).not.toContain('Prisma');

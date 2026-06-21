@@ -270,6 +270,14 @@ export async function subscriptionRoutes(
               message: { type: 'string' },
             },
           },
+          402: {
+            type: 'object',
+            properties: {
+              statusCode: { type: 'number' },
+              error: { type: 'string' },
+              message: { type: 'string' },
+            },
+          },
         },
       },
     },
@@ -294,6 +302,24 @@ export async function subscriptionRoutes(
       }
 
       const { tier } = parseResult.data as UpgradeBody;
+
+      // SECURITY (paywall / revenue bypass): this route is authenticated but
+      // performs NO payment verification, so it must never grant a PAID tier.
+      // Elevation to a paid plan (PRO / PREMIUM / ENTERPRISE) is only legitimate
+      // via the verified purchase flows — POST /v1/subscriptions/iap/validate
+      // (Apple/Google receipt validation) or the Stripe webhook. Both of those
+      // call subscriptionService.upgradeTier() directly after verifying payment;
+      // this client-callable path is restricted to the safe transition: FREE
+      // (downgrade / cancel). Any attempt to set a paid tier here is rejected so
+      // a user cannot grant themselves a free upgrade.
+      if (tier !== 'FREE') {
+        log.warn({ userId, tier }, 'routes: POST /upgrade – rejected paid-tier elevation without verified purchase');
+        return reply.status(402).send({
+          statusCode: 402,
+          error: 'payment_required',
+          message: 'Paid plans require a verified purchase',
+        });
+      }
 
       try {
         const { subscription, fromTier } = await subscriptionService.upgradeTier({

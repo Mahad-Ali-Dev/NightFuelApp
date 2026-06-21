@@ -60,18 +60,21 @@ export async function login(
 }
 
 /**
- * Create a new account.
- * Automatically persists tokens to SecureStore.
+ * Create a new account, then sign in.
+ *
+ * The backend /register endpoint is intentionally enumeration-resistant: it
+ * returns a generic { message } (never tokens, never "user already exists") so
+ * an attacker can't probe which emails are registered. We therefore complete the
+ * flow with an explicit login using the same credentials — a brand-new account
+ * logs in cleanly; a duplicate email with a non-matching password fails exactly
+ * like any other bad login, leaking no account-existence signal. `login()`
+ * persists the tokens to SecureStore, so the screen contract is unchanged.
  */
 export async function register(
   payload: RegisterPayload,
 ): Promise<AuthResponse> {
-  const { data } = await apiClient.post<AuthResponse>(
-    '/v1/auth/register',
-    payload,
-  );
-  await setTokens(data.accessToken, data.refreshToken);
-  return data;
+  await apiClient.post('/v1/auth/register', payload);
+  return login(payload.email, payload.password);
 }
 
 /**

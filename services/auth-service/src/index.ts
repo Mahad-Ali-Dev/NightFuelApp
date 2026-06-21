@@ -32,7 +32,12 @@ const prisma = new PrismaClient();
 const eventBus = new RedisEventBus(config.REDIS_URL);
 const authService = new AuthService(prisma, eventBus, { JWT_SECRET: config.JWT_SECRET });
 
-const fastify = Fastify({ logger: false });
+// trustProxy: behind nginx / the platform reverse proxy, so request.ip reflects
+// the real client IP from X-Forwarded-For rather than the proxy's address. The
+// credential routes key their per-route rate limit on request.ip (routes.ts), so
+// without this every client would share the proxy's IP bucket (mirrors
+// subscription-service's `trustProxy: true`).
+const fastify = Fastify({ logger: false, trustProxy: true });
 registerGlobalProcessHandlers(logger);
 registerFastifyErrorHandler(fastify, logger);
 

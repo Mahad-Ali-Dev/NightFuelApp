@@ -176,16 +176,22 @@ export class UserService {
                 },
                 update: data,
             }).catch(err => {
-                const errorLog = {
-                    timestamp: new Date().toISOString(),
-                    userId,
-                    err,
-                    data
-                };
-                fs.appendFileSync(
-                    path.join(process.cwd(), 'prisma-error.log'),
-                    JSON.stringify(errorLog, null, 2) + '\n---\n'
-                );
+                // Dev-only debug file dump — never write to disk in production
+                // (cwd may be read-only in the container, and the error data
+                // contains PII). The structured logger.error below is the
+                // production diagnostic.
+                if (process.env.NODE_ENV !== 'production') {
+                    const errorLog = {
+                        timestamp: new Date().toISOString(),
+                        userId,
+                        err,
+                        data
+                    };
+                    fs.appendFileSync(
+                        path.join(process.cwd(), 'prisma-error.log'),
+                        JSON.stringify(errorLog, null, 2) + '\n---\n'
+                    );
+                }
                 logger.error({ userId, err, data }, 'Prisma error');
                 throw err;
             });
@@ -316,25 +322,6 @@ export class UserService {
 
             return prefs;
         } catch (err: any) {
-            // Dev-only debug file write — redact raw err.message/stack so PII
-            // (user inputs, query fragments) never lands on disk. The real
-            // cause is still in the structured logger.error below.
-            const errorLog = {
-                method: 'updatePreferences',
-                timestamp: new Date().toISOString(),
-                userId,
-                err: {
-                    message: 'redacted',
-                    stack: 'redacted',
-                    code: err.code,
-                    meta: err.meta
-                },
-                body
-            };
-            fs.appendFileSync(
-                'c:\\Users\\saras\\Downloads\\NightFule\\prisma-error.log',
-                JSON.stringify(errorLog, null, 2) + '\n---\n'
-            );
             logger.error({ userId, err, body }, 'Failed to update user preferences');
             throw err;
         }
@@ -360,14 +347,20 @@ export class UserService {
                 onboardingCompleted: body.completed,
             },
         }).catch(err => {
-            const errorLog = {
-                method: 'updateOnboarding',
-                timestamp: new Date().toISOString(),
-                userId,
-                err,
-                // No 'data' object to log here, as updateOnboarding directly uses body.step/completed
-            };
-            fs.appendFileSync(path.join(process.cwd(), 'prisma-error.log'), JSON.stringify(errorLog, null, 2) + '\n---\n');
+            // Dev-only debug file dump — never write to disk in production
+            // (cwd may be read-only in the container). The structured
+            // logger.error is the production diagnostic.
+            if (process.env.NODE_ENV !== 'production') {
+                const errorLog = {
+                    method: 'updateOnboarding',
+                    timestamp: new Date().toISOString(),
+                    userId,
+                    err,
+                    // No 'data' object to log here, as updateOnboarding directly uses body.step/completed
+                };
+                fs.appendFileSync(path.join(process.cwd(), 'prisma-error.log'), JSON.stringify(errorLog, null, 2) + '\n---\n');
+            }
+            logger.error({ userId, err }, 'Prisma error');
             throw err;
         });
 
@@ -385,10 +378,14 @@ export class UserService {
                 },
             };
 
-            fs.appendFileSync(
-                path.join(process.cwd(), 'event-out.log'),
-                `[${new Date().toISOString()}] Publishing to ${Channels.User.OnboardingCompleted} for user ${userId}\n`
-            );
+            // Dev-only audit trail of outbound events — the real publish below
+            // is the source of truth; never write to disk in production.
+            if (process.env.NODE_ENV !== 'production') {
+                fs.appendFileSync(
+                    path.join(process.cwd(), 'event-out.log'),
+                    `[${new Date().toISOString()}] Publishing to ${Channels.User.OnboardingCompleted} for user ${userId}\n`
+                );
+            }
 
             await this.eventBus.publish(Channels.User.OnboardingCompleted, event);
         }

@@ -38,10 +38,30 @@ function requireEnv(name: string): string {
   return value;
 }
 
+// JWT_SECRET sets the forgery floor for every access token this service trusts.
+// A weak/short secret would let tokens be forged, so we require >=32 chars and
+// fail CLOSED at boot rather than booting silently on a forgeable secret —
+// mirrors auth-service (the token issuer) and the other services in this group.
+function requireSecret(name: string, minLength: number): string {
+  const value = requireEnv(name);
+  if (value.length < minLength) {
+    throw new Error(`Environment variable ${name} must be at least ${minLength} characters`);
+  }
+  return value;
+}
+
 const PORT = parseInt(process.env['SUB_PORT'] ?? '3010', 10);
-const JWT_SECRET = requireEnv('JWT_SECRET');
+const JWT_SECRET = requireSecret('JWT_SECRET', 32);
 const REDIS_URL = requireEnv('REDIS_URL');
 const LOG_LEVEL = process.env['LOG_LEVEL'] ?? 'info';
+
+// Comma-separated list of allowed web origins. When unset we fail CLOSED with an
+// empty allowlist (no cross-origin browser access) rather than falling back to
+// '*' — a wildcard origin with credentials:true is forbidden by the browser and
+// reflects every site's requests. Never '*' with credentials.
+const CORS_ORIGINS = process.env['CORS_ORIGIN']
+  ? process.env['CORS_ORIGIN'].split(',').map((o) => o.trim()).filter(Boolean)
+  : [];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Logger (shared @nightfuel/config createLogger — used both as the root logger
@@ -112,7 +132,7 @@ export async function buildApp(): Promise<ReturnType<typeof Fastify>> {
   });
 
   await app.register(cors, {
-    origin: process.env['CORS_ORIGIN']?.split(',') ?? '*',
+    origin: CORS_ORIGINS,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,

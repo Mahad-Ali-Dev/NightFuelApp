@@ -11,8 +11,11 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
     // Any other error (DB/Prisma/network/etc.) is an unexpected internal failure
     // and must NOT be reflected to the client verbatim — it gets the per-route
     // generic fallback instead, while the real error is still logged server-side.
+    // NOTE: 'User already exists' is deliberately NOT allowlisted. register()
+    // no longer throws it (it returns the same generic message for new and
+    // duplicate emails to prevent account enumeration); were it ever thrown
+    // again it must collapse to the generic fallback, never reach the client.
     const ALLOWED = new Set<string>([
-        'User already exists',
         'Account temporarily locked',
         'Invalid credentials',
         'Invalid refresh token',
@@ -51,12 +54,19 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
             },
         },
         async (request, reply) => {
+            // Always reply 200 with the same generic message — never reveal
+            // whether the email is already registered (account enumeration).
+            // On an internal failure, still surface the identical generic body
+            // (logged server-side) so the duplicate/new/error cases are all
+            // indistinguishable, mirroring the forgot-password handler below.
+            const GENERIC_REGISTER_MESSAGE =
+                "If this email isn't already registered, the account was created";
             try {
                 const result = await service.register(request.body);
-                reply.code(201).send(result);
+                reply.send(result);
             } catch (err: any) {
                 request.log.error(err);
-                reply.code(400).send({ error: safeMsg(err, 'Unable to complete request') });
+                reply.send({ message: GENERIC_REGISTER_MESSAGE });
             }
         }
     );
@@ -72,7 +82,12 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
         async (request, reply) => {
             try {
                 const result = await service.login(request.body);
-                reply.send(result);
+                // Defence-in-depth: the service already strips passwordHash, but
+                // redact it again at the edge so the bcrypt hash can never reach
+                // the client even if a future change reintroduces it on the user
+                // object (mirrors the /me route's passwordHash exclusion).
+                const { passwordHash, ...safeUser } = (result.user ?? {}) as any;
+                reply.send({ ...result, user: safeUser });
             } catch (err: any) {
                 request.log.error(err);
                 reply.code(401).send({ error: safeMsg(err, 'Invalid credentials') });

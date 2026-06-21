@@ -10,6 +10,7 @@
  *   quantity  .min(0.01).max(10000)
  *   calories  .min(0).max(20000)
  *   protein / carbs / fat  .min(0).max(2000) each
+ *   foodItems .min(1).max(50)
  *
  * Previously each of these had only a lower bound, so an item like
  * `calories: 1e9` flowed straight into totalCalories. If anyone loosens or
@@ -23,6 +24,7 @@ import { logMealBodySchema } from '../src/schemas';
 const MAX_QUANTITY = 10000;
 const MAX_CALORIES = 20000;
 const MAX_MACRO_GRAMS = 2000;
+const MAX_FOOD_ITEMS = 50;
 
 // A single, fully in-bounds food item. Tests clone-and-override only the field
 // under examination so the reason a payload passes or fails is never in doubt.
@@ -118,6 +120,19 @@ describe('meal-service schemas — logMealBodySchema bounded input validation', 
     // ── array constraint preserved ───────────────────────────────────────────
     it('still rejects an empty foodItems array (min 1 preserved)', () => {
         const result = logMealBodySchema.safeParse({ mealType: 'LUNCH', foodItems: [] });
+        expect(result.success).toBe(false);
+    });
+
+    // ── array upper bound (storage-amplification guard) ──────────────────────
+    it('accepts a foodItems array exactly at the 50-item cap', () => {
+        const foodItems = Array.from({ length: MAX_FOOD_ITEMS }, () => baseItem());
+        const result = logMealBodySchema.safeParse({ mealType: 'LUNCH', foodItems });
+        expect(result.success).toBe(true);
+    });
+
+    it('rejects a foodItems array above the 50-item cap (storage-amplification)', () => {
+        const foodItems = Array.from({ length: MAX_FOOD_ITEMS + 1 }, () => baseItem());
+        const result = logMealBodySchema.safeParse({ mealType: 'LUNCH', foodItems });
         expect(result.success).toBe(false);
     });
 

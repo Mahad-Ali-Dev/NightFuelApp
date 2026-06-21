@@ -11,6 +11,27 @@ import { randomUUID, randomBytes, createHash } from 'crypto';
 // exists, to avoid leaking which emails are registered (user enumeration).
 const FORGOT_PASSWORD_MESSAGE = 'If an account exists, a reset link has been sent';
 
+// Generic message returned by register regardless of whether the email is
+// already taken, to avoid leaking which emails are registered (user
+// enumeration). A duplicate email gets this exact same response a brand-new
+// signup would, mirroring the forgot-password anti-enumeration style above.
+const REGISTER_MESSAGE = "If this email isn't already registered, the account was created";
+
+// Precomputed bcrypt hash of a fixed dummy password. When login is attempted
+// for an email that does NOT exist, we still run bcrypt.compare against this
+// hash and discard the result, so the response time for "no such user" matches
+// the time for "user exists, wrong password" (closes the login timing
+// side-channel that would otherwise let an attacker enumerate accounts).
+// Generated with bcrypt.hashSync('a-dummy-password-for-constant-time', 12).
+const DUMMY_PASSWORD_HASH =
+    '$2a$12$sR.p51NNp8/s/8nMzIyEqusdIOmwnsCNGMQCZbN2h8Dqien0kx7lq';
+
+// Type returned to callers for register/login — the raw User row minus its
+// secret passwordHash. Stripping here means the bcrypt hash never leaves the
+// service layer (it cannot leak through the route even if a future change
+// forgets to redact it). Mirrors the /me route's `const { passwordHash, ...} `.
+export type SafeUser = Omit<User, 'passwordHash'>;
+
 // How long a password-reset token stays valid.
 const RESET_TOKEN_TTL_MINUTES = 60;
 
@@ -40,7 +61,19 @@ export class AuthService {
         private config: { JWT_SECRET: string }
     ) { }
 
-    async register(body: RegisterBody): Promise<{ user: User; accessToken: string; refreshToken: string }> {
+    /**
+     * Register a new account. Always resolves with the SAME generic message
+     * (never reveals whether the email is already taken) to prevent user
+     * enumeration — mirroring the forgot-password anti-enumeration style.
+     *
+     * If the email is free, the account is created and a `user.registered`
+     * event is published. If the email is already taken, the call silently
+     * no-ops and returns the identical response, so a caller cannot tell the
+     * two cases apart (neither by response shape/status nor — see below — by
+     * timing: a duplicate still pays a bcrypt.hash cost equivalent to a real
+     * signup before returning).
+     */
+    async register(body: RegisterBody): Promise<{ message: string }> {
         // Normalize the email so lookups and stored values are canonical
         // (case-insensitive, no surrounding whitespace). Matches the mobile
         // client and prevents case/whitespace-variant duplicate accounts.
@@ -51,7 +84,12 @@ export class AuthService {
         });
 
         if (existingUser) {
-            throw new Error('User already exists');
+            // Account-enumeration defence: do NOT reveal that the email is
+            // taken. Still spend the same bcrypt.hash cost a real signup would,
+            // so the duplicate path is timing-indistinguishable from a new one,
+            // then return the identical generic response.
+            await bcrypt.hash(body.password, 12);
+            return { message: REGISTER_MESSAGE };
         }
 
         const passwordHash = await bcrypt.hash(body.password, 12);
@@ -85,12 +123,10 @@ export class AuthService {
             },
         });
 
-        const { accessToken, refreshToken } = await this.generateTokens(user, body.deviceId);
-
-        return { user, accessToken, refreshToken };
+        return { message: REGISTER_MESSAGE };
     }
 
-    async login(body: LoginBody): Promise<{ user: User; accessToken: string; refreshToken: string }> {
+    async login(body: LoginBody): Promise<{ user: SafeUser; accessToken: string; refreshToken: string }> {
         // Normalize the email so the lockout key and the user lookup use the
         // same canonical form (case-insensitive, no surrounding whitespace),
         // matching how register() stores it and how the mobile client sends it.
@@ -109,6 +145,12 @@ export class AuthService {
         });
 
         if (!user) {
+            // Timing side-channel defence: run a bcrypt.compare against a fixed
+            // dummy hash and discard the result, so a "no such user" response
+            // takes the same time as a "user exists, wrong password" response
+            // (the real compare below). Without this, an attacker could
+            // enumerate accounts by measuring how fast login fails.
+            await bcrypt.compare(body.password, DUMMY_PASSWORD_HASH);
             this.recordLoginFailure(lockoutKey);
             throw new Error('Invalid credentials');
         }
@@ -124,7 +166,10 @@ export class AuthService {
 
         const { accessToken, refreshToken } = await this.generateTokens(user, body.deviceId);
 
-        return { user, accessToken, refreshToken };
+        // Strip the bcrypt hash so the secret never leaves the service layer
+        // (mirrors the /me route's `const { passwordHash, ...profile } = user`).
+        const { passwordHash, ...safeUser } = user;
+        return { user: safeUser, accessToken, refreshToken };
     }
 
     /**
@@ -225,8 +270,13 @@ export class AuthService {
      * the raw token does not leave this method yet.
      */
     async forgotPassword(body: ForgotPasswordBody): Promise<{ message: string }> {
+        // Normalize the email so the lookup matches how register()/login() store
+        // it (case-insensitive, no surrounding whitespace) — otherwise a reset
+        // request for 'User@Example.com ' would never find the canonical row.
+        const email = body.email.trim().toLowerCase();
+
         const user = await this.prisma.user.findUnique({
-            where: { email: body.email },
+            where: { email },
         });
 
         if (!user) {

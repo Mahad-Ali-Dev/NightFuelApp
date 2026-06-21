@@ -19,6 +19,10 @@ const envSchema = z.object({
     // missing env doesn't fail boot; the service degrades to plan=free if the
     // subscription-service is unreachable (see chat.service resolvePlan).
     SUBSCRIPTION_SERVICE_URL: z.string().url().default('http://subscription-service:3015'),
+    // Comma-separated list of allowed web origins. Optional: when unset we fail
+    // CLOSED with an empty allowlist (no cross-origin browser access) rather than
+    // reflecting the request origin. Never use '*' with credentials.
+    CORS_ORIGIN: z.string().optional(),
 });
 
 const config = loadConfig(envSchema);
@@ -35,7 +39,13 @@ fastify.setSerializerCompiler(serializerCompiler);
 fastify.withTypeProvider<ZodTypeProvider>();
 
 fastify.register(fastifyHelmet);
-fastify.register(fastifyCors, { origin: true });
+// Explicit allowlist from CORS_ORIGIN (comma-separated). When unset the list is
+// empty, so the browser is told no cross-origin is allowed (fail CLOSED). Never
+// '*' and never reflect the request origin.
+const corsOrigins = config.CORS_ORIGIN
+    ? config.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+    : [];
+fastify.register(fastifyCors, { origin: corsOrigins });
 
 // Global IP-cap on every request — including the GET that initiates the
 // /v1/chat/ws upgrade — so a hostile client can't churn through expensive

@@ -13,6 +13,10 @@ const envSchema = z.object({
     COMMUNITY_PORT: z.string().default('3013'),
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     USER_SERVICE_URL: z.string().default('http://user-service:3009'),
+    // Comma-separated list of allowed web origins. Optional: when unset we fail
+    // CLOSED with an empty allowlist (no cross-origin browser access) rather than
+    // reflecting the request origin. Never use '*' with credentials.
+    CORS_ORIGIN: z.string().optional(),
 });
 
 const config = loadConfig(envSchema);
@@ -28,7 +32,13 @@ fastify.setSerializerCompiler(serializerCompiler);
 fastify.withTypeProvider<ZodTypeProvider>();
 
 fastify.register(fastifyHelmet);
-fastify.register(fastifyCors, { origin: true });
+// Explicit allowlist from CORS_ORIGIN (comma-separated). When unset the list is
+// empty, so the browser is told no cross-origin is allowed (fail CLOSED). Never
+// '*' and never reflect the request origin.
+const corsOrigins = config.CORS_ORIGIN
+    ? config.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+    : [];
+fastify.register(fastifyCors, { origin: corsOrigins });
 
 fastify.get('/health', async () => {
     return { status: 'ok', service: 'community-service' };

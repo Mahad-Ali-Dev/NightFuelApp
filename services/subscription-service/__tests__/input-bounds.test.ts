@@ -209,21 +209,24 @@ describe('subscription-service input-bounds — genuine routes reject bad input 
             expect(svc.upgradeTier).not.toHaveBeenCalled();
         });
 
-        it('accepts a valid tier ("PRO"): NOT a 400 and calls upgradeTier exactly once', async () => {
-            // fromTier === target so the route does not even attempt to publish,
-            // but the eventBus stub is inert regardless.
-            svc.upgradeTier.mockResolvedValue({ subscription: fakeSubscription('PRO'), fromTier: 'PRO' });
+        it('accepts a valid tier that passes the schema AND the paywall ("FREE"): NOT a 400 and calls upgradeTier exactly once', async () => {
+            // NOTE: paid tiers (PRO/PREMIUM/ENTERPRISE) are schema-valid but the
+            // route now rejects them with 402 payment_required (F22 paywall fix —
+            // see paywall-bypass.test.ts). FREE is the only tier the client-callable
+            // /upgrade path may set, so it's the right "valid enum reaches service"
+            // case for this input-bounds suite.
+            svc.upgradeTier.mockResolvedValue({ subscription: fakeSubscription('FREE'), fromTier: 'PRO' });
 
             const res = await app.inject({
                 method: 'POST',
                 url: '/v1/subscriptions/upgrade',
-                payload: { tier: 'PRO' },
+                payload: { tier: 'FREE' },
             });
 
             expect(res.statusCode).not.toBe(400);
             expect(res.statusCode).toBe(200);
             expect(svc.upgradeTier).toHaveBeenCalledTimes(1);
-            expect(svc.upgradeTier).toHaveBeenCalledWith({ userId: USER_ID, targetTier: 'PRO' });
+            expect(svc.upgradeTier).toHaveBeenCalledWith({ userId: USER_ID, targetTier: 'FREE' });
         });
     });
 

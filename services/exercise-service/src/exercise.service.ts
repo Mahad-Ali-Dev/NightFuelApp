@@ -567,7 +567,17 @@ export class ExerciseService {
         });
     }
 
-    async logSessionExercise(sessionId: string, exerciseName: string, sets: number, reps: number, weightKg: number, durationSecs: number) {
+    async logSessionExercise(sessionId: string, userId: string, exerciseName: string, sets: number, reps: number, weightKg: number, durationSecs: number) {
+        // IDOR guard: only allow logging into a session that belongs to the
+        // caller. Mirrors the getWorkout/deleteWorkout `{ id, userId }` filter —
+        // returns null when the session doesn't exist or isn't the caller's, so
+        // the route can answer 404 without mutating another user's session.
+        const session = await this.prisma.workoutSession.findFirst({
+            where: { id: sessionId, userId },
+            select: { id: true },
+        });
+        if (!session) return null;
+
         return this.prisma.exerciseLog.create({
             data: {
                 sessionId,
@@ -580,10 +590,21 @@ export class ExerciseService {
         });
     }
 
-    async endSession(sessionId: string) {
-        return this.prisma.workoutSession.update({
-            where: { id: sessionId },
+    async endSession(sessionId: string, userId: string) {
+        // IDOR guard: scope the mutation to the caller's own session via
+        // updateMany({ id, userId }) — count 0 means it doesn't exist or isn't
+        // theirs, so we return null and let the route answer 404. Mirrors the
+        // deleteWorkout deleteMany({ id, userId }) pattern.
+        const result = await this.prisma.workoutSession.updateMany({
+            where: { id: sessionId, userId },
             data: { status: 'completed', endedAt: new Date() }
+        });
+        if (result.count === 0) return null;
+
+        // Return the updated row in the same shape the original .update() did
+        // (no relations) so the owner's success response is unchanged.
+        return this.prisma.workoutSession.findFirst({
+            where: { id: sessionId, userId },
         });
     }
 }

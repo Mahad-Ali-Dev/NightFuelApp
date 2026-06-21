@@ -545,15 +545,20 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/session/:id/exer
     }
 }, async (request, reply) => {
     try {
+        const userId = (request.user as any).userId ?? (request.user as any).id;
         const { id } = request.params;
-        return reply.code(201).send(await exerciseSvc.logSessionExercise(
+        const log = await exerciseSvc.logSessionExercise(
             id,
+            userId,
             request.body.exerciseName,
             request.body.sets,
             request.body.reps,
             request.body.weightKg,
             request.body.durationSecs
-        ));
+        );
+        // null = the session doesn't exist or isn't the caller's (IDOR guard).
+        if (!log) return reply.code(404).send({ error: 'Session not found' });
+        return reply.code(201).send(log);
     } catch (err: any) {
         logger.error(err);
         return reply.code(500).send({ error: 'An unexpected error occurred' });
@@ -565,8 +570,12 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/session/:id/end'
     schema: { params: z.object({ id: z.string().uuid() }) }
 }, async (request, reply) => {
     try {
+        const userId = (request.user as any).userId ?? (request.user as any).id;
         const { id } = request.params;
-        return reply.send(await exerciseSvc.endSession(id));
+        const session = await exerciseSvc.endSession(id, userId);
+        // null = the session doesn't exist or isn't the caller's (IDOR guard).
+        if (!session) return reply.code(404).send({ error: 'Session not found' });
+        return reply.send(session);
     } catch (err: any) {
         logger.error(err);
         return reply.code(500).send({ error: 'An unexpected error occurred' });

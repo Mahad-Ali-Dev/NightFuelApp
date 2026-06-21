@@ -56,6 +56,10 @@ android/app/build
 *.pkg
 
 # Build / install noise
+# Blanket: never track *.log — runtime/diag/event logs can capture real user PII
+# and secrets (F22: committed diag/prisma-error/event logs leaked emails, UUIDs,
+# health data and the prod DB host). Keep them out of git entirely.
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

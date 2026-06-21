@@ -11,6 +11,7 @@
  *   POST /recipes       instructions[]        z.array(z.string().min(1).max(1000)).max(100)
  *   POST /recipes       tags[]                z.array(z.string().max(60)).max(50)
  *   POST /log           foodItems[].name      z.string().min(1).max(200)
+ *   POST /log           foodItems[]           z.array(...).min(1).max(50)
  *
  * Every request below carries a VALID Bearer token, so the auth gate is open and
  * any 400 originates from the zod schema, NOT from auth. We additionally assert
@@ -54,6 +55,7 @@ const MAX_INSTRUCTIONS = 100;
 const MAX_INSTRUCTION_LEN = 1000;
 const MAX_TAGS = 50;
 const MAX_FOOD_NAME_LEN = 200;
+const MAX_FOOD_ITEMS = 50;
 
 // Every substring in this leaky message is an attack signal the 5xx redactor
 // MUST strip. Same string used across the per-service redaction suites.
@@ -424,6 +426,48 @@ describe('meal-service input bounds (valid token, schema-lock)', () => {
                 totalCalories: 150,
                 isAdherent: true,
             });
+        });
+    });
+
+    // ── POST /log — foodItems array cap .min(1).max(50) ──────────────────────
+    describe('POST /log foodItems array bound (min 1, max 50)', () => {
+        function foodItem(i: number) {
+            return { name: `food-${i}`, quantity: 1, calories: 150, protein: 5, carbs: 27, fat: 3 };
+        }
+
+        it('51 foodItems -> 400 (over cap) and logMeal NOT called', async () => {
+            const foodItems = Array.from({ length: MAX_FOOD_ITEMS + 1 }, (_, i) => foodItem(i));
+            const res = await app.inject({
+                method: 'POST',
+                url: '/log',
+                headers: AUTH,
+                payload: { mealType: 'BREAKFAST', foodItems },
+            });
+            expect(res.statusCode).toBe(400);
+            expect(svc.logMeal).not.toHaveBeenCalled();
+        });
+
+        it('empty foodItems array -> 400 (min 1) and logMeal NOT called', async () => {
+            const res = await app.inject({
+                method: 'POST',
+                url: '/log',
+                headers: AUTH,
+                payload: { mealType: 'BREAKFAST', foodItems: [] },
+            });
+            expect(res.statusCode).toBe(400);
+            expect(svc.logMeal).not.toHaveBeenCalled();
+        });
+
+        it('exactly 50 foodItems -> 201 (reaches service)', async () => {
+            const foodItems = Array.from({ length: MAX_FOOD_ITEMS }, (_, i) => foodItem(i));
+            const res = await app.inject({
+                method: 'POST',
+                url: '/log',
+                headers: AUTH,
+                payload: { mealType: 'BREAKFAST', foodItems },
+            });
+            expect(res.statusCode).toBe(201);
+            expect(svc.logMeal).toHaveBeenCalledTimes(1);
         });
     });
 

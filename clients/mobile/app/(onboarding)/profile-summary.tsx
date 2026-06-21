@@ -121,6 +121,14 @@ export default function ProfileSummaryScreen() {
             // Update local state
             updateUser({ onboardingComplete: true });
 
+            // Profile is now durably saved server-side. Clear the locally
+            // persisted onboarding draft so the health PII it holds (weightKg /
+            // heightCm / dateOfBirth / biologicalSex / healthConditions) doesn't
+            // linger on-device after onboarding is complete. The shift block
+            // below still reads the captured `data` snapshot, which reset()
+            // leaves untouched.
+            useOnboardingStore.getState().reset();
+
             // 4. Best-effort: persist the selected shift so a freshly-onboarded
             // user lands on a dashboard that reflects their schedule instead of
             // "No active shift" (and the circadian tab's ['circadian-model'] query,
