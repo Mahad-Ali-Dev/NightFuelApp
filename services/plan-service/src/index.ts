@@ -92,7 +92,7 @@ fastify.get('/health', async () => {
 });
 
 fastify.register(async (instance) => {
-    await planRoutes(instance, { planService });
+    await planRoutes(instance, { planService, internalServiceToken: config.INTERNAL_SERVICE_TOKEN });
 }, { prefix: '/v1/plans' });
 
 const start = async () => {
@@ -103,7 +103,7 @@ const start = async () => {
         await setupEventSubscribers(eventBus, planService);
         logger.info('Subscribed to event bus');
 
-        const worker = new PlanWorker(planService, { USER_SERVICE_URL: config.USER_SERVICE_URL });
+        const worker = new PlanWorker(planService, { USER_SERVICE_URL: config.USER_SERVICE_URL, INTERNAL_SERVICE_TOKEN: config.INTERNAL_SERVICE_TOKEN });
         worker.start();
         logger.info('Background worker started');
 

@@ -8,7 +8,7 @@ export class MealService {
     constructor(
         private prisma: PrismaClient,
         private eventBus: EventBus,
-        private config: { PLAN_SERVICE_URL: string }
+        private config: { PLAN_SERVICE_URL: string; INTERNAL_SERVICE_TOKEN?: string }
     ) { }
 
     async searchFoods(query: string, options?: {
@@ -203,7 +203,10 @@ export class MealService {
             const cleanDate = date ? date.split('T')[0] : new Date().toISOString().split('T')[0];
             const url = `${this.config.PLAN_SERVICE_URL}/v1/plans/internal/active/${userId}?date=${cleanDate}`;
 
-            const res = await fetch(url);
+            const res = await fetch(url, {
+                // F34 #5: plan-service /internal/* now requires the shared token.
+                headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+            });
             if (!res.ok) {
                 const errorData = await res.json().catch(() => ({}) as any);
                 throw new Error((errorData as any).error || `No active plan found for ${date ?? 'today'}`);

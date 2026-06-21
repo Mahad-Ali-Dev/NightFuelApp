@@ -65,8 +65,13 @@ services:
     build:
       context: ../../
       dockerfile: services/auth-service/Dockerfile
+    # F34 #2: bind to localhost only. Sibling services + nginx reach this over
+    # the internal Docker network by service-name (http://auth-service:3001), so
+    # the host port is needed ONLY for local debugging — exposing it on 0.0.0.0
+    # let anyone on the host network bypass the nginx edge (incl. its /internal
+    # 404 gate). Follows the postgres/redis "internal-only" precedent above.
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     environment:
       DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_auth?schema=public
       DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_auth?schema=public
@@ -86,7 +91,8 @@ services:
       context: ../../
       dockerfile: services/shift-service/Dockerfile
     ports:
-      - "3002:3002"
+      # F34 #2: localhost-only (reached internally as http://shift-service:3002).
+      - "127.0.0.1:3002:3002"
     environment:
       DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_shifts?schema=public
       DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_shifts?schema=public
@@ -106,7 +112,8 @@ services:
       context: ../../services/circadian-engine
       dockerfile: Dockerfile
     ports:
-      - "3003:3003"
+      # F34 #2: localhost-only (reached internally as http://circadian-engine:3003).
+      - "127.0.0.1:3003:3003"
     environment:
       REDIS_URL: redis://redis:6379
       PORT: 3003
@@ -120,7 +127,9 @@ services:
       context: ../../services/ai-pipeline
       dockerfile: Dockerfile
     ports:
-      - "3004:3004"
+      # F34 #2: localhost-only. nginx proxies /v1/ai -> http://ai-pipeline:3004
+      # over the internal network; the public edge is nginx (8080) only.
+      - "127.0.0.1:3004:3004"
     environment:
       REDIS_URL: redis://redis:6379
       PORT: 3004
@@ -152,7 +161,8 @@ services:
       context: ../../
       dockerfile: services/plan-service/Dockerfile
     ports:
-      - "3005:3005"
+      # F34 #2: localhost-only (reached internally as http://plan-service:3005).
+      - "127.0.0.1:3005:3005"
     environment:
       PLAN_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_plans?schema=public
       PLAN_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_plans?schema=public
@@ -184,7 +194,8 @@ services:
       context: ../../
       dockerfile: services/meal-service/Dockerfile
     ports:
-      - "3006:3006"
+      # F34 #2: localhost-only (reached internally as http://meal-service:3006).
+      - "127.0.0.1:3006:3006"
     environment:
       MEAL_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_meals?schema=public
       MEAL_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_meals?schema=public
@@ -194,6 +205,9 @@ services:
       MEAL_PORT: 3006
       PLAN_SERVICE_URL: http://plan-service:3005
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F34 #5: sent as X-Internal-Token on the s2s call to plan-service
+      # /v1/plans/internal/active/:userId (now guarded in-service).
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
     depends_on:
       postgres:
@@ -207,7 +221,8 @@ services:
       context: ../../
       dockerfile: services/user-service/Dockerfile
     ports:
-      - "3009:3009"
+      # F34 #2: localhost-only (reached internally as http://user-service:3009).
+      - "127.0.0.1:3009:3009"
     environment:
       USER_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_users?schema=public
       USER_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_users?schema=public
@@ -215,6 +230,10 @@ services:
       REDIS_URL: redis://redis:6379
       USER_PORT: 3009
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F34 #5: user-service OWNS /v1/users/internal/* (profile/preferences/
+      # status/all). It verifies this token via the in-service guard; callers
+      # (chat/plan/progress) send the same value.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
     depends_on:
       postgres:
@@ -228,7 +247,8 @@ services:
       context: ../../
       dockerfile: services/progress-service/Dockerfile
     ports:
-      - "3007:3007"
+      # F34 #2: localhost-only (reached internally as http://progress-service:3007).
+      - "127.0.0.1:3007:3007"
     environment:
       PROGRESS_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_progress?schema=public
       PROGRESS_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_progress?schema=public
@@ -253,7 +273,8 @@ services:
       context: ../../
       dockerfile: services/notification-service/Dockerfile
     ports:
-      - "3008:3008"
+      # F34 #2: localhost-only (reached internally as http://notification-service:3008).
+      - "127.0.0.1:3008:3008"
     environment:
       NOTIF_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_notifications?schema=public
       NOTIF_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_notifications?schema=public
@@ -278,7 +299,8 @@ services:
       context: ../../
       dockerfile: services/exercise-service/Dockerfile
     ports:
-      - "3011:3011"
+      # F34 #2: localhost-only (reached internally as http://exercise-service:3011).
+      - "127.0.0.1:3011:3011"
     environment:
       EXERCISE_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_exercise?schema=public
       EXERCISE_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_exercise?schema=public
@@ -302,7 +324,8 @@ services:
       context: ../../
       dockerfile: services/sleep-service/Dockerfile
     ports:
-      - "3012:3012"
+      # F34 #2: localhost-only (reached internally as http://sleep-service:3012).
+      - "127.0.0.1:3012:3012"
     environment:
       SLEEP_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_sleep?schema=public
       SLEEP_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_sleep?schema=public
@@ -323,7 +346,8 @@ services:
       context: ../../
       dockerfile: services/subscription-service/Dockerfile
     ports:
-      - "3010:3010"
+      # F34 #2: localhost-only (reached internally as http://subscription-service:3010).
+      - "127.0.0.1:3010:3010"
     environment:
       SUB_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_subscriptions?schema=public
       SUB_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_subscriptions?schema=public
@@ -346,7 +370,8 @@ services:
       context: ../../
       dockerfile: services/community-service/Dockerfile
     ports:
-      - "3013:3013"
+      # F34 #2: localhost-only (reached internally as http://community-service:3013).
+      - "127.0.0.1:3013:3013"
     environment:
       COMMUNITY_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_community?schema=public
       COMMUNITY_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_community?schema=public
@@ -368,7 +393,8 @@ services:
       context: ../../
       dockerfile: services/chat-service/Dockerfile
     ports:
-      - "3014:3014"
+      # F34 #2: localhost-only (reached internally as http://chat-service:3014).
+      - "127.0.0.1:3014:3014"
     environment:
       CHAT_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_chat?schema=public
       CHAT_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_chat?schema=public
@@ -392,7 +418,8 @@ services:
       context: ../../
       dockerfile: services/state-service/Dockerfile
     ports:
-      - "3015:3015"
+      # F34 #2: localhost-only (reached internally as http://state-service:3015).
+      - "127.0.0.1:3015:3015"
     environment:
       STATE_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_state?schema=public
       STATE_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_state?schema=public
@@ -413,7 +440,8 @@ services:
       context: ../../
       dockerfile: services/decision-engine/Dockerfile
     ports:
-      - "3016:3016"
+      # F34 #2: localhost-only (reached internally as http://decision-engine:3016).
+      - "127.0.0.1:3016:3016"
     environment:
       REDIS_URL: redis://redis:6379
       DECISION_PORT: 3016
@@ -433,7 +461,10 @@ services:
       context: ../../clients/web
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      # F34 #2: localhost-only. The web client is built to call the API via the
+      # nginx gateway (NEXT_PUBLIC_API_URL=http://nginx/api), so the host port is
+      # only for local browsing; front it with the host nginx like 8080.
+      - "127.0.0.1:3000:3000"
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: http://nginx/api

@@ -7,7 +7,7 @@ from .chains.audit_generator import generate_weekly_audit
 from .chains.meal_swap import generate_meal_alternatives
 from .logger import logger
 from .rate_limiter import check_rate_limit
-from .auth import require_caller
+from .auth import require_caller, require_internal
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -21,7 +21,9 @@ async def generate_plan(
     request: DayPlanRequest,
     http_request: Request,
     provider: str = "anthropic",
-    identity: str = Depends(require_caller),
+    # F34 #6: s2s only — internal token required (NOT a user JWT) so users can't
+    # call ai-pipeline directly and bypass plan-service's daily AI cap.
+    identity: str = Depends(require_internal),
 ):
     """
     Synchronous endpoint for plan generation.
@@ -69,7 +71,9 @@ async def weekly_audit(
     payload: WeeklyAuditRequest,
     http_request: Request,
     provider: str = "anthropic",
-    identity: str = Depends(require_caller),
+    # F34 #6: s2s only — internal token required (NOT a user JWT). progress-service
+    # is the real caller and enforces the cap before reaching here.
+    identity: str = Depends(require_internal),
 ):
     """
     Generate a coaching summary/audit for the last 7 days.
@@ -100,6 +104,10 @@ async def meal_swap(
     payload: SwapPayload,
     http_request: Request,
     provider: str = "anthropic",
+    # F35a review: user-facing — the web dashboard "Swap meal" button calls this
+    # directly with a user JWT (clients/web/lib/api.ts swapMeal). Unlike
+    # generate-plan/weekly-audit there is no daily-cap server path to bypass, so it
+    # stays require_caller (per-identity rate-limited below) rather than internal-only.
     identity: str = Depends(require_caller),
 ):
     """
@@ -131,6 +139,9 @@ async def meal_score(
     payload: MealScoreRequest,
     http_request: Request,
     provider: str = "anthropic",
+    # F35a review: user-facing — the web meal-insights panel calls this directly with a
+    # user JWT (clients/web/lib/api.ts scoreMeal). No daily-cap path to bypass, so it
+    # stays require_caller (per-identity rate-limited below), not internal-only.
     identity: str = Depends(require_caller),
 ):
     logger.info("Scoring custom meal", extra={"meal": payload.meal.get("name", "Unknown")})

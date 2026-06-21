@@ -203,7 +203,10 @@ export class PlanService {
         // 2. Fetch user preferences
         let preferences = null;
         try {
-            const prefRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`);
+            const prefRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`, {
+                // F34 #5: user-service /internal/* now requires the shared token.
+                headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+            });
             if (prefRes.ok) {
                 preferences = await prefRes.json();
                 logger.info({ userId }, 'Fetched user preferences for AI plan');
@@ -219,7 +222,10 @@ export class PlanService {
         // for non-tracking users (or anyone). This is best-effort and non-fatal.
         let cyclePhase = 'UNKNOWN';
         try {
-            const statusRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/status/${userId}`);
+            const statusRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/status/${userId}`, {
+                // F34 #5: user-service /internal/* now requires the shared token.
+                headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+            });
             if (statusRes.ok) {
                 const status = await statusRes.json() as any;
                 if (typeof status?.cyclePhase === 'string' && status.cyclePhase) {

@@ -4,7 +4,7 @@ import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { PlanService } from './plan.service';
 import { getPlanParamsSchema, getPlanResponseSchema, generatePlanBodySchema, storePlanBodySchema, createProtocolSchema, updateProtocolSchema, getPlanHistoryQuerySchema } from './schemas';
-import { createLogger, assertWithinDailyLimit, AI_LIMITS, AI_QUOTA_EXCEEDED, resolvePlan } from '@nightfuel/config';
+import { createLogger, assertWithinDailyLimit, AI_LIMITS, AI_QUOTA_EXCEEDED, resolvePlan, makeInternalAuthGuard } from '@nightfuel/config';
 
 const logger = createLogger('plan-service:routes');
 
@@ -26,8 +26,13 @@ const DEFAULT_SUBSCRIPTION_SERVICE_URL = 'http://subscription-service:3015';
 // trailing slash itself, so DEFAULT_SUBSCRIPTION_SERVICE_URL stays only as the
 // fallback value and this route no longer reaches into (fastify as any).jwt.
 
-export const planRoutes = async (fastify: FastifyInstance, opts: { planService: PlanService }) => {
+export const planRoutes = async (fastify: FastifyInstance, opts: { planService: PlanService; internalServiceToken?: string }) => {
     const { planService } = opts;
+
+    // F34 #5: guard the server-to-server-only /internal/* route. Constant-time
+    // X-Internal-Token check; 404s on missing/wrong token (matches the nginx
+    // edge). meal-service (the sole caller) sends the header.
+    const internalAuth = makeInternalAuthGuard(opts.internalServiceToken);
 
     // GET /v1/plans/:date — fetch stored plan for a specific date
     fastify.withTypeProvider<ZodTypeProvider>().get(
@@ -224,6 +229,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/internal/active/:userId',
         {
+            preHandler: internalAuth,
             schema: {
                 params: z.object({ userId: z.string().uuid() }),
                 querystring: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }),

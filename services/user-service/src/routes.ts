@@ -1,7 +1,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { sendUnauthorizedPayload } from '@nightfuel/config';
+import { sendUnauthorizedPayload, makeInternalAuthGuard } from '@nightfuel/config';
 import {
     updateProfileSchema,
     updatePreferencesSchema,
@@ -48,9 +48,16 @@ function requireAdmin(request: FastifyRequest, reply: FastifyReply): boolean {
 
 export const userRoutes = async (
     fastify: FastifyInstance,
-    opts: { userService: UserService }
+    opts: { userService: UserService; internalServiceToken?: string }
 ): Promise<void> => {
     const service = opts.userService;
+
+    // F34 #5: in-service guard for the server-to-server-only /internal/* routes.
+    // Constant-time checks X-Internal-Token == INTERNAL_SERVICE_TOKEN; on
+    // missing/wrong token it 404s (same as the nginx edge — never reveal the
+    // route). Callers (chat/plan/progress) send the header. This is
+    // defense-in-depth behind the edge 404, not a replacement for it.
+    const internalAuth = makeInternalAuthGuard(opts.internalServiceToken);
 
     // ── GET /v1/users/me ──────────────────────────────────────────────────────
     // Returns the authenticated user's full profile including nested preferences.
@@ -479,6 +486,7 @@ export const userRoutes = async (
     // ── GET /v1/users/internal/profile/:userId ────────────────────────────────────
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/internal/profile/:userId',
+        { preHandler: internalAuth },
         async (request, reply) => {
             try {
                 const { userId } = request.params as { userId: string };
@@ -497,6 +505,7 @@ export const userRoutes = async (
     // ── GET /v1/users/internal/preferences/:userId ────────────────────────────────
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/internal/preferences/:userId',
+        { preHandler: internalAuth },
         async (request, reply) => {
             try {
                 const { userId } = request.params as { userId: string };
@@ -515,6 +524,7 @@ export const userRoutes = async (
     // ── GET /v1/users/internal/status/:userId ────────────────────────────────────
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/internal/status/:userId',
+        { preHandler: internalAuth },
         async (request, reply) => {
             try {
                 const { userId } = request.params as { userId: string };
@@ -533,6 +543,7 @@ export const userRoutes = async (
     // ── GET /v1/users/internal/all ────────────────────────────────────────────────
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/internal/all',
+        { preHandler: internalAuth },
         async (request, reply) => {
             try {
                 const users = await service.getAllUsersInternal();

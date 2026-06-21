@@ -655,7 +655,14 @@ export class ChatService {
         try {
             const res = await fetch(url, {
                 method: 'GET',
-                headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
+                headers: {
+                    authorization: `Bearer ${token}`,
+                    accept: 'application/json',
+                    // F34 #5: user-service /internal/* now requires the shared
+                    // internal token (in addition to the Bearer JWT). Without it
+                    // the route 404s and every peer falls back to a generic name.
+                    'X-Internal-Token': INTERNAL_SERVICE_TOKEN,
+                },
                 signal: controller.signal,
             });
             if (!res.ok) {

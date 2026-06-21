@@ -8,7 +8,7 @@ export class PlanWorker {
 
     constructor(
         private planService: PlanService,
-        private config: { USER_SERVICE_URL: string }
+        private config: { USER_SERVICE_URL: string; INTERNAL_SERVICE_TOKEN?: string }
     ) { }
 
     async start() {
@@ -23,7 +23,10 @@ export class PlanWorker {
     private async checkAndRegenerate() {
         try {
             // 1. Fetch all users from user-service
-            const usersRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/all`);
+            const usersRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/all`, {
+                // F34 #5: user-service /internal/* now requires the shared token.
+                headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+            });
             if (!usersRes.ok) throw new Error('Failed to fetch users from user-service');
 
             const users = await usersRes.json() as Array<{ userId: string, timezone: string }>;

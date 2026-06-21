@@ -16,6 +16,10 @@ const envSchema = z.object({
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     REDIS_URL: z.string().url(),
     PLAN_SERVICE_URL: z.string().url(),
+    // F34 #5: shared token sent as X-Internal-Token on the s2s call to
+    // plan-service /v1/plans/internal/active/:userId. Defaulted so boot doesn't
+    // break; plan-service's guard rejects an empty/wrong token.
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -25,7 +29,7 @@ const eventBus = new RedisEventBus(config.REDIS_URL);
 const mealService = new MealService(
     prisma,
     eventBus,
-    { PLAN_SERVICE_URL: config.PLAN_SERVICE_URL }
+    { PLAN_SERVICE_URL: config.PLAN_SERVICE_URL, INTERNAL_SERVICE_TOKEN: config.INTERNAL_SERVICE_TOKEN }
 );
 
 const fastify = Fastify({ logger: false });

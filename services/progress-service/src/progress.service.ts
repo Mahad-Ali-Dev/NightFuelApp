@@ -752,7 +752,10 @@ export class ProgressService {
         // 1. Fetch preferences from user-service
         let preferences;
         try {
-            const res = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`);
+            const res = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`, {
+                // F34 #5: user-service /internal/* now requires the shared token.
+                headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+            });
             if (!res.ok) throw new Error('Could not fetch preferences');
             preferences = await res.json();
         } catch (err) {
@@ -778,7 +781,14 @@ export class ProgressService {
         try {
             const updateRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    // F34 #5: send the shared internal token (consistent with the
+                    // GET above). NOTE: user-service does not currently define a
+                    // PUT /internal/preferences route, so this call already 404s
+                    // pre-F34 — see the summary's "could not secure" note.
+                    'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '',
+                },
                 body: JSON.stringify({ targetCalories: result.newCalorieTarget })
             });
 
@@ -851,7 +861,10 @@ export class ProgressService {
         // 1. Fetch preferences
         let preferences;
         try {
-            const res = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`);
+            const res = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`, {
+                // F34 #5: user-service /internal/* now requires the shared token.
+                headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+            });
             if (!res.ok) throw new Error('Could not fetch preferences');
             preferences = await res.json();
         } catch (err) {

@@ -18,6 +18,10 @@ const envSchema = z.object({
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     USER_DATABASE_URL: z.string().url(),
     USER_DIRECT_URL: z.string().url(),
+    // F34 #5: shared secret that the /v1/users/internal/* routes verify via the
+    // makeInternalAuthGuard preHandler. Defaulted so boot doesn't break in
+    // dev/test; when empty the guard fails closed (every /internal request 404s).
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -93,7 +97,7 @@ fastify.get('/health', async () => {
 // ── Route registration ────────────────────────────────────────────────────────
 fastify.register(
     async (instance) => {
-        await userRoutes(instance, { userService });
+        await userRoutes(instance, { userService, internalServiceToken: config.INTERNAL_SERVICE_TOKEN });
     },
     { prefix: '/v1/users' }
 );

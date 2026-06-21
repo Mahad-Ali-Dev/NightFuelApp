@@ -98,3 +98,33 @@ async def require_caller(request: Request) -> str:
         detail="Unauthorized",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+async def require_internal(request: Request) -> str:
+    """FastAPI dependency: authorize an INTERNAL (server-to-server) caller ONLY.
+
+    F34 #6 (AI daily-quota bypass). The LLM endpoints /generate-plan,
+    /weekly-audit, /meal-swap and /meal-score are reached server-to-server by
+    plan-service / progress-service (which FIRST enforce the per-user daily AI
+    cap). Before this, those endpoints used `require_caller`, which also accepts a
+    bare end-user Bearer JWT — so a user could POST ai-pipeline directly and skip
+    the cap, draining the paid LLM.
+
+    This dependency accepts the valid X-Internal-Token ONLY and rejects a user
+    JWT with 401. Use it (instead of require_caller) on every s2s LLM route. The
+    user-facing Ria endpoints (/chat, /chat/stream) keep require_caller so the
+    mobile app can call them with a user JWT.
+
+    Returns the constant INTERNAL_IDENTITY (the rate-limiter bucket key).
+    """
+    internal_token = request.headers.get("x-internal-token")
+    if internal_token and _is_valid_internal_token(internal_token):
+        return INTERNAL_IDENTITY
+
+    # Deliberately do NOT fall back to the user-JWT branch: a user token must
+    # not be sufficient for these server-to-server-only endpoints.
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Unauthorized",
+        headers={"WWW-Authenticate": "Bearer"},
+    )

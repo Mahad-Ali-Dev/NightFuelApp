@@ -87,6 +87,66 @@ def test_valid_user_jwt_allowed():
     assert resp.status_code != 401
 
 
+# ── F34 #6: s2s LLM endpoints are INTERNAL-ONLY (reject a user JWT) ───────────
+# generate-plan / weekly-audit must NOT accept a bare end-user Bearer JWT (that
+# would let a user bypass the plan/exercise daily AI cap by calling ai-pipeline
+# directly). They require the internal token. meal-swap / meal-score / chat /
+# chat/stream are USER-facing (the web dashboard calls meal-swap/score directly
+# with a user JWT, and they have no daily-cap path to bypass — F35a review).
+
+S2S_INTERNAL_ONLY_PATHS = [
+    "/v1/ai/generate-plan",
+    "/v1/ai/weekly-audit",
+]
+
+USER_FACING_PATHS = [
+    "/v1/ai/meal-swap",
+    "/v1/ai/meal-score",
+    "/v1/ai/chat",
+    "/v1/ai/chat/stream",
+]
+
+
+@pytest.mark.parametrize("path", S2S_INTERNAL_ONLY_PATHS)
+def test_s2s_endpoints_reject_user_jwt(path):
+    # A perfectly valid end-user JWT must be rejected (401) on these s2s routes.
+    headers = {"Authorization": f"Bearer {_user_jwt()}"}
+    resp = client.post(path, json=CHAT_BODY, headers=headers)
+    assert resp.status_code == 401
+
+
+@pytest.mark.parametrize("path", S2S_INTERNAL_ONLY_PATHS)
+def test_s2s_endpoints_accept_internal_token(path):
+    # The internal token passes the auth gate (we assert NOT-401; the body may
+    # still 422/200 depending on the per-endpoint model — auth is what we lock).
+    resp = client.post(path, json=CHAT_BODY, headers=INTERNAL_HEADERS)
+    assert resp.status_code != 401
+
+
+@pytest.mark.parametrize("path", USER_FACING_PATHS)
+def test_user_facing_endpoints_accept_user_jwt(path):
+    # User-facing routes (Ria chat + the web meal-swap/score dashboard actions)
+    # must accept a valid end-user JWT (NOT-401). A regression here breaks the app.
+    headers = {"Authorization": f"Bearer {_user_jwt()}"}
+    assert client.post(path, json=CHAT_BODY, headers=headers).status_code != 401
+
+
+def test_require_internal_rejects_user_jwt():
+    from app.auth import require_internal
+
+    token = _user_jwt(subject="victim", claim="userId")
+    req = _FakeRequest({"authorization": f"Bearer {token}"})
+    with pytest.raises(Exception):
+        asyncio.run(require_internal(req))
+
+
+def test_require_internal_accepts_internal_token():
+    from app.auth import require_internal
+
+    req = _FakeRequest({"x-internal-token": settings.INTERNAL_SERVICE_TOKEN})
+    assert asyncio.run(require_internal(req)) == "internal"
+
+
 # ── require_caller resolves the right identity ───────────────────────────────
 
 class _FakeRequest:
