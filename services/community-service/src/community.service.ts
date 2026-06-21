@@ -56,7 +56,7 @@ export class CommunityService {
 
     // ── Feed & Posts ──────────────────────────────────────────────────────────
 
-    async getFeed(limit: number = 20, cursor?: string) {
+    async getFeed(viewerId: string, limit: number = 20, cursor?: string) {
         const posts = await this.prisma.post.findMany({
             take: limit,
             ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
@@ -65,15 +65,74 @@ export class CommunityService {
                 _count: { select: { comments: true } },
             }
         });
-        return this._withAuthors(posts);
+        // Privacy gate: drop posts whose author is private and not followed by the
+        // viewer (the author's own + public-author posts always pass). Mirrors
+        // canViewUserContent but batched over the page so we don't N+1 the
+        // resolver / follow lookups.
+        const visible = await this._filterViewablePosts(viewerId, posts);
+        return this._withAuthors(visible);
     }
 
-    async getPostById(postId: string) {
+    /**
+     * Filter a page of posts to those the viewer may see. A post passes when its
+     * author is the viewer, the author is PUBLIC, or the viewer is an accepted
+     * follower of a PRIVATE author. Author privacy is batch-resolved and the
+     * required follow edges are fetched in a single query.
+     */
+    private async _filterViewablePosts<T extends { authorId?: string | null }>(
+        viewerId: string,
+        posts: T[]
+    ): Promise<T[]> {
+        if (posts.length === 0) return posts;
+
+        // Distinct foreign authors (skip the viewer's own + falsy ids).
+        const authorIds = [
+            ...new Set(
+                posts
+                    .map((p) => p.authorId)
+                    .filter((id): id is string => !!id && id !== viewerId)
+            ),
+        ];
+        if (authorIds.length === 0) return posts;
+
+        // Resolve privacy for each distinct author.
+        const authors = this.authorResolver
+            ? await this.authorResolver.resolveMany(authorIds).catch((err) => {
+                logger.warn({ err }, 'feed author resolve failed; treating authors as public');
+                return new Map();
+            })
+            : new Map();
+
+        const privateAuthorIds = authorIds.filter((id) => authors.get(id)?.isPrivate);
+        if (privateAuthorIds.length === 0) return posts;
+
+        // Which private authors does the viewer follow? One query for the page.
+        const edges = await this.prisma.follow.findMany({
+            where: { followerId: viewerId, followingId: { in: privateAuthorIds } },
+            select: { followingId: true },
+        });
+        const followed = new Set(edges.map((e: { followingId: string }) => e.followingId));
+        const privateSet = new Set(privateAuthorIds);
+
+        return posts.filter((p) => {
+            const aid = p.authorId;
+            if (!aid || aid === viewerId) return true;
+            if (!privateSet.has(aid)) return true; // public author
+            return followed.has(aid);              // private: only if followed
+        });
+    }
+
+    async getPostById(viewerId: string, postId: string) {
         const post = await this.prisma.post.findUnique({
             where: { id: postId },
             include: { _count: { select: { comments: true } } }
         });
         if (!post) return post;
+        // Privacy gate: hide a private author's post from a non-follower. Return
+        // null so the route maps it to 404 (do not disclose existence).
+        if (post.authorId && !(await this.canViewUserContent(viewerId, post.authorId))) {
+            return null;
+        }
         return this._withAuthor(post);
     }
 
@@ -262,7 +321,18 @@ export class CommunityService {
         return comment;
     }
 
-    async getComments(postId: string, limit: number = 50) {
+    async getComments(viewerId: string, postId: string, limit: number = 50) {
+        // Privacy gate: comments inherit the post author's visibility. If the
+        // post is gone or its (private) author isn't viewable by the viewer,
+        // return an empty list rather than leaking the thread.
+        const post = await this.prisma.post.findUnique({
+            where: { id: postId },
+            select: { authorId: true },
+        });
+        if (!post) return this._withAuthors([]);
+        if (post.authorId && !(await this.canViewUserContent(viewerId, post.authorId))) {
+            return this._withAuthors([]);
+        }
         const comments = await this.prisma.comment.findMany({
             where: { postId },
             take: limit,

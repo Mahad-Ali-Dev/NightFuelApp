@@ -36,4 +36,12 @@ ENV NODE_ENV=production
 COPY --from=installer /app /app
 WORKDIR /app/services/subscription-service
 EXPOSE 3012
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=prisma/schema.prisma && node dist/index.js"]
+# The hand-written migrations under prisma/migrations are human-readable RECORDS,
+# not a complete `prisma migrate` history (the new 20260622_iap_transactions table
+# is documented there but only applied via db push — F31 sleep-service precedent).
+# `migrate deploy` would leave the DB missing the iap_transactions table, so the
+# IAP receipt-binding guard in POST /v1/subscriptions/iap/validate would 500 with
+# P2021. Sync from the schema instead so a fresh DB gets the full, correct set of
+# tables. db push of an additive, table-only delta is data-loss-free (see
+# 20260622_iap_transactions/migration.sql SAFETY note).
+CMD ["sh", "-c", "npx prisma db push --schema=prisma/schema.prisma --skip-generate --accept-data-loss && node dist/index.js"]

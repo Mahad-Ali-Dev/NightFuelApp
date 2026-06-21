@@ -26,6 +26,26 @@ export interface CancelSubscriptionInput {
   userId: string;
 }
 
+export interface BindIapTransactionInput {
+  /** Apple originalTransactionId / Google orderId-or-purchaseToken — stable across renewals. */
+  originalTransactionId: string;
+  userId: string;
+  platform: 'ios' | 'android';
+  productId: string;
+  tier: SubscriptionTier;
+}
+
+/**
+ * Outcome of binding a validated IAP receipt to an account.
+ *   - 'bound'       — first redemption: the binding was created for this user.
+ *   - 'reaffirmed'  — the receipt is already bound to THIS user (idempotent re-validate).
+ *   - 'conflict'    — the receipt is already bound to a DIFFERENT user (replay/sharing — REJECT).
+ */
+export type BindIapTransactionResult =
+  | { status: 'bound' }
+  | { status: 'reaffirmed' }
+  | { status: 'conflict'; boundUserId: string };
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -172,6 +192,78 @@ export class SubscriptionService {
     }
 
     return buildLimitsResponse(sub.tier, sub.status);
+  }
+
+  // ── bindIapTransaction ──────────────────────────────────────────────────────
+  /**
+   * Bind a validated IAP receipt to exactly one account (CRITICAL #1 — receipt
+   * replay / sharing). Keyed by the platform's STABLE cross-renewal identifier
+   * (Apple originalTransactionId / Google orderId-or-purchaseToken).
+   *
+   * Contract — the caller (routes.ts) MUST resolve this BEFORE calling
+   * upgradeTier and act on the status:
+   *   - 'bound'      → first redemption; proceed to upgradeTier.
+   *   - 'reaffirmed' → same user re-validated the same receipt; idempotent,
+   *                    proceed to upgradeTier (a no-op re-affirm of their tier).
+   *   - 'conflict'   → receipt already belongs to ANOTHER user; the caller MUST
+   *                    reject and MUST NOT upgrade — this is the shared/replayed
+   *                    receipt case.
+   *
+   * Race safety: two users submitting the same receipt concurrently both miss the
+   * initial findUnique, then both try to create. The DB UNIQUE on
+   * original_transaction_id lets exactly one win; the loser's create throws Prisma
+   * P2002, which we catch and re-resolve to the now-existing owner — yielding
+   * 'reaffirmed' (same user, e.g. a client retry) or 'conflict' (different user).
+   */
+  async bindIapTransaction(
+    input: BindIapTransactionInput,
+  ): Promise<BindIapTransactionResult> {
+    const { originalTransactionId, userId, platform, productId, tier } = input;
+
+    const existing = await this.prisma.iAPTransaction.findUnique({
+      where: { originalTransactionId },
+    });
+
+    if (existing) {
+      if (existing.userId === userId) {
+        this.logger.info({ userId, originalTransactionId }, 'subscription.service: IAP receipt re-affirmed by owner');
+        return { status: 'reaffirmed' };
+      }
+      this.logger.warn(
+        { userId, boundUserId: existing.userId, originalTransactionId },
+        'subscription.service: IAP receipt already redeemed by another account — rejecting',
+      );
+      return { status: 'conflict', boundUserId: existing.userId };
+    }
+
+    try {
+      await this.prisma.iAPTransaction.create({
+        data: { originalTransactionId, userId, platform, productId, tier },
+      });
+      this.logger.info({ userId, originalTransactionId, tier }, 'subscription.service: IAP receipt bound to account');
+      return { status: 'bound' };
+    } catch (err: unknown) {
+      // P2002 = unique constraint violation: a concurrent request bound this
+      // receipt first. Re-resolve the winning owner to decide reaffirm vs conflict.
+      if (
+        err &&
+        typeof err === 'object' &&
+        (err as { code?: string }).code === 'P2002'
+      ) {
+        const winner = await this.prisma.iAPTransaction.findUnique({
+          where: { originalTransactionId },
+        });
+        if (winner && winner.userId === userId) {
+          return { status: 'reaffirmed' };
+        }
+        this.logger.warn(
+          { userId, boundUserId: winner?.userId, originalTransactionId },
+          'subscription.service: IAP receipt bound by another account in a race — rejecting',
+        );
+        return { status: 'conflict', boundUserId: winner?.userId ?? 'unknown' };
+      }
+      throw err;
+    }
   }
 
   // ── upgradeTier ─────────────────────────────────────────────────────────────

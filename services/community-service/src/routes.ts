@@ -31,8 +31,9 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
         schema: { querystring: z.object({ limit: z.coerce.number().int().min(1).max(100).default(20), cursor: z.string().max(200).optional() }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
+        const viewerId = (request as any).user?.id || (request as any).user?.userId;
         const { limit, cursor } = request.query as any;
-        const posts = await communityService.getFeed(limit, cursor);
+        const posts = await communityService.getFeed(viewerId, limit, cursor);
         const mappedPosts = posts.map(p => ({ ...p, commentsCount: (p as any)._count?.comments || 0 }));
         return reply.send(mappedPosts);
     });
@@ -87,8 +88,11 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
         schema: { params: z.object({ id: z.string().uuid() }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
+        const viewerId = (request as any).user?.id || (request as any).user?.userId;
         const { id } = request.params as any;
-        const post = await communityService.getPostById(id);
+        // viewerId drives the privacy gate; a private author's post is hidden
+        // (treated as not found) from a non-follower.
+        const post = await communityService.getPostById(viewerId, id);
         if (!post) return reply.code(404).send({ error: 'Post not found' });
         return reply.send({ ...post, commentsCount: (post as any)._count?.comments || 0 });
     });
@@ -97,8 +101,10 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
         schema: { params: z.object({ id: z.string().uuid() }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
+        const viewerId = (request as any).user?.id || (request as any).user?.userId;
         const { id } = request.params as any;
-        return reply.send(await communityService.getComments(id));
+        // viewerId drives the privacy gate; comments inherit the post author's visibility.
+        return reply.send(await communityService.getComments(viewerId, id));
     });
 
     // Post Management

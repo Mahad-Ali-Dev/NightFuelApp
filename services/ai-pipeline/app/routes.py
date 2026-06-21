@@ -54,6 +54,10 @@ async def generate_plan(
         logic_targets=logic_targets_dict,
         provider=active_provider,
         cycle_phase=request.cyclePhase,
+        # F35 #12: attribute telemetry to the verified caller identity, not the
+        # client-supplied body userId. For this s2s route identity == "internal",
+        # so the handler keeps the body userId the sibling service vouched for.
+        verified_identity=identity,
     )
     
     logger.info("Plan generation complete", extra={"structured_plan": structured_plan})
@@ -128,7 +132,10 @@ async def meal_swap(
         user_id=payload.userId,
         meal=payload.meal_to_swap,
         preferences=pref_dict,
-        provider=active_provider
+        provider=active_provider,
+        # F35 #12: user-facing route — attribute telemetry to the verified JWT
+        # identity so a forged body userId can't book usage to another account.
+        verified_identity=identity,
     )
 
 from .chains.meal_scorer import generate_meal_score
@@ -158,7 +165,9 @@ async def meal_score(
         user_id=payload.userId,
         meal=payload.meal,
         preferences=pref_dict,
-        provider=active_provider
+        provider=active_provider,
+        # F35 #12: attribute telemetry to the verified JWT identity, not the body.
+        verified_identity=identity,
     )
 
 from .chains.coach_chat import generate_chat_response
@@ -187,7 +196,9 @@ async def chat_with_coach(
         message=payload.message,
         history=[h.model_dump() for h in payload.history],
         context=payload.context,
-        provider=active_provider
+        provider=active_provider,
+        # F35 #12: attribute telemetry to the verified JWT identity, not the body.
+        verified_identity=identity,
     )
 
     return {"reply": response_text}
@@ -232,6 +243,8 @@ async def chat_with_coach_stream(
             history=[h.model_dump() for h in payload.history],
             context=payload.context,
             provider=active_provider,
+            # F35 #12: attribute telemetry to the verified JWT identity, not the body.
+            verified_identity=identity,
         ):
             # SSE: "data: <line>\n\n". JSON inside; one event per chunk.
             yield f"data: {_json.dumps(event)}\n\n"

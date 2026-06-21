@@ -112,6 +112,11 @@ function buildStubService() {
         cancel: jest.fn(),
         getByUserId: jest.fn(),
         getLimits: jest.fn(),
+        // CRITICAL #1: the IAP route now binds the receipt before upgrading.
+        // Default to a first-redemption 'bound' so the existing happy path flows
+        // through to upgradeTier. (Receipt-replay rejection is covered by
+        // iap-receipt-binding.test.ts.)
+        bindIapTransaction: jest.fn(async () => ({ status: 'bound' })),
     };
 }
 
@@ -317,6 +322,8 @@ describe('subscription-service input-bounds — genuine routes reject bad input 
                 tier: 'PRO',
                 productId: KNOWN_PRODUCT_ID,
                 expiresAt: '2026-12-31T00:00:00.000Z',
+                // CRITICAL #1: the route now requires a stable id to bind the receipt.
+                originalTransactionId: '1000000999888777',
             });
             svc.upgradeTier.mockResolvedValue({ subscription: fakeSubscription('PRO'), fromTier: 'FREE' });
 

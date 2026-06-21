@@ -185,7 +185,10 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/sleep', {
         const session = await sleepSvc.createSession({ ...request.body, userId });
         return reply.code(201).send(session);
     } catch (err: any) {
-        logger.error({ err, body: request.body, stack: err.stack }, 'POST /v1/sleep failed');
+        // SECURITY (MEDIUM #15): do NOT log `request.body` — it carries health
+        // data (sleep timestamps / quality). Log userId + err only.
+        const userId = (request.user as any)?.userId ?? (request.user as any)?.id;
+        logger.error({ userId, err }, 'POST /v1/sleep failed');
         return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });

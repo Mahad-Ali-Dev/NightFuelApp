@@ -245,8 +245,8 @@ describe('community-service input bounds (valid token, schema-lock)', () => {
 
             expect(res.statusCode).not.toBe(400);
             expect(svc.getFeed).toHaveBeenCalledTimes(1);
-            // Default page size is preserved: first positional arg is 20.
-            expect(svc.getFeed).toHaveBeenCalledWith(20, undefined);
+            // viewerId (from JWT) is threaded first; default page size 20 is preserved.
+            expect(svc.getFeed).toHaveBeenCalledWith('44444444-4444-4444-8444-444444444444', 20, undefined);
         });
 
         it('limit=101 (above max) -> 400 and getFeed NOT called', async () => {
@@ -280,7 +280,7 @@ describe('community-service input bounds (valid token, schema-lock)', () => {
 
             expect(res.statusCode).not.toBe(400);
             expect(svc.getFeed).toHaveBeenCalledTimes(1);
-            expect(svc.getFeed).toHaveBeenCalledWith(100, undefined);
+            expect(svc.getFeed).toHaveBeenCalledWith('44444444-4444-4444-8444-444444444444', 100, undefined);
         });
 
         it('limit=0 (below min) -> 400 and getFeed NOT called', async () => {
@@ -316,7 +316,7 @@ describe('community-service input bounds (valid token, schema-lock)', () => {
 
             expect(res.statusCode).not.toBe(400);
             expect(svc.getFeed).toHaveBeenCalledTimes(1);
-            expect(svc.getFeed).toHaveBeenCalledWith(10, cursor);
+            expect(svc.getFeed).toHaveBeenCalledWith('44444444-4444-4444-8444-444444444444', 10, cursor);
         });
     });
 

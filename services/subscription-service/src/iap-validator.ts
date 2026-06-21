@@ -79,6 +79,12 @@ const APPLE_SANDBOX_VERIFY_URL = 'https://sandbox.itunes.apple.com/verifyReceipt
  * sandbox receipts to the sandbox URL. We try production first; if Apple
  * returns status `21007` (sandbox receipt sent to production), we retry
  * against sandbox automatically. This is the standard documented flow.
+ *
+ * SECURITY (HIGH #3 — sandbox receipts accepted in production): the 21007
+ * sandbox retry, and any receipt whose response `environment` is "Sandbox",
+ * are ONLY honoured when sandbox is explicitly allowed (see `isSandboxAllowed`).
+ * In production this is OFF by default, so a free StoreKit-test / TestFlight
+ * sandbox receipt can NEVER upgrade a real account.
  */
 export async function validateAppleReceipt(receipt: string): Promise<ValidationResult> {
   const sharedSecret = process.env.APPLE_SHARED_SECRET;
@@ -96,11 +102,36 @@ export async function validateAppleReceipt(receipt: string): Promise<ValidationR
   // Try production first (most common in real users)
   const prodResp = await postJson(APPLE_PRODUCTION_VERIFY_URL, body);
   if (prodResp.status === 21007) {
-    // 21007 = sandbox receipt sent to production — retry against sandbox.
+    // 21007 = sandbox receipt sent to production. Retrying against the sandbox
+    // URL is ONLY legitimate when sandbox is allowed; in production we refuse so
+    // a sandbox receipt cannot be laundered into a real upgrade.
+    if (!isSandboxAllowed()) {
+      log.warn('Apple sandbox receipt (status 21007) rejected in production (IAP_ALLOW_SANDBOX is off)');
+      return {
+        valid: false,
+        errorCode: 'apple_environment_mismatch',
+        errorMessage: 'Sandbox receipts are not accepted in production',
+      };
+    }
     const sandboxResp = await postJson(APPLE_SANDBOX_VERIFY_URL, body);
     return parseAppleResponse(sandboxResp);
   }
   return parseAppleResponse(prodResp);
+}
+
+/**
+ * Whether Sandbox-environment IAP receipts may be honoured.
+ *
+ * Default CLOSED: in production a sandbox receipt is rejected. Set
+ * `IAP_ALLOW_SANDBOX=true` (non-prod testing) to accept them. As a convenience,
+ * sandbox is also allowed when NODE_ENV is not 'production', so local/test runs
+ * work without extra config — but the flag, when set, is authoritative.
+ */
+export function isSandboxAllowed(): boolean {
+  const flag = (process.env.IAP_ALLOW_SANDBOX ?? '').trim().toLowerCase();
+  if (flag === 'true' || flag === '1') return true;
+  if (flag === 'false' || flag === '0') return false;
+  return process.env.NODE_ENV !== 'production';
 }
 
 interface AppleVerifyResponse {
@@ -122,6 +153,22 @@ interface AppleReceiptInfo {
 }
 
 function parseAppleResponse(resp: AppleVerifyResponse): ValidationResult {
+  // SECURITY (HIGH #3): reject Sandbox-environment receipts unless sandbox is
+  // explicitly allowed. Apple stamps every verifyReceipt response with the
+  // environment it was issued in; a real App Store purchase is "Production".
+  // Without this check a sandbox receipt that happens to validate at the
+  // production endpoint (or a sandbox URL retry) would silently upgrade a real
+  // account. We gate even though validateAppleReceipt already guards the 21007
+  // retry, so direct/edge responses are covered too (defense in depth).
+  if (resp.environment === 'Sandbox' && !isSandboxAllowed()) {
+    log.warn('Apple receipt rejected: Sandbox environment in production (IAP_ALLOW_SANDBOX is off)');
+    return {
+      valid: false,
+      errorCode: 'apple_environment_mismatch',
+      errorMessage: 'Sandbox receipts are not accepted in production',
+    };
+  }
+
   if (resp.status !== 0) {
     log.warn({ status: resp.status }, 'Apple receipt validation failed');
     // 21002 = malformed, 21003 = couldn't authenticate, 21004 = wrong shared secret,

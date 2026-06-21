@@ -47,6 +47,7 @@ async def generate_chat_response_stream(
     history: List[Dict[str, str]],
     context: Dict[str, Any],
     provider: LLMProvider = LLMProvider.OPENAI,
+    verified_identity: str = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     """
     Stream a coach chat response. Yields {"type": "token"|"done"|"error", ...}.
@@ -91,7 +92,12 @@ async def generate_chat_response_stream(
             else:
                 langchain_history.append(AIMessage(content=msg.get("content", "")))
 
-        handler = TokenTelemetryHandler(user_id=user_id, action="chat-stream", provider=provider.value)
+        handler = TokenTelemetryHandler(
+            user_id=user_id,
+            action="chat-stream",
+            provider=provider.value,
+            verified_identity=verified_identity,
+        )
 
         async for chunk in chain.astream(
             {

@@ -34,7 +34,8 @@ async def generate_chat_response(
     message: str,
     history: List[Dict[str, str]],
     context: Dict[str, Any],
-    provider: LLMProvider = LLMProvider.OPENAI
+    provider: LLMProvider = LLMProvider.OPENAI,
+    verified_identity: str = None,
 ) -> str:
     from json import dumps
 
@@ -64,7 +65,7 @@ async def generate_chat_response(
             else:
                 langchain_history.append(AIMessage(content=msg.get("content", "")))
                 
-        handler = TokenTelemetryHandler(user_id=user_id, action="chat", provider=provider.value)
+        handler = TokenTelemetryHandler(user_id=user_id, action="chat", provider=provider.value, verified_identity=verified_identity)
 
         response = await chain.ainvoke({
             "system_prompt": SYSTEM_PROMPT,

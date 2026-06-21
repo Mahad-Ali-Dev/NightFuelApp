@@ -46,7 +46,8 @@ async def generate_meal_alternatives(
     user_id: str,
     meal: Dict[str, Any],
     preferences: Dict[str, Any],
-    provider: LLMProvider = LLMProvider.OPENAI
+    provider: LLMProvider = LLMProvider.OPENAI,
+    verified_identity: str = None,
 ) -> Dict[str, Any]:
     from json import dumps
     
@@ -57,7 +58,7 @@ async def generate_meal_alternatives(
     chain = prompt | llm | parser
     
     from ..telemetry import TokenTelemetryHandler
-    handler = TokenTelemetryHandler(user_id=user_id, action="meal-swap", provider=provider.value)
+    handler = TokenTelemetryHandler(user_id=user_id, action="meal-swap", provider=provider.value, verified_identity=verified_identity)
 
     response = await chain.ainvoke({
         "system_prompt": SYSTEM_PROMPT,

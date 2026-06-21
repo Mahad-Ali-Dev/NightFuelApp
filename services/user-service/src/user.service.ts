@@ -249,19 +249,25 @@ export class UserService {
                 // (cwd may be read-only in the container, and the error data
                 // contains PII). The structured logger.error below is the
                 // production diagnostic.
+                //
+                // SECURITY (HIGH #9): NEVER log the `data` payload. It carries
+                // GDPR Art.9 special-category fields (menstrual-cycle / period /
+                // health). We log only userId, the error, and the NAMES of the
+                // fields that were being written (never their values) so the
+                // diagnostic is still useful without leaking PII.
                 if (process.env.NODE_ENV !== 'production') {
                     const errorLog = {
                         timestamp: new Date().toISOString(),
                         userId,
                         err,
-                        data
+                        fields: Object.keys(data),
                     };
                     fs.appendFileSync(
                         path.join(process.cwd(), 'prisma-error.log'),
                         JSON.stringify(errorLog, null, 2) + '\n---\n'
                     );
                 }
-                logger.error({ userId, err, data }, 'Prisma error');
+                logger.error({ userId, err, fields: Object.keys(data) }, 'Prisma error');
                 throw err;
             });
 
@@ -275,7 +281,9 @@ export class UserService {
 
             return profile;
         } catch (err: any) {
-            logger.error({ userId, err, data }, 'Failed to upsert user profile');
+            // SECURITY (HIGH #9): do NOT log `data` — it contains GDPR Art.9
+            // special-category fields. Log userId + err + the field NAMES only.
+            logger.error({ userId, err, fields: Object.keys(data) }, 'Failed to upsert user profile');
             throw err;
         }
     }
@@ -394,7 +402,11 @@ export class UserService {
 
             return prefs;
         } catch (err: any) {
-            logger.error({ userId, err, body }, 'Failed to update user preferences');
+            // SECURITY (MEDIUM #14): do NOT log the raw request `body` — it
+            // carries health-adjacent fields (allergies, injury-safe mode,
+            // dietary preference). Log userId + err + the NAMES of the fields
+            // being written (never their values).
+            logger.error({ userId, err, fields: Object.keys(body ?? {}) }, 'Failed to update user preferences');
             throw err;
         }
     }

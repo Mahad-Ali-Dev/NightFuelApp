@@ -98,6 +98,7 @@ async def generate_plan_content(
     provider: LLMProvider = LLMProvider.OPENAI,
     max_retries: int = 3,
     cycle_phase: Optional[str] = None,
+    verified_identity: Optional[str] = None,
 ) -> Dict[str, Any]:
 
     logger.info(f"Initializing LangChain with provider: {provider.value}")
@@ -193,7 +194,7 @@ async def generate_plan_content(
             logger.info(f"Invoking LLM chain attempt: {attempt + 1}")
             
             from ..telemetry import TokenTelemetryHandler
-            handler = TokenTelemetryHandler(user_id=user_id, action="generate-plan", provider=provider.value)
+            handler = TokenTelemetryHandler(user_id=user_id, action="generate-plan", provider=provider.value, verified_identity=verified_identity)
 
             response = await chain.ainvoke(
                 {"user_context": user_context},

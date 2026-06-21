@@ -61,3 +61,25 @@ model SubscriptionEvent {
   @@index([userId, createdAt(sort: Desc)])
   @@map("subscription_events")
 }
+
+// ─── IAP receipt binding (CRITICAL #1 — receipt replay / sharing) ──────────────
+// One row per validated Apple/Google subscription receipt, keyed by the
+// platform's STABLE cross-renewal identifier (Apple originalTransactionId /
+// Google orderId-or-purchaseToken). The @@unique on originalTransactionId is the
+// hard guarantee that a single valid receipt can upgrade exactly ONE account:
+// the validate route binds the receipt to the first userId that redeems it, and
+// any later submission of the SAME receipt by a DIFFERENT user is rejected (the
+// row already belongs to someone else). A re-submit by the SAME user is an
+// idempotent re-affirm. See SubscriptionService.bindIapTransaction.
+model IAPTransaction {
+  id                    String   @id @default(uuid())
+  originalTransactionId String   @unique @map("original_transaction_id")
+  userId                String   @map("user_id")
+  platform              String
+  productId             String   @map("product_id")
+  tier                  String
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("iap_transactions")
+}

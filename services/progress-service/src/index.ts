@@ -82,7 +82,14 @@ fastify.get('/health', async () => {
 });
 
 fastify.register(async (instance) => {
-    await progressRoutes(instance, { progressService });
+    await progressRoutes(instance, {
+        progressService,
+        // F35 #12: shared internal-service token. The /ai-usage sink is a
+        // server-to-server endpoint (the Python ai-pipeline POSTs LLM cost
+        // telemetry to it); it is now guarded by the constant-time X-Internal-Token
+        // check so an unauthenticated caller can't poison the cost table.
+        internalServiceToken: config.INTERNAL_SERVICE_TOKEN,
+    });
 }, { prefix: '/v1/progress' });
 
 const start = async () => {

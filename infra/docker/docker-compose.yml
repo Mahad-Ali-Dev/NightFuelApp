@@ -357,6 +357,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_placeholder}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
+      APPLE_SHARED_SECRET: ${APPLE_SHARED_SECRET:-}
+      # HIGH #3: accept Apple/Google SANDBOX receipts. Default false — a sandbox
+      # (StoreKit-test / TestFlight) receipt must NEVER upgrade a real account in
+      # production. Set to true only in non-prod test environments.
+      IAP_ALLOW_SANDBOX: ${IAP_ALLOW_SANDBOX:-false}
       LOG_LEVEL: info
     depends_on:
       postgres:

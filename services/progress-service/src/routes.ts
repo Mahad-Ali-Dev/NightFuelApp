@@ -1,5 +1,6 @@
 
 import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { makeInternalAuthGuard } from '@nightfuel/config';
 import { ProgressService } from './progress.service';
 import {
     historyQuerySchema,
@@ -18,8 +19,14 @@ const errorResponseSchema = z.object({
 
 export const progressRoutes: FastifyPluginAsyncZod<{
     progressService: ProgressService;
+    internalServiceToken?: string;
 }> = async (fastify, options) => {
     const { progressService } = options;
+
+    // F35 #12: guard the server-to-server-only /ai-usage telemetry sink. Same
+    // constant-time X-Internal-Token check the other internal routes use; 404s
+    // on missing/wrong token. The Python ai-pipeline sends the header.
+    const internalAuth = makeInternalAuthGuard(options.internalServiceToken);
 
     // -------------------------------------------------------------------------
     // GET /v1/progress/today
@@ -444,13 +451,22 @@ export const progressRoutes: FastifyPluginAsyncZod<{
                 promptTokens: z.number().int().min(0).max(10_000_000),
                 completionTokens: z.number().int().min(0).max(10_000_000),
                 totalTokens: z.number().int().min(0).max(20_000_000),
+                // F35 #11: optional cost/model the ai-pipeline now computes per
+                // call. Accepted (and bounded) so the POST validates; not yet
+                // persisted (no aiUsageLog columns — that needs a migration), so
+                // logAiUsage continues to read only the six fields above.
+                costUsd: z.number().min(0).max(1000).optional(),
+                model: z.string().max(120).optional(),
             }),
             response: {
                 201: z.any(),
                 500: errorResponseSchema,
             },
         },
-        // Intentionally omitting preHandler: [fastify.authenticate] because this is a server-to-server call from Python
+        // F35 #12: server-to-server only — guarded by the shared internal-token
+        // check (was previously unauthenticated). The Python ai-pipeline sends
+        // X-Internal-Token; missing/wrong token 404s before the handler runs.
+        preHandler: internalAuth,
     }, async (request, reply) => {
         try {
             const body = request.body as any;

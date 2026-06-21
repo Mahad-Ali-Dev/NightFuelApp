@@ -102,6 +102,15 @@ export function registerStripeRoutes(
           mode: 'subscription',
           line_items: [{ price: PRICE_IDS[tier]!, quantity: 1 }],
           metadata: { userId, tier },
+          // SECURITY (HIGH #4 — Stripe never downgrades on cancel/expire): the
+          // Session metadata above lives only on the Checkout Session, which is
+          // NOT the object delivered by customer.subscription.updated/deleted.
+          // Stripe copies `subscription_data.metadata` onto the underlying
+          // Subscription object, so the cancel/expire webhooks can resolve the
+          // owner via sub.metadata.userId and downgrade the RIGHT user. Without
+          // this, those handlers see no userId and the user keeps a paid tier
+          // forever after cancellation.
+          subscription_data: { metadata: { userId, tier } },
           success_url:
             successUrl ??
             `${process.env['APP_URL'] ?? 'http://localhost:3000'}/settings/subscription?success=1`,
@@ -314,6 +323,12 @@ async function handleStripeEvent(
           if (tier) {
             await subscriptionService.upgradeTier({ userId, targetTier: tier as any });
           }
+        } else if (sub.status === 'canceled') {
+          // HIGH #4: a terminal cancel can also surface as an `updated` event
+          // (e.g. immediate cancellation). Revoke the paid tier for the resolved
+          // user, same as the deleted handler.
+          await subscriptionService.upgradeTier({ userId, targetTier: 'FREE' as any });
+          logger.info({ userId }, '[stripe] customer.subscription.updated (canceled) — downgraded to FREE');
         } else if (sub.status === 'past_due' || sub.status === 'unpaid') {
           logger.warn({ userId, status: sub.status }, '[stripe] subscription payment issue');
         }
@@ -324,10 +339,19 @@ async function handleStripeEvent(
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription;
         const userId = sub.metadata?.['userId'];
-        if (userId) {
-          await subscriptionService.cancel({ userId });
-          logger.info({ userId }, '[stripe] customer.subscription.deleted — subscription cancelled');
+        if (!userId) {
+          // HIGH #4: without subscription_data.metadata.userId on checkout we
+          // could not resolve the owner here and the user would keep their paid
+          // tier forever. Log loudly so a missing-metadata regression is visible.
+          logger.warn({ subId: sub.id }, '[stripe] customer.subscription.deleted — no userId in metadata, cannot downgrade');
+          break;
         }
+        // The subscription has fully ended (cancelled / expired) — revoke the
+        // paid tier by downgrading to FREE. `cancel` only flags
+        // cancelAtPeriodEnd and would leave the paid tier active, so we downgrade
+        // the tier directly here.
+        await subscriptionService.upgradeTier({ userId, targetTier: 'FREE' as any });
+        logger.info({ userId }, '[stripe] customer.subscription.deleted — downgraded to FREE');
         break;
       }
 

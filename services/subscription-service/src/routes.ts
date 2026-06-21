@@ -457,6 +457,15 @@ export async function subscriptionRoutes(
               errorMessage: { type: 'string' },
             },
           },
+          // CRITICAL #1: a receipt already redeemed by another account.
+          409: {
+            type: 'object',
+            properties: {
+              valid: { type: 'boolean' },
+              errorCode: { type: 'string' },
+              errorMessage: { type: 'string' },
+            },
+          },
         },
       },
     },
@@ -515,6 +524,47 @@ export async function subscriptionRoutes(
             errorMessage: 'Receipt does not match claimed product',
           });
         }
+
+        // SECURITY (CRITICAL #1 — receipt replay / sharing): bind the verified
+        // receipt to exactly ONE account before granting any tier. The stable
+        // cross-renewal id (Apple originalTransactionId / Google orderId) keys
+        // the binding. If the same receipt was already redeemed by a DIFFERENT
+        // user, reject — one valid receipt must never upgrade unlimited accounts.
+        const originalTransactionId = result.originalTransactionId;
+        if (!originalTransactionId) {
+          // A verified receipt with no stable id can't be deduped safely — refuse
+          // rather than grant an unbindable (replayable) upgrade.
+          log.warn({ userId, platform }, 'IAP verified receipt missing originalTransactionId — refusing to bind');
+          return reply.status(200).send({
+            valid: false,
+            errorCode: 'invalid_receipt',
+            errorMessage: 'Receipt is missing a stable transaction identifier',
+          });
+        }
+
+        const binding = await subscriptionService.bindIapTransaction({
+          originalTransactionId,
+          userId,
+          platform,
+          productId,
+          tier: result.tier as SubscriptionTier,
+        });
+
+        if (binding.status === 'conflict') {
+          log.warn(
+            { userId, originalTransactionId },
+            'IAP receipt already redeemed by another account — rejecting replay',
+          );
+          return reply.status(409).send({
+            valid: false,
+            errorCode: 'receipt_already_redeemed',
+            errorMessage: 'This receipt has already been redeemed by another account',
+          });
+        }
+
+        // status is 'bound' (first redemption) or 'reaffirmed' (same user
+        // re-validating). Both proceed to upgradeTier; upgradeTier is itself
+        // idempotent (no-op when already on the target tier).
 
         // Persist the new tier. upgradeTier emits the tier-updated event
         // for the rest of the system (notification-service, user-service, etc.).
