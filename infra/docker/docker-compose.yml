@@ -124,6 +124,11 @@ services:
     environment:
       REDIS_URL: redis://redis:6379
       PORT: 3004
+      # F22 #8 dual-auth: verify end-user Bearer JWTs (shared JWT_SECRET) and
+      # trusted server-to-server callers (INTERNAL_SERVICE_TOKEN). The same
+      # INTERNAL_SERVICE_TOKEN value is shared with chat/exercise/plan/progress.
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-mock-key}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-mock-key}
       # Optional LLM tuning (all default safely when unset). Set in infra/docker/.env:
@@ -162,6 +167,8 @@ services:
       MEAL_SERVICE_URL: http://meal-service:3006
       EXERCISE_SERVICE_URL: http://exercise-service:3011
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F22 #8: shared token authorizing the server-to-server call to ai-pipeline.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
     depends_on:
       postgres:
@@ -231,6 +238,8 @@ services:
       USER_SERVICE_URL: http://user-service:3009
       AI_PIPELINE_URL: http://ai-pipeline:3004
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F22 #8: shared token authorizing the server-to-server call to ai-pipeline.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
     depends_on:
       postgres:
@@ -278,6 +287,8 @@ services:
       EXERCISE_PORT: 3011
       AI_PIPELINE_URL: http://ai-pipeline:3004
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F22 #8: shared token authorizing the server-to-server call to ai-pipeline.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
     depends_on:
       postgres:
@@ -366,6 +377,8 @@ services:
       CHAT_PORT: 3014
       AI_PIPELINE_URL: http://ai-pipeline:3004
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F22 #8: shared token authorizing the server-to-server call to ai-pipeline.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
     depends_on:
       postgres:

@@ -16,7 +16,11 @@ const envSchema = z.object({
     EXERCISE_PORT: z.string().default('3011'),
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     REDIS_URL: z.string().url(),
-    AI_PIPELINE_URL: z.string().url().default('http://localhost:3010'),
+    AI_PIPELINE_URL: z.string().url().default('http://ai-pipeline:3004'),
+    // F22 #8: shared token for the server-to-server call to ai-pipeline
+    // (sent as X-Internal-Token). Defaulted so boot doesn't break; ai-pipeline
+    // rejects an empty/mismatched token, so prod must set this.
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
     // Resolves the caller's plan for the AI-routine-generator daily quota.
     // Defaulted so a missing env doesn't fail boot; the service degrades to
     // plan=free if the subscription-service is unreachable (mirrors
@@ -398,10 +402,16 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generat
 
     let routineData: any = null;
     try {
-        // Call AI pipeline chat endpoint
-        const aiRes = await fetch(`${config.AI_PIPELINE_URL}/chat`, {
+        // Call AI pipeline chat endpoint. NOTE: the ai-pipeline router is mounted
+        // at /v1/ai, so the path must be /v1/ai/chat (a bare /chat 404s — this
+        // routine generator silently fell back to the deterministic template on
+        // every call until this was corrected).
+        const aiRes = await fetch(`${config.AI_PIPELINE_URL}/v1/ai/chat`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Internal-Token': config.INTERNAL_SERVICE_TOKEN,
+            },
             body: JSON.stringify({
                 userId,
                 message: prompt,

@@ -56,6 +56,9 @@ jobs:
           ANTHROPIC_API_KEY: mock-key
           OPENAI_API_KEY: mock-key
           REDIS_URL: redis://localhost:6379
+          # F22 #8: ai-pipeline now requires these at boot (dual-auth).
+          JWT_SECRET: test-jwt-secret-at-least-32-characters-long
+          INTERNAL_SERVICE_TOKEN: test-internal-token
         run: |
           cd services/${{ matrix.service }}
           python -m pytest tests/ -v --tb=short

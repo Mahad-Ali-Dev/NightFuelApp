@@ -9,6 +9,10 @@ const logger = createLogger('chat.service');
 // ── RIA AI constants ──────────────────────────────────────────────────────────
 export const RIA_AI_USER_ID = 'ria-ai-coach';
 const AI_PIPELINE_URL = process.env.AI_PIPELINE_URL || 'http://localhost:3010';
+// F22 #8: shared token authorizing this server-to-server call to ai-pipeline,
+// sent as X-Internal-Token. Empty default keeps boot working; ai-pipeline
+// rejects an empty/mismatched token, so prod must set INTERNAL_SERVICE_TOKEN.
+const INTERNAL_SERVICE_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || '';
 
 // ── Internal service-to-service call config ─────────────────────────────────────
 const DEFAULT_USER_SERVICE_URL = 'http://user-service:3009';
@@ -522,7 +526,10 @@ export class ChatService {
         try {
             const res = await fetch(`${AI_PIPELINE_URL}/v1/ai/chat`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Internal-Token': INTERNAL_SERVICE_TOKEN,
+                },
                 body: JSON.stringify({
                     userId,
                     message: userMessage,

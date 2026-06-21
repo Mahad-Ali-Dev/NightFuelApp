@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from .models import DayPlanRequest, DayPlanResponse, GoalPreferences, WeeklyAuditRequest
 from .validators import generate_skeleton
 from .chains.plan_generator import generate_plan_content, LLMProvider
@@ -7,6 +7,7 @@ from .chains.audit_generator import generate_weekly_audit
 from .chains.meal_swap import generate_meal_alternatives
 from .logger import logger
 from .rate_limiter import check_rate_limit
+from .auth import require_caller
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -16,13 +17,18 @@ def health_check():
     return {"status": "ok"}
 
 @router.post("/generate-plan", response_model=DayPlanResponse)
-async def generate_plan(request: DayPlanRequest, http_request: Request, provider: str = "anthropic"):
+async def generate_plan(
+    request: DayPlanRequest,
+    http_request: Request,
+    provider: str = "anthropic",
+    identity: str = Depends(require_caller),
+):
     """
     Synchronous endpoint for plan generation.
     Takes a single day's circadian profile and returns a structured AI-generated plan.
     """
     logger.info(f"Generating plan for user {request.userId} on date {request.date}")
-    await check_rate_limit(request.userId, category="generation", request=http_request)
+    await check_rate_limit(identity, category="generation")
 
     # Layer 2: Chrono-Nutrition Optimizer (Rules Engine)
     skeleton = generate_skeleton(request)
@@ -61,13 +67,14 @@ async def generate_plan(request: DayPlanRequest, http_request: Request, provider
 async def weekly_audit(
     payload: WeeklyAuditRequest,
     http_request: Request,
-    provider: str = "anthropic"
+    provider: str = "anthropic",
+    identity: str = Depends(require_caller),
 ):
     """
     Generate a coaching summary/audit for the last 7 days.
     """
     logger.info(f"Generating weekly audit for user {payload.userId}")
-    await check_rate_limit(payload.userId, category="generation", request=http_request)
+    await check_rate_limit(identity, category="generation")
 
     try:
         active_provider = LLMProvider(provider.lower())
@@ -91,13 +98,14 @@ class SwapPayload(BaseModel):
 async def meal_swap(
     payload: SwapPayload,
     http_request: Request,
-    provider: str = "anthropic"
+    provider: str = "anthropic",
+    identity: str = Depends(require_caller),
 ):
     """
     Swap a single meal for an alternative that fits the same caloric/macro profile.
     """
     logger.info("Swapping meal", extra={"meal": payload.meal_to_swap.get("name", "Unknown")})
-    await check_rate_limit(payload.userId, category="generation", request=http_request)
+    await check_rate_limit(identity, category="generation")
     
     # Validate provider
     try:
@@ -121,10 +129,11 @@ from .models import MealScoreRequest
 async def meal_score(
     payload: MealScoreRequest,
     http_request: Request,
-    provider: str = "anthropic"
+    provider: str = "anthropic",
+    identity: str = Depends(require_caller),
 ):
     logger.info("Scoring custom meal", extra={"meal": payload.meal.get("name", "Unknown")})
-    await check_rate_limit(payload.userId, category="generation", request=http_request)
+    await check_rate_limit(identity, category="generation")
     
     try:
         active_provider = LLMProvider(provider.lower())
@@ -150,10 +159,11 @@ import json as _json
 async def chat_with_coach(
     payload: CoachChatRequest,
     http_request: Request,
-    provider: str = "anthropic"
+    provider: str = "anthropic",
+    identity: str = Depends(require_caller),
 ):
     logger.info("Handling chat request", extra={"userId": payload.userId})
-    await check_rate_limit(payload.userId, category="chat", request=http_request)
+    await check_rate_limit(identity, category="chat")
 
     try:
         active_provider = LLMProvider(provider.lower())
@@ -172,7 +182,12 @@ async def chat_with_coach(
 
 
 @router.post("/chat/stream")
-async def chat_with_coach_stream(payload: CoachChatRequest, http_request: Request, provider: str = "anthropic"):
+async def chat_with_coach_stream(
+    payload: CoachChatRequest,
+    http_request: Request,
+    provider: str = "anthropic",
+    identity: str = Depends(require_caller),
+):
     """
     Server-Sent Events streaming variant of /chat.
 
@@ -191,7 +206,7 @@ async def chat_with_coach_stream(payload: CoachChatRequest, http_request: Reques
     Closes M1, M5, M6 from PRODUCTION_READINESS.md.
     """
     logger.info("Handling streaming chat request", extra={"userId": payload.userId})
-    await check_rate_limit(payload.userId, category="chat", request=http_request)
+    await check_rate_limit(identity, category="chat")
 
     try:
         active_provider = LLMProvider(provider.lower())

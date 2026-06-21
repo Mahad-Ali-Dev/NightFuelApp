@@ -30,6 +30,9 @@ const envSchema = z.object({
     MEAL_SERVICE_URL: z.string().url(),
     EXERCISE_SERVICE_URL: z.string().url(),
     REDIS_URL: z.string().url(),
+    // F22 #8: shared token for the server-to-server call to ai-pipeline
+    // (X-Internal-Token). Defaulted so boot doesn't break; prod must set it.
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -46,6 +49,7 @@ const planService = new PlanService(
         DECISION_ENGINE_URL: config.DECISION_ENGINE_URL,
         MEAL_SERVICE_URL: config.MEAL_SERVICE_URL,
         EXERCISE_SERVICE_URL: config.EXERCISE_SERVICE_URL,
+        INTERNAL_SERVICE_TOKEN: config.INTERNAL_SERVICE_TOKEN,
     }
 );
 

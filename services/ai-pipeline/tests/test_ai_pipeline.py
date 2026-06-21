@@ -17,6 +17,10 @@ except ImportError:  # pragma: no cover
 
 client = TestClient(app)
 
+# F22 #8: every data route now requires auth. The internal service token is the
+# simplest credential for tests that aren't specifically about auth.
+INTERNAL_HEADERS = {"X-Internal-Token": "test-internal-token"}
+
 def get_test_profile():
     return CircadianProfile(
         bodyTemperatureCurve={"00:00": 36.5},
@@ -84,7 +88,11 @@ def test_generate_plan_endpoint():
     }
     
     # We pass 'provider=mock' or assume it defaults and hits the mock key fallback
-    response = client.post("/v1/ai/generate-plan?provider=anthropic", json=request_data)
+    response = client.post(
+        "/v1/ai/generate-plan?provider=anthropic",
+        json=request_data,
+        headers=INTERNAL_HEADERS,
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -244,6 +252,7 @@ def test_chat_endpoint_rejects_overlong_message_with_422():
     resp = client.post(
         "/v1/ai/chat",
         json={"userId": "u-1", "message": "x" * (MAX_MESSAGE_CHARS + 1)},
+        headers=INTERNAL_HEADERS,
     )
     assert resp.status_code == 422
 
@@ -257,6 +266,7 @@ def test_weekly_audit_endpoint_rejects_too_many_history_with_422():
             "history": [{"day": 1}] * (MAX_LIST_ITEMS + 1),
             "preferences": {},
         },
+        headers=INTERNAL_HEADERS,
     )
     assert resp.status_code == 422
 

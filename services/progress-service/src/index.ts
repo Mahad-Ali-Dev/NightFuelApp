@@ -18,6 +18,9 @@ const envSchema = z.object({
     REDIS_URL: z.string().url(),
     USER_SERVICE_URL: z.string().url(),
     AI_PIPELINE_URL: z.string().url().optional(),
+    // F22 #8: shared token for the server-to-server call to ai-pipeline
+    // (X-Internal-Token). Defaulted so boot doesn't break; prod must set it.
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -29,7 +32,8 @@ const progressService = new ProgressService(
     eventBus,
     {
         USER_SERVICE_URL: config.USER_SERVICE_URL,
-        AI_PIPELINE_URL: config.AI_PIPELINE_URL
+        AI_PIPELINE_URL: config.AI_PIPELINE_URL,
+        INTERNAL_SERVICE_TOKEN: config.INTERNAL_SERVICE_TOKEN,
     }
 );
 

@@ -24,7 +24,7 @@ export class ProgressService {
     constructor(
         private prisma: PrismaClient,
         private eventBus: EventBus,
-        private config: { USER_SERVICE_URL: string, AI_PIPELINE_URL?: string }
+        private config: { USER_SERVICE_URL: string, AI_PIPELINE_URL?: string, INTERNAL_SERVICE_TOKEN?: string }
     ) { }
 
     // ---------------------------------------------------------------------------
@@ -868,7 +868,11 @@ export class ProgressService {
             const aiBaseUrl = (this as any).config.AI_PIPELINE_URL || 'http://localhost:8000';
             const response = await fetch(`${aiBaseUrl}/v1/ai/weekly-audit?userId=${userId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    // F22 #8: authorize this server-to-server call to ai-pipeline.
+                    'X-Internal-Token': (this as any).config.INTERNAL_SERVICE_TOKEN ?? '',
+                },
                 body: JSON.stringify({
                     userId,
                     stats,

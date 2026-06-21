@@ -1,7 +1,6 @@
 import os
 from typing import Optional
 
-from fastapi import Request
 from redis.asyncio import Redis
 
 from .config import get_settings
@@ -66,41 +65,26 @@ class RateLimitExceeded(Exception):
         )
 
 
-def _resolve_identity(user_id: Optional[str], request: Optional[Request]) -> str:
-    """Key the bucket on the authenticated userId, else fall back to client IP.
-
-    Falling back to IP means anonymous / unauthenticated traffic is still
-    capped (so the cost guard can't be bypassed by omitting userId), while a
-    completely unidentifiable caller gets a shared "unknown" bucket.
-    """
-    if user_id and str(user_id).strip():
-        return f"user:{str(user_id).strip()}"
-
-    if request is not None:
-        # Honor X-Forwarded-For (left-most = original client) when behind the
-        # nginx gateway, otherwise the direct socket peer.
-        fwd = request.headers.get("x-forwarded-for")
-        if fwd:
-            client_ip = fwd.split(",")[0].strip()
-            if client_ip:
-                return f"ip:{client_ip}"
-        if request.client and request.client.host:
-            return f"ip:{request.client.host}"
-
-    return "ip:unknown"
-
-
 async def check_rate_limit(
-    user_id: Optional[str],
+    identity: Optional[str],
     category: str = "generation",
-    request: Optional[Request] = None,
 ) -> int:
-    """Enforce a per-user (or per-IP) fixed-window quota for LLM endpoints.
+    """Enforce a per-IDENTITY fixed-window quota for LLM endpoints.
+
+    F22 #8: the bucket key is the VERIFIED identity resolved by
+    `app.auth.require_caller` — NOT the request-body userId. A forged body
+    userId therefore can no longer mint another user's (or an unlimited)
+    quota. `identity` is one of:
+
+        "internal"        -> trusted sibling service (chat/exercise/plan/
+                             progress). These BYPASS the per-user quota: they
+                             are server-to-server callers whose own upstream
+                             routes already enforce per-user limits.
+        "user:<subject>"  -> an authenticated end user; capped per-window.
 
     Args:
-        user_id: Authenticated user id. If empty, we fall back to client IP.
+        identity: The verified caller identity from require_caller.
         category: One of RATE_LIMITS keys ("chat" | "generation").
-        request: The FastAPI request, used only for the IP fallback.
 
     Returns:
         The current request count within the window (for logging/metrics).
@@ -113,6 +97,10 @@ async def check_rate_limit(
     hiccup must never block a paying user — the trade-off is that the cost
     guard is temporarily disabled, which is preferable to an outage.
     """
+    # Trusted internal services bypass the per-user quota entirely.
+    if identity == "internal":
+        return 0
+
     cfg = RATE_LIMITS.get(category)
     if cfg is None:
         logger.warning(
@@ -124,7 +112,10 @@ async def check_rate_limit(
     limit = cfg["limit"]
     window_seconds = cfg["window_seconds"]
 
-    identity = _resolve_identity(user_id, request)
+    # Guard against an empty/None identity (should not happen post-auth) — give
+    # it a shared bucket rather than crashing or granting unlimited access.
+    if not identity or not str(identity).strip():
+        identity = "unknown"
     key = f"rate_limit:ai:{category}:{identity}"
 
     try:

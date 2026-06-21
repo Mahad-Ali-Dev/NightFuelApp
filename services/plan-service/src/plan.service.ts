@@ -13,7 +13,7 @@ export class PlanService {
     constructor(
         private prisma: PrismaClient,
         private eventBus: EventBus,
-        private config: { AI_PIPELINE_URL: string, USER_SERVICE_URL: string, STATE_SERVICE_URL: string, DECISION_ENGINE_URL: string, MEAL_SERVICE_URL: string, EXERCISE_SERVICE_URL: string }
+        private config: { AI_PIPELINE_URL: string, USER_SERVICE_URL: string, STATE_SERVICE_URL: string, DECISION_ENGINE_URL: string, MEAL_SERVICE_URL: string, EXERCISE_SERVICE_URL: string, INTERNAL_SERVICE_TOKEN?: string }
     ) {
         const breakerOptions = {
             timeout: 30000,           // 30s — LLM calls can be slow
@@ -30,7 +30,11 @@ export class PlanService {
         logger.info(`Making HTTP request to ai-pipeline at ${this.config.AI_PIPELINE_URL}/v1/ai/generate-plan`);
         const response = await fetch(`${this.config.AI_PIPELINE_URL}/v1/ai/generate-plan`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                // F22 #8: authorize this server-to-server call to ai-pipeline.
+                'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '',
+            },
             body: JSON.stringify({
                 userId,
                 date,
