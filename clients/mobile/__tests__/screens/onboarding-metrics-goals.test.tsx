@@ -226,7 +226,8 @@ describe('BiologicalDataScreen (onboarding) — bounds + accessible validation +
 
   test('a fully valid entry enables Continue and advancing calls router.push to the next step', () => {
     // DOB + sex seeded; weight + height typed as valid numbers → isValid true.
-    mockStore.data = { dateOfBirth: VALID_DOB, biologicalSex: 'FEMALE' };
+    // MALE here so the cycle-basics step is SKIPPED (the original next step).
+    mockStore.data = { dateOfBirth: VALID_DOB, biologicalSex: 'MALE' };
     renderWithTheme(<BiologicalDataScreen />);
 
     fireEvent.changeText(weightField(), '72');
@@ -245,10 +246,43 @@ describe('BiologicalDataScreen (onboarding) — bounds + accessible validation +
       dateOfBirth: VALID_DOB,
       weightKg: 72,
       heightCm: 168,
-      biologicalSex: 'FEMALE',
+      biologicalSex: 'MALE',
     });
     // …and advances to the next onboarding step exactly once.
     expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith('/(onboarding)/shift-type');
   });
+
+  // ── Conditional cycle step routing (F25) ───────────────────────────────────
+
+  test('FEMALE routes to the OPT-IN cycle-basics step (not straight to shift-type)', () => {
+    mockStore.data = { dateOfBirth: VALID_DOB, biologicalSex: 'FEMALE' };
+    renderWithTheme(<BiologicalDataScreen />);
+
+    fireEvent.changeText(weightField(), '72');
+    fireEvent.changeText(heightField(), '168');
+
+    fireEvent.press(continueButton());
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith('/(onboarding)/cycle-basics');
+    expect(mockPush).not.toHaveBeenCalledWith('/(onboarding)/shift-type');
+  });
+
+  test.each(['MALE', 'OTHER', 'PREFER_NOT_TO_SAY'])(
+    'non-female (%s) SKIPS the cycle step and goes straight to shift-type (unchanged flow)',
+    (sexValue) => {
+      mockStore.data = { dateOfBirth: VALID_DOB, biologicalSex: sexValue };
+      renderWithTheme(<BiologicalDataScreen />);
+
+      fireEvent.changeText(weightField(), '80');
+      fireEvent.changeText(heightField(), '180');
+
+      fireEvent.press(continueButton());
+
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledWith('/(onboarding)/shift-type');
+      expect(mockPush).not.toHaveBeenCalledWith('/(onboarding)/cycle-basics');
+    },
+  );
 });

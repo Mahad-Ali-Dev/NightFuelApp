@@ -4,25 +4,47 @@ import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useOnboardingStore } from '@/store/onboardingStore';
 
 export default function OnboardingLayout() {
     const { colors, typography } = useTheme();
     const router = useRouter();
     const segments = useSegments();
     const insets = useSafeAreaInsets();
+    // The cycle-basics step is CONDITIONAL — only FEMALE users reach it (routing
+    // branch in metrics-goals.tsx). When it's part of the flow the total step
+    // count is 5, otherwise the original 4. We infer "this flow includes the
+    // cycle step" from the collected biologicalSex so the "STEP X OF N"
+    // denominator (previously hardcoded /4) stays accurate for both paths.
+    const biologicalSex = useOnboardingStore((s) => s.data.biologicalSex);
 
     // Determine current step based on route
     const currentRoute = segments[segments.length - 1];
-    const routeOrder = [
-        'metrics-goals',
-        'shift-type',
-        'sleep-schedule',
-        'dietary-needs',
-        'profile-summary'
-    ];
+    // `currentRoute` is the expo-router segment union; compare as a string
+    // (mirrors the existing `getStepTitle(currentRoute as string)` cast below)
+    // since 'cycle-basics' is a real route but may not be in the generated union.
+    const includesCycleStep = biologicalSex === 'FEMALE' || (currentRoute as string) === 'cycle-basics';
+    const routeOrder = includesCycleStep
+        ? [
+            'metrics-goals',
+            'cycle-basics',
+            'shift-type',
+            'sleep-schedule',
+            'dietary-needs',
+            'profile-summary',
+        ]
+        : [
+            'metrics-goals',
+            'shift-type',
+            'sleep-schedule',
+            'dietary-needs',
+            'profile-summary',
+        ];
+    // profile-summary hides its own header, so the visible step count excludes it.
+    const totalSteps = routeOrder.length - 1;
     const stepIndex = routeOrder.indexOf(currentRoute ?? '');
     const stepNumber = stepIndex >= 0 ? stepIndex + 1 : 1;
-    const progress = Math.min(stepNumber / 4, 1);
+    const progress = Math.min(stepNumber / totalSteps, 1);
 
     // Custom header matching the design
     const CustomHeader = () => (
@@ -39,7 +61,7 @@ export default function OnboardingLayout() {
             <View style={styles.progressContainer}>
                 <View style={styles.progressTextRow}>
                     <Text style={[typography.overline, { color: colors.text.secondary }]}>
-                        STEP {Math.min(stepNumber, 4)} OF 4
+                        STEP {Math.min(stepNumber, totalSteps)} OF {totalSteps}
                     </Text>
                     <Text style={[typography.overline, { color: colors.accent.cyan }]}>
                         {Math.round(progress * 100)}%
@@ -53,6 +75,7 @@ export default function OnboardingLayout() {
     return (
         <Stack screenOptions={{ header: () => <CustomHeader />, contentStyle: { backgroundColor: colors.background.primary } }}>
             <Stack.Screen name="metrics-goals" />
+            <Stack.Screen name="cycle-basics" />
             <Stack.Screen name="shift-type" />
             <Stack.Screen name="sleep-schedule" />
             <Stack.Screen name="dietary-needs" />
@@ -64,6 +87,7 @@ export default function OnboardingLayout() {
 function getStepTitle(route: string): string {
     switch (route) {
         case 'metrics-goals': return 'Biological Data';
+        case 'cycle-basics': return 'Cycle';
         case 'shift-type': return 'Goals';
         case 'sleep-schedule': return 'Lifestyle';
         case 'dietary-needs': return 'Nutrition';

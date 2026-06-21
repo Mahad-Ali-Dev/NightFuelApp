@@ -26,6 +26,17 @@ export interface UpdateProfileInput {
     biologicalSex?: 'MALE' | 'FEMALE' | 'OTHER' | 'PREFER_NOT_TO_SAY' | null;
     timezone?: string;
     region?: 'us' | 'eu' | 'ap';
+    // ── Menstrual-cycle tracking (F25; persisted via the EXISTING PUT
+    // /v1/users/me / updateProfileSchema). All fields are OPT-IN — the backend
+    // gates them on cycleTrackingEnabled, so the client may send them regardless
+    // and the server ignores the period inputs when tracking is off. Data
+    // minimization: ONLY these fields exist (no sexual-activity / pregnancy data).
+    cycleTrackingEnabled?: boolean;
+    lastPeriodStartDate?: string | null; // YYYY-MM-DD, same format as dateOfBirth
+    avgCycleLengthDays?: number | null;  // 21-45, default 28
+    avgPeriodLengthDays?: number | null; // 1-10, default 5
+    cycleRegularity?: 'REGULAR' | 'IRREGULAR' | 'UNKNOWN' | null;
+    hormonalContraception?: boolean;
 }
 
 // Mirrors the columns GET /v1/users/me/preferences actually returns
@@ -51,6 +62,12 @@ export interface UserStatus {
     // not a phase). Leave it undefined when absent so the UI's honest-empty
     // fallback ('—') renders instead of a fabricated 'WAKE' for everyone.
     circadianPhase?: 'WAKE' | 'SLEEP' | 'WIND_DOWN';
+    // Derived menstrual-cycle phase from GET /v1/users/me/status (F25). Mirrors
+    // the circadianPhase slot above: optional, passed through only when the
+    // backend actually returns it. 'UNKNOWN' is an HONEST state — "not enough
+    // info / tracking off" — and must render a tracking-only UI, never a fake
+    // phase. The science is an estimate, not medical advice.
+    cyclePhase?: 'MENSTRUAL' | 'FOLLICULAR' | 'OVULATORY' | 'LUTEAL' | 'UNKNOWN';
     lastUpdated: string;
 }
 
@@ -85,6 +102,12 @@ export const getStatus = async (): Promise<UserStatus> => {
         // hard-stuck the Profile "CIRCADIAN PHASE" card on 'WAKE' for everyone.
         // Left undefined, profile.tsx's `?? '—'` honest-empty fallback renders.
         circadianPhase: data.circadianPhase,
+        // Pass through only when the backend provides a cycle phase. Absent =>
+        // undefined, so the opt-in-aware UI hides entirely (the user never
+        // enabled tracking). 'UNKNOWN' is a real value the backend returns when
+        // tracking is on but there is not enough info / data is irregular / on
+        // hormonal contraception — the UI renders an honest tracking-only state.
+        cyclePhase: data.cyclePhase,
         lastUpdated: data.lastUpdated ?? data.updatedAt ?? '',
     };
 };

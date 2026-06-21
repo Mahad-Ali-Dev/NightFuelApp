@@ -150,6 +150,14 @@ function populatedData() {
     dietaryPreference: 'NONE',
     dietMode: 'BALANCED',
     healthConditions: [],
+    // Cycle tracking opted OUT by default in this fixture (the MALE/non-female
+    // path). Individual tests override these for the opted-in case.
+    cycleTrackingEnabled: false,
+    lastPeriodStartDate: null,
+    avgCycleLengthDays: null,
+    avgPeriodLengthDays: null,
+    cycleRegularity: null,
+    hormonalContraception: false,
   };
 }
 
@@ -219,6 +227,74 @@ describe('ProfileSummaryScreen (onboarding) — guarded shift persistence on fin
     // …but its failure is swallowed: onboarding completion still redirects.
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/(tabs)'));
     expect(mockReplace).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Cycle-tracking fields in the profile payload (F25) ─────────────────────
+
+  test('finishing sends the cycle-tracking fields in the updateProfile payload (opted in)', async () => {
+    mockStore.data = {
+      ...populatedData(),
+      biologicalSex: 'FEMALE',
+      cycleTrackingEnabled: true,
+      lastPeriodStartDate: '2026-06-10',
+      avgCycleLengthDays: 30,
+      avgPeriodLengthDays: 6,
+      cycleRegularity: 'REGULAR',
+      hormonalContraception: false,
+    };
+    renderWithTheme(<ProfileSummaryScreen />);
+
+    fireEvent.press(finishButton());
+
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledTimes(1));
+    const payload = mockUpdateProfile.mock.calls[0][0];
+    expect(payload).toMatchObject({
+      cycleTrackingEnabled: true,
+      lastPeriodStartDate: '2026-06-10',
+      avgCycleLengthDays: 30,
+      avgPeriodLengthDays: 6,
+      cycleRegularity: 'REGULAR',
+      hormonalContraception: false,
+    });
+    // YYYY-MM-DD format reused from the existing date handling (same as DOB).
+    expect(payload.lastPeriodStartDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  test('a FEMALE user who opts out still sends cycleTrackingEnabled:false (records the choice), no period inputs', async () => {
+    mockStore.data = { ...populatedData(), biologicalSex: 'FEMALE', cycleTrackingEnabled: false };
+    renderWithTheme(<ProfileSummaryScreen />);
+
+    fireEvent.press(finishButton());
+
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledTimes(1));
+    const payload = mockUpdateProfile.mock.calls[0][0];
+    expect(payload.cycleTrackingEnabled).toBe(false);
+    // No period inputs leak when tracking is off (clean strips the nulls).
+    expect(payload.lastPeriodStartDate).toBeUndefined();
+    expect(payload.avgCycleLengthDays).toBeUndefined();
+  });
+
+  test('a NON-FEMALE profile sends NO cycle fields at all (data minimization; covers a FEMALE->MALE switch)', async () => {
+    // Even with cycle data lingering in the store (e.g. the user picked FEMALE,
+    // entered cycle data, then switched to MALE), a non-female profile must write
+    // ZERO cycle keys — the payload is gated on biologicalSex === 'FEMALE'.
+    mockStore.data = {
+      ...populatedData(),
+      biologicalSex: 'MALE',
+      cycleTrackingEnabled: true,
+      lastPeriodStartDate: '2026-06-01',
+      cycleRegularity: 'REGULAR',
+    };
+    renderWithTheme(<ProfileSummaryScreen />);
+
+    fireEvent.press(finishButton());
+
+    await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledTimes(1));
+    const payload = mockUpdateProfile.mock.calls[0][0];
+    expect(payload.cycleTrackingEnabled).toBeUndefined();
+    expect(payload.hormonalContraception).toBeUndefined();
+    expect(payload.lastPeriodStartDate).toBeUndefined();
+    expect(payload.cycleRegularity).toBeUndefined();
   });
 
   test('with no sleep window collected, the shift step is SKIPPED but completion still runs', async () => {

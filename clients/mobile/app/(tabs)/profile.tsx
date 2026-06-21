@@ -28,6 +28,7 @@ import { Image } from 'expo-image';
 import { colors as C } from '@/theme/colors';
 import { withAlpha } from '@/theme/utils';
 import { Skeleton, GlassCard, CtaButton } from '@/components/ui';
+import { CyclePhaseCard } from '@/components/CyclePhaseCard';
 import { TAB_BAR_H } from './_layout';
 
 const { width } = Dimensions.get('window');
@@ -226,6 +227,11 @@ export default function ProfileScreen() {
                             )}
                         </View>
                     </GlassCard>
+
+                    {/* Cycle phase card (F25) — OPT-IN-aware: renders nothing
+                        unless the user enabled cycle tracking (status.cyclePhase
+                        present). 'UNKNOWN' shows an honest tracking-only state. */}
+                    <CyclePhaseCard cyclePhase={(status as any)?.cyclePhase} />
 
                     {/* Achievements */}
                     <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>ACHIEVEMENTS</Text>

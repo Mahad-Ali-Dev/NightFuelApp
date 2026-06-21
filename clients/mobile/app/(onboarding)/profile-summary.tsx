@@ -69,6 +69,24 @@ export default function ProfileSummaryScreen() {
                 biologicalSex: data.biologicalSex,
                 heightCm: data.heightCm,
                 weightKg: data.weightKg,
+                // Menstrual-cycle tracking (F25) is FEMALE-only. Send the cycle
+                // fields ONLY for a female profile, so a male/other/opted-out user
+                // never writes cycle PII — this also covers a FEMALE→non-FEMALE
+                // switch where the cycle step was skipped on the second pass (the
+                // step is the only screen that resets these). The backend further
+                // gates the detail fields on cycleTrackingEnabled; `clean` strips
+                // null detail fields so the backend applies its 28/5 defaults.
+                // lastPeriodStartDate reuses the dateOfBirth YYYY-MM-DD format.
+                ...(data.biologicalSex === 'FEMALE'
+                    ? {
+                          cycleTrackingEnabled: data.cycleTrackingEnabled,
+                          lastPeriodStartDate: data.lastPeriodStartDate,
+                          avgCycleLengthDays: data.avgCycleLengthDays,
+                          avgPeriodLengthDays: data.avgPeriodLengthDays,
+                          cycleRegularity: data.cycleRegularity,
+                          hormonalContraception: data.hormonalContraception,
+                      }
+                    : {}),
             });
             console.log('[Onboarding] Profile payload:', JSON.stringify(profilePayload));
             await userApi.updateProfile(profilePayload);

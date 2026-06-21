@@ -78,7 +78,11 @@ export default function BiologicalDataScreen() {
             heightCm: parseFloat(height) || 0,
             biologicalSex: sex as any,
         });
-        router.push('/(onboarding)/shift-type');
+        // FEMALE users get the OPT-IN menstrual-cycle step (cycle-basics) inserted
+        // here; everyone else (MALE / OTHER / PREFER_NOT_TO_SAY) skips it entirely
+        // and goes straight to shift-type, exactly as before. Data minimization:
+        // the cycle step is only offered when it could plausibly apply.
+        router.push(sex === 'FEMALE' ? '/(onboarding)/cycle-basics' : '/(onboarding)/shift-type');
     };
 
     const isValid =
