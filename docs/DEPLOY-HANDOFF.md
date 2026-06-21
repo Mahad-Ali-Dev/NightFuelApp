@@ -23,16 +23,22 @@ they live only in the host env (`infra/docker/.env`) or the relevant provider co
 
 ## Contents
 
-1. [Five unapplied DB migrations](#1-five-unapplied-db-migrations)
+1. [Unapplied DB migrations](#1-unapplied-db-migrations)
 2. [Recipe catalog re-seed](#2-recipe-catalog-re-seed)
 3. [AI-call accounting — `aiGenerated` flag (migration files committed)](#3-ai-call-accounting--aigenerated-flag-migration-files-committed)
 4. [Payments — RevenueCat + App Store / Play product IDs](#4-payments--revenuecat--app-store--play-product-ids)
 5. [Push delivery — EAS dev build + APNs/FCM](#5-push-delivery--eas-dev-build--apnsfcm)
-6. [Fitness-watch native pairing — dev build required](#6-fitness-watch-native-pairing--dev-build-required)
+6. [Fitness-watch / health sync — dev build required (F31)](#6-fitness-watch--health-sync--dev-build-required-f31)
+7. [Voice for Ria — EAS dev build + native STT/TTS (F30)](#7-voice-for-ria--eas-dev-build--native-stttts-f30)
 
 ---
 
-## 1. Five unapplied DB migrations
+## 1. Unapplied DB migrations
+
+> **Update (sprints F25–F31):** three MORE migrations landed after the original five
+> — see [§1b](#1b-newer-migrations-f25f31--cycle-tracker--period-log--health-samples)
+> below. All three apply via `db push` (additive, nullable/defaulted), same as the
+> user/exercise/plan rows here.
 
 **What.** Five services/columns gained a new column / table this sprint. The migration
 **files** are committed; whether they auto-apply on `docker compose up` depends on
@@ -116,6 +122,45 @@ docker compose exec postgres psql -U postgres -d plan_service -c '\d day_plans'
 (Adjust `-d <db>` / `-U <user>` to your actual Postgres connection — Supabase
 deployments connect via the per-service `*_DATABASE_URL` instead of a local
 `postgres` container.)
+
+---
+
+### 1b. Newer migrations (F25–F31) — cycle tracker + period log + health samples
+
+**What.** The cycle-tracker (F25/F28) and watch/health-sync (F31) sprints added cycle
+columns + two new tables. All are **additive** (nullable / defaulted columns, brand-new
+tables) and all apply via **`db push`** on (re)start of the owning service — same
+mechanism as the user/exercise/plan rows above. The `migration.sql` files are kept as
+the human-readable record.
+
+| Service | New schema element | Migration file (committed) | Manual command (only if missing) |
+|---|---|---|---|
+| `user-service` | `user_profiles` cycle columns (`cycle_tracking_enabled`, `last_period_start_date`, `avg_cycle_length_days`, `avg_period_length_days`, `cycle_regularity`, `hormonal_contraception`) + `user_status.cycle_phase` | `services/user-service/prisma/migrations/20260621_cycle_tracker/migration.sql` | `docker compose exec user-service npx prisma db push --skip-generate --accept-data-loss` |
+| `user-service` | new `period_logs` table (`id`, `user_id` idx, `start_date`, `end_date?`, `created_at`) | `services/user-service/prisma/migrations/20260621_period_log/migration.sql` | (same `user-service db push` as above — one push applies both) |
+| `sleep-service` | new `health_samples` table (append-only wearable archive; all metric cols nullable/defaulted) | `services/sleep-service/prisma/migrations/20260621_health_samples/migration.sql` | `docker compose exec sleep-service npx prisma db push --skip-generate --accept-data-loss` |
+
+> ### 🔴 Apply these with the F28/F29/F31 code (endpoints query the new tables)
+> - **`period_logs`** — `POST /v1/users/me/cycle/period` and `GET /v1/users/me/cycle/history`
+>   query this table. Until it exists those routes **500**. The cycle *phase* in
+>   onboarding/profile still works without it (it derives from the `user_profiles`
+>   columns), but logging/history needs the table.
+> - **`health_samples`** — `POST /v1/sleep/health-sync` writes here. Until the table
+>   exists the endpoint errors. Lower urgency: that route is only called by the **native**
+>   app after the watch dev build (§6), so it can land alongside the EAS rollout — but
+>   apply it before users sync a watch.
+> - **`sleep-service` now uses `db push`** (its `Dockerfile` `CMD` was switched from
+>   `migrate deploy` to `prisma db push --skip-generate --accept-data-loss` this round,
+>   matching the user-service drift precedent) — so the `health_samples` table is created
+>   from `schema.prisma` automatically on a rebuild/restart of sleep-service.
+
+**Verify after applying:**
+
+```bash
+# user-service: cycle columns on user_profiles + period_logs table
+docker compose exec postgres psql -U postgres -d user_service -c '\d user_profiles' -c '\d period_logs'
+# sleep-service: health_samples table
+docker compose exec postgres psql -U postgres -d sleep_service -c '\d health_samples'
+```
 
 ---
 
@@ -299,29 +344,46 @@ session.
 
 ---
 
-## 6. Fitness-watch native pairing — dev build required
+## 6. Fitness-watch / health sync — dev build required (F31)
 
-**What.** Pair a fitness watch / health source (Apple HealthKit, Google Health
-Connect, or a wearable SDK). These rely on native modules + OS permission prompts that
-**do not exist in Expo Go** — they require a custom dev/prod build.
+**What.** Real wearable/health sync (Apple HealthKit on iOS, Google Health Connect on
+Android), READ-ONLY: sleep, steps, heart rate, resting HR, HRV, active energy, workouts.
+The architecture is **fully built and gate-verified** — the backend ingestion endpoint
+(`POST /v1/sleep/health-sync`), the digital-twin wiring (synced sleep + HRV/resting-HR
+move `avgSleepQuality`/`fatigueLevel`, which the decision-engine reads), and the native
+adapters behind the existing `getHealthSyncAdapter()` seam. The native modules are
+**lazy-loaded behind the seam**, so the app runs fine without them (honest "needs a dev
+build" state) until you build with them installed.
 
-**Why gated.** Same root cause as push: native capability + signed build + per-OS
-entitlements. Cannot be exercised in Expo Go and cannot be built from a session.
+**Why gated.** Native modules + OS permission prompts + the Apple HealthKit entitlement
+**do not exist in Expo Go** and cannot be built/granted from a session.
 
 **Owner steps:**
 
-1. Build a custom dev client (Expo Go cannot load the native health modules):
+1. **Install the native deps** (already declared in `clients/mobile/package.json`):
    ```bash
    cd clients/mobile
+   npm install   # pulls @kingstinct/react-native-healthkit, react-native-health-connect, expo-dev-client
+   ```
+2. **Remove the gate-only shims** now that the real packages resolve:
+   - delete `clients/mobile/src/types/health-native.d.ts` (ambient module shims), and
+   - remove the two `react-native-health*-stub` entries from `clients/mobile/jest.config.js` `moduleNameMapper`.
+   (They exist only so the gate stays green without the native packages — see the file headers.)
+3. **Build a custom dev client** (Expo Go cannot load the native health modules):
+   ```bash
    eas build --profile development --platform ios
    eas build --profile development --platform android
    ```
-2. **iOS** — ensure the HealthKit entitlement + usage-description strings are present,
-   then test the OS permission prompt on a physical device (HealthKit is unavailable
-   in the simulator).
-3. **Android** — ensure the Health Connect permissions are declared, then test the
-   grant flow on a physical device with Health Connect installed.
-4. Pair an actual watch/health source on-device and confirm data flows into the app.
+4. **iOS** — the HealthKit config plugin + entitlement + read-only `NSHealthShareUsageDescription`
+   are already in `app.json`; ensure the **HealthKit entitlement is on the provisioning
+   profile**, then test the OS permission prompt on a **physical device** (HealthKit is
+   unavailable in the simulator). Note: `NSHealthUpdateUsageDescription` was intentionally
+   **dropped** (the app is read-only) to avoid an App Store "where's the write feature?" rejection.
+5. **Android** — the Health Connect plugin + `health.READ_*` permissions are already in
+   `app.json`; test the grant flow on a physical device with Health Connect installed.
+6. Apply the **`health_samples`** migration ([§1b](#1b-newer-migrations-f25f31--cycle-tracker--period-log--health-samples))
+   before users sync, then pair a watch/health source on-device and confirm data flows
+   into the app and that synced sleep/HRV shift the twin.
 
 > ### ⛔ DO NOT run from an agent session
 > Requires a signed native build and on-device OS permission grants on the owner's
@@ -329,17 +391,57 @@ entitlements. Cannot be exercised in Expo Go and cannot be built from a session.
 
 ---
 
+## 7. Voice for Ria — EAS dev build + native STT/TTS (F30)
+
+**What.** "Talk to Ria, Ria replies in voice" — on-device speech-to-text
+(`expo-speech-recognition`, interim + final transcripts) feeding the existing Ria chat
+pipeline, and text-to-speech (`expo-speech`) speaking the reply. Built behind a
+`getVoiceAdapter()` seam (same gate-safe pattern as health sync): the app runs fine
+without the native modules (mic shows an honest "needs a dev build" state); the feature
+is **opt-in / default-off**, so text chat is unchanged until a user enables it.
+
+**Why gated.** The STT/TTS native modules + the iOS mic/speech permission prompts don't
+exist in Expo Go and need a signed dev build + on-device testing.
+
+**Owner steps:**
+
+1. **Install the native deps** (already in `clients/mobile/package.json`):
+   ```bash
+   cd clients/mobile
+   npm install   # pulls expo-speech, expo-speech-recognition
+   ```
+2. **Remove the gate-only shims** now that the packages resolve:
+   - delete `clients/mobile/src/types/voice-native.d.ts`, and
+   - remove the two `expo-speech*-stub` entries from `clients/mobile/jest.config.js` `moduleNameMapper`.
+3. **Build a custom dev client** (`eas build --profile development -p ios|android`).
+   The `expo-speech-recognition` config plugin + iOS `NSMicrophoneUsageDescription`/
+   `NSSpeechRecognitionUsageDescription` are already in `app.json`.
+4. On a **physical device**, open Ria, tap the mic, grant the mic + speech-recognition
+   permissions, confirm interim transcript → send → spoken reply, and that barge-in
+   (TTS stops when you start a new turn) works.
+
+> ### ⛔ DO NOT run from an agent session
+> Signed native build + on-device permission grants — owner-only, same as §5/§6.
+
+---
+
 ## Quick checklist (all owner-only)
 
-- [ ] Apply / confirm the 5 migrations on the live DBs (§1) — chat & community via
-      `migrate deploy`; user, exercise & plan via `db push`.
+- [ ] Apply / confirm the original 5 migrations on the live DBs (§1) — chat & community
+      via `migrate deploy`; user, exercise & plan via `db push`.
+- [ ] Apply the 3 newer migrations (§1b) — `cycle_tracker` + `period_log` (user-service
+      `db push`) and `health_samples` (sleep-service `db push`). `period_logs` is needed
+      for cycle logging/history; `health_samples` before any watch sync.
 - [ ] 🔴 Apply the exercise-service **and** plan-service `ai_generated` columns (§1/§3)
       **in the same deploy as this round's code** — the quota COUNT now references the
       column, so code-without-column makes the AI generate endpoints fail (`P2022`).
 - [ ] Re-seed recipes if the catalog is empty/stale (§2) — safe to re-run.
 - [ ] Create store IAP products + wire RevenueCat (§4).
 - [ ] EAS dev build + APNs/FCM for remote push (§5).
-- [ ] EAS dev build + on-device health permissions for watch pairing (§6).
+- [ ] Watch/health sync (§6): `npm install` the 3 native libs, delete the health shims,
+      EAS dev build, HealthKit entitlement, on-device permission grants.
+- [ ] Voice for Ria (§7): `npm install` the 2 native libs, delete the voice shims, EAS
+      dev build, on-device mic/speech permission grants.
 
 _This document modifies no code and executes nothing. It links other files by path
 only; it does not edit them._
