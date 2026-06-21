@@ -178,6 +178,43 @@ describe('state-service materializer — handleSleepLogged fatigue stays in 0..1
     });
 });
 
+// ── F31 health-sync autonomic DIRECTION (the cross-defect end-state) ──────────
+// The sleep-service refinement turns STRAIN (low HRV / high resting-HR) into a
+// LOWER quality + disturbances > 3, and RECOVERY (high HRV / low resting-HR) into
+// a HIGHER quality + 0 disturbances. This suite proves the materializer then moves
+// fatigue in the CORRECT direction for those exact refined payloads — the bug was
+// that strain previously produced disturbances=1 (<= 3), which DECREMENTED fatigue
+// (wrong way). It also confirms the quality the engine reads never drops below 1.
+describe('state-service materializer — F31 health-sync fatigue direction', () => {
+    it('STRAIN refined sleep (quality 5, disturbances 4) RAISES fatigue', async () => {
+        const { materializer, calls } = makeMaterializer({ fatigueLevel: 5 });
+        // Exactly the shape refineSleepWithAutonomicSignals emits for low HRV /
+        // high resting-HR (disturbances pushed past the >3 fatigue gate).
+        await materializer.handleSleepLogged(sleepEvent({ quality: 5, disturbances: 4 }));
+
+        expect(calls[0].update.fatigueLevel).toBe(6); // 5 + 1 (disturbances 4 > 3)
+        expect(calls[0].update.avgSleepQuality).toBe(5);
+    });
+
+    it('RECOVERY refined sleep (quality 9, disturbances 0) LOWERS fatigue', async () => {
+        const { materializer, calls } = makeMaterializer({ fatigueLevel: 5 });
+        await materializer.handleSleepLogged(sleepEvent({ quality: 9, disturbances: 0 }));
+
+        expect(calls[0].update.fatigueLevel).toBe(4); // 5 - 1 (disturbances 0 <= 3)
+        expect(calls[0].update.avgSleepQuality).toBe(9);
+    });
+
+    it('the refined quality reaching the engine is always >= 1 (engine min(1))', async () => {
+        const { materializer, calls } = makeMaterializer({ fatigueLevel: 5 });
+        // Worst-case refined quality is floored at 1 by the sleep-service; the
+        // materializer writes it verbatim, so the engine never sees a 0.
+        await materializer.handleSleepLogged(sleepEvent({ quality: 1, disturbances: 4 }));
+
+        expect(calls[0].update.avgSleepQuality).toBe(1);
+        expect(calls[0].update.fatigueLevel).toBe(6);
+    });
+});
+
 describe('state-service materializer — handleMetricsLogged finite + ranged weight', () => {
     it('a NaN weight is NOT persisted (write skipped entirely)', async () => {
         const { materializer, calls } = makeMaterializer();

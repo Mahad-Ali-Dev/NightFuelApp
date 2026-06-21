@@ -11,8 +11,8 @@ import { withAlpha } from '@/theme/utils';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-// import * as Notifications from 'expo-notifications'; 
-// import healthKit from 'react-native-health';
+// import * as Notifications from 'expo-notifications';
+import { getHealthSyncAdapter } from '@/lib/healthSync';
 
 export default function PermissionsScreen() {
     const { colors, typography, spacing } = useTheme();
@@ -21,6 +21,34 @@ export default function PermissionsScreen() {
 
     const [notifications, setNotifications] = useState(false);
     const [healthKit, setHealthKit] = useState(false);
+    // Honest reason surfaced when Health can't be connected on this build (Expo
+    // Go / no native module): the seam's no-op adapter resolves an 'unavailable'
+    // result with a human-readable reason, which we show verbatim. We NEVER fake
+    // a "connected" toggle — if connect() doesn't return 'connected', the switch
+    // snaps back off.
+    const [healthNotice, setHealthNotice] = useState<string | null>(null);
+
+    // Drive the Health toggle through the health-sync seam (the same
+    // getHealthSyncAdapter() the Connected Devices screen uses). The adapter
+    // NEVER throws — a non-connected result is surfaced as DATA (the honest
+    // reason) and the toggle reflects the real outcome rather than the tap.
+    const handleHealthToggle = async (next: boolean) => {
+        if (!next) {
+            setHealthKit(false);
+            setHealthNotice(null);
+            void getHealthSyncAdapter().disconnect();
+            return;
+        }
+        const result = await getHealthSyncAdapter().connect();
+        if (result.status === 'connected') {
+            setHealthKit(true);
+            setHealthNotice(null);
+        } else {
+            // Honest: keep the toggle OFF and show why (e.g. needs a dev build).
+            setHealthKit(false);
+            setHealthNotice(result.reason ?? 'Health sync is unavailable on this build.');
+        }
+    };
 
     const handleFinish = async () => {
         // In a real app we would request native permissions here
@@ -87,11 +115,23 @@ export default function PermissionsScreen() {
                         </View>
                         <Switch
                             value={healthKit}
-                            onValueChange={setHealthKit}
+                            onValueChange={(next) => { void handleHealthToggle(next); }}
                             trackColor={{ false: colors.border.default, true: colors.accent.cyan }}
                             thumbColor={colors.text.primary}
                         />
                     </View>
+                    {/* Honest unavailable reason (explicit ternary-null per
+                        rules/rendering-no-falsy-and.md). Shown only after a failed
+                        connect attempt; never implies a connection. */}
+                    {healthNotice ? (
+                        <Text
+                            style={[typography.caption, { color: colors.text.tertiary, marginTop: spacing.md }]}
+                            accessibilityRole="alert"
+                            accessibilityLiveRegion="polite"
+                        >
+                            {healthNotice}
+                        </Text>
+                    ) : null}
                 </Card>
             </ScrollView>
 

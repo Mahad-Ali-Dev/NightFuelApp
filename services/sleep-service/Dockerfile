@@ -36,4 +36,11 @@ ENV NODE_ENV=production
 COPY --from=installer /app /app
 WORKDIR /app/services/sleep-service
 EXPOSE 3010
-CMD ["sh", "-c", "npx prisma migrate deploy --schema=prisma/schema.prisma && node dist/index.js"]
+# The hand-written migrations under prisma/migrations are human-readable RECORDS,
+# not a complete `prisma migrate` history (the new 20260621_health_samples table
+# is documented there but only applied via db push — F28 user-service precedent).
+# `migrate deploy` would leave the DB missing the health_samples table, so the
+# new POST /v1/sleep/health-sync would 500 with P2021. Sync from the schema
+# instead so a fresh DB gets the full, correct set of columns/tables. db push of
+# an additive, table-only delta is data-loss-free (see migration.sql SAFETY note).
+CMD ["sh", "-c", "npx prisma db push --schema=prisma/schema.prisma --skip-generate --accept-data-loss && node dist/index.js"]

@@ -38,6 +38,17 @@ module.exports = {
       // AFTER these so the more specific package names match first.)
       [`^expo-speech-recognition${END}`]: '<rootDir>/src/mocks/expo-speech-recognition-stub.js',
       [`^expo-speech${END}`]: '<rootDir>/src/mocks/expo-speech-stub.js',
+      // Health-sync native packages (@kingstinct/react-native-healthkit /
+      // react-native-health-connect) are declared in package.json for the EAS
+      // build but NOT installed for the gate. jest eagerly resolves the lazy
+      // `require('./healthSyncNative')` in src/lib/healthSync.ts, so without these
+      // stubs the resolver would fail the suite. The stubs report HealthKit /
+      // Health Connect UNAVAILABLE → createNativeHealthSyncAdapter() returns null
+      // → getHealthSyncAdapter() falls back to the honest no-op (the gate/Expo-Go
+      // behaviour). Keeps the gate green with NO `npm install` of native deps.
+      // (The `@/` mapper must come AFTER these so the package names match first.)
+      [`^@kingstinct/react-native-healthkit${END}`]: '<rootDir>/src/mocks/react-native-healthkit-stub.js',
+      [`^react-native-health-connect${END}`]: '<rootDir>/src/mocks/react-native-health-connect-stub.js',
       [`^@/(.*)${END}`]: '<rootDir>/src/$1',
     };
   })(),

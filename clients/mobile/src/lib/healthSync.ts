@@ -95,16 +95,68 @@ export const noopHealthSyncAdapter: HealthSyncAdapter = Object.freeze({
 });
 
 /**
- * The current default adapter. Today this is always the no-op adapter. When a
- * native dev build wires up a real HealthKit / Health-Connect / BLE adapter, it
- * returns that instead — the seam the rest of the app imports against.
+ * Memoised resolved adapter. `undefined` until the first {@link getHealthSyncAdapter}
+ * call probes for a native adapter; thereafter it's the chosen singleton (native
+ * if available, else the no-op). Memoising means the dynamic require + probe run
+ * at most once per app session. Mirrors the F30 voice seam (`src/lib/voice.ts`).
+ */
+let resolvedAdapter: HealthSyncAdapter | undefined;
+
+/**
+ * The seam the rest of the app imports against. Resolves the best available
+ * adapter:
  *
- * Exposed as a function (not just the const) so callers don't bake in the
- * no-op at import time and a later platform-aware implementation is a
- * drop-in replacement.
+ *   - Tries to LAZILY load the real native adapter (`./healthSyncNative`) via a
+ *     dynamic `require` inside a try/catch — the SAME degrade-gracefully idiom as
+ *     {@link getVoiceAdapter}. This keeps the gate GREEN with NO `npm install` of
+ *     the native deps: `tsc` resolves the imports against the ambient shims in
+ *     `src/types/health-native.d.ts`; jest maps the native packages to stubs that
+ *     report unavailable so `createNativeHealthSyncAdapter()` returns null; the
+ *     screen suites mock `@/lib/healthSync` outright.
+ *   - In a real EAS dev/release build with the packages installed and the OS
+ *     permissions granted, the require succeeds and the native adapter is adopted
+ *     — no UI change needed (every screen imports `getHealthSyncAdapter`).
+ *   - Otherwise (Expo Go, packages absent, native init failed) it falls back to
+ *     the honest no-op (`'unavailable'`).
+ *
+ * NOTE: the file is named `healthSyncNative` (NOT `healthSync.native`) on purpose
+ * — a `.native.ts` suffix is a React-Native platform extension that Metro /
+ * jest-expo would resolve in place of `healthSync` itself.
  */
 export function getHealthSyncAdapter(): HealthSyncAdapter {
-  return noopHealthSyncAdapter;
+  if (resolvedAdapter) return resolvedAdapter;
+
+  try {
+    // Lazy, runtime-only require — never reached at module-eval time of THIS
+    // file; runs only when getHealthSyncAdapter() is first called. In Expo Go /
+    // without the native packages it throws (caught below → no-op). Under the
+    // jest gate the native packages are mapped to stubs that report unavailable,
+    // so createNativeHealthSyncAdapter() returns null → no-op fallback. No
+    // `npm install` of native deps is required to stay green.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('./healthSyncNative') as {
+      createNativeHealthSyncAdapter?: () => HealthSyncAdapter | null;
+    };
+    const native = mod?.createNativeHealthSyncAdapter?.() ?? null;
+    if (native) {
+      resolvedAdapter = native;
+      return resolvedAdapter;
+    }
+  } catch {
+    // Packages not installed (the jest gate / Expo Go) or native init failed —
+    // degrade gracefully to the honest no-op. Never throws to the caller.
+  }
+
+  resolvedAdapter = noopHealthSyncAdapter;
+  return resolvedAdapter;
+}
+
+/**
+ * Test/seam hook: reset the memoised adapter so a suite can force re-resolution.
+ * Not used in production code paths. Mirrors `__resetVoiceAdapterForTests`.
+ */
+export function __resetHealthSyncAdapterForTests(): void {
+  resolvedAdapter = undefined;
 }
 
 /**

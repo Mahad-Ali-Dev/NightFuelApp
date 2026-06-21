@@ -10,6 +10,10 @@ import { RedisEventBus } from '@nightfuel/events';
 import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized } from '@nightfuel/config';
 import { z } from 'zod';
 import { SleepService } from './sleep.service';
+import {
+    HealthSyncService,
+    healthSyncSchema,
+} from './health-sync.service';
 
 const envSchema = z.object({
     SLEEP_PORT: z.string().default('3012'),
@@ -22,6 +26,11 @@ const logger = createLogger('sleep-service');
 const prisma = new PrismaClient();
 const eventBus = new RedisEventBus(config.REDIS_URL);
 const sleepSvc = new SleepService(prisma, eventBus);
+// HealthSyncService persists raw samples into health_samples (via prisma) and
+// materializes sleep samples THROUGH sleepSvc.createSession — so synced sleep
+// reuses the exact same sleep.session-logged → state-service twin path as a
+// manual log (no new event, no materializer change).
+const healthSyncSvc = new HealthSyncService(prisma as any, sleepSvc);
 
 const fastify = Fastify({ logger: false });
 registerGlobalProcessHandlers(logger);
@@ -85,6 +94,15 @@ const preferencesSchema = z.object({
     windDownDuration: z.number().int().min(0).max(120).optional(),
     temperatureTarget: z.number().min(15).max(30).optional().nullable(),
 });
+
+// ── Health-sync (watch / wearable ingestion) schema ─────────────────────────────
+// The POST /v1/sleep/health-sync body schema is the SHARED `healthSyncSchema`
+// imported from ./health-sync.service (D3) — ONE definition used by both this
+// deployed route and the route regression test, so the test can never validate a
+// stale copy. It is a user-AUTHENTICATED batch endpoint: the userId is taken from
+// the verified JWT, NEVER the body (no IDOR). The schema is size-capped and each
+// numeric field is range-checked PER KIND so a poisoned value can never reach the
+// DB or the digital twin.
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
 
@@ -159,6 +177,29 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/sleep', {
         return reply.code(201).send(session);
     } catch (err: any) {
         logger.error({ err, body: request.body, stack: err.stack }, 'POST /v1/sleep failed');
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
+    }
+});
+
+// POST /v1/sleep/health-sync — INGEST a batch of wearable / health-app samples.
+//
+// User-authenticated and routed through nginx's existing `/v1/sleep` prefix (NOT
+// an /internal route). AUTHZ: the userId is taken ONLY from the verified JWT, so
+// a caller can ingest exclusively their OWN samples — there is no userId in the
+// body to forge (no IDOR). The body is size-capped + per-sample bounded by
+// healthSyncSchema before this handler runs. Sleep samples flow through the
+// existing sleep.session-logged → state-service twin path; HRV/resting-HR refine
+// the freshest sleep sample's quality/disturbances so they nudge fatigue too.
+fastify.withTypeProvider<ZodTypeProvider>().post('/v1/sleep/health-sync', {
+    onRequest: [(fastify as any).authenticate],
+    schema: { body: healthSyncSchema },
+}, async (request, reply) => {
+    try {
+        const userId = (request.user as any).userId ?? (request.user as any).id;
+        const summary = await healthSyncSvc.ingest(userId, request.body.samples as any);
+        return reply.code(201).send(summary);
+    } catch (err: any) {
+        logger.error({ err, stack: err?.stack }, 'POST /v1/sleep/health-sync failed');
         return reply.code(500).send({ error: 'An unexpected error occurred' });
     }
 });

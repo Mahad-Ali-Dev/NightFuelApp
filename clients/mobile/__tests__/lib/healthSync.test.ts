@@ -22,6 +22,7 @@ import defaultHealthSync, {
   SUPPORTED_HEALTH_SOURCES,
   getHealthSyncAdapter,
   noopHealthSyncAdapter,
+  __resetHealthSyncAdapterForTests,
 } from '@/lib/healthSync';
 import {
   HEALTH_DATA_KINDS,
@@ -118,6 +119,26 @@ describe('healthSync — default no-op adapter', () => {
 
   test('the singleton is frozen — callers cannot mutate the shared instance', () => {
     expect(Object.isFrozen(noopHealthSyncAdapter)).toBe(true);
+  });
+});
+
+describe('healthSync — getHealthSyncAdapter() seam (lazy native require)', () => {
+  // Mirrors the F30 getVoiceAdapter() seam tests: under the gate the native
+  // packages (@kingstinct/react-native-healthkit / react-native-health-connect)
+  // are mapped to stubs that report HealthKit / Health Connect UNAVAILABLE, so
+  // createNativeHealthSyncAdapter() returns null and getHealthSyncAdapter() falls
+  // back to the honest no-op — exactly the Expo-Go behaviour. No native install.
+  beforeEach(() => __resetHealthSyncAdapterForTests());
+  afterAll(() => __resetHealthSyncAdapterForTests());
+
+  test('falls back to the no-op adapter when native deps are absent (the gate)', () => {
+    expect(getHealthSyncAdapter()).toBe(noopHealthSyncAdapter);
+  });
+
+  test('memoises the resolved adapter (probe + require run once)', () => {
+    const first = getHealthSyncAdapter();
+    const second = getHealthSyncAdapter();
+    expect(first).toBe(second);
   });
 });
 

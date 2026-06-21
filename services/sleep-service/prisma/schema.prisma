@@ -38,6 +38,38 @@ model SleepPreference {
   @@map("sleep_preferences")
 }
 
+// Raw wearable / health-app samples ingested via POST /v1/sleep/health-sync.
+//
+// This is an APPEND-ONLY archive of what the watch/phone reported, kept distinct
+// from the derived SleepSession rows (sleep samples ALSO get materialized into a
+// SleepSession so they flow through the existing sleep.session-logged → twin
+// path). Every metric column is nullable: a single sample carries exactly one
+// kind of reading (a sleep session, a steps total, an HR/HRV reading, …), so the
+// columns it doesn't use stay NULL. Nothing here is required and the table starts
+// empty, so a user who never syncs has ZERO rows and the twin is unchanged.
+model HealthSample {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  // 'sleep' | 'steps' | 'heartRate' | 'restingHeartRate' | 'hrv' | 'activeEnergy' | 'workout'
+  kind          String
+  // 'apple_health' | 'google_fit' | 'generic_ble' (the HealthSource that read it).
+  source        String   @default("apple_health")
+  // Sample interval. For point readings start == end.
+  startTime     DateTime @map("start_time")
+  endTime       DateTime? @map("end_time")
+  // Generic numeric value (steps count, bpm, ms HRV, kcal active energy, …).
+  // Sleep samples carry their quality in `quality` and duration via start/end.
+  value         Float?
+  unit          String?
+  // Sleep-specific: 0–10 quality + disturbance count, mirroring SleepSession.
+  quality       Int?
+  disturbances  Int?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([userId, kind, startTime])
+  @@map("health_samples")
+}
+
 model body_metrics {
   id             String   @id
   user_id        String
