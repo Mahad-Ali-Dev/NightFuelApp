@@ -1,11 +1,8 @@
 from typing import Dict, Any, List
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from ..logger import logger
-from .plan_generator import LLMProvider
-from ..llm_config import ANTHROPIC_MODEL, OPENAI_MODEL
+from .plan_generator import LLMProvider, get_llm
 
 AUDIT_SYSTEM_PROMPT = """
 You are Zeitra, an elite chrono-nutrition AI coach. 
@@ -34,10 +31,8 @@ async def generate_weekly_audit(
     provider: LLMProvider = LLMProvider.OPENAI
 ) -> Dict[str, Any]:
     try:
-        if provider == LLMProvider.ANTHROPIC:
-            llm = ChatAnthropic(model_name=ANTHROPIC_MODEL, temperature=0.3)
-        else:
-            llm = ChatOpenAI(model_name=OPENAI_MODEL, temperature=0.3)
+        # Quality tier (fast=False) + cross-provider fallback, like every other chain.
+        llm = get_llm(provider, fast=False, temperature=0.3)
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", AUDIT_SYSTEM_PROMPT),

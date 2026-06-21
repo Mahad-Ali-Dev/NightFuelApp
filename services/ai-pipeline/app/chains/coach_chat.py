@@ -3,7 +3,7 @@ from typing import Dict, Any, List
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from .plan_generator import get_llm, LLMProvider
+from .plan_generator import get_llm, LLMProvider, no_live_provider
 from ..prompts.prompts import SYSTEM_PROMPT
 from ..telemetry import TokenTelemetryHandler
 from ..logger import logger
@@ -11,14 +11,22 @@ from ..logger import logger
 CHAT_PROMPT = """
 {system_prompt}
 
-You are Ria, the Zeitra AI Coach. You are speaking directly to the user in a chat interface. 
-Keep your responses engaging, concise (1-3 sentences unless asked for detail), and highly actionable.
+You are Ria, the Zeitra AI Coach, speaking directly to the user in a chat interface.
 
 USER CONTEXT & CURRENT STATUS:
 {user_context_json}
 
-Use the user's name if available, and tailor your advice to their active goals.
-Be empathetic but firm about circadian health protocols.
+STYLE:
+- Be engaging, concise (1-3 short sentences unless the user asks for detail), and highly actionable.
+- Use the user's name if available and tailor advice to their active goals.
+- Be empathetic but firm about circadian-health protocols.
+
+FORMATTING — the app renders your reply as Markdown, so format for a phone screen:
+- Short paragraphs only; never a wall of text.
+- **Bold** the single most important number or takeaway.
+- When giving steps or multiple tips, use a short Markdown bullet list ("- ").
+- An occasional, relevant emoji adds warmth — use sparingly.
+- Do NOT use headings (#) or tables in chat; keep it light and conversational.
 """
 
 async def generate_chat_response(
@@ -30,12 +38,11 @@ async def generate_chat_response(
 ) -> str:
     from json import dumps
 
-    # Check if API key is valid before calling LLM
-    active_key_env = "ANTHROPIC_API_KEY" if provider == LLMProvider.ANTHROPIC else "OPENAI_API_KEY"
-    active_key = os.environ.get(active_key_env, "mock-key")
-    if not active_key or active_key in ("mock-key", "sk-ant-...", "sk-..."):
+    # Demo mode only when NO provider has a real key. With cross-provider
+    # fallback, one configured key (Anthropic OR OpenAI) is enough.
+    if no_live_provider():
         from ..logger import logger as chat_logger
-        chat_logger.warning("Coach chat using mock response — no valid API key found")
+        chat_logger.warning("Coach chat using mock response — no live LLM provider configured")
         return "Hey! I'm Ria, your Zeitra coach. I'm currently running in demo mode. Once the AI service is fully configured, I'll be able to give you personalized advice on nutrition, sleep, and training based on your shift schedule. Stay consistent! 💪"
 
     try:

@@ -33,19 +33,12 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage
 
-from .plan_generator import get_llm, LLMProvider
+from .plan_generator import get_llm, LLMProvider, no_live_provider
 from ..llm_config import ANTHROPIC_MODEL_FAST, OPENAI_MODEL_FAST
 from ..prompts.prompts import SYSTEM_PROMPT
 from ..telemetry import TokenTelemetryHandler
 from ..logger import logger
 from .coach_chat import CHAT_PROMPT
-
-
-def _is_mock_key(provider: LLMProvider) -> bool:
-    """Avoid burning Sonnet budget when no real key is configured."""
-    env_var = "ANTHROPIC_API_KEY" if provider == LLMProvider.ANTHROPIC else "OPENAI_API_KEY"
-    key = os.environ.get(env_var, "")
-    return not key or key in ("mock-key", "sk-ant-...", "sk-...")
 
 
 async def generate_chat_response_stream(
@@ -60,7 +53,7 @@ async def generate_chat_response_stream(
     """
     started_at = time.perf_counter()
 
-    if _is_mock_key(provider):
+    if no_live_provider():
         # Stream the canned demo reply word-by-word so the UX is consistent.
         # No tokens / cost emitted because nothing was actually billed.
         demo = (
