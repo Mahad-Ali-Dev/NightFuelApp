@@ -140,6 +140,7 @@ the human-readable record.
 | `sleep-service` | new `health_samples` table (append-only wearable archive; all metric cols nullable/defaulted) + **F33** `@@unique(userId,kind,startTime,source)` for re-sync idempotency | `services/sleep-service/prisma/migrations/20260621_health_samples/migration.sql` | `docker compose exec sleep-service npx prisma db push --skip-generate --accept-data-loss` |
 | `community-service` | **F33** new `post_likes` table (`user_id`, `post_id`, `@@unique([userId,postId])`) — makes likePost idempotent / un-gameable | `services/community-service/prisma/migrations/20260621_post_like/migration.sql` | `docker compose exec community-service npx prisma db push --skip-generate --accept-data-loss` |
 | `subscription-service` | **F35b** new `iap_transactions` table (`original_transaction_id @unique`, `user_id`, ...) — binds an IAP receipt to ONE account (blocks receipt replay/sharing) | `services/subscription-service/prisma/migrations/20260622_iap_transactions/migration.sql` | `docker compose exec subscription-service npx prisma db push --skip-generate --accept-data-loss` |
+| `plan-service` | **F38** `day_plans.protocol_id → protocol_templates` FK set to **ON DELETE SET NULL** — so a coach's GDPR erasure (F36) doesn't abort on other users' plans referencing their protocol | `services/plan-service/prisma/migrations/20260622_protocol_ondelete_setnull/migration.sql` | `docker compose exec plan-service npx prisma db push --skip-generate --accept-data-loss` |
 
 > **F35b new env (owner `.env`).** `IAP_ALLOW_SANDBOX` (default `false` — leave false in
 > prod so Apple **sandbox** receipts can't redeem real tiers) and `APPLE_SHARED_SECRET`
@@ -441,6 +442,33 @@ exist in Expo Go and need a signed dev build + on-device testing.
 
 ---
 
+## 8. GDPR — erasure + portability (implemented) + retention (your policy call)
+
+**Implemented in-repo (F36 + F37), no owner action beyond the env below:**
+- **Right to erasure** — `DELETE /v1/users/me` (authenticated). Cascades a permanent
+  purge of the user's data across **all 13 services** (own data + auth credentials +
+  every owning service via internal-token fan-out), idempotent, returns a per-service
+  summary. Requires `INTERNAL_SERVICE_TOKEN` set for every service (see §1b / §5-style
+  env) — the purge guards **fail closed** without it, so erasure would silently no-op.
+- **Right to portability** — `GET /v1/users/me/export`. Aggregates the user's data
+  across all services into one JSON bundle; excludes all secrets/credentials
+  (password/token hashes, push keys). Same `INTERNAL_SERVICE_TOKEN` dependency.
+
+> ### 🔴 Set `INTERNAL_SERVICE_TOKEN` (host `.env`) — required for erasure/export to work
+> A strong shared secret, identical across all services. If unset/empty, the internal
+> guards 404 and both GDPR flows degrade (erasure leaves data behind; export returns
+> empty service slots). This is the single most important env for GDPR compliance.
+
+**Your policy decision — retention / TTL (F34 #17, NOT yet automated):**
+There is no automated time-based purge of special-category data (`health_samples`,
+`period_logs`, `body_metrics`, sleep logs). On-request erasure (above) covers the
+user-initiated case, which is the main compliance requirement; a *retention schedule*
+(auto-delete data older than N months) is a **product/legal decision** — pick the
+retention period per data type, then a scheduled purge can be added to enforce it.
+Until then, document the retention stance in `docs/PRIVACY.md`.
+
+---
+
 ## Quick checklist (all owner-only)
 
 - [ ] Apply / confirm the original 5 migrations on the live DBs (§1) — chat & community
@@ -463,6 +491,10 @@ exist in Expo Go and need a signed dev build + on-device testing.
       EAS dev build, HealthKit entitlement, on-device permission grants.
 - [ ] Voice for Ria (§7): `npm install` the 2 native libs, delete the voice shims, EAS
       dev build, on-device mic/speech permission grants.
+- [ ] 🔴 GDPR (§8): set a strong shared `INTERNAL_SERVICE_TOKEN` (all services) — without
+      it `DELETE /v1/users/me` (erasure) and `GET /v1/users/me/export` silently degrade.
+- [ ] Decide a data **retention** policy (§8 / F34 #17) and record it in `docs/PRIVACY.md`
+      (on-request erasure is already implemented; time-based auto-purge is not).
 
 _This document modifies no code and executes nothing. It links other files by path
 only; it does not edit them._
