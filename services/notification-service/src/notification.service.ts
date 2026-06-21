@@ -247,4 +247,40 @@ export class NotificationService {
                 return true;
         }
     }
+
+    // -----------------------------------------------------------------------
+    // GDPR purge
+    // -----------------------------------------------------------------------
+
+    /**
+     * PERMANENTLY delete EVERY notification-service row owned by `userId`.
+     *
+     * Covers all three user-owned tables in this service's schema
+     * (notification_preferences, notifications, push_subscriptions), each keyed
+     * by the `userId` (user_id) column. There are no relation-keyed tables in
+     * this service, so every delete is a direct `user_id = :userId` match — no
+     * other user's data is ever touched.
+     *
+     * IDEMPOTENT: `deleteMany` never throws on zero matched rows, so purging a
+     * user with no rows returns all-zero counts and re-purging is safe. All
+     * deletes run inside a single `$transaction` so the purge is all-or-nothing
+     * (a mid-purge failure leaves no partially-erased user).
+     */
+    async purgeUser(userId: string): Promise<{
+        notification_preferences: number;
+        notifications: number;
+        push_subscriptions: number;
+    }> {
+        const [preferences, notifications, pushSubscriptions] = await this.prisma.$transaction([
+            this.prisma.notificationPreference.deleteMany({ where: { userId } }),
+            this.prisma.notification.deleteMany({ where: { userId } }),
+            this.prisma.pushSubscription.deleteMany({ where: { userId } }),
+        ]);
+
+        return {
+            notification_preferences: preferences.count,
+            notifications: notifications.count,
+            push_subscriptions: pushSubscriptions.count,
+        };
+    }
 }

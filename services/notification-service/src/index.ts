@@ -12,6 +12,7 @@ import { createLogger, loadConfig, sendUnauthorized, registerFastifyErrorHandler
 import { NotificationService } from './notification.service';
 import { PushService } from './push.service';
 import { notificationRoutes } from './routes';
+import { internalRoutes } from './internal-routes';
 import { setupEventSubscribers } from './events';
 import fastifySocketIO from 'fastify-socket.io';
 
@@ -28,6 +29,11 @@ const envSchema = z.object({
     // Both are in .env, so this is satisfied automatically.
     NOTIF_DATABASE_URL: z.string().url(),
     NOTIF_DIRECT_URL: z.string().url(),
+    // Shared server-to-server token for /v1/notifications/internal/* routes
+    // (GDPR purge). The makeInternalAuthGuard preHandler constant-time compares
+    // X-Internal-Token to this value; an empty/unset token fails closed (every
+    // internal request 404s), so prod must set INTERNAL_SERVICE_TOKEN.
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -195,6 +201,19 @@ fastify.register(
     },
     { prefix: '/v1/notifications' },
 );
+
+// ---------------------------------------------------------------------------
+// Internal (server-to-server) routes — registered WITHOUT the JWT prefix.
+// Guarded by makeInternalAuthGuard (X-Internal-Token), not the user JWT.
+// Includes the GDPR purge endpoint:
+//   DELETE /v1/notifications/internal/user/:userId
+// ---------------------------------------------------------------------------
+fastify.register(async (instance) => {
+    await internalRoutes(instance, {
+        notificationService,
+        internalServiceToken: config.INTERNAL_SERVICE_TOKEN,
+    });
+});
 
 // ---------------------------------------------------------------------------
 // Global error handler

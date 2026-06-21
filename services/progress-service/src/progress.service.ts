@@ -999,4 +999,53 @@ export class ProgressService {
             }
         });
     }
+
+    // ---------------------------------------------------------------------------
+    // GDPR purge — PERMANENTLY erase every progress-service row owned by userId.
+    //
+    // Backs DELETE /v1/progress/internal/user/:userId (server-to-server only,
+    // guarded by the shared X-Internal-Token check). Covers ALL six user-owned
+    // tables in this service's schema (every model carries a `user_id` column):
+    //   daily_progress, streaks, body_metrics, ai_usage_logs, hydration_logs,
+    //   performance_reports.
+    //
+    // IDEMPOTENT: deleteMany never throws on zero matched rows, so purging a user
+    // with no data returns all-zero counts and purging twice is safe. The whole
+    // set runs in a single $transaction so a partial failure rolls back (no
+    // half-deleted user). Returns a per-table deletedCounts summary.
+    // ---------------------------------------------------------------------------
+    async purgeUser(userId: string): Promise<{
+        daily_progress: number;
+        streaks: number;
+        body_metrics: number;
+        ai_usage_logs: number;
+        hydration_logs: number;
+        performance_reports: number;
+    }> {
+        const p = this.prisma as any;
+        const [
+            dailyProgress,
+            streaks,
+            bodyMetrics,
+            aiUsageLogs,
+            hydrationLogs,
+            performanceReports,
+        ] = await p.$transaction([
+            p.dailyProgress.deleteMany({ where: { userId } }),
+            p.streak.deleteMany({ where: { userId } }),
+            p.bodyMetrics.deleteMany({ where: { userId } }),
+            p.aiUsageLog.deleteMany({ where: { userId } }),
+            p.hydrationLog.deleteMany({ where: { userId } }),
+            p.performanceReport.deleteMany({ where: { userId } }),
+        ]);
+
+        return {
+            daily_progress: dailyProgress.count,
+            streaks: streaks.count,
+            body_metrics: bodyMetrics.count,
+            ai_usage_logs: aiUsageLogs.count,
+            hydration_logs: hydrationLogs.count,
+            performance_reports: performanceReports.count,
+        };
+    }
 }

@@ -3,7 +3,7 @@ import '@fastify/websocket';
 import { z } from 'zod';
 import { ChatService, RequestPendingError, ConversationAccessError } from './chat.service';
 import jwt from 'jsonwebtoken';
-import { sendUnauthorized } from '@nightfuel/config';
+import { sendUnauthorized, makeInternalAuthGuard } from '@nightfuel/config';
 
 // Inbound WebSocket frame schema — a discriminated union over `type`. senderId is
 // intentionally absent from EVERY variant: the sender is derived from the verified
@@ -63,8 +63,17 @@ function broadcastToUser(userId: string, frame: unknown): void {
     }
 }
 
-export default async function (fastify: FastifyInstance, opts: { chatService: ChatService, jwtSecret: string }) {
+export default async function (
+    fastify: FastifyInstance,
+    opts: { chatService: ChatService; jwtSecret: string; internalServiceToken?: string },
+) {
     const { chatService, jwtSecret } = opts;
+
+    // F34 #5: in-service guard for the server-to-server-only /internal/* routes.
+    // Constant-time checks X-Internal-Token == INTERNAL_SERVICE_TOKEN; on a
+    // missing/wrong token it replies 404 (never revealing the route exists) and
+    // the real handler never runs. An unset token fails CLOSED (every request 404s).
+    const internalAuth = makeInternalAuthGuard(opts.internalServiceToken);
 
     // invalid/missing token -> 401, never a fallback identity
     fastify.decorate('authenticate', async (request: any, reply: any) => {
@@ -356,6 +365,28 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
         const result = await chatService.sendRiaMessage(userId, message, context);
         return reply.send(result);
     });
+
+    // ── DELETE /v1/chat/internal/user/:userId (GDPR purge) ──────────────────────
+    // Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+    // internalAuth preHandler additionally requires X-Internal-Token). PERMANENTLY
+    // erases EVERY chat-service row owned by :userId across all three user-owned
+    // tables (coach_profiles, conversations, messages). IDEMPOTENT: purging a user
+    // with no rows returns 200 with zero counts; purging twice is safe (deleteMany
+    // never throws on zero rows). Returns a per-table deletedCounts summary.
+    fastify.delete(
+        '/v1/chat/internal/user/:userId',
+        { preHandler: internalAuth },
+        async (request, reply) => {
+            const { userId } = request.params as { userId: string };
+            try {
+                const deletedCounts = await chatService.purgeUser(userId);
+                return reply.code(200).send({ userId, deletedCounts });
+            } catch (err: any) {
+                request.log.error({ err, userId }, 'GDPR purge failed');
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        },
+    );
 
     // ── WebSocket route for real-time chat ──────────────────────────────────
     (fastify as any).get('/v1/chat/ws', { websocket: true }, (socket: any, req: any) => {

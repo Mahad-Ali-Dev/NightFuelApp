@@ -920,6 +920,97 @@ export class UserService {
         return computeCycleForecast(input, windowStart, windowEnd, now);
     }
 
+    // ── GDPR account deletion (own-data purge + event) ────────────────────────
+
+    /**
+     * Authoritatively purge EVERY user-service-OWNED row for this userId, in a
+     * single transaction. Backs the own-data step of the DELETE /v1/users/me
+     * orchestrator.
+     *
+     * The set of tables comes straight from the user-service ownership inventory:
+     *   user_profiles            (user_id)
+     *   user_preferences         (user_id)
+     *   coach_profiles           (user_id)
+     *   coach_client_relations   (coach_user_id, client_user_id)  ← TWO ownership
+     *                                                                columns; the
+     *                                                                user may be on
+     *                                                                EITHER side, so
+     *                                                                we delete both.
+     *   period_logs              (user_id)   ← GDPR Art.9 special-category health
+     *   user_statuses            (user_id)
+     *
+     * IDEMPOTENT: every delete is a `deleteMany` (returns { count }, never throws
+     * on zero matches), so purging a user with no rows succeeds with all counts 0,
+     * and purging the same user twice is safe. All deletes run inside ONE
+     * interactive transaction so the own-data purge is atomic — the user is never
+     * left half-deleted within this service.
+     *
+     * Children are deleted before parents (coach_client_relations before
+     * coach_profiles; the rest are independent) so the counts are accurate
+     * regardless of FK-cascade behaviour.
+     */
+    async purgeOwnUserData(userId: string): Promise<{
+        userId: string;
+        deletedCounts: Record<string, number>;
+    }> {
+        const p = this.prisma as any;
+        const [
+            coachClientRelations,
+            periodLogs,
+            userStatuses,
+            userPreferences,
+            coachProfiles,
+            userProfiles,
+        ] = await this.prisma.$transaction([
+            // coach_client_relations: the user can be the coach OR the client.
+            p.coachClientRelation.deleteMany({
+                where: { OR: [{ coachUserId: userId }, { clientUserId: userId }] },
+            }),
+            p.periodLog.deleteMany({ where: { userId } }),
+            this.prisma.userStatus.deleteMany({ where: { userId } }),
+            this.prisma.userPreferences.deleteMany({ where: { userId } }),
+            p.coachProfile.deleteMany({ where: { userId } }),
+            // Parent profile last.
+            this.prisma.userProfile.deleteMany({ where: { userId } }),
+        ]);
+
+        const deletedCounts: Record<string, number> = {
+            coach_client_relations: coachClientRelations.count,
+            period_logs: periodLogs.count,
+            user_statuses: userStatuses.count,
+            user_preferences: userPreferences.count,
+            coach_profiles: coachProfiles.count,
+            user_profiles: userProfiles.count,
+        };
+
+        logger.info({ userId, deletedCounts }, 'Purged user-service own data (GDPR)');
+        return { userId, deletedCounts };
+    }
+
+    /**
+     * Best-effort USER_DELETED event for any async consumers (caches, search
+     * indexes, analytics). NEVER throws — the account deletion is already
+     * authoritative without it; a bus hiccup must not fail the user's request.
+     */
+    async emitUserDeleted(userId: string): Promise<void> {
+        try {
+            await this.eventBus.publish(Channels.Auth.UserDeleted, {
+                eventId: randomUUID(),
+                eventType: 'user.deleted',
+                producedAt: new Date().toISOString(),
+                producerService: 'user-service',
+                correlationId: randomUUID(),
+                userId,
+                payload: { userId, deletedAt: new Date().toISOString() },
+            });
+            logger.info({ userId }, 'USER_DELETED event emitted');
+        } catch (err) {
+            // Best-effort: log and move on. Consumers can also reconcile from the
+            // per-service purge that already ran.
+            logger.error({ userId, err }, 'Failed to emit USER_DELETED event (best-effort)');
+        }
+    }
+
     /** Expand each logged period (start..end inclusive) into a flat ISO date set. */
     private expandLoggedDates(logs: PeriodLogInput[]): string[] {
         const out = new Set<string>();

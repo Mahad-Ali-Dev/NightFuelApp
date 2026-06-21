@@ -478,4 +478,29 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(500).send({ error: 'Internal server error' });
         }
     });
+
+    // -------------------------------------------------------------------------
+    // DELETE /v1/progress/internal/user/:userId  (GDPR purge)
+    // Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+    // internalAuth preHandler additionally requires X-Internal-Token). PERMANENTLY
+    // erases EVERY progress-service row owned by :userId across all six user-owned
+    // tables (daily_progress, streaks, body_metrics, ai_usage_logs, hydration_logs,
+    // performance_reports). IDEMPOTENT: purging a user with no rows returns 200
+    // with zero counts; purging twice is safe (deleteMany never throws on zero
+    // rows; the deletes run in one transaction). Returns a per-table
+    // deletedCounts summary.
+    // -------------------------------------------------------------------------
+    fastify.delete('/internal/user/:userId', {
+        preHandler: internalAuth,
+    }, async (request, reply) => {
+        const { userId } = request.params as { userId: string };
+        try {
+            const deletedCounts = await progressService.purgeUser(userId);
+            return reply.status(200).send({ userId, deletedCounts });
+        } catch (err: any) {
+            request.log.error({ err, userId }, 'GDPR purge failed');
+            // Redaction: generic 5xx body, no raw err.message leak (logged above).
+            return reply.status(500).send({ error: 'Internal server error' });
+        }
+    });
 };

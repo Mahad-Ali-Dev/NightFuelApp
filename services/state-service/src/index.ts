@@ -2,10 +2,11 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler } from '@nightfuel/config';
+import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, makeInternalAuthGuard } from '@nightfuel/config';
 import { z } from 'zod';
 import { setupEventSubscribers } from './events';
 import { StateMaterializer } from './materializer';
+import { purgeUser } from './purge';
 import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
 
@@ -17,6 +18,11 @@ const envSchema = z.object({
     // CLOSED with an empty allowlist (no cross-origin browser access) rather than
     // reflecting the request origin. Never use '*' with credentials.
     CORS_ORIGIN: z.string().optional(),
+    // F34 #5 / GDPR purge: shared token required (as X-Internal-Token) on the
+    // server-to-server-only /v1/state/internal/* routes. Defaulted so boot never
+    // breaks; the guard fails CLOSED on an empty/wrong token (every request 404s
+    // until the token is set), matching user-service / plan-service / sleep-service.
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -44,6 +50,32 @@ fastify.register(fastifyCors, { origin: corsOrigins });
 
 fastify.get('/health', async () => {
     return { status: 'ok', service: 'state-service' };
+});
+
+// F34 #5 / GDPR purge: guard the server-to-server-only /v1/state/internal/*
+// routes with the shared INTERNAL_SERVICE_TOKEN (X-Internal-Token header). An
+// unset/empty token fails CLOSED (every request 404s until the token is set).
+const internalAuth = makeInternalAuthGuard(config.INTERNAL_SERVICE_TOKEN);
+
+// ── DELETE /v1/state/internal/user/:userId (GDPR purge) ─────────────────────────
+// Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+// internalAuth preHandler additionally requires X-Internal-Token). PERMANENTLY
+// erases EVERY state-service row owned by :userId. This service has exactly ONE
+// user-owned table (user_states, keyed by user_id). IDEMPOTENT: purging a user
+// with no rows returns 200 with zero counts; purging twice is safe (deleteMany
+// never throws on zero rows). Returns a per-table deletedCounts summary.
+fastify.withTypeProvider<ZodTypeProvider>().delete('/v1/state/internal/user/:userId', {
+    preHandler: internalAuth,
+    schema: { params: z.object({ userId: z.string().min(1).max(64) }) },
+}, async (request, reply) => {
+    const { userId } = request.params;
+    try {
+        const deletedCounts = await purgeUser(prisma, userId);
+        return reply.code(200).send({ userId, deletedCounts });
+    } catch (err: any) {
+        request.log.error({ err, userId }, 'GDPR purge failed');
+        return reply.code(500).send({ error: 'Internal server error' });
+    }
 });
 
 fastify.get(

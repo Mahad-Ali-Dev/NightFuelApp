@@ -23,6 +23,11 @@ const envSchema = z.object({
     // CLOSED with an empty allowlist (no cross-origin browser access) rather than
     // reflecting the request origin. Never use '*' with credentials.
     CORS_ORIGIN: z.string().optional(),
+    // F34 #5 / GDPR purge: shared secret the server-to-server-only
+    // /v1/chat/internal/* routes verify via the makeInternalAuthGuard preHandler.
+    // Defaulted to '' so boot doesn't break in dev; an empty expected token fails
+    // CLOSED (the guard 404s every request until the token is set in prod).
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -80,7 +85,11 @@ fastify.get('/health', async () => {
 });
 
 const chatService = new ChatService(prisma, eventBus);
-fastify.register(routes, { chatService, jwtSecret: config.JWT_SECRET });
+fastify.register(routes, {
+    chatService,
+    jwtSecret: config.JWT_SECRET,
+    internalServiceToken: config.INTERNAL_SERVICE_TOKEN,
+});
 
 
 const start = async () => {

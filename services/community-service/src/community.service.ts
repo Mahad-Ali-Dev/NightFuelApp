@@ -695,4 +695,72 @@ export class CommunityService {
             return null;
         }
     }
+
+    // ── GDPR purge (server-to-server only) ──────────────────────────────────────
+    // PERMANENTLY erases EVERY community-service row owned by `userId` across all
+    // of this service's user-owned tables. IDEMPOTENT: every delete is a
+    // deleteMany, which never throws on zero matched rows, so purging a user with
+    // no data (or re-purging) returns all-zero counts and 200. Wrapped in a single
+    // $transaction so the purge is atomic — either every table is cleared or none.
+    //
+    // We delete only the user's OWN rows:
+    //   • posts                  — author_id = userId (cascades to ALL comments on
+    //                              those posts via comments.post onDelete: Cascade)
+    //   • comments               — author_id = userId (the user's own comments on
+    //                              OTHER people's posts; not covered by the cascade)
+    //   • post_likes             — user_id = userId (likes the user made)
+    //   • user_scores            — user_id = userId (the user's XP/level row)
+    //   • user_badges            — user_id = userId (badges the user earned)
+    //   • challenge_participants  — user_id = userId (the user's challenge entries)
+    //   • follows                — follower_id = userId OR following_id = userId
+    //                              (both directions are the user's own social-graph
+    //                              edges; we leave OTHER users' edges intact)
+    //
+    // We never touch shared/catalog rows the user does not own (badges, challenges)
+    // nor other users' posts/comments/likes.
+    async purgeUser(userId: string): Promise<{
+        posts: number;
+        comments: number;
+        post_likes: number;
+        user_scores: number;
+        user_badges: number;
+        challenge_participants: number;
+        follows: number;
+    }> {
+        const [
+            posts,
+            comments,
+            postLikes,
+            userScores,
+            userBadges,
+            challengeParticipants,
+            follows,
+        ] = await this.prisma.$transaction([
+            // Delete the user's posts first — this cascades to every comment on
+            // those posts (comments.post onDelete: Cascade) before we count the
+            // user's remaining own comments below.
+            this.prisma.post.deleteMany({ where: { authorId: userId } }),
+            // The user's own comments on OTHER people's posts (the cascade above
+            // already removed their comments on their own posts).
+            this.prisma.comment.deleteMany({ where: { authorId: userId } }),
+            this.prisma.postLike.deleteMany({ where: { userId } }),
+            this.prisma.userScore.deleteMany({ where: { userId } }),
+            this.prisma.userBadge.deleteMany({ where: { userId } }),
+            this.prisma.challengeParticipant.deleteMany({ where: { userId } }),
+            // Both directions of the social graph belong to the user.
+            this.prisma.follow.deleteMany({
+                where: { OR: [{ followerId: userId }, { followingId: userId }] },
+            }),
+        ]);
+
+        return {
+            posts: posts.count,
+            comments: comments.count,
+            post_likes: postLikes.count,
+            user_scores: userScores.count,
+            user_badges: userBadges.count,
+            challenge_participants: challengeParticipants.count,
+            follows: follows.count,
+        };
+    }
 }

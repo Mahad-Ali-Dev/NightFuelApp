@@ -378,4 +378,47 @@ export class AuthService {
 
         return { accessToken, refreshToken: refreshTokenString };
     }
+
+    /**
+     * GDPR purge — PERMANENTLY delete EVERY row this service owns for `userId`.
+     *
+     * This service's user-owned tables (verified against prisma/schema.prisma):
+     *   - refresh_tokens        (user_id)  — child rows, deleted first
+     *   - password_reset_tokens (user_id)  — child rows, deleted first
+     *   - users                 (id)       — the parent row, deleted last
+     *
+     * (refresh/reset tokens declare `onDelete: Cascade`, so deleting the user
+     * alone would clear them — but we delete them explicitly anyway so the
+     * returned summary reports an accurate per-table count and the purge does
+     * not silently depend on the DB-level cascade.)
+     *
+     * IDEMPOTENT: every delete is a `deleteMany` (returns `{ count }`, never
+     * throws on zero matches), so purging a user with no rows succeeds with all
+     * counts 0, and purging the same user twice is safe. All deletes run inside
+     * a single interactive transaction so the purge is atomic.
+     *
+     * Returns a per-table summary of how many rows were removed.
+     */
+    async purgeUserData(userId: string): Promise<{
+        userId: string;
+        deletedCounts: { refresh_tokens: number; password_reset_tokens: number; users: number };
+    }> {
+        const [refreshTokens, passwordResetTokens, users] = await this.prisma.$transaction([
+            // Children first (explicit, not relying on the FK cascade) so the
+            // counts are accurate regardless of cascade behaviour.
+            this.prisma.refreshToken.deleteMany({ where: { userId } }),
+            this.prisma.passwordResetToken.deleteMany({ where: { userId } }),
+            // Parent last.
+            this.prisma.user.deleteMany({ where: { id: userId } }),
+        ]);
+
+        return {
+            userId,
+            deletedCounts: {
+                refresh_tokens: refreshTokens.count,
+                password_reset_tokens: passwordResetTokens.count,
+                users: users.count,
+            },
+        };
+    }
 }

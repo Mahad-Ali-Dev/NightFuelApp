@@ -626,4 +626,55 @@ export class ExerciseService {
             where: { id: sessionId, userId },
         });
     }
+
+    // ── GDPR purge ──────────────────────────────────────────────────────────────
+    // PERMANENTLY delete EVERY exercise-service row owned by `userId` for a
+    // right-to-erasure request. Covers all four user-owned tables in this
+    // service's schema (every model carrying a user_id column):
+    //   • workouts          — keyed by user_id.
+    //   • workout_routines  — keyed by user_id (a NULL user_id row is a GLOBAL
+    //                         template owned by NO user, so `where: { userId }`
+    //                         with a concrete id never touches it).
+    //   • 1rm_logs          — keyed by user_id.
+    //   • workout_sessions  — keyed by user_id.
+    //
+    // The two relation-keyed child tables carry NO user_id and are erased
+    // transitively by their parent's DB-level cascade (declared in schema.prisma):
+    //   • exercises     — onDelete: Cascade from workouts        (deleted with the workout).
+    //   • exercise_logs — onDelete: Cascade from workout_sessions (deleted with the session).
+    // So deleting only the parent rows above removes the children too; they are
+    // not counted in the summary because they belong to the user only through the
+    // parent (no per-user ownership column of their own).
+    //
+    // IDEMPOTENT by construction: every step is a deleteMany, which returns
+    // `{ count: 0 }` (never throws) when no rows match — so purging a user with
+    // no data, or purging the same user twice, both succeed. Returns a per-table
+    // deletedCounts summary the caller surfaces in the 200 body.
+    //
+    // All deletes run inside `$transaction` so the purge is all-or-nothing: a
+    // mid-purge failure leaves no partially-erased user.
+    async purgeUser(userId: string): Promise<{
+        workouts: number;
+        workout_routines: number;
+        '1rm_logs': number;
+        workout_sessions: number;
+    }> {
+        const [workouts, workoutRoutines, oneRepMaxLogs, workoutSessions] =
+            await this.prisma.$transaction([
+                // Cascades to child `exercises` rows (exercises.onDelete: Cascade).
+                this.prisma.workout.deleteMany({ where: { userId } }),
+                // A concrete userId never matches the NULL-user global templates.
+                this.prisma.workoutRoutine.deleteMany({ where: { userId } }),
+                this.prisma.oneRepMaxLog.deleteMany({ where: { userId } }),
+                // Cascades to child `exercise_logs` rows (exerciseLog.onDelete: Cascade).
+                this.prisma.workoutSession.deleteMany({ where: { userId } }),
+            ]);
+
+        return {
+            workouts: workouts.count,
+            workout_routines: workoutRoutines.count,
+            '1rm_logs': oneRepMaxLogs.count,
+            workout_sessions: workoutSessions.count,
+        };
+    }
 }

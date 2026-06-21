@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { SubscriptionService } from './subscription.service';
 import type { EventBus } from './events';
 import { publishTierUpdated } from './events';
-import { sendUnauthorizedPayload } from '@nightfuel/config';
+import { sendUnauthorizedPayload, makeInternalAuthGuard } from '@nightfuel/config';
 import {
   TIER_CATALOGUE,
   UpgradeBodySchema,
@@ -40,6 +40,13 @@ function extractUserId(request: FastifyRequest): string {
 interface RoutesPluginOptions {
   subscriptionService: SubscriptionService;
   eventBus: EventBus;
+  /**
+   * Shared server-to-server token (INTERNAL_SERVICE_TOKEN) gating the
+   * /v1/subscriptions/internal/* routes. Optional so existing callers/tests that
+   * don't exercise internal routes keep working; when unset the guard fails
+   * CLOSED (every internal request 404s).
+   */
+  internalServiceToken?: string;
 }
 
 export async function subscriptionRoutes(
@@ -47,6 +54,12 @@ export async function subscriptionRoutes(
   options: RoutesPluginOptions,
 ): Promise<void> {
   const { subscriptionService, eventBus } = options;
+
+  // ── Internal-token guard (F34 #5 / F35a pattern) ────────────────────────────
+  // Constant-time X-Internal-Token check for the server-to-server-only
+  // /internal/* routes below; 404s on a missing/wrong token (mirrors the nginx
+  // edge) so a probe can't distinguish a guarded route from a missing one.
+  const internalAuth = makeInternalAuthGuard(options.internalServiceToken);
   // Cast: fastify.log is FastifyBaseLogger; events.ts expects pino.Logger — both are structurally compatible at runtime.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const log = fastify.log as any;
@@ -594,6 +607,60 @@ export async function subscriptionRoutes(
           errorCode: 'server_error',
           errorMessage: 'Could not validate receipt',
         });
+      }
+    },
+  );
+
+  // ── DELETE /v1/subscriptions/internal/user/:userId (GDPR purge) ────────────
+  // Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+  // internalAuth preHandler additionally requires X-Internal-Token, 404ing on a
+  // missing/wrong token so a probe can't tell a guarded route from a missing one).
+  // PERMANENTLY erases EVERY subscription-service row owned by :userId across ALL
+  // THREE user-owned tables (subscriptions, subscription_events, iap_transactions
+  // — each via user_id). IDEMPOTENT: purging a user with no rows returns 200 with
+  // zero counts; purging twice is safe (deleteMany never throws on zero rows).
+  // SubscriptionService.purgeUser wraps the deletes in a $transaction and returns
+  // a per-table deletedCounts summary.
+  fastify.delete(
+    '/v1/subscriptions/internal/user/:userId',
+    {
+      preHandler: internalAuth,
+      schema: {
+        description: 'GDPR: permanently delete all of this user\'s subscription-service data.',
+        tags: ['internal'],
+        params: {
+          type: 'object',
+          required: ['userId'],
+          properties: { userId: { type: 'string', minLength: 1 } },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              userId: { type: 'string' },
+              deletedCounts: {
+                type: 'object',
+                properties: {
+                  subscriptions: { type: 'number' },
+                  subscription_events: { type: 'number' },
+                  iap_transactions: { type: 'number' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { userId } = request.params as { userId: string };
+      try {
+        const deletedCounts = await subscriptionService.purgeUser(userId);
+        return reply.status(200).send({ userId, deletedCounts });
+      } catch (err) {
+        log.error({ userId, err }, 'routes: DELETE /internal/user – GDPR purge failed');
+        return reply
+          .status(500)
+          .send({ statusCode: 500, error: 'Internal Server Error', message: 'Failed to purge user data' });
       }
     },
   );

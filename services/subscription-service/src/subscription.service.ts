@@ -488,4 +488,48 @@ export class SubscriptionService {
     // array (aiModels): always "allowed" in the sense that the tier has models
     return { allowed: true, tier, value };
   }
+
+  // ── purgeUser (GDPR) ────────────────────────────────────────────────────────
+  /**
+   * GDPR purge — PERMANENTLY delete EVERY subscription-service row owned by
+   * `userId`.
+   *
+   * This service has exactly three user-owned tables (verified against
+   * prisma/schema.prisma — every model carries a `user_id` and no other
+   * user-id-bearing columns exist):
+   *   • subscriptions       — owned via user_id (Subscription.userId)
+   *   • subscription_events — owned via user_id (SubscriptionEvent.userId)
+   *   • iap_transactions    — owned via user_id (IAPTransaction.userId)
+   *
+   * All three deletes run inside a single $transaction so the purge is
+   * all-or-nothing.
+   *
+   * IDEMPOTENT: deleteMany never throws on zero rows, so purging a user with no
+   * data returns all-zero counts and re-purging is a safe no-op.
+   */
+  async purgeUser(
+    userId: string,
+  ): Promise<{ subscriptions: number; subscription_events: number; iap_transactions: number }> {
+    const [subscriptions, subscriptionEvents, iapTransactions] = await this.prisma.$transaction([
+      this.prisma.subscription.deleteMany({ where: { userId } }),
+      this.prisma.subscriptionEvent.deleteMany({ where: { userId } }),
+      this.prisma.iAPTransaction.deleteMany({ where: { userId } }),
+    ]);
+
+    this.logger.info(
+      {
+        userId,
+        subscriptions: subscriptions.count,
+        subscription_events: subscriptionEvents.count,
+        iap_transactions: iapTransactions.count,
+      },
+      'subscription.service: purgeUser done',
+    );
+
+    return {
+      subscriptions: subscriptions.count,
+      subscription_events: subscriptionEvents.count,
+      iap_transactions: iapTransactions.count,
+    };
+  }
 }

@@ -23,6 +23,11 @@ const envSchema = z.object({
     // Comma-separated list of allowed web origins. Falls back to localhost dev
     // origins. Never use '*' here — credentials:true forbids a wildcard origin.
     CORS_ORIGINS: z.string().optional(),
+    // F34 #5 / F35a: shared secret that the /v1/auth/internal/* routes verify via
+    // the makeInternalAuthGuard preHandler (constant-time X-Internal-Token check).
+    // Defaulted so boot doesn't break in dev/test; when empty the guard fails
+    // closed (every /internal request 404s). Mirrors user-service / plan-service.
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -91,7 +96,7 @@ fastify.get('/health', async () => {
 
 // Register routes
 fastify.register(async (instance) => {
-    await authRoutes(instance, { authService });
+    await authRoutes(instance, { authService, internalServiceToken: config.INTERNAL_SERVICE_TOKEN });
 }, { prefix: '/v1/auth' });
 
 const start = async () => {

@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { CommunityService, SelfFollowError } from './community.service';
 import jwt from 'jsonwebtoken';
-import { sendUnauthorized } from '@nightfuel/config';
+import { sendUnauthorized, makeInternalAuthGuard } from '@nightfuel/config';
 
 // ── Input upper bounds ──────────────────────────────────────────────────────
 // Generous caps so every currently-valid app payload still passes; only
@@ -12,8 +12,14 @@ import { sendUnauthorized } from '@nightfuel/config';
 const MAX_USER_POSTS_LIMIT = 100;   // GET /user/:id/posts page size
 const MAX_LEADERBOARD_LIMIT = 100;  // GET /leaderboard page size
 
-export default async function (fastify: FastifyInstance, opts: { communityService: CommunityService, jwtSecret: string }) {
+export default async function (fastify: FastifyInstance, opts: { communityService: CommunityService, jwtSecret: string, internalServiceToken?: string }) {
     const { communityService, jwtSecret } = opts;
+
+    // F34 #5: in-service guard for the server-to-server-only /internal/* routes.
+    // Constant-time checks X-Internal-Token == INTERNAL_SERVICE_TOKEN; on a
+    // missing/wrong token it replies 404 (never revealing the route exists) and
+    // the real handler never runs. An unset token fails CLOSED (every request 404s).
+    const internalAuth = makeInternalAuthGuard(opts.internalServiceToken);
 
     // Authentication middleware
     fastify.decorate('authenticate', async (request: any, reply: any) => {
@@ -304,4 +310,27 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
             : id;
         return reply.send(await communityService.getUserScore(userId));
     });
+
+    // ── DELETE /v1/community/internal/user/:userId (GDPR purge) ──────────────────
+    // Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+    // internalAuth preHandler additionally requires X-Internal-Token). PERMANENTLY
+    // erases EVERY community-service row owned by :userId across all user-owned
+    // tables (posts, comments, post_likes, user_scores, user_badges,
+    // challenge_participants, follows). IDEMPOTENT: purging a user with no rows
+    // returns 200 with zero counts; purging twice is safe (deleteMany never throws
+    // on zero rows). Returns a per-table deletedCounts summary.
+    fastify.delete(
+        '/v1/community/internal/user/:userId',
+        { preHandler: internalAuth },
+        async (request, reply) => {
+            const { userId } = request.params as { userId: string };
+            try {
+                const deletedCounts = await communityService.purgeUser(userId);
+                return reply.code(200).send({ userId, deletedCounts });
+            } catch (err: any) {
+                request.log.error({ err, userId }, 'GDPR purge failed');
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        },
+    );
 };

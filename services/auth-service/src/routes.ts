@@ -1,11 +1,21 @@
 
 import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { z } from 'zod';
+import { makeInternalAuthGuard } from '@nightfuel/config';
 import { registerSchema, loginSchema, refreshTokenSchema, forgotPasswordSchema, resetPasswordSchema } from './schemas';
 import { AuthService } from './auth.service';
 
-export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = async (fastify, opts) => {
+export const authRoutes: FastifyPluginAsync<{ authService: AuthService; internalServiceToken?: string }> = async (fastify, opts) => {
     const service = opts.authService;
+
+    // F34 #5 / F35a: guard the server-to-server-only /internal/* route with the
+    // shared constant-time X-Internal-Token check (makeInternalAuthGuard). On a
+    // missing/wrong token it 404s (matches the nginx edge), so a probe cannot
+    // tell a guarded internal route from a missing path. The token is wired in
+    // from config (INTERNAL_SERVICE_TOKEN) in index.ts; when empty the guard
+    // fails closed and every /internal request 404s.
+    const internalAuth = makeInternalAuthGuard(opts.internalServiceToken);
 
     // Allowlist of the exact user-facing strings AuthService is known to throw.
     // Any other error (DB/Prisma/network/etc.) is an unexpected internal failure
@@ -194,6 +204,35 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService }> = asyn
             // Exclude password hash
             const { passwordHash, ...profile } = user;
             return profile;
+        }
+    );
+
+    // ── DELETE /v1/auth/internal/user/:userId ────────────────────────────────
+    // GDPR purge — server-to-server only (guarded by the X-Internal-Token check
+    // above). PERMANENTLY deletes EVERY row this service owns for :userId across
+    // users, refresh_tokens and password_reset_tokens.
+    //
+    // IDEMPOTENT: the service layer uses deleteMany (no throw on zero rows), so
+    // purging a user with no rows still returns 200 with all counts 0, and
+    // calling it twice is safe (the second call simply reports 0s). Returns a
+    // small {deletedCounts per table} summary.
+    fastify.withTypeProvider<ZodTypeProvider>().delete(
+        '/internal/user/:userId',
+        {
+            preHandler: internalAuth,
+            schema: {
+                params: z.object({ userId: z.string().uuid() }),
+            },
+        },
+        async (request, reply) => {
+            try {
+                const { userId } = request.params;
+                const result = await service.purgeUserData(userId);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
+            }
         }
     );
 };

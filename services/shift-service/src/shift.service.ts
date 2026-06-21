@@ -123,6 +123,56 @@ export class ShiftService {
         return shift;
     }
 
+    // ── GDPR purge (F35a) ────────────────────────────────────────────────────────
+    // PERMANENTLY erase EVERY shift-service row owned by `userId` across all three
+    // user-owned tables (shifts, rotation_patterns, scheduled_sessions). All three
+    // are keyed by a single `user_id` column (verified against the schema), so a
+    // delete-by-userId removes exactly this user's rows and nothing belonging to
+    // another user. There are no cross-user relations here — scheduled_sessions'
+    // optional `shift_id` points only at one of the SAME user's shifts.
+    //
+    // IDEMPOTENT: deleteMany never throws on zero matches, so purging a user with
+    // no rows returns all-zero counts and re-purging is safe.
+    //
+    // shifts + rotation_patterns are always-present base tables, so their deletes
+    // run together in a $transaction (all-or-nothing). scheduled_sessions is
+    // created by a USER-GATED migration that may be un-run (see training.routes.ts);
+    // its delete is issued separately and tolerates the missing-table error (P2021)
+    // by reporting 0 — mirroring this service's existing graceful-degradation
+    // contract rather than failing the whole purge before the table exists.
+    async purgeUser(userId: string): Promise<{
+        shifts: number;
+        rotation_patterns: number;
+        scheduled_sessions: number;
+    }> {
+        const [shifts, rotationPatterns] = await this.prisma.$transaction([
+            this.prisma.shift.deleteMany({ where: { userId } }),
+            this.prisma.rotationPattern.deleteMany({ where: { userId } }),
+        ]);
+
+        let scheduledSessions = 0;
+        try {
+            const res = await this.prisma.scheduledSession.deleteMany({ where: { userId } });
+            scheduledSessions = res.count;
+        } catch (err: any) {
+            // P2021 = table does not exist (un-run scheduled_sessions migration).
+            // Treat the absent table as "zero rows to purge"; anything else is a
+            // genuine fault and must propagate to the 500 handler.
+            const message = typeof err?.message === 'string' ? err.message : '';
+            const missingTable =
+                err?.code === 'P2021' ||
+                /relation "scheduled_sessions" does not exist/i.test(message) ||
+                /table.*scheduled_sessions.*does not exist/i.test(message);
+            if (!missingTable) throw err;
+        }
+
+        return {
+            shifts: shifts.count,
+            rotation_patterns: rotationPatterns.count,
+            scheduled_sessions: scheduledSessions,
+        };
+    }
+
     async deleteShift(id: string, userId: string): Promise<void> {
         await this.prisma.shift.delete({
             where: { id, userId },

@@ -7,7 +7,7 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized } from '@nightfuel/config';
+import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized, makeInternalAuthGuard } from '@nightfuel/config';
 import { z } from 'zod';
 import { SleepService } from './sleep.service';
 import {
@@ -19,6 +19,11 @@ const envSchema = z.object({
     SLEEP_PORT: z.string().default('3012'),
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     REDIS_URL: z.string().url(),
+    // F34 #5 / GDPR purge: shared token required (as X-Internal-Token) on the
+    // server-to-server-only /v1/sleep/internal/* routes. Defaulted so boot never
+    // breaks; the guard fails CLOSED on an empty/wrong token (every request 404s
+    // until the token is set), matching user-service / plan-service.
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -116,6 +121,33 @@ const preferencesSchema = z.object({
 // ── Routes ─────────────────────────────────────────────────────────────────────
 
 fastify.get('/health', async () => ({ status: 'ok', service: 'sleep-service' }));
+
+// F34 #5 / GDPR purge: guard the server-to-server-only /v1/sleep/internal/*
+// routes with the shared INTERNAL_SERVICE_TOKEN (X-Internal-Token header). An
+// unset/empty token fails CLOSED (every request 404s until the token is set).
+const internalAuth = makeInternalAuthGuard(config.INTERNAL_SERVICE_TOKEN);
+
+// ── DELETE /v1/sleep/internal/user/:userId (GDPR purge) ─────────────────────────
+// Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+// internalAuth preHandler additionally requires X-Internal-Token). PERMANENTLY
+// erases EVERY sleep-service row owned by :userId across all three user-owned
+// tables (sleep_sessions, sleep_preferences, health_samples). IDEMPOTENT: purging
+// a user with no rows returns 200 with zero counts; purging twice is safe
+// (deleteMany never throws on zero rows, and the deletes run in one transaction).
+// Returns a per-table deletedCounts summary.
+fastify.withTypeProvider<ZodTypeProvider>().delete('/v1/sleep/internal/user/:userId', {
+    preHandler: internalAuth,
+    schema: { params: z.object({ userId: z.string().uuid() }) },
+}, async (request, reply) => {
+    const { userId } = request.params;
+    try {
+        const deletedCounts = await sleepSvc.purgeUser(userId);
+        return reply.code(200).send({ userId, deletedCounts });
+    } catch (err: any) {
+        request.log.error({ err, userId }, 'GDPR purge failed');
+        return reply.code(500).send({ error: 'Internal server error' });
+    }
+});
 
 // GET /v1/sleep?limit=30
 fastify.withTypeProvider<ZodTypeProvider>().get('/v1/sleep', {

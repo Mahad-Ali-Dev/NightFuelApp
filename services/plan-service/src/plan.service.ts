@@ -610,4 +610,33 @@ export class PlanService {
             where: { id }
         });
     }
+
+    /**
+     * GDPR purge — PERMANENTLY delete EVERY plan-service row owned by `userId`.
+     *
+     * This service has exactly two user-owned tables (verified against
+     * prisma/schema.prisma — no other user-id columns exist):
+     *   • day_plans          — owned via user_id      (DayPlan.userId)
+     *   • protocol_templates — owned via creator_id   (ProtocolTemplate.creatorId)
+     *
+     * day_plans has an optional FK to protocol_templates (protocol_id). Deleting
+     * day_plans FIRST avoids any FK contention before the templates go. Both run
+     * inside a single $transaction so the purge is all-or-nothing.
+     *
+     * IDEMPOTENT: deleteMany never throws on zero rows, so purging a user with no
+     * data returns all-zero counts and re-purging is a safe no-op.
+     */
+    async purgeUser(userId: string): Promise<{ day_plans: number; protocol_templates: number }> {
+        const [dayPlans, protocolTemplates] = await this.prisma.$transaction([
+            // The user's day plans (user_id).
+            this.prisma.dayPlan.deleteMany({ where: { userId } }),
+            // Protocol templates the user authored (creator_id).
+            this.prisma.protocolTemplate.deleteMany({ where: { creatorId: userId } }),
+        ]);
+
+        return {
+            day_plans: dayPlans.count,
+            protocol_templates: protocolTemplates.count,
+        };
+    }
 }

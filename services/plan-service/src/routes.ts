@@ -253,6 +253,36 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
         }
     );
 
+    // ── DELETE /v1/plans/internal/user/:userId (GDPR purge) ──────────────────────
+    // Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+    // internalAuth preHandler additionally requires X-Internal-Token, 404ing on a
+    // missing/wrong token so a probe can't tell a guarded route from a missing one).
+    // PERMANENTLY erases EVERY plan-service row owned by :userId across BOTH
+    // user-owned tables (day_plans via user_id, protocol_templates via creator_id).
+    // IDEMPOTENT: purging a user with no rows returns 200 with zero counts; purging
+    // twice is safe (deleteMany never throws on zero rows). PlanService.purgeUser
+    // wraps both deletes in a $transaction and returns a per-table deletedCounts
+    // summary.
+    fastify.withTypeProvider<ZodTypeProvider>().delete(
+        '/internal/user/:userId',
+        {
+            preHandler: internalAuth,
+            schema: {
+                params: z.object({ userId: z.string().uuid() }),
+            },
+        },
+        async (request, reply) => {
+            const { userId } = request.params;
+            try {
+                const deletedCounts = await planService.purgeUser(userId);
+                return reply.code(200).send({ userId, deletedCounts });
+            } catch (err: any) {
+                request.log.error({ err, userId }, 'GDPR purge failed');
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
     // ── Protocol Template Routes ──────────────────────────────────────────
 
     // POST /v1/plans/protocols — Create a new protocol template

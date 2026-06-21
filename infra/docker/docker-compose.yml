@@ -78,6 +78,9 @@ services:
       REDIS_URL: redis://redis:6379
       AUTH_PORT: 3001
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F36 GDPR purge: verifies X-Internal-Token on DELETE /internal/user/:userId.
+      # Shared INTERNAL_SERVICE_TOKEN across services; guard fails closed if empty.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
     depends_on:
       postgres:
@@ -99,6 +102,9 @@ services:
       REDIS_URL: redis://redis:6379
       SHIFT_PORT: 3002
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F35a / GDPR purge: authorizes this service's /v1/shifts/internal/* routes
+      # (X-Internal-Token). Same INTERNAL_SERVICE_TOKEN value shared across services.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
     depends_on:
       postgres:
@@ -282,6 +288,9 @@ services:
       REDIS_URL: redis://redis:6379
       NOTIF_PORT: 3008
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # Shared server-to-server token guarding /v1/notifications/internal/*
+      # (GDPR purge). Same INTERNAL_SERVICE_TOKEN value shared across services.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-VAPID_PLACEHOLDER_PUBLIC}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-VAPID_PLACEHOLDER_PRIVATE}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@nightfuel.app}
@@ -333,6 +342,9 @@ services:
       REDIS_URL: redis://redis:6379
       SLEEP_PORT: 3012
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F36 GDPR purge: verifies X-Internal-Token on DELETE /internal/user/:userId
+      # (erases sleep_sessions + health_samples). Fails closed if empty.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
     depends_on:
       postgres:
@@ -355,6 +367,9 @@ services:
       REDIS_URL: redis://redis:6379
       SUB_PORT: 3010
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F36 GDPR purge: verifies X-Internal-Token on DELETE /internal/user/:userId
+      # (erases subscriptions + iap_transactions billing PII). Fails closed if empty.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_placeholder}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
       APPLE_SHARED_SECRET: ${APPLE_SHARED_SECRET:-}
@@ -385,6 +400,10 @@ services:
       COMMUNITY_PORT: 3013
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
       USER_SERVICE_URL: http://user-service:3009
+      # GDPR purge: shared token the server-to-server-only
+      # /v1/community/internal/* routes verify (makeInternalAuthGuard). Same
+      # INTERNAL_SERVICE_TOKEN value shared across services.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
     depends_on:
       postgres:
@@ -432,6 +451,9 @@ services:
       REDIS_URL: redis://redis:6379
       STATE_PORT: 3015
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F36 GDPR purge: verifies X-Internal-Token on DELETE /internal/user/:userId
+      # (erases derived user_state). Fails closed if empty.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
     depends_on:
       postgres:

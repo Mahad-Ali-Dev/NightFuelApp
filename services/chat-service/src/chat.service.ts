@@ -683,4 +683,49 @@ export class ChatService {
         }
     }
 
+    // ── GDPR purge ────────────────────────────────────────────────────────────────
+    // PERMANENTLY delete EVERY chat-service row owned by `userId` for a
+    // right-to-erasure request. Covers all three user-owned tables in this
+    // service's schema:
+    //   • coach_profiles   — keyed by user_id (the user IS the coach).
+    //   • conversations    — the user is either participant_a OR participant_b.
+    //   • messages         — authored by the user (sender_id).
+    //
+    // IDEMPOTENT by construction: every step is a deleteMany, which returns
+    // `{ count: 0 }` (never throws) when no rows match — so purging a user with
+    // no data, or purging the same user twice, both succeed. Returns a per-table
+    // deletedCounts summary the caller surfaces in the 200 body.
+    //
+    // Ordering & transaction: messages are deleted FIRST (by sender_id), then the
+    // user's conversations, then their coach profile. Note messages.conversation
+    // has onDelete: Cascade, so deleting a conversation already removes ITS
+    // messages; deleting the user's own messages first additionally erases
+    // messages they authored in conversations that are NOT being deleted (i.e.
+    // where neither participant column is this user — defensive, normally none).
+    // All deletes run inside `$transaction` so the purge is all-or-nothing: a
+    // mid-purge failure leaves no partially-erased user.
+    async purgeUser(userId: string): Promise<{
+        coach_profiles: number;
+        conversations: number;
+        messages: number;
+    }> {
+        const [messages, conversations, coachProfiles] = await this.prisma.$transaction([
+            // Messages the user authored (anywhere). deleteMany never throws on 0 rows.
+            this.prisma.message.deleteMany({ where: { senderId: userId } }),
+            // Conversations where the user is either participant. Cascades to any
+            // remaining messages in those threads (messages.onDelete: Cascade).
+            this.prisma.conversation.deleteMany({
+                where: { OR: [{ participantA: userId }, { participantB: userId }] },
+            }),
+            // The user's own coach profile (user_id is unique; 0 or 1 rows).
+            this.prisma.coachProfile.deleteMany({ where: { userId } }),
+        ]);
+
+        return {
+            coach_profiles: coachProfiles.count,
+            conversations: conversations.count,
+            messages: messages.count,
+        };
+    }
+
 }

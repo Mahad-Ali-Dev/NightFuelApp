@@ -7,7 +7,7 @@ import fastifyHelmet from '@fastify/helmet';
 import fastifyRateLimit from '@fastify/rate-limit';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized, assertWithinDailyLimit, AI_LIMITS, AI_QUOTA_EXCEEDED, resolvePlan } from '@nightfuel/config';
+import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized, assertWithinDailyLimit, AI_LIMITS, AI_QUOTA_EXCEEDED, resolvePlan, makeInternalAuthGuard } from '@nightfuel/config';
 import { z } from 'zod';
 import { ExerciseService } from './exercise.service';
 // fetchExerciseById now used internally by ExerciseService.getLibraryExerciseById
@@ -57,6 +57,12 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
         return sendUnauthorized(reply, request, err);
     }
 });
+
+// F34 #5 / GDPR purge: guard the server-to-server-only /v1/exercises/internal/*
+// routes. Constant-time X-Internal-Token compare; 404s on a missing/wrong token
+// (matching the nginx edge) so a probe can't even learn the route exists. An
+// unset INTERNAL_SERVICE_TOKEN fails CLOSED (every request 404s until set).
+const internalAuth = makeInternalAuthGuard(config.INTERNAL_SERVICE_TOKEN);
 
 // ── Shared exercise body schema ───────────────────────────────────────────────
 // Numeric fields are positive and capped: additive upper bounds only, so valid
@@ -589,6 +595,29 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/session/:id/end'
     } catch (err: any) {
         logger.error(err);
         return reply.code(500).send({ error: 'An unexpected error occurred' });
+    }
+});
+
+// ── DELETE /v1/exercises/internal/user/:userId (GDPR purge) ─────────────────────
+// Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+// internalAuth preHandler additionally requires X-Internal-Token). PERMANENTLY
+// erases EVERY exercise-service row owned by :userId across all four user-owned
+// tables (workouts, workout_routines, 1rm_logs, workout_sessions) — child rows in
+// exercises / exercise_logs are removed via their parent's onDelete: Cascade.
+// IDEMPOTENT: purging a user with no rows returns 200 with zero counts; purging
+// twice is safe (deleteMany never throws on zero rows). Returns a per-table
+// deletedCounts summary.
+fastify.withTypeProvider<ZodTypeProvider>().delete('/v1/exercises/internal/user/:userId', {
+    preHandler: internalAuth,
+    schema: { params: z.object({ userId: z.string().uuid() }) },
+}, async (request, reply) => {
+    const { userId } = request.params;
+    try {
+        const deletedCounts = await exerciseSvc.purgeUser(userId);
+        return reply.code(200).send({ userId, deletedCounts });
+    } catch (err: any) {
+        request.log.error({ err, userId }, 'GDPR purge failed');
+        return reply.code(500).send({ error: 'Internal server error' });
     }
 });
 

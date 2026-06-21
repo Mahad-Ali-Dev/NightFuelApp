@@ -63,7 +63,10 @@ const USER_ID = '55555555-5555-5555-5555-555555555555';
 // Sensitive VALUES that must NEVER appear in any log argument.
 const SENSITIVE_VALUES = [
     '2026-06-01', // lastPeriodStartDate
-    '28',         // avgCycleLengthDays (as string)
+    '31415',      // avgCycleLengthDays — a COLLISION-PROOF sentinel. A short value
+                  // like '28' can appear inside the dev dump's ISO timestamp (e.g.
+                  // ...:48.428Z), failing not.toContain spuriously. A 5-digit run
+                  // never appears in an ISO-8601 timestamp / UUID / path.
     'IRREGULAR',  // cycleRegularity
     'peanuts',    // allergies
 ];
@@ -105,7 +108,7 @@ describe('UserService.updateProfile — PII-in-logs redaction (HIGH #9)', () => 
         await expect(
             svc.updateProfile(USER_ID, {
                 cycleTrackingEnabled: true,
-                avgCycleLengthDays: 28,
+                avgCycleLengthDays: 31415,
                 cycleRegularity: 'IRREGULAR',
                 lastPeriodStartDate: '2026-06-01',
             } as any),
@@ -138,7 +141,7 @@ describe('UserService.updateProfile — PII-in-logs redaction (HIGH #9)', () => 
             const svc = buildServiceWithFailingUpsert();
             await expect(
                 svc.updateProfile(USER_ID, {
-                    avgCycleLengthDays: 28,
+                    avgCycleLengthDays: 31415,
                     lastPeriodStartDate: '2026-06-01',
                 } as any),
             ).rejects.toThrow();

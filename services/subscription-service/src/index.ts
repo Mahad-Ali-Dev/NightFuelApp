@@ -55,6 +55,12 @@ const JWT_SECRET = requireSecret('JWT_SECRET', 32);
 const REDIS_URL = requireEnv('REDIS_URL');
 const LOG_LEVEL = process.env['LOG_LEVEL'] ?? 'info';
 
+// Shared server-to-server token (X-Internal-Token) gating the GDPR purge route
+// DELETE /v1/subscriptions/internal/user/:userId. Read like user-service /
+// plan-service. Defaulted to '' so boot doesn't break in dev; the guard fails
+// CLOSED on an empty token (every internal request 404s) so prod MUST set it.
+const INTERNAL_SERVICE_TOKEN = process.env['INTERNAL_SERVICE_TOKEN'] ?? '';
+
 // Comma-separated list of allowed web origins. When unset we fail CLOSED with an
 // empty allowlist (no cross-origin browser access) rather than falling back to
 // '*' — a wildcard origin with credentials:true is forbidden by the browser and
@@ -210,7 +216,11 @@ export async function buildApp(): Promise<ReturnType<typeof Fastify>> {
   await setupEventSubscribers(eventBus, subscriptionService, rootLogger);
 
   // ── Routes ──────────────────────────────────────────────────────────────────
-  await app.register(subscriptionRoutes, { subscriptionService, eventBus });
+  await app.register(subscriptionRoutes, {
+    subscriptionService,
+    eventBus,
+    internalServiceToken: INTERNAL_SERVICE_TOKEN,
+  });
 
   // ── Stripe Checkout + Webhook routes ────────────────────────────────────────
   registerStripeRoutes(app, subscriptionService, rootLogger);

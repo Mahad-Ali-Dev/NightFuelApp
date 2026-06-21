@@ -313,4 +313,33 @@ export class MealService {
             data: { status, endTime }
         });
     }
+
+    // ── GDPR purge ──────────────────────────────────────────────────────────────
+    // PERMANENTLY erase EVERY meal-service row owned by `userId`. This service's
+    // only user-owned tables are meal_logs (MealLog.userId) and fasting_logs
+    // (FastingLog.userId); food_items and recipes are shared library data with NO
+    // per-user ownership column (verified against schema.prisma) and are left
+    // untouched. Mirrors the exercise-service / user-service purge pattern.
+    //
+    // IDEMPOTENT by construction: every step is a deleteMany, which returns
+    // `{ count: 0 }` (never throws) when no rows match — so purging a user with
+    // no data, or purging the same user twice, both succeed. Returns a per-table
+    // deletedCounts summary the caller surfaces in the 200 body.
+    //
+    // All deletes run inside `$transaction` so the purge is all-or-nothing: a
+    // mid-purge failure leaves no partially-erased user.
+    async purgeUser(userId: string): Promise<{
+        meal_logs: number;
+        fasting_logs: number;
+    }> {
+        const [mealLogs, fastingLogs] = await this.prisma.$transaction([
+            this.prisma.mealLog.deleteMany({ where: { userId } }),
+            this.prisma.fastingLog.deleteMany({ where: { userId } }),
+        ]);
+
+        return {
+            meal_logs: mealLogs.count,
+            fasting_logs: fastingLogs.count,
+        };
+    }
 }

@@ -12,6 +12,7 @@ import {
 } from './schemas';
 import { z } from 'zod';
 import { UserService } from './user.service';
+import { fanOutPurge, ServicePurgeResult } from './account-deletion';
 
 // ── Shared userId extractor ───────────────────────────────────────────────────
 // auth-service signs JWTs with { userId, role }. @fastify/jwt attaches the
@@ -48,9 +49,17 @@ function requireAdmin(request: FastifyRequest, reply: FastifyReply): boolean {
 
 export const userRoutes = async (
     fastify: FastifyInstance,
-    opts: { userService: UserService; internalServiceToken?: string }
+    opts: {
+        userService: UserService;
+        internalServiceToken?: string;
+        // Seam for tests: override the inter-service fan-out so the DELETE /me
+        // orchestrator can be exercised without real HTTP. Defaults to the real
+        // fanOutPurge (native fetch + X-Internal-Token to every owning service).
+        fanOut?: typeof fanOutPurge;
+    }
 ): Promise<void> => {
     const service = opts.userService;
+    const fanOut = opts.fanOut ?? fanOutPurge;
 
     // F34 #5: in-service guard for the server-to-server-only /internal/* routes.
     // Constant-time checks X-Internal-Token == INTERNAL_SERVICE_TOKEN; on
@@ -175,6 +184,81 @@ export const userRoutes = async (
                     return reply.code(404).send({ error: 'Profile not found' });
                 }
 
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── DELETE /v1/users/me ───────────────────────────────────────────────────
+    // GDPR "delete my account" ORCHESTRATOR. Erases the CALLING user everywhere.
+    //
+    // SECURITY (no IDOR): the userId comes ONLY from the verified JWT
+    // (extractUserId → request.user.userId). There is NO body/param userId, so a
+    // user can only ever delete THEIR OWN account — a forged body can't redirect
+    // the deletion at someone else.
+    //
+    // Steps:
+    //   1. Authoritatively purge user-service's OWN tables (transactional,
+    //      idempotent deleteMany over the ownership inventory).
+    //   2. Fan out DELETE /v1/<svc>/internal/user/:userId to EVERY owning service
+    //      (auth-service included — it holds the canonical credentials) with the
+    //      shared X-Internal-Token. Auth credentials are erased via auth's purge.
+    //   3. RESILIENT: attempt all services, collect per-service success/failure.
+    //      All-ok → 200; any failure → 207 multi-status with the per-service list
+    //      so the failures are visible + logged for retry (never silently half-
+    //      deleted). The own-data purge already succeeded authoritatively.
+    //   4. IDEMPOTENT: a re-delete of an already-deleted account returns success
+    //      (own purge counts come back 0; downstream purges deleteMany → 2xx).
+    //   5. Best-effort USER_DELETED event for async consumers.
+    fastify.withTypeProvider<ZodTypeProvider>().delete(
+        '/me',
+        {
+            onRequest: [(fastify as any).authenticate],
+        },
+        async (request, reply) => {
+            try {
+                // IDENTITY: JWT only. Never read a userId from body/params here.
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                // 1. Own data first — this is the authoritative deletion for the
+                //    PII this service owns. If it throws, we 500 (nothing erased
+                //    elsewhere yet, so the client can safely retry).
+                const ownData = await service.purgeOwnUserData(userId);
+
+                // 2 + 3. Fan out to every owning service (auth included), resilient.
+                const services: ServicePurgeResult[] = await fanOut(
+                    userId,
+                    opts.internalServiceToken ?? ''
+                );
+
+                // 5. Best-effort event (never throws).
+                await service.emitUserDeleted(userId);
+
+                const failures = services.filter((s) => !s.ok);
+                if (failures.length > 0) {
+                    request.log.error(
+                        { userId, failures },
+                        'GDPR deletion: some downstream services failed to purge (queued for retry)'
+                    );
+                    // 207-style summary: own data + auth/others that succeeded are
+                    // authoritative; the listed failures need retry.
+                    return reply.code(207).send({
+                        userId,
+                        status: 'partial',
+                        ownData,
+                        services,
+                    });
+                }
+
+                return reply.code(200).send({
+                    userId,
+                    status: 'deleted',
+                    ownData,
+                    services,
+                });
+            } catch (err: any) {
+                request.log.error(err);
                 return reply.code(500).send({ error: 'Internal server error' });
             }
         }

@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized } from '@nightfuel/config';
+import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized, makeInternalAuthGuard } from '@nightfuel/config';
 import { z } from 'zod';
 import { MealService } from './meal.service';
 import { mealRoutes } from './routes';
@@ -68,6 +68,33 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
 
 fastify.get('/health', async () => {
     return { status: 'ok', service: 'meal-service' };
+});
+
+// F34 #5 / GDPR purge: guard the server-to-server-only /v1/meals/internal/*
+// routes with the shared INTERNAL_SERVICE_TOKEN (X-Internal-Token header). An
+// unset/empty token fails CLOSED (every request 404s until the token is set).
+const internalAuth = makeInternalAuthGuard(config.INTERNAL_SERVICE_TOKEN);
+
+// ── DELETE /v1/meals/internal/user/:userId (GDPR purge) ─────────────────────────
+// Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+// internalAuth preHandler additionally requires X-Internal-Token). PERMANENTLY
+// erases EVERY meal-service row owned by :userId across both user-owned tables
+// (meal_logs, fasting_logs). food_items / recipes are shared library data with no
+// per-user ownership and are left untouched. IDEMPOTENT: purging a user with no
+// rows returns 200 with zero counts; purging twice is safe (deleteMany never
+// throws on zero rows). Returns a per-table deletedCounts summary.
+fastify.withTypeProvider<ZodTypeProvider>().delete('/v1/meals/internal/user/:userId', {
+    preHandler: internalAuth,
+    schema: { params: z.object({ userId: z.string().uuid() }) },
+}, async (request, reply) => {
+    const { userId } = request.params;
+    try {
+        const deletedCounts = await mealService.purgeUser(userId);
+        return reply.code(200).send({ userId, deletedCounts });
+    } catch (err: any) {
+        request.log.error({ err, userId }, 'GDPR purge failed');
+        return reply.code(500).send({ error: 'Internal server error' });
+    }
 });
 
 fastify.register(async (instance) => {

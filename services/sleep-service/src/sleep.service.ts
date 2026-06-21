@@ -278,4 +278,38 @@ export class SleepService {
             throw new Error('Failed to compute sleep analytics');
         }
     }
+
+    /**
+     * GDPR purge — PERMANENTLY delete EVERY sleep-service row owned by `userId`.
+     *
+     * Covers all three user-owned tables this service owns through its own Prisma
+     * client: sleep_sessions, sleep_preferences, health_samples (each keyed by a
+     * plain `user_id` column — there are no relation-keyed child tables here, so
+     * deleting by user_id is complete). The cross-service tables merged into the
+     * schema file (meal_logs, workouts, …) are owned by OTHER services and are
+     * deliberately NOT touched here — each service purges only its own rows.
+     *
+     * IDEMPOTENT: deleteMany never throws on zero matches, so purging a user with
+     * no rows returns all-zero counts and re-purging is a safe no-op. All three
+     * deletes run in a single $transaction so the purge is atomic.
+     *
+     * Returns a per-table deletedCounts summary.
+     */
+    async purgeUser(userId: string): Promise<{
+        sleep_sessions: number;
+        sleep_preferences: number;
+        health_samples: number;
+    }> {
+        const [sessions, preferences, samples] = await this.prisma.$transaction([
+            this.prisma.sleepSession.deleteMany({ where: { userId } }),
+            this.prisma.sleepPreference.deleteMany({ where: { userId } }),
+            this.prisma.healthSample.deleteMany({ where: { userId } }),
+        ]);
+
+        return {
+            sleep_sessions: sessions.count,
+            sleep_preferences: preferences.count,
+            health_samples: samples.count,
+        };
+    }
 }

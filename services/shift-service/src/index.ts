@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized } from '@nightfuel/config';
+import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized, makeInternalAuthGuard } from '@nightfuel/config';
 import { z } from 'zod';
 import { ShiftService } from './shift.service';
 import { shiftRoutes } from './routes';
@@ -14,6 +14,11 @@ const envSchema = z.object({
     SHIFT_PORT: z.string().default('3002'),
     JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     REDIS_URL: z.string().url(),
+    // F35a / GDPR purge: shared server-to-server token used to authorize this
+    // service's /v1/shifts/internal/* routes (sent as X-Internal-Token). Defaulted
+    // so boot never breaks; an unset/empty token fails CLOSED (the guard 404s every
+    // request until the token is set), mirroring user-service / plan-service.
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -57,6 +62,33 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
 
 fastify.get('/health', async () => {
     return { status: 'ok', service: 'shift-service' };
+});
+
+// F34 #5 / GDPR purge (F35a): guard the server-to-server-only
+// /v1/shifts/internal/* routes with the shared INTERNAL_SERVICE_TOKEN
+// (X-Internal-Token header). An unset/empty token fails CLOSED — every request
+// 404s until the token is set, indistinguishable from a route that doesn't exist.
+const internalAuth = makeInternalAuthGuard(config.INTERNAL_SERVICE_TOKEN);
+
+// ── DELETE /v1/shifts/internal/user/:userId (GDPR purge) ────────────────────────
+// Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+// internalAuth preHandler additionally requires X-Internal-Token). PERMANENTLY
+// erases EVERY shift-service row owned by :userId across all three user-owned
+// tables (shifts, rotation_patterns, scheduled_sessions). IDEMPOTENT: purging a
+// user with no rows returns 200 with zero counts; purging twice is safe
+// (deleteMany never throws on zero rows). Returns a per-table deletedCounts summary.
+fastify.withTypeProvider<ZodTypeProvider>().delete('/v1/shifts/internal/user/:userId', {
+    preHandler: internalAuth,
+    schema: { params: z.object({ userId: z.string().uuid() }) },
+}, async (request, reply) => {
+    const { userId } = request.params;
+    try {
+        const deletedCounts = await shiftService.purgeUser(userId);
+        return reply.code(200).send({ userId, deletedCounts });
+    } catch (err: any) {
+        request.log.error({ err, userId }, 'GDPR purge failed');
+        return reply.code(500).send({ error: 'Internal server error' });
+    }
 });
 
 // Register routes
