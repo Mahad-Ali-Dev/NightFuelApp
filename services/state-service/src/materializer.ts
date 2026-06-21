@@ -106,58 +106,145 @@ const finiteOrUndef = (n: unknown): number | undefined =>
 export class StateMaterializer {
     constructor(private prisma: PrismaClient) { }
 
+    /**
+     * Run a read → compute → write for ONE user's row atomically, with an
+     * idempotency guard, for the two handlers that do a real read-modify-write
+     * (adherence window + fatigue step). The other handlers are blind
+     * last-writer-wins overwrites and need neither.
+     *
+     * CONCURRENCY: handlers are wired via EventBus.subscribe (Redis Pub/Sub
+     * fan-out — see events.ts + packages/events/redis-event-bus.ts, which
+     * dispatches every message to all handlers with Promise.all), NOT a Redis
+     * consumer group. So two events for the SAME user (concurrent OR an
+     * immediate redelivery) can interleave a plain read → compute → upsert and
+     * lose an update / double-apply a step. We close that window by:
+     *   (1) DEDUP — taking a row lock, then skipping when the incoming
+     *       event.eventId equals the row's stored lastEventId (catches an
+     *       immediate redelivery of the last event).
+     *   (2) LOCK — doing the read + compute + upsert inside a single
+     *       $transaction, with a `SELECT … FOR UPDATE` on the user's row so a
+     *       concurrent handler for the same user blocks until we commit, then
+     *       reads our committed value. The lock only exists once the row does;
+     *       the FIRST event for a brand-new user has no row to lock, so two
+     *       truly-simultaneous first events race the insert — the loser hits the
+     *       unique(userId) constraint (P2002) and we retry ONCE, which now finds
+     *       (and locks) the row the winner committed.
+     *
+     * The single-event path is unchanged: lock is uncontended, dedup never
+     * matches (lastEventId differs), compute sees the same `existing` it would
+     * have read before, and the same upsert runs — identical results.
+     *
+     * `compute` receives the locked row (or null on first insert) and returns
+     * the create/update data; returning null means "skip the write".
+     *
+     * RESIDUAL RISK: correctness here relies on the DB enforcing row locks
+     * (Postgres FOR UPDATE) — true ordering across the whole stream would still
+     * require a per-user consumer group; this localized change makes each
+     * same-user update atomic and de-duplicates immediate redelivery, but does
+     * not impose a global event order.
+     */
+    private async runLockedUpsert(
+        userId: string,
+        eventId: string,
+        select: Prisma.UserStateSelect,
+        compute: (
+            existing: Record<string, any> | null,
+        ) => { create: Prisma.UserStateCreateInput; update: Prisma.UserStateUpdateInput } | null,
+    ): Promise<void> {
+        // Always read lastEventId too, so the dedup guard can compare it.
+        const lockSelect: Prisma.UserStateSelect = { ...select, lastEventId: true };
+
+        const attempt = async (): Promise<void> => {
+            await this.prisma.$transaction(async (tx: any) => {
+                // Lock the user's row FOR UPDATE if it exists. Parameterised raw
+                // query (tagged template) — userId is bound, never interpolated.
+                const locked = (await tx.$queryRaw(
+                    Prisma.sql`SELECT 1 FROM "user_states" WHERE "user_id" = ${userId} FOR UPDATE`,
+                )) as unknown[];
+
+                // Read the current row *inside* the lock so we observe the
+                // committed state of any handler that just released the lock.
+                const existing = locked.length
+                    ? await tx.userState.findUnique({ where: { userId }, select: lockSelect })
+                    : null;
+
+                // DEDUP: an immediate redelivery of the same event is a no-op.
+                if (existing && existing.lastEventId === eventId) {
+                    logger.info({ userId, eventId }, 'Duplicate event skipped (matches lastEventId)');
+                    return;
+                }
+
+                const data = compute(existing);
+                if (!data) return; // handler chose to skip the write
+
+                await tx.userState.upsert({
+                    where: { userId },
+                    create: data.create,
+                    update: data.update,
+                });
+            });
+        };
+
+        try {
+            await attempt();
+        } catch (err: any) {
+            // P2002 = two first-events for a brand-new user raced the insert (no
+            // row existed to lock). Retry once: the row now exists, so this
+            // attempt locks it and folds in our update on top of the winner's.
+            if (err?.code === 'P2002') {
+                await attempt();
+                return;
+            }
+            throw err;
+        }
+    }
+
     async handleMealLogged(event: NightFuelEvent<MealLoggedPayload>) {
         const { userId, payload } = event;
         logger.info({ userId, mealLogId: payload.mealLogId }, 'Processing meal log event');
 
-        // Read-modify-write of the rolling adherence window.
-        //
-        // RACE NOTE: handlers are wired via EventBus.subscribe (Redis Pub/Sub
-        // fan-out — see events.ts), NOT a consumer group, so concurrent
-        // meal-logged events for the SAME user can interleave this read →
-        // compute → upsert and lose an update (last writer wins). Within the
-        // code-only scope we minimise the window (read only adherenceSamples,
-        // do all work synchronously, single upsert) but cannot make it atomic.
-        // FOLLOW-UP: move to a consumer group with per-user ordering, or do the
-        // read-modify-write inside a DB transaction / SELECT … FOR UPDATE.
-        const existing = await this.prisma.userState.findUnique({
-            where: { userId },
-            select: { adherenceSamples: true },
-        });
-
         const now = Date.now();
-        // Only build a sample when the producer sent an explicit boolean verdict.
-        // A missing/undefined isAdherent must NOT be coerced to a false (0)
-        // sample — doing so would drag last7DaysAdherence toward 0 and trip the
-        // decision-engine's < 0.7 volume cut for users who simply lack a verdict.
-        const sample: AdherenceSample | null =
-            typeof payload.isAdherent === 'boolean'
-                ? {
-                      at: payload.loggedAt ?? new Date(now).toISOString(),
-                      adherent: payload.isAdherent,
-                  }
-                : null;
-        const { samples, mean } = rollWindow(
-            parseSamples(existing?.adherenceSamples),
-            sample,
-            now
-        );
+        // Read-modify-write of the rolling adherence window, made race-safe and
+        // idempotent by runLockedUpsert (row lock + lastEventId dedup).
+        await this.runLockedUpsert(
+            userId,
+            event.eventId,
+            { adherenceSamples: true },
+            (existing) => {
+                // Only build a sample when the producer sent an explicit boolean
+                // verdict. A missing/undefined isAdherent must NOT be coerced to
+                // a false (0) sample — doing so would drag last7DaysAdherence
+                // toward 0 and trip the decision-engine's < 0.7 volume cut for
+                // users who simply lack a verdict.
+                const sample: AdherenceSample | null =
+                    typeof payload.isAdherent === 'boolean'
+                        ? {
+                              at: payload.loggedAt ?? new Date(now).toISOString(),
+                              adherent: payload.isAdherent,
+                          }
+                        : null;
+                const { samples, mean } = rollWindow(
+                    parseSamples(existing?.adherenceSamples),
+                    sample,
+                    now,
+                );
 
-        await this.prisma.userState.upsert({
-            where: { userId },
-            create: {
-                userId,
-                last7DaysAdherence: mean,
-                adherenceSamples: samples as unknown as Prisma.InputJsonValue,
-                lastEventId: event.eventId,
+                return {
+                    create: {
+                        userId,
+                        last7DaysAdherence: mean,
+                        adherenceSamples: samples as unknown as Prisma.InputJsonValue,
+                        lastEventId: event.eventId,
+                    },
+                    update: {
+                        last7DaysAdherence: mean,
+                        adherenceSamples: samples as unknown as Prisma.InputJsonValue,
+                        lastEventId: event.eventId,
+                        lastProcessedAt: new Date(now),
+                    },
+                };
             },
-            update: {
-                last7DaysAdherence: mean,
-                adherenceSamples: samples as unknown as Prisma.InputJsonValue,
-                lastEventId: event.eventId,
-                lastProcessedAt: new Date(now),
-            },
-        });
+        );
     }
 
     async handleSleepLogged(event: NightFuelEvent<SleepLoggedPayload>) {
@@ -174,32 +261,41 @@ export class StateMaterializer {
 
         // Fatigue is a bounded 0..10 score. The previous unbounded
         // {increment:1}/{decrement:1} let it drift arbitrarily far outside that
-        // range over many events. Per-user events are processed sequentially by
-        // the stream consumer group (see handleMealLogged), so a read → clamp →
-        // write of the absolute next value is race-safe and keeps it in 0..10.
-        const existing = await this.prisma.userState.findUnique({
-            where: { userId },
-            select: { fatigueLevel: true },
-        });
-        const currentFatigue = clampScore(existing?.fatigueLevel) ?? 3.0;
-        const nextFatigue = clampScore(currentFatigue + (moreFatigued ? 1 : -1)) ?? currentFatigue;
+        // range over many events. We read → step ±1 → clamp the absolute next
+        // value to keep it in 0..10.
+        //
+        // Per-user events are NOT processed sequentially: handlers fire off Redis
+        // Pub/Sub (EventBus.subscribe), not a consumer group, so concurrent /
+        // redelivered sleep events for the same user could otherwise double-step
+        // or lose this read-modify-write. runLockedUpsert makes the read+write
+        // atomic (row lock) and idempotent (lastEventId dedup), so the step is
+        // applied exactly once against the committed current value.
+        await this.runLockedUpsert(
+            userId,
+            event.eventId,
+            { fatigueLevel: true },
+            (existing) => {
+                const currentFatigue = clampScore(existing?.fatigueLevel) ?? 3.0;
+                const nextFatigue =
+                    clampScore(currentFatigue + (moreFatigued ? 1 : -1)) ?? currentFatigue;
 
-        await this.prisma.userState.upsert({
-            where: { userId },
-            create: {
-                userId,
-                avgSleepQuality: quality ?? 7.0,
-                fatigueLevel: moreFatigued ? 7.0 : 3.0,
-                lastEventId: event.eventId
+                return {
+                    create: {
+                        userId,
+                        avgSleepQuality: quality ?? 7.0,
+                        fatigueLevel: moreFatigued ? 7.0 : 3.0,
+                        lastEventId: event.eventId,
+                    },
+                    update: {
+                        // undefined → Prisma skips the field, leaving the column intact.
+                        avgSleepQuality: quality,
+                        fatigueLevel: nextFatigue,
+                        lastEventId: event.eventId,
+                        lastProcessedAt: new Date(),
+                    },
+                };
             },
-            update: {
-                // undefined → Prisma skips the field, leaving the column intact.
-                avgSleepQuality: quality,
-                fatigueLevel: nextFatigue,
-                lastEventId: event.eventId,
-                lastProcessedAt: new Date()
-            }
-        });
+        );
     }
 
     async handleMetricsLogged(event: NightFuelEvent<BodyMetricsLoggedPayload>) {

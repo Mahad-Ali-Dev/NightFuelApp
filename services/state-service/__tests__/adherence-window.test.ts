@@ -45,15 +45,24 @@ interface StoredSample {
  */
 function makeMaterializer(existingSamples: StoredSample[] | null = null) {
     const calls: UpsertCall[] = [];
-    const fakePrisma: any = {
-        userState: {
-            findUnique: async () =>
-                existingSamples === null ? null : { adherenceSamples: existingSamples },
-            upsert: async (args: UpsertCall) => {
-                calls.push(args);
-                return {};
-            },
+    const row = existingSamples === null ? null : { adherenceSamples: existingSamples };
+    const userState = {
+        findUnique: async () => row,
+        upsert: async (args: UpsertCall) => {
+            calls.push(args);
+            return {};
         },
+    };
+    // handleMealLogged now runs through StateMaterializer.runLockedUpsert, which
+    // opens a $transaction, takes a row lock via $queryRaw (FOR UPDATE), then
+    // reads + upserts on the transaction client. The fake $transaction runs the
+    // callback with a tx mirroring the client; $queryRaw reports the row as
+    // present (non-empty) iff a row exists, matching the production lock path.
+    const fakePrisma: any = {
+        userState,
+        $queryRaw: async () => (row ? [1] : []),
+        $transaction: async (fn: (tx: any) => Promise<any>) =>
+            fn({ userState, $queryRaw: async () => (row ? [1] : []) }),
     };
     return { materializer: new StateMaterializer(fakePrisma), calls };
 }

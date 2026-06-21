@@ -154,14 +154,60 @@ export class CommunityService {
         return this._withAuthors(posts);
     }
 
+    /**
+     * Like `postId` as `likerId`. Idempotent and de-duplicated per user: the
+     * Post.likes counter is incremented only on a user's FIRST like, enforced by
+     * the @@unique([userId, postId]) constraint on PostLike. A second like by the
+     * same user is a no-op (the unique violation is swallowed, the counter is not
+     * touched), so a single user can no longer inflate a post's like count and
+     * game the Social Butterfly badge.
+     *
+     * `likerId` is required for de-duplication; without it we cannot attribute a
+     * like to a user, so we fall back to the unconditional increment ONLY when no
+     * likerId is supplied (legacy / unauthenticated callers). The route always
+     * passes the authenticated caller's id.
+     */
     async likePost(postId: string, likerId?: string) {
-        const post = await this.prisma.post.update({
-            where: { id: postId },
-            data: { likes: { increment: 1 } }
-        });
+        let counted = false;
 
-        // Check social butterfly badge for post author
-        if (post.authorId) {
+        if (likerId) {
+            // Check-then-act inside a transaction; the unique constraint is the
+            // real guard against a concurrent double-like (catch P2002 below).
+            try {
+                counted = await this.prisma.$transaction(async (tx: any) => {
+                    const existing = await tx.postLike.findUnique({
+                        where: { userId_postId: { userId: likerId, postId } },
+                    });
+                    if (existing) return false; // already liked — no-op
+                    await tx.postLike.create({ data: { userId: likerId, postId } });
+                    await tx.post.update({
+                        where: { id: postId },
+                        data: { likes: { increment: 1 } },
+                    });
+                    return true;
+                });
+            } catch (err: any) {
+                // P2002 = the user already liked (lost the race). Idempotent no-op.
+                if (err?.code !== 'P2002') throw err;
+                counted = false;
+            }
+        } else {
+            // Legacy path: no liker identity to de-dupe on, keep prior behaviour.
+            await this.prisma.post.update({
+                where: { id: postId },
+                data: { likes: { increment: 1 } },
+            });
+            counted = true;
+        }
+
+        const post = await this.prisma.post.findUnique({ where: { id: postId } });
+        if (!post) return post;
+
+        // Check social butterfly badge for the post author — only worth
+        // recomputing when a like was actually newly counted. The aggregate sums
+        // Post.likes, each of which is now a count of DISTINCT per-user likes, so
+        // the badge can no longer be gamed by one user re-liking.
+        if (counted && post.authorId) {
             const totalLikes = await this.prisma.post.aggregate({
                 where: { authorId: post.authorId },
                 _sum: { likes: true },
@@ -173,6 +219,33 @@ export class CommunityService {
         }
 
         return post;
+    }
+
+    /**
+     * Unlike `postId` as `likerId`. Idempotent: removes the PostLike row and
+     * decrements Post.likes only when a like by this user actually existed.
+     * Unliking a post the user never liked is a no-op (counter never goes
+     * negative). Mirrors the idempotency contract of likePost.
+     */
+    async unlikePost(postId: string, likerId: string) {
+        try {
+            await this.prisma.$transaction(async (tx: any) => {
+                const deleted = await tx.postLike.deleteMany({
+                    where: { userId: likerId, postId },
+                });
+                if (deleted.count > 0) {
+                    await tx.post.update({
+                        where: { id: postId },
+                        data: { likes: { decrement: 1 } },
+                    });
+                }
+            });
+        } catch (err: any) {
+            // Post may have been deleted concurrently — treat as a no-op.
+            if (err?.code !== 'P2025') throw err;
+        }
+
+        return this.prisma.post.findUnique({ where: { id: postId } });
     }
 
     async addComment(postId: string, authorId: string, text: string) {

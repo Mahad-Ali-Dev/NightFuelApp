@@ -805,12 +805,19 @@ export class UserService {
     async logPeriod(userId: string, body: LogPeriodBody) {
         await this.ensureProfileExists(userId);
 
-        await (this.prisma as any).periodLog.create({
-            data: {
+        // IDEMPOTENCY (data-integrity LOW #9): a double-submit of the same period
+        // start must not duplicate a row (duplicate starts skew the learned
+        // averages). createMany({ skipDuplicates: true }) no-ops against the
+        // @@unique([userId, startDate]) constraint instead of throwing, so a
+        // re-submit silently keeps the single existing row and we still recompute
+        // + return the current stats below.
+        await (this.prisma as any).periodLog.createMany({
+            data: [{
                 userId,
                 startDate: new Date(body.startDate),
                 endDate: body.endDate ? new Date(body.endDate) : null,
-            },
+            }],
+            skipDuplicates: true,
         });
 
         const logs = await this.loadPeriodLogs(userId);

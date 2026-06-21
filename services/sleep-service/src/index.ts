@@ -30,7 +30,16 @@ const sleepSvc = new SleepService(prisma, eventBus);
 // materializes sleep samples THROUGH sleepSvc.createSession — so synced sleep
 // reuses the exact same sleep.session-logged → state-service twin path as a
 // manual log (no new event, no materializer change).
-const healthSyncSvc = new HealthSyncService(prisma as any, sleepSvc);
+//
+// The third arg is the per-night idempotency reader: on a replay/re-sync, a night
+// that already has a SleepSession is skipped (no re-insert, no twin re-fire).
+const sleepSessionReader = {
+    countNightSessions: (userId: string, nightStart: Date, nightEnd: Date) =>
+        prisma.sleepSession.count({
+            where: { userId, startTime: { gte: nightStart, lt: nightEnd } },
+        }),
+};
+const healthSyncSvc = new HealthSyncService(prisma as any, sleepSvc, sleepSessionReader);
 
 const fastify = Fastify({ logger: false });
 registerGlobalProcessHandlers(logger);

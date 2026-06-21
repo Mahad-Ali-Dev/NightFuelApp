@@ -55,8 +55,19 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
         schema: { params: z.object({ id: z.string().uuid() }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
+        const likerId = (request as any).user?.id || (request as any).user?.userId;
         const { id } = request.params as any;
-        return reply.send(await communityService.likePost(id));
+        // likerId de-dupes the like (one per user) so the count can't be inflated.
+        return reply.send(await communityService.likePost(id, likerId));
+    });
+
+    fastify.delete('/v1/community/post/:id/like', {
+        schema: { params: z.object({ id: z.string().uuid() }) },
+        preHandler: [(fastify as any).authenticate]
+    }, async (request, reply) => {
+        const likerId = (request as any).user?.id || (request as any).user?.userId;
+        const { id } = request.params as any;
+        return reply.send(await communityService.unlikePost(id, likerId));
     });
 
     fastify.post('/v1/community/post/:id/comment', {

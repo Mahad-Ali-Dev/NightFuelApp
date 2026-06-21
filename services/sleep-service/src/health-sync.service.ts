@@ -331,17 +331,50 @@ export interface SleepSessionCreator {
     createSession(input: CreateSleepSessionInput): Promise<{ id: string }>;
 }
 
+/**
+ * Read-side seam used to make per-night sleep materialization IDEMPOTENT.
+ * `countNightSessions` returns how many SleepSession rows already exist for the
+ * given user whose startTime falls within [nightStart, nightEnd). When >0 the
+ * night was already materialized (an earlier sync), so we skip re-creating it
+ * and, crucially, skip RE-FIRING sleep.session-logged into the twin.
+ */
+export interface SleepSessionReader {
+    countNightSessions(userId: string, nightStart: Date, nightEnd: Date): Promise<number>;
+}
+
 /** The slice of the Prisma client this ingestion depends on. */
 export interface HealthSampleStore {
     healthSample: {
-        createMany(args: { data: unknown[] }): Promise<{ count: number }>;
+        // skipDuplicates makes a replay/re-sync of overlapping rows a no-op
+        // against the @@unique([userId, kind, startTime, source]) constraint.
+        createMany(args: { data: unknown[]; skipDuplicates?: boolean }): Promise<{ count: number }>;
     };
+}
+
+/**
+ * Bucket a sleep startTime into its calendar "night" window [start-of-day,
+ * next-day) in UTC. A re-synced night reports the same startTime, so it lands in
+ * the same bucket and the existence check below dedupes it. (UTC bucketing is
+ * sufficient here: the materialized SleepSession.startTime is the same instant on
+ * every sync, so the [day, day+1) window always re-captures it.)
+ */
+export function nightWindow(startTimeIso: string): { start: Date; end: Date } | null {
+    const t = Date.parse(startTimeIso);
+    if (!Number.isFinite(t)) return null;
+    const d = new Date(t);
+    const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    return { start, end };
 }
 
 export class HealthSyncService {
     constructor(
         private readonly store: HealthSampleStore,
         private readonly sleep: SleepSessionCreator,
+        // Optional read-side seam for per-night idempotency. When omitted (legacy
+        // wiring), the existence check is skipped — but production wiring always
+        // passes it so a re-sync never re-fires the twin event.
+        private readonly sessions?: SleepSessionReader,
     ) {}
 
     /**
@@ -363,7 +396,7 @@ export class HealthSyncService {
             disturbances: clamp(s.disturbances, 0, MAX_DISTURBANCES) ?? null,
         }));
         const { count } = rows.length
-            ? await this.store.healthSample.createMany({ data: rows })
+            ? await this.store.healthSample.createMany({ data: rows, skipDuplicates: true })
             : { count: 0 };
 
         // 2. Materialize sleep samples → SleepSession (→ existing twin path).
@@ -379,10 +412,24 @@ export class HealthSyncService {
             .sort((a, b) => Date.parse(a.startTime) - Date.parse(b.startTime));
 
         let autonomicRefined = false;
+        let sleepSessionsCreated = 0;
         const hasSignals = signals.avgHrvMs !== undefined || signals.avgRestingHrBpm !== undefined;
         for (let i = 0; i < sleepInputs.length; i++) {
             const isLatest = i === sleepInputs.length - 1;
             let input = sleepInputs[i];
+
+            // IDEMPOTENCY: if this user already has a SleepSession for this night
+            // (an earlier sync materialized it), skip BOTH the re-insert and the
+            // sleep.session-logged re-fire into the twin. A replay/re-sync of the
+            // same batch must not double-count the night's fatigue contribution.
+            if (this.sessions) {
+                const win = nightWindow(input.startTime);
+                if (win) {
+                    const existing = await this.sessions.countNightSessions(userId, win.start, win.end);
+                    if (existing > 0) continue;
+                }
+            }
+
             if (isLatest && hasSignals) {
                 const refined = refineSleepWithAutonomicSignals(input, signals);
                 if (refined !== input) {
@@ -392,11 +439,12 @@ export class HealthSyncService {
             }
             // createSession publishes sleep.session-logged → state-service twin.
             await this.sleep.createSession(input);
+            sleepSessionsCreated++;
         }
 
         return {
             persisted: count,
-            sleepSessionsCreated: sleepInputs.length,
+            sleepSessionsCreated,
             autonomicRefined,
         };
     }

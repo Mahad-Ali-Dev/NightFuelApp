@@ -149,6 +149,11 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
             if (err instanceof RequestPendingError) {
                 return reply.status(409).send({ error: 'request_pending' });
             }
+            // Write-IDOR gate: a non-participant sender is rejected 403 BEFORE any
+            // persist/delivery — same membership error the read paths already map.
+            if (err instanceof ConversationAccessError) {
+                return reply.status(403).send({ error: 'forbidden' });
+            }
             throw err;
         }
 
@@ -514,6 +519,13 @@ export default async function (fastify: FastifyInstance, opts: { chatService: Ch
                     } catch (e) {
                         if (e instanceof RequestPendingError) {
                             socket.send(JSON.stringify({ type: 'error', error: 'request_pending' }));
+                            return;
+                        }
+                        // Write-IDOR gate: a non-participant sender is vetoed with a
+                        // `forbidden` error frame and NOT persisted/delivered. Socket
+                        // stays open (per-frame veto, consistent with request_pending).
+                        if (e instanceof ConversationAccessError) {
+                            socket.send(JSON.stringify({ type: 'error', error: 'forbidden' }));
                             return;
                         }
                         throw e;

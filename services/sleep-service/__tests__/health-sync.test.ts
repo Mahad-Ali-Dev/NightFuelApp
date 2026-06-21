@@ -30,6 +30,7 @@ import {
     type HealthSampleInput,
     type HealthSampleStore,
     type SleepSessionCreator,
+    type SleepSessionReader,
 } from '../src/health-sync.service';
 
 const USER = 'user-1';
@@ -185,13 +186,23 @@ describe('refineSleepWithAutonomicSignals', () => {
 
 // ── (B) HealthSyncService.ingest happy-path over fakes ───────────────────────
 function makeFakes() {
-    const createManyCalls: unknown[][] = [];
+    const createManyCalls: { data: unknown[]; skipDuplicates?: boolean }[] = [];
     const createdSessions: any[] = [];
+    // Stateful raw archive keyed by the @@unique tuple so a re-ingest of the SAME
+    // rows is deduped exactly like createMany({ skipDuplicates: true }) in prod.
+    const persistedKeys = new Set<string>();
     const store: HealthSampleStore = {
         healthSample: {
-            createMany: async ({ data }) => {
-                createManyCalls.push(data as unknown[]);
-                return { count: (data as unknown[]).length };
+            createMany: async ({ data, skipDuplicates }) => {
+                createManyCalls.push({ data: data as unknown[], skipDuplicates });
+                let inserted = 0;
+                for (const row of data as any[]) {
+                    const key = `${row.userId}|${row.kind}|${new Date(row.startTime).toISOString()}|${row.source}`;
+                    if (skipDuplicates && persistedKeys.has(key)) continue;
+                    persistedKeys.add(key);
+                    inserted++;
+                }
+                return { count: inserted };
             },
         },
     };
@@ -201,7 +212,17 @@ function makeFakes() {
             return { id: `s-${createdSessions.length}` };
         },
     };
-    return { store, sleep, createManyCalls, createdSessions };
+    // Idempotency reader backed by the createdSessions list: counts sessions whose
+    // startTime falls in the night window, mirroring prisma.sleepSession.count.
+    const sessions: SleepSessionReader = {
+        countNightSessions: async (userId, nightStart, nightEnd) =>
+            createdSessions.filter((s) => {
+                if (s.userId !== userId) return false;
+                const t = Date.parse(s.startTime);
+                return t >= nightStart.getTime() && t < nightEnd.getTime();
+            }).length,
+    };
+    return { store, sleep, sessions, createManyCalls, createdSessions };
 }
 
 describe('HealthSyncService.ingest', () => {
@@ -214,7 +235,9 @@ describe('HealthSyncService.ingest', () => {
         ];
         const res = await svc.ingest(USER, samples);
         expect(createManyCalls).toHaveLength(1);
-        expect(createManyCalls[0]).toHaveLength(2);
+        expect(createManyCalls[0].data).toHaveLength(2);
+        // Idempotency: the raw-archive insert must be dedup-safe.
+        expect(createManyCalls[0].skipDuplicates).toBe(true);
         expect(res.persisted).toBe(2);
         expect(res.sleepSessionsCreated).toBe(0);
         expect(res.autonomicRefined).toBe(false);
@@ -293,5 +316,63 @@ describe('HealthSyncService.ingest', () => {
         ]);
         expect(createdSessions).toHaveLength(0);
         expect(res.persisted).toBe(1);
+    });
+});
+
+// ── (C) IDEMPOTENCY: replay / re-sync of the same batch (data-integrity HIGH #3)
+describe('HealthSyncService.ingest — idempotency (replay / re-sync)', () => {
+    it('RE-INGESTING the same batch inserts NO new health_samples and fires NO new twin event', async () => {
+        const { store, sleep, sessions, createdSessions } = makeFakes();
+        const svc = new HealthSyncService(store, sleep, sessions);
+        const samples: HealthSampleInput[] = [
+            { kind: 'sleep', startTime: '2026-06-20T23:00:00.000Z', endTime: '2026-06-21T07:00:00.000Z', quality: 7 },
+            { kind: 'restingHeartRate', startTime: '2026-06-21T07:00:00.000Z', value: 58 },
+        ];
+
+        // First sync: persists both rows + materializes the one night.
+        const first = await svc.ingest(USER, samples);
+        expect(first.persisted).toBe(2);
+        expect(first.sleepSessionsCreated).toBe(1);
+        expect(createdSessions).toHaveLength(1);
+
+        // Replay the IDENTICAL batch.
+        const replay = await svc.ingest(USER, samples);
+        // No new raw rows (createMany skipDuplicates no-ops every row).
+        expect(replay.persisted).toBe(0);
+        // No new SleepSession → no new sleep.session-logged into the twin.
+        expect(replay.sleepSessionsCreated).toBe(0);
+        expect(createdSessions).toHaveLength(1);
+    });
+
+    it('a NEW night in a later sync still materializes (only the already-seen night is skipped)', async () => {
+        const { store, sleep, sessions, createdSessions } = makeFakes();
+        const svc = new HealthSyncService(store, sleep, sessions);
+
+        await svc.ingest(USER, [
+            { kind: 'sleep', startTime: '2026-06-20T23:00:00.000Z', endTime: '2026-06-21T07:00:00.000Z', quality: 7 },
+        ]);
+        expect(createdSessions).toHaveLength(1);
+
+        // Re-sends night #1 (already materialized → skipped) plus a fresh night #2.
+        const res = await svc.ingest(USER, [
+            { kind: 'sleep', startTime: '2026-06-20T23:00:00.000Z', endTime: '2026-06-21T07:00:00.000Z', quality: 7 },
+            { kind: 'sleep', startTime: '2026-06-21T23:00:00.000Z', endTime: '2026-06-22T07:00:00.000Z', quality: 8 },
+        ]);
+        expect(res.sleepSessionsCreated).toBe(1);
+        expect(createdSessions).toHaveLength(2);
+        expect(createdSessions[1].startTime).toBe('2026-06-21T23:00:00.000Z');
+    });
+
+    it('without the reader seam (legacy wiring) the per-night skip is a no-op (back-compat)', async () => {
+        // The 2-arg constructor keeps the prior behavior: every sleep sample is
+        // materialized. Production always passes the reader (see index.ts).
+        const { store, sleep, createdSessions } = makeFakes();
+        const svc = new HealthSyncService(store, sleep);
+        const sample: HealthSampleInput[] = [
+            { kind: 'sleep', startTime: '2026-06-20T23:00:00.000Z', endTime: '2026-06-21T07:00:00.000Z', quality: 7 },
+        ];
+        await svc.ingest(USER, sample);
+        await svc.ingest(USER, sample);
+        expect(createdSessions).toHaveLength(2);
     });
 });

@@ -54,14 +54,24 @@ interface UpsertCall {
  */
 function makeMaterializer(existingRow: Record<string, unknown> | null = null) {
     const calls: UpsertCall[] = [];
-    const fakePrisma: any = {
-        userState: {
-            findUnique: async () => existingRow,
-            upsert: async (args: UpsertCall) => {
-                calls.push(args);
-                return {};
-            },
+    const userState = {
+        findUnique: async () => existingRow,
+        upsert: async (args: UpsertCall) => {
+            calls.push(args);
+            return {};
         },
+    };
+    // The fatigue handler now runs through StateMaterializer.runLockedUpsert,
+    // which opens a $transaction, takes a row lock via $queryRaw (FOR UPDATE),
+    // then reads + upserts on the transaction client. The fake $transaction runs
+    // the callback synchronously with a tx that mirrors the real client; the fake
+    // $queryRaw reports the row as present (non-empty) iff existingRow is set, so
+    // the lock-then-read path matches production.
+    const fakePrisma: any = {
+        userState,
+        $queryRaw: async () => (existingRow ? [1] : []),
+        $transaction: async (fn: (tx: any) => Promise<any>) =>
+            fn({ userState, $queryRaw: async () => (existingRow ? [1] : []) }),
     };
     return { materializer: new StateMaterializer(fakePrisma), calls };
 }

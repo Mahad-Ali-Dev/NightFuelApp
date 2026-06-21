@@ -20,6 +20,31 @@ import type { LogPeriodBody, CycleStatsResponse } from '@/api/cycle';
  * date is bounded to >= the chosen start (matching the server's refine).
  */
 
+/**
+ * Parse a 'YYYY-MM-DD' string into a Date at LOCAL midnight (#12).
+ *
+ * The native date picker and DateTimeField's `seedDate` both interpret a
+ * 'YYYY-MM-DD' value at the device's LOCAL midnight. Any bound we hand the
+ * picker (`minimumDate`) must therefore also be local midnight, or it will be
+ * compared against a differently-zoned instant. Building the bound with
+ * `new Date('YYYY-MM-DDT00:00:00Z')` instead anchors it to UTC midnight, which
+ * for a user BEHIND UTC (negative offset) resolves to the previous LOCAL day —
+ * an off-by-one that wrongly allows an end date one day before the start.
+ *
+ * Using the `new Date(year, monthIndex, day)` constructor yields local midnight
+ * regardless of the device timezone. Returns `undefined` for a malformed value
+ * so the caller simply omits the bound (matching the empty-string behaviour).
+ */
+export function localMidnightFromDateString(value: string): Date | undefined {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!m) return undefined;
+    const year = Number(m[1]);
+    const monthIndex = Number(m[2]) - 1; // JS months are 0-based
+    const day = Number(m[3]);
+    const d = new Date(year, monthIndex, day); // local midnight
+    return Number.isNaN(d.getTime()) ? undefined : d;
+}
+
 export interface LogPeriodCardProps {
     /** Called after a successful log (e.g. to surface a toast at the screen level). */
     onLogged?: (stats: CycleStatsResponse) => void;
@@ -57,6 +82,15 @@ export function LogPeriodCard({ onLogged }: LogPeriodCardProps) {
 
     const today = new Date();
 
+    // #12: bound the end-date picker to >= the chosen start. The picker (and
+    // DateTimeField's seedDate) parse 'YYYY-MM-DD' at LOCAL midnight, so this
+    // bound must be built at LOCAL midnight too. The previous
+    // `new Date(`${startDate}T00:00:00Z`)` parsed UTC midnight, which for users
+    // BEHIND UTC (negative offset) lands on the PREVIOUS local day — an
+    // off-by-one that let them pick an end date one day before the start. Parse
+    // the Y-M-D parts explicitly into a local Date to stay consistent.
+    const minEndDate = startDate ? localMidnightFromDateString(startDate) : undefined;
+
     return (
         <GlassCard radius={borderRadius['2xl']} style={styles.card}>
             <View style={styles.inner}>
@@ -90,7 +124,7 @@ export function LogPeriodCard({ onLogged }: LogPeriodCardProps) {
                         value={endDate}
                         onChange={setEndDate}
                         maximumDate={today}
-                        minimumDate={startDate ? new Date(`${startDate}T00:00:00Z`) : undefined}
+                        minimumDate={minEndDate}
                         accessibilityLabel="Period end date, optional"
                     />
                 </View>

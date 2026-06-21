@@ -24,6 +24,17 @@ model Post {
   @@map("posts")
 }
 
+model PostLike {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, postId])
+  @@index([postId])
+  @@map("post_likes")
+}
+
 model Comment {
   id        String   @id @default(uuid())
   postId    String   @map("post_id")

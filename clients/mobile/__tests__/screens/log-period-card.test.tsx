@@ -41,12 +41,16 @@ jest.mock('expo-linear-gradient', () => {
 // DateTimeField: passthrough that renders the current value (exercised fully by
 // its own suite). The card defaults the start to nowDateString, so we don't need
 // to drive the picker here.
+// Capture each field's props so the #12 test can assert the end-date field's
+// `minimumDate` is a LOCAL-midnight Date (not UTC midnight). Keyed by a11y label.
+const capturedFieldProps: Record<string, any> = {};
 jest.mock('@/components/ui/DateTimeField', () => {
   const { Text: RNText } = require('react-native');
   return {
-    DateTimeField: ({ value, accessibilityLabel }: any) => (
-      <RNText accessibilityLabel={accessibilityLabel}>{value || ''}</RNText>
-    ),
+    DateTimeField: (props: any) => {
+      capturedFieldProps[props.accessibilityLabel] = props;
+      return <RNText accessibilityLabel={props.accessibilityLabel}>{props.value || ''}</RNText>;
+    },
     nowDateString: () => '2026-06-20',
     nowTimeString: () => '12:00',
   };
@@ -88,7 +92,7 @@ import {
   borderRadius,
   shadows,
 } from '@/theme';
-import { LogPeriodCard } from '../../src/components/cycle/LogPeriodCard';
+import { LogPeriodCard, localMidnightFromDateString } from '../../src/components/cycle/LogPeriodCard';
 
 function renderCard(node: React.ReactElement) {
   return render(
@@ -103,6 +107,7 @@ function renderCard(node: React.ReactElement) {
 beforeEach(() => {
   mockLogPeriod.mockClear();
   mockInvalidate.mockClear();
+  for (const k of Object.keys(capturedFieldProps)) delete capturedFieldProps[k];
 });
 
 describe('LogPeriodCard (F28) — log + invalidate', () => {
@@ -126,5 +131,50 @@ describe('LogPeriodCard (F28) — log + invalidate', () => {
     const invalidatedKeys = mockInvalidate.mock.calls.map((c) => c[0]?.queryKey?.[0]);
     expect(invalidatedKeys).toEqual(expect.arrayContaining(['cycle-forecast', 'cycle-history', 'my-status']));
     expect(onLogged).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('LogPeriodCard (#12) — end-date minimumDate is LOCAL-midnight consistent', () => {
+  test('localMidnightFromDateString parses to LOCAL midnight (not UTC midnight)', () => {
+    const d = localMidnightFromDateString('2026-06-20');
+    expect(d).toBeInstanceOf(Date);
+    // Local calendar components must match the input exactly, regardless of the
+    // device timezone. The OLD `new Date('2026-06-20T00:00:00Z')` would, for a
+    // behind-UTC device, report getDate() === 19 (the previous local day) — the
+    // off-by-one this fix removes.
+    expect(d!.getFullYear()).toBe(2026);
+    expect(d!.getMonth()).toBe(5); // June (0-based)
+    expect(d!.getDate()).toBe(20);
+    // It is local midnight: zero local time-of-day components.
+    expect(d!.getHours()).toBe(0);
+    expect(d!.getMinutes()).toBe(0);
+    expect(d!.getSeconds()).toBe(0);
+  });
+
+  test('localMidnightFromDateString returns undefined for a malformed value (caller omits the bound)', () => {
+    expect(localMidnightFromDateString('')).toBeUndefined();
+    expect(localMidnightFromDateString('2026/06/20')).toBeUndefined();
+    expect(localMidnightFromDateString('garbage')).toBeUndefined();
+  });
+
+  test('the end-date field receives a LOCAL-midnight minimumDate equal to the start date', () => {
+    renderCard(<LogPeriodCard />);
+
+    // The card defaults start to nowDateString() → '2026-06-20' (mocked above).
+    const endField = capturedFieldProps['Period end date, optional'];
+    expect(endField).toBeDefined();
+    expect(endField.minimumDate).toBeInstanceOf(Date);
+
+    // The bound is the start date at LOCAL midnight — its LOCAL components match
+    // the start string. Under the old UTC-midnight build, a behind-UTC device
+    // would see getDate() === 19, wrongly allowing an end one day before start.
+    const min: Date = endField.minimumDate;
+    expect(min.getFullYear()).toBe(2026);
+    expect(min.getMonth()).toBe(5);
+    expect(min.getDate()).toBe(20);
+    expect(min.getHours()).toBe(0);
+    // It equals what the shared helper produces for the same start string, so
+    // the picker compares like-for-like with DateTimeField's local-midnight seed.
+    expect(min.getTime()).toBe(localMidnightFromDateString('2026-06-20')!.getTime());
   });
 });

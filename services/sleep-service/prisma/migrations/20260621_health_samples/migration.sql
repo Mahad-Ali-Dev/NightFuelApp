@@ -45,3 +45,19 @@ CREATE TABLE "health_samples" (
 -- Index: history + per-kind queries are scoped by (user_id, kind, start_time).
 CREATE INDEX "health_samples_user_id_kind_start_time_idx"
     ON "health_samples"("user_id", "kind", "start_time");
+
+-- IDEMPOTENCY (data-integrity HIGH #3): a replay / re-sync of the SAME reading
+-- must NOT duplicate rows (which would re-materialize SleepSessions and RE-FIRE
+-- nightfuel:sleep:session-logged into the twin). A reading is uniquely keyed by
+-- (user_id, kind, start_time, source). The ingestion path uses
+-- createMany({ skipDuplicates: true }) so an overlapping re-ingest silently
+-- no-ops the dupes instead of inserting them.
+--
+-- SAFE TO ADD: this table is brand-new and UNAPPLIED (it is created above in this
+-- same record, starts EMPTY for everyone, and is applied via the owner-gated
+-- `prisma db push` on service restart — NOT `prisma migrate`). Because no rows
+-- exist yet, adding the UNIQUE constraint can never fail on pre-existing
+-- duplicates. db push reads the @@unique from schema.prisma and creates this
+-- index in lockstep; this DDL documents that delta.
+CREATE UNIQUE INDEX "health_samples_user_id_kind_start_time_source_key"
+    ON "health_samples"("user_id", "kind", "start_time", "source");

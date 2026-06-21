@@ -298,4 +298,83 @@ describe('Connected Devices screen', () => {
         expect(screen.queryByText('Connected')).toBeNull();
         expect(screen.queryByText(/connected!?$/i)).toBeNull();
     });
+
+    // ── Added: sync-feedback state transitions (#7 stale label, #11 silent success) ──
+
+    it('#7 refreshes the "Last synced" label after a SUCCESSFUL sync even with no prior notice', async () => {
+        // The adapter advances its last-synced timestamp on success. Model that:
+        // lastSyncedAt() returns null until syncNow() resolves connected, then an
+        // ISO string. The DERIVED label must move from "Never synced" to the
+        // formatted value — i.e. the row must re-render on a plain success (which
+        // changes no message), not stay stale.
+        const SYNCED_ISO = '2026-06-20T08:30:00.000Z';
+        let synced: string | null = null;
+        mockLastSyncedAt.mockImplementation(() => synced);
+        mockSyncNow.mockImplementation(async () => {
+            synced = SYNCED_ISO;
+            return { status: 'connected' };
+        });
+
+        renderScreen();
+
+        // Before the sync: all three rows read the adapter's null → "Never synced".
+        expect(screen.getAllByText('Never synced')).toHaveLength(3);
+
+        fireEvent.press(screen.getByTestId('sync-apple_health'));
+
+        // After a plain success the rows re-derive lastSyncedAt() and the stale
+        // "Never synced" is replaced by a real "Last synced …" label (#7). (The
+        // mock's lastSyncedAt() is global, so all rows re-read the same advanced
+        // value — the point is the label is no longer stale at "Never synced".)
+        await waitFor(() => expect(screen.getAllByText(/^Last synced /).length).toBeGreaterThan(0));
+        expect(screen.queryByText('Never synced')).toBeNull();
+        expect(mockSyncNow).toHaveBeenCalledTimes(1);
+        // A plain success surfaces NO notice and NEVER fakes a banner reason.
+        expect(screen.queryByTestId('notice-apple_health')).toBeNull();
+        expect(screen.queryByRole('alert')).toBeNull();
+    });
+
+    it('#11 surfaces a benign "nothing new" confirmation on a CONNECTED result that carries a reason', async () => {
+        // healthSyncNative returns { status: 'connected', reason: 'No new health
+        // data to sync.' } when a sync succeeds but finds nothing. The screen
+        // previously CLEARED the reason on connected → zero user feedback. It must
+        // now surface the reason as a benign info confirmation.
+        const NOTHING_NEW = 'No new health data to sync.';
+        mockSyncNow.mockImplementation(async () => ({ status: 'connected', reason: NOTHING_NEW }));
+
+        renderScreen();
+        fireEvent.press(screen.getByTestId('sync-google_fit'));
+
+        // The confirmation text is shown to the user (no more silent success).
+        await waitFor(() => expect(screen.getByText(NOTHING_NEW)).toBeTruthy());
+        expect(screen.getByTestId('notice-google_fit')).toBeTruthy();
+
+        // It is an HONEST success, not an error: the controls must NOT announce
+        // "currently unavailable", and it is NOT an alert region.
+        expect(screen.getByRole('button', { name: 'Sync Google Fit now' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Connect Google Fit' })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: /currently unavailable/ })).toBeNull();
+        expect(screen.queryByRole('alert')).toBeNull();
+        // And never a fabricated "Connected" badge.
+        expect(screen.queryByText('Connected')).toBeNull();
+    });
+
+    it('#11/#7 a benign confirmation clears once a later plain success returns no reason', async () => {
+        const NOTHING_NEW = 'No new health data to sync.';
+        // First sync: connected-with-reason. Second sync: plain connected.
+        mockSyncNow
+            .mockImplementationOnce(async () => ({ status: 'connected', reason: NOTHING_NEW }))
+            .mockImplementationOnce(async () => ({ status: 'connected' }));
+
+        renderScreen();
+
+        fireEvent.press(screen.getByTestId('sync-generic_ble'));
+        await waitFor(() => expect(screen.getByText(NOTHING_NEW)).toBeTruthy());
+
+        // A subsequent plain success drops the confirmation (no stale notice).
+        fireEvent.press(screen.getByTestId('sync-generic_ble'));
+        await waitFor(() => expect(screen.queryByText(NOTHING_NEW)).toBeNull());
+        expect(screen.queryByTestId('notice-generic_ble')).toBeNull();
+        expect(mockSyncNow).toHaveBeenCalledTimes(2);
+    });
 });

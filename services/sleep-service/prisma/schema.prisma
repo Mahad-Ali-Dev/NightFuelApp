@@ -66,6 +66,11 @@ model HealthSample {
   disturbances  Int?
   createdAt     DateTime @default(now()) @map("created_at")
 
+  // Idempotency: a replay/re-sync of the SAME reading must not duplicate rows.
+  // A sample is uniquely identified by who reported it, what kind, when it
+  // started, and the source that read it. Paired with createMany(skipDuplicates)
+  // so a re-ingest of an overlapping batch silently no-ops the dupes.
+  @@unique([userId, kind, startTime, source])
   @@index([userId, kind, startTime])
   @@map("health_samples")
 }

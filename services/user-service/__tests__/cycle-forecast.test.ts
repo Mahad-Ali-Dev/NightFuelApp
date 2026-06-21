@@ -100,6 +100,22 @@ describe('computeCycleForecast() — irregular widens window + lowers confidence
         expect(f.confidence).toBe('MEDIUM');
         expect(f.reason).toBe('insufficient_history');
     });
+
+    it('exactly 2 logged starts (single observed gap, no SD) is NOT HIGH/tight', () => {
+        // LOW #8: one observed gap with no measurable variability must not imply
+        // HIGH confidence with a tight (+/-1) window.
+        const f = computeCycleForecast(
+            { ...REGULAR, cycleLengthStdDev: null, loggedCycleCount: 2 },
+            winStart,
+            winEnd,
+            today,
+        );
+        expect(f.confidence).not.toBe('HIGH');
+        expect(f.confidence).toBe('MEDIUM');
+        expect(f.reason).toBe('single_observed_gap');
+        // widened window, not the tight +/-1 around ovulation (2026-06-15)
+        expect(f.fertileWindow).toEqual({ start: '2026-06-12', end: '2026-06-18' });
+    });
 });
 
 describe('computeCycleForecast() — tracking-only (NONE confidence)', () => {
@@ -157,6 +173,34 @@ describe('computeCycleForecast() — stale last period', () => {
         expect(f.confidence).toBe('LOW');
         expect(f.reason).toBe('stale_last_period');
         expect(f.predictedNextPeriodStart).not.toBeNull();
+    });
+});
+
+describe('computeCycleForecast() — overdue (not stale) predicts a FUTURE next period', () => {
+    it('next start / ovulation / fertile window are all strictly in the future', () => {
+        // HIGH #2: last 2026-06-01, L=28 -> first projection 2026-06-29.
+        // today 2026-07-05 (34 days since last; < 1.5*28=42 so NOT stale) is PAST
+        // that first projection, so the predicted next start must roll forward to
+        // 2026-07-27 instead of staying on the already-elapsed 2026-06-29.
+        const overdueToday = utc(2026, 6, 5); // 2026-07-05
+        const f = computeCycleForecast(
+            REGULAR,
+            utc(2026, 6, 1), // window 2026-07-01
+            utc(2026, 6, 31), // .. 2026-07-31
+            overdueToday,
+        );
+        expect(f.confidence).toBe('HIGH'); // overdue-but-fresh stays well-evidenced
+        expect(f.reason).toBe('ok');
+        expect(f.predictedNextPeriodStart).toBe('2026-07-27');
+        // ovulation = nextStart - 14 = 2026-07-13, all in the future
+        expect(f.predictedOvulationDate).toBe('2026-07-13');
+        expect(f.fertileWindow).toEqual({ start: '2026-07-12', end: '2026-07-14' });
+
+        const toMs = (iso: string) => Date.parse(iso + 'T00:00:00Z');
+        const todayMs = Date.UTC(2026, 6, 5);
+        expect(toMs(f.predictedNextPeriodStart!)).toBeGreaterThan(todayMs);
+        expect(toMs(f.predictedOvulationDate!)).toBeGreaterThan(todayMs);
+        expect(toMs(f.fertileWindow!.start)).toBeGreaterThan(todayMs);
     });
 });
 

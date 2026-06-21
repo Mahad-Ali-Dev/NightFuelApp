@@ -123,6 +123,10 @@ model PeriodLog {
   endDate   DateTime? @map("end_date") @db.Date
   createdAt DateTime  @default(now()) @map("created_at")
 
+  // Idempotency (data-integrity LOW #9): a double-submit of the same period start
+  // must not duplicate a row (which would skew the learned cycle averages). One
+  // logged start per user per calendar day.
+  @@unique([userId, startDate])
   @@index([userId])
   @@map("period_logs")
 }

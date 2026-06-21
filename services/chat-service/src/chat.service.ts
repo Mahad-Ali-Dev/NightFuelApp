@@ -291,6 +291,18 @@ export class ChatService {
         conv: { id: string; participantA: string; participantB: string; requestState: string },
         senderId: string,
     ): Promise<void> {
+        // Membership gate (write-IDOR fix): the sender MUST be one of the two
+        // conversation participants. Without this, any authenticated user could
+        // POST/WS-send into a stranger's accepted (or Ria) conversation — every
+        // later branch (Ria exemption, declined/pending request-state logic,
+        // accepted pass-through) silently assumed the caller already belonged to
+        // the thread. Checked FIRST so it applies to Ria threads too (the sender
+        // must still be the human participant of their own Ria thread). Reuses
+        // ConversationAccessError -> mapped to 403 by both send paths.
+        if (conv.participantA !== senderId && conv.participantB !== senderId) {
+            throw new ConversationAccessError();
+        }
+
         // Ria/coach AI thread — never request-blocked.
         if (conv.participantA === RIA_AI_USER_ID || conv.participantB === RIA_AI_USER_ID) return;
 

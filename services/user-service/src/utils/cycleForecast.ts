@@ -157,7 +157,7 @@ export function computeCycleForecast(
     if (daysSinceLast > STALE_CYCLE_MULTIPLIER * L) {
         // Stale: we still predict the next start (best-effort) but at LOW confidence
         // and with a WIDE fertile window — do not pretend to know the exact day.
-        return buildLowConfidenceForecast(input, L, lastMs, startMs, endMs, loggedSet, 'stale_last_period');
+        return buildLowConfidenceForecast(input, L, lastMs, startMs, endMs, todayMs, loggedSet, 'stale_last_period');
     }
 
     // ── Confidence tiering (uncertainty-aware) ─────────────────────────────────
@@ -167,7 +167,7 @@ export function computeCycleForecast(
     const selfIrregular = (input.cycleRegularity ?? '').toUpperCase() === 'IRREGULAR';
 
     if (selfIrregular || (sd != null && sd > HIGH_SD_THRESHOLD)) {
-        return buildLowConfidenceForecast(input, L, lastMs, startMs, endMs, loggedSet, 'irregular');
+        return buildLowConfidenceForecast(input, L, lastMs, startMs, endMs, todayMs, loggedSet, 'irregular');
     }
 
     let confidence: Confidence;
@@ -177,6 +177,12 @@ export function computeCycleForecast(
         // observed history -> MEDIUM at best, with a slightly widened window.
         confidence = 'MEDIUM';
         reason = 'insufficient_history';
+    } else if (logged === 2 && sd == null) {
+        // Exactly two logged starts gives a SINGLE observed gap with no measurable
+        // variability — that lone data point is NOT high-confidence. Downgrade to
+        // MEDIUM with the widened (+/-3) window rather than implying tight precision.
+        confidence = 'MEDIUM';
+        reason = 'single_observed_gap';
     } else if (sd != null && sd > MEDIUM_SD_THRESHOLD) {
         confidence = 'MEDIUM';
         reason = 'moderate_variability';
@@ -190,7 +196,7 @@ export function computeCycleForecast(
     //   MEDIUM = +/-3 days
     const halfWidth = confidence === 'HIGH' ? 1 : 3;
 
-    return buildForecast(input, L, lastMs, startMs, endMs, loggedSet, confidence, reason, halfWidth);
+    return buildForecast(input, L, lastMs, startMs, endMs, todayMs, loggedSet, confidence, reason, halfWidth);
 }
 
 /** LOW-confidence forecast: still predicts a next-start but with a WIDE window. */
@@ -200,11 +206,12 @@ function buildLowConfidenceForecast(
     lastMs: number,
     startMs: number,
     endMs: number,
+    todayMs: number,
     loggedSet: Set<string>,
     reason: string,
 ): CycleForecast {
     // +/-5 days: deliberately wide so we never imply false precision.
-    return buildForecast(input, L, lastMs, startMs, endMs, loggedSet, 'LOW', reason, 5);
+    return buildForecast(input, L, lastMs, startMs, endMs, todayMs, loggedSet, 'LOW', reason, 5);
 }
 
 /**
@@ -218,19 +225,18 @@ function buildForecast(
     lastMs: number,
     startMs: number,
     endMs: number,
+    todayMs: number,
     loggedSet: Set<string>,
     confidence: Confidence,
     reason: string,
     halfWidth: number,
 ): CycleForecast {
-    // Project the NEXT period start strictly after lastMs that is also the first
-    // start on/after the window's reference. We anchor on lastMs and step by L.
-    // predictedNextStart = the first projected start > the window-start's cycle so
-    // the fertile window shown is the upcoming one.
+    // Project the NEXT period start: the FIRST projected start (lastMs + k*L) that
+    // is strictly in the FUTURE relative to today, so the predicted next period —
+    // and its derived fertile window / ovulation — never lands in the past for an
+    // overdue-but-not-stale cycle. We anchor on lastMs and step by L.
     let nextStart = lastMs + L * MS_PER_DAY;
-    // Advance so the predicted start is not in the past relative to window start
-    // (keeps the displayed prediction the upcoming cycle for far-back windows).
-    while (nextStart + L * MS_PER_DAY <= startMs) {
+    while (nextStart <= todayMs) {
         nextStart += L * MS_PER_DAY;
     }
 
