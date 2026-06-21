@@ -50,7 +50,8 @@ async def generate_plan(
         skeleton=skeleton,
         user_preferences=pref_dict,
         logic_targets=logic_targets_dict,
-        provider=active_provider
+        provider=active_provider,
+        cycle_phase=request.cyclePhase,
     )
     
     logger.info("Plan generation complete", extra={"structured_plan": structured_plan})

@@ -26,7 +26,7 @@ export class PlanService {
         });
     }
 
-    private async makeAIRequest(userId: string, date: string, shiftType: string, planParams: any, circadianProfile?: any, context?: any): Promise<any> {
+    private async makeAIRequest(userId: string, date: string, shiftType: string, planParams: any, circadianProfile?: any, context?: any, cyclePhase: string = 'UNKNOWN'): Promise<any> {
         logger.info(`Making HTTP request to ai-pipeline at ${this.config.AI_PIPELINE_URL}/v1/ai/generate-plan`);
         const response = await fetch(`${this.config.AI_PIPELINE_URL}/v1/ai/generate-plan`, {
             method: 'POST',
@@ -41,7 +41,11 @@ export class PlanService {
                 shiftType,
                 circadianProfile,
                 planParams, // Pass deterministic parameters here
-                context    // Pass meal/exercise context here
+                context,    // Pass meal/exercise context here
+                // Derived menstrual-cycle phase (UNKNOWN if unavailable). The
+                // ai-pipeline applies a SMALL phase-aware prompt nudge only when
+                // != UNKNOWN, so non-tracking users see no change.
+                cyclePhase
             })
         });
 
@@ -142,6 +146,25 @@ export class PlanService {
             logger.warn({ userId, err }, 'Failed to fetch user preferences');
         }
 
+        // 2b. Fetch the derived menstrual-cycle phase from user-service's status
+        // (digital twin). Defaults to 'UNKNOWN' if the status is missing/unreachable
+        // or has no phase yet — UNKNOWN is a strict no-op downstream (decision-engine
+        // modifiers + ai-pipeline prompt), so a fetch failure NEVER changes the plan
+        // for non-tracking users (or anyone). This is best-effort and non-fatal.
+        let cyclePhase = 'UNKNOWN';
+        try {
+            const statusRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/status/${userId}`);
+            if (statusRes.ok) {
+                const status = await statusRes.json() as any;
+                if (typeof status?.cyclePhase === 'string' && status.cyclePhase) {
+                    cyclePhase = status.cyclePhase;
+                }
+                logger.debug({ userId, cyclePhase }, 'Fetched cycle phase for plan');
+            }
+        } catch (err) {
+            logger.warn({ userId, err }, 'Failed to fetch cycle phase, defaulting to UNKNOWN');
+        }
+
         // 3. Fetch Meal Context
         let mealContext = [];
         try {
@@ -196,16 +219,21 @@ export class PlanService {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        userState: userState ?? {
-                            userId,
-                            currentWeightKg: 80,
-                            last7DaysAdherence: 1.0,
-                            avgSleepQuality: 7,
-                            fatigueLevel: 3,
-                            currentCalorieTarget: 2000,
-                            currentProteinTargetG: 150,
-                            trainingPhase: 'HYPERTROPHY',
-                            cycleWeek: 1
+                        userState: {
+                            ...(userState ?? {
+                                userId,
+                                currentWeightKg: 80,
+                                last7DaysAdherence: 1.0,
+                                avgSleepQuality: 7,
+                                fatigueLevel: 3,
+                                currentCalorieTarget: 2000,
+                                currentProteinTargetG: 150,
+                                trainingPhase: 'HYPERTROPHY',
+                                cycleWeek: 1
+                            }),
+                            // Inject the derived cycle phase (UNKNOWN if unavailable —
+                            // a strict no-op in the engine, so this is safe for everyone).
+                            cyclePhase,
                         },
                         goal: (preferences as any)?.primaryGoal ?? 'MAINTENANCE'
                     })
@@ -256,7 +284,7 @@ export class PlanService {
         let latencyMs = 0;
 
         try {
-            planResult = await this.breaker.fire(userId, date, shiftType, planParams, profileData, context) as any;
+            planResult = await this.breaker.fire(userId, date, shiftType, planParams, profileData, context, cyclePhase) as any;
             latencyMs = Date.now() - startMs;
             logger.info(`AI plan received in ${latencyMs}ms for user ${userId}`);
         } catch (aiErr: any) {

@@ -14,6 +14,12 @@ export const UserStateSchema = z.object({
     currentProteinTargetG: z.number(),
     trainingPhase: z.string().default('HYPERTROPHY'), // HYPERTROPHY, STRENGTH, DELOAD
     cycleWeek: z.number().int().default(1),
+    // Derived menstrual-cycle phase. UNKNOWN is the safe default => phase
+    // modifiers are a strict no-op, so non-tracking users are completely
+    // unaffected (this is TRACK-FIRST, SUGGESTION-SECOND).
+    cyclePhase: z
+        .enum(['MENSTRUAL', 'FOLLICULAR', 'OVULATORY', 'LUTEAL', 'UNKNOWN'])
+        .default('UNKNOWN'),
 });
 
 export const DecisionInputSchema = z.object({
@@ -31,6 +37,32 @@ export const DecisionInputSchema = z.object({
 });
 
 export type DecisionInput = z.infer<typeof DecisionInputSchema>;
+
+// ── Menstrual-cycle phase modifiers (EVIDENCE-MODEST, GENTLE DEFAULTS) ─────────
+// The science on phase-synced training/nutrition is WEAK and individual variation
+// dominates, so these are deliberately SMALL and never prescriptive. UNKNOWN is a
+// strict 1.0 no-op, so NON-TRACKING users (who always carry UNKNOWN) are entirely
+// unaffected. Volume modifiers compose MULTIPLICATIVELY with the existing
+// periodization / adherence / fatigue factors and stay well inside the
+// engine's 0.1–2.0 volume bound. The luteal calorie bump reflects the modest,
+// commonly-cited rise in luteal-phase resting energy expenditure.
+type CyclePhase = 'MENSTRUAL' | 'FOLLICULAR' | 'OVULATORY' | 'LUTEAL' | 'UNKNOWN';
+
+const CYCLE_VOLUME_MODIFIER: Record<CyclePhase, number> = {
+    MENSTRUAL: 0.9,   // gentle reduction (cramping / lower perceived energy)
+    LUTEAL: 0.9,      // gentle reduction (premenstrual fatigue)
+    FOLLICULAR: 1.0,  // baseline
+    OVULATORY: 1.0,   // baseline
+    UNKNOWN: 1.0,     // no-op (non-tracking / degraded => unchanged behaviour)
+};
+
+const CYCLE_CALORIE_MODIFIER: Record<CyclePhase, number> = {
+    LUTEAL: 1.05,     // modest luteal energy-expenditure bump
+    MENSTRUAL: 1.0,
+    FOLLICULAR: 1.0,
+    OVULATORY: 1.0,
+    UNKNOWN: 1.0,     // no-op
+};
 
 export interface DecisionOutput {
     calories: number;
@@ -50,7 +82,8 @@ export class DecisionEngine {
             fatigueLevel,
             avgSleepQuality,
             trainingPhase,
-            cycleWeek
+            cycleWeek,
+            cyclePhase
         } = userState;
 
         let calories = currentCalorieTarget;
@@ -110,6 +143,16 @@ export class DecisionEngine {
             }
         }
         // GENERAL_HEALTH, ENERGY, MAINTENANCE, STRENGTH, ENDURANCE: no macro override.
+
+        // 5. Menstrual-cycle phase modifiers (SMALL, GATED, evidence-modest).
+        // UNKNOWN => both multipliers are 1.0, so this block is a strict no-op for
+        // non-tracking / degraded users — their output is byte-identical to before
+        // this feature. For tracking users, volume composes multiplicatively with
+        // the factors above (and stays inside the 0.1–2.0 bound), and the calorie
+        // bump is applied to the running calorie target.
+        const phase = (cyclePhase ?? 'UNKNOWN') as CyclePhase;
+        volume_modifier *= CYCLE_VOLUME_MODIFIER[phase] ?? 1.0;
+        calories *= CYCLE_CALORIE_MODIFIER[phase] ?? 1.0;
 
         return {
             calories: Math.round(calories),

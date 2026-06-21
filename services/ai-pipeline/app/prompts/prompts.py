@@ -41,6 +41,19 @@ Adjust meal suggestions based on user.region:
     - SPECIFIC RESTRICTIONS: If 'knee', 'back', or 'shoulder' are in healthConditions, EXPLICITLY avoid movements that aggravate them (e.g., no heavy squats for knee, no overhead press for shoulder).
 - MASS_GAIN / CUTTING: Adjust portion sizes in the 'items' list to reach the target caloric surplus or deficit.
 
+10. MENSTRUAL CYCLE PHASE (apply ONLY when cyclePhase != UNKNOWN):
+The supporting science is weak and individual variation dominates, so treat these
+as GENTLE, optional nudges layered on top of the deterministic targets — never
+override the targets or make strong/prescriptive claims. If cyclePhase is UNKNOWN
+or absent, IGNORE this section entirely (baseline plan).
+- MENSTRUAL: Emphasize iron-rich foods (red meat, lentils, spinach, tofu) paired
+  with vitamin C for absorption. Keep workout intensity gentle if energy is low.
+- FOLLICULAR / OVULATORY: Baseline — no special adjustment.
+- LUTEAL: Favor complex carbohydrates and magnesium-rich foods (oats, sweet potato,
+  dark chocolate, pumpkin seeds, leafy greens) and emphasize hydration. A MODEST
+  calorie / carbohydrate increase here is expected (already reflected in the
+  deterministic targets when present) — keep it small.
+
 OUTPUT FORMAT EXPECTED:
 {{
   "coaching_message": "A short, empathetic motivational message for the user's shift.",
@@ -76,10 +89,26 @@ OUTPUT FORMAT EXPECTED:
 }}
 """
 
-def build_user_context(skeleton: Optional[dict], user_preferences: Optional[dict], logic_targets: Optional[dict] = None) -> str:
+def build_user_context(
+    skeleton: Optional[dict],
+    user_preferences: Optional[dict],
+    logic_targets: Optional[dict] = None,
+    cycle_phase: Optional[str] = None,
+) -> str:
     from json import dumps
     prompt = ""
-    
+
+    # Inject the menstrual-cycle phase line independently of logic_targets so the
+    # phase nudge (SYSTEM_PROMPT section 10) can fire even when logicTargets is
+    # absent. UNKNOWN / None => omit the line entirely (baseline plan, no nudge).
+    if cycle_phase and str(cycle_phase).upper() != "UNKNOWN":
+        prompt += (
+            f"\n--- MENSTRUAL CYCLE PHASE ---\n"
+            f"Current phase: {cycle_phase}. Apply the GENTLE phase guidance from rule 10 "
+            f"(small, optional nudges only — do NOT override the deterministic targets).\n"
+            f"-----------------------------\n"
+        )
+
     if logic_targets:
         prompt += f"""
 --- DETERMINISTIC TARGETS (STRICT ADHERENCE REQUIRED) ---

@@ -14,6 +14,19 @@ export const updateProfileSchema = z.object({
     biologicalSex: z.enum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY']).nullable().optional(),
     timezone: z.string().min(1).max(64).optional(),
     region: z.enum(['us', 'eu', 'ap']).optional(),
+
+    // ── Menstrual-cycle tracking inputs ──────────────────────────────────────
+    // Raw user inputs persisted on UserProfile. lastPeriodStartDate uses the SAME
+    // YYYY-MM-DD regex string as dateOfBirth (parsed to UTC midnight DateTime).
+    // Bounds mirror the computeCyclePhase gate so out-of-gate values are still
+    // storable (they just resolve to UNKNOWN) — the gate, not the schema, is the
+    // safety boundary.
+    cycleTrackingEnabled: z.boolean().optional(),
+    lastPeriodStartDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    avgCycleLengthDays: z.coerce.number().int().min(15).max(60).nullable().optional(),
+    avgPeriodLengthDays: z.coerce.number().int().min(1).max(14).nullable().optional(),
+    cycleRegularity: z.enum(['REGULAR', 'IRREGULAR', 'UNKNOWN']).nullable().optional(),
+    hormonalContraception: z.boolean().optional(),
 });
 
 // ── Preferences update ────────────────────────────────────────────────────────

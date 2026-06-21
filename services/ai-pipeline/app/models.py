@@ -39,6 +39,9 @@ class GoalPreferences(BaseModel):
     dietMode: Optional[str] = "BALANCED"
     healthConditions: Optional[List[str]] = []
     region: Optional[str] = "us" # 'us', 'eu', 'ap'
+    # Derived menstrual-cycle phase. UNKNOWN => no phase nudge (non-tracking users
+    # are unaffected). One of MENSTRUAL | FOLLICULAR | OVULATORY | LUTEAL | UNKNOWN.
+    cyclePhase: Optional[str] = "UNKNOWN"
 
 class LogicTargets(BaseModel):
     calorieTarget: int
@@ -55,6 +58,10 @@ class DayPlanRequest(BaseModel):
     logicTargets: Optional[LogicTargets] = None
     preferences: Optional[GoalPreferences] = None
     context: Optional[Dict[str, Any]] = None # New field for meal/exercise context
+    # Derived menstrual-cycle phase, sent top-level by plan-service alongside
+    # planParams. Defaults to UNKNOWN (no phase nudge) so existing callers and
+    # non-tracking users are unaffected.
+    cyclePhase: Optional[str] = "UNKNOWN"
 
 class DayPlanResponse(BaseModel):
     userId: str

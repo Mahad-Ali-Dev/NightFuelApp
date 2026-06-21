@@ -24,6 +24,19 @@ model UserProfile {
   onboardingCompleted Boolean       @default(false) @map("onboarding_completed")
   onboardingStep      Int           @default(0) @map("onboarding_step")
   isPrivate           Boolean       @default(false) @map("is_private")
+
+  // ── Menstrual-cycle tracking inputs (track-first, suggestion-second) ──────────
+  // All nullable/defaulted so `prisma db push --accept-data-loss` applies them to
+  // existing rows without data loss. These are raw USER INPUTS; the DERIVED phase
+  // lives on UserStatus.cyclePhase (computed by computeCyclePhase). Non-tracking
+  // users keep cycleTrackingEnabled=false and always resolve to UNKNOWN.
+  cycleTrackingEnabled  Boolean   @default(false) @map("cycle_tracking_enabled")
+  lastPeriodStartDate   DateTime? @map("last_period_start_date") @db.Date
+  avgCycleLengthDays    Int?      @default(28) @map("avg_cycle_length_days")
+  avgPeriodLengthDays   Int?      @default(5) @map("avg_period_length_days")
+  cycleRegularity       String?   @map("cycle_regularity") // REGULAR | IRREGULAR | UNKNOWN
+  hormonalContraception Boolean   @default(false) @map("hormonal_contraception")
+
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
 
@@ -104,6 +117,10 @@ model UserStatus {
   fatigueScore      Float    @default(0) @map("fatigue_score")
   circadianPeakTime String?  @map("circadian_peak_time")
   circadianLowTime  String?  @map("circadian_low_time")
+  // Derived menstrual-cycle phase (computeCyclePhase). One of MENSTRUAL |
+  // FOLLICULAR | OVULATORY | LUTEAL | UNKNOWN. UNKNOWN is the safe default for
+  // every non-tracking / degradation case (no phase-syncing applied).
+  cyclePhase        String?  @map("cycle_phase")
   
   // Adherence & Performance
   adherenceRate     Float    @default(0) @map("adherence_rate")

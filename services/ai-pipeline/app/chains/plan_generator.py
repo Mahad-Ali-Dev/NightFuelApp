@@ -96,7 +96,8 @@ async def generate_plan_content(
     user_preferences: Dict[str, Any],
     logic_targets: Optional[Dict[str, Any]] = None,
     provider: LLMProvider = LLMProvider.OPENAI,
-    max_retries: int = 3
+    max_retries: int = 3,
+    cycle_phase: Optional[str] = None,
 ) -> Dict[str, Any]:
 
     logger.info(f"Initializing LangChain with provider: {provider.value}")
@@ -109,7 +110,7 @@ async def generate_plan_content(
     ])
 
     chain = prompt | llm | parser
-    user_context = build_user_context(skeleton, user_preferences, logic_targets)
+    user_context = build_user_context(skeleton, user_preferences, logic_targets, cycle_phase)
 
     # Only mock if NO provider has a real key (with cross-provider fallback, a
     # single configured provider is enough — get_llm picks whichever is live).

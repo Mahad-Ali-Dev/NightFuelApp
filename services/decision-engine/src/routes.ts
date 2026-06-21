@@ -59,6 +59,12 @@ const userStateSchema = z
             .enum(['HYPERTROPHY', 'STRENGTH', 'DELOAD'])
             .default('HYPERTROPHY'),
         cycleWeek: z.number().int().min(1).max(MAX_CYCLE_WEEK).default(1),
+        // Derived menstrual-cycle phase. UNKNOWN default => phase modifiers are a
+        // strict no-op (non-tracking users unaffected). Bounded to the exact enum
+        // so any other value is a clean 400, mirroring the engine's loose schema.
+        cyclePhase: z
+            .enum(['MENSTRUAL', 'FOLLICULAR', 'OVULATORY', 'LUTEAL', 'UNKNOWN'])
+            .default('UNKNOWN'),
     })
     .strict();
 

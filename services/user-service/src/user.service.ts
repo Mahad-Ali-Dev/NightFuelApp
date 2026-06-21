@@ -7,6 +7,7 @@ import fs from 'fs';
 import path from 'path';
 import { UpdateProfileBody, UpdatePreferencesBody, UpdateOnboardingBody, UpdatePrivacyBody } from './schemas';
 import { calculateBMI, calculateBMR, calculateTDEE, calculateAge } from './utils/calculators';
+import { computeCyclePhase, CyclePhaseInput } from './utils/cyclePhase';
 
 const logger = createLogger('user-service:service');
 
@@ -17,6 +18,15 @@ export interface ProfileWithPreferences extends UserProfile {
     // the schema (the migration + schema.prisma own the runtime column). Once the
     // client is regenerated this is simply redundant with the generated field.
     isPrivate: boolean;
+    // Menstrual-cycle tracking INPUT shims (same precedent as isPrivate above):
+    // declared so the service/route layer compiles against the new columns before
+    // `prisma generate` regenerates the client. Redundant once regenerated.
+    cycleTrackingEnabled?: boolean;
+    lastPeriodStartDate?: Date | null;
+    avgCycleLengthDays?: number | null;
+    avgPeriodLengthDays?: number | null;
+    cycleRegularity?: string | null;
+    hormonalContraception?: boolean;
 }
 
 // Roles that get a CoachProfile stub automatically
@@ -160,6 +170,18 @@ export class UserService {
             data.dateOfBirth = dob ? new Date(dob) : null;
         }
 
+        // ── Menstrual-cycle tracking inputs ──────────────────────────────────
+        if (body.cycleTrackingEnabled !== undefined) data.cycleTrackingEnabled = body.cycleTrackingEnabled;
+        if (body.avgCycleLengthDays !== undefined) data.avgCycleLengthDays = body.avgCycleLengthDays;
+        if (body.avgPeriodLengthDays !== undefined) data.avgPeriodLengthDays = body.avgPeriodLengthDays;
+        if (body.cycleRegularity !== undefined) data.cycleRegularity = body.cycleRegularity;
+        if (body.hormonalContraception !== undefined) data.hormonalContraception = body.hormonalContraception;
+        if (body.lastPeriodStartDate !== undefined) {
+            // Same YYYY-MM-DD -> UTC-midnight Date pattern as dateOfBirth above.
+            const lpd = body.lastPeriodStartDate;
+            data.lastPeriodStartDate = lpd ? new Date(lpd) : null;
+        }
+
         // Upsert: auto-create the profile if the user-registered Redis event
         // hasn't been processed yet (race condition: user can reach onboarding
         // "Finish & Sync" before the async event round-trip completes).
@@ -200,6 +222,9 @@ export class UserService {
 
             // Auto-recalculate baseline metrics
             await this.recalculateBaselines(userId);
+            // Auto-recalculate the derived menstrual-cycle phase (UNKNOWN for all
+            // non-tracking users — no behavioural change for them).
+            await this.recalculateCyclePhase(userId);
 
             return profile;
         } catch (err: any) {
@@ -453,12 +478,59 @@ export class UserService {
     }
 
     /**
+     * Internal helper to derive & persist the menstrual-cycle phase.
+     *
+     * Sibling of recalculateBaselines: loads the profile, runs the PURE,
+     * fully-gated computeCyclePhase over the raw cycle inputs, and writes the
+     * result to UserStatus.cyclePhase via the existing updateUserStatus upsert.
+     *
+     * Non-tracking users (cycleTrackingEnabled=false — the default) always derive
+     * UNKNOWN, so this is a no-op-equivalent for them: it only ever writes the
+     * 'UNKNOWN' sentinel, which downstream services treat as "no phase-syncing".
+     */
+    private async recalculateCyclePhase(userId: string): Promise<void> {
+        try {
+            const profile = await this.prisma.userProfile.findUnique({
+                where: { userId },
+            });
+            if (!profile) return;
+
+            // The generated Prisma client may predate the cycle columns (the
+            // schema + migration own the runtime columns; `prisma generate`
+            // catches the types up). Read through `any` so this compiles before
+            // regeneration — mirrors the isPrivate shim precedent.
+            const p = profile as any;
+            const input: CyclePhaseInput = {
+                cycleTrackingEnabled: p.cycleTrackingEnabled,
+                biologicalSex: p.biologicalSex,
+                hormonalContraception: p.hormonalContraception,
+                cycleRegularity: p.cycleRegularity,
+                avgCycleLengthDays: p.avgCycleLengthDays,
+                avgPeriodLengthDays: p.avgPeriodLengthDays,
+                lastPeriodStartDate: p.lastPeriodStartDate,
+            };
+
+            const cyclePhase = computeCyclePhase(input);
+
+            await this.updateUserStatus(userId, {
+                cyclePhase,
+                lastUpdatedBy: 'user-service:cycle-phase',
+            });
+
+            logger.debug({ userId, cyclePhase }, 'Recalculated cycle phase');
+        } catch (err) {
+            logger.error({ userId, err }, 'Failed to recalculate cycle phase');
+        }
+    }
+
+    /**
      * Update the materialized UserStatus (Digital Twin).
      */
     async updateUserStatus(userId: string, data: {
         fatigueScore?: number;
         circadianPeakTime?: string | null;
         circadianLowTime?: string | null;
+        cyclePhase?: string | null;
         adherenceRate?: number;
         currentStreak?: number;
         currentTdee?: number;
@@ -466,13 +538,17 @@ export class UserService {
         lastUpdatedBy: string;
     }): Promise<void> {
         try {
+            // Cast create/update to `any`: `cyclePhase` is a new column the
+            // checked-in generated client may predate (schema + migration own the
+            // runtime column; `prisma generate` catches the types up). Same shim
+            // precedent as isPrivate / the ProfileWithPreferences cast.
             const status = await this.prisma.userStatus.upsert({
                 where: { userId },
                 create: {
                     userId,
                     ...data,
-                },
-                update: data,
+                } as any,
+                update: data as any,
             });
 
             await this.eventBus.publish<UserStatusUpdatedPayload>(Channels.User.StatusUpdated, {
