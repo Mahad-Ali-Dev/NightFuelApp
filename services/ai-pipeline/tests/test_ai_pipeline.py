@@ -293,3 +293,57 @@ def test_global_500_handler_redacts_traceback():
     assert "traceback" not in body
     assert LEAKY not in body
     assert "/etc/" not in body
+
+
+# ── planParams -> logicTargets wiring (the DETERMINISTIC TARGETS fix) ───────────
+# plan-service now translates its snake_case planParams into the LogicTargets shape
+# below and sends it as request.logicTargets. These tests lock that (1) DayPlanRequest
+# parses that exact shape, and (2) build_user_context then EMITS the deterministic
+# targets block (previously it never fired because logicTargets was always None).
+
+def test_day_plan_request_parses_logic_targets_shape():
+    from app.models import DayPlanRequest
+    req = DayPlanRequest(
+        userId="user-123",
+        date="2026-03-01",
+        shiftType="DAY",
+        logicTargets={
+            "calorieTarget": 2000,
+            "proteinTargetG": 150,
+            "carbsTargetG": 204,
+            "fatTargetG": 65,
+            "trainingVolumeMultiplier": 1.0,
+        },
+        cyclePhase="UNKNOWN",
+    )
+    assert req.logicTargets is not None
+    assert req.logicTargets.calorieTarget == 2000
+    assert req.logicTargets.proteinTargetG == 150
+    assert req.logicTargets.trainingVolumeMultiplier == 1.0
+
+
+def test_deterministic_targets_block_fires_when_logic_targets_present():
+    from app.prompts.prompts import build_user_context
+    out = build_user_context(
+        {"rules": {}},
+        {"primaryGoal": "MUSCLE_GAIN"},
+        {
+            "calorieTarget": 2000,
+            "proteinTargetG": 150,
+            "carbsTargetG": 204,
+            "fatTargetG": 65,
+            "trainingVolumeMultiplier": 1.0,
+        },
+        "UNKNOWN",
+    )
+    assert "DETERMINISTIC TARGETS" in out
+    assert "2000 kcal" in out
+    assert "150 g" in out
+
+
+def test_deterministic_targets_block_absent_when_logic_targets_none():
+    # Mirrors the OLD (buggy) behaviour for callers that genuinely send no targets:
+    # the block must NOT appear -> proves the block is gated purely on presence.
+    from app.prompts.prompts import build_user_context
+    out = build_user_context({"rules": {}}, {"primaryGoal": "X"}, None, "UNKNOWN")
+    assert "DETERMINISTIC TARGETS" not in out

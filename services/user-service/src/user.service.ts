@@ -8,6 +8,13 @@ import path from 'path';
 import { UpdateProfileBody, UpdatePreferencesBody, UpdateOnboardingBody, UpdatePrivacyBody } from './schemas';
 import { calculateBMI, calculateBMR, calculateTDEE, calculateAge } from './utils/calculators';
 import { computeCyclePhase, CyclePhaseInput } from './utils/cyclePhase';
+import {
+    computeCycleStatsFromLogs,
+    buildCycleHistory,
+    PeriodLogInput,
+} from './utils/cycleHistory';
+import { computeCycleForecast, ForecastInput } from './utils/cycleForecast';
+import { LogPeriodBody } from './schemas';
 
 const logger = createLogger('user-service:service');
 
@@ -144,10 +151,50 @@ export class UserService {
         return profile as unknown as ProfileWithPreferences;
     }
 
+    /**
+     * Fetch the materialized UserStatus, RECOMPUTING the derived cyclePhase at
+     * READ time from the stored profile inputs.
+     *
+     * WHY (staleness fix, mirrors F23's read-time streak fix): cyclePhase was only
+     * recomputed on profile UPDATE, so it went stale across days — a user who
+     * logged a period and then didn't touch their profile for a week would keep
+     * showing the phase computed a week ago. computeCyclePhase is PURE and takes
+     * `now`, so we re-derive it here against the current day and RETURN the fresh
+     * value. Persist-on-read is optional (we skip the extra write on the hot read
+     * path); returning the freshly-computed value is the requirement.
+     *
+     * Non-tracking / degraded users derive UNKNOWN exactly as before — this is a
+     * no-op for them. If the profile/status can't be loaded we fall back to the
+     * stored row untouched (best-effort, never throws on the read path).
+     */
     async getStatus(userId: string) {
-        return this.prisma.userStatus.findUnique({
-            where: { userId }
+        const status = await this.prisma.userStatus.findUnique({
+            where: { userId },
         });
+        if (!status) return status;
+
+        try {
+            const profile = await this.prisma.userProfile.findUnique({ where: { userId } });
+            if (!profile) return status;
+
+            const p = profile as any;
+            const freshPhase = computeCyclePhase({
+                cycleTrackingEnabled: p.cycleTrackingEnabled,
+                biologicalSex: p.biologicalSex,
+                hormonalContraception: p.hormonalContraception,
+                cycleRegularity: p.cycleRegularity,
+                avgCycleLengthDays: p.avgCycleLengthDays,
+                avgPeriodLengthDays: p.avgPeriodLengthDays,
+                lastPeriodStartDate: p.lastPeriodStartDate,
+            });
+
+            // Return a copy with the freshly-derived phase; don't mutate the row in
+            // a way that would be persisted by an accidental later write.
+            return { ...status, cyclePhase: freshPhase } as typeof status;
+        } catch (err) {
+            logger.warn({ userId, err }, 'Read-time cyclePhase recompute failed; returning stored status');
+            return status;
+        }
     }
 
     /**
@@ -724,5 +771,153 @@ export class UserService {
                 activeProtocolId: protocolId
             }
         });
+    }
+
+    // ── Menstrual-cycle: period logging + history + forecast ──────────────────
+
+    /** Load a user's PeriodLog rows (oldest-first), as pure-helper inputs. */
+    private async loadPeriodLogs(userId: string): Promise<PeriodLogInput[]> {
+        // PeriodLog is a new model the checked-in generated client may predate
+        // (schema + migration own the runtime table; `prisma generate` catches the
+        // types up). Access through `any`, same shim precedent as the cycle columns.
+        const rows = await (this.prisma as any).periodLog.findMany({
+            where: { userId },
+            orderBy: { startDate: 'asc' },
+        });
+        return (rows ?? []).map((r: any) => ({ startDate: r.startDate, endDate: r.endDate }));
+    }
+
+    /**
+     * Log a period start (+ optional end), then RECOMPUTE the user's learned cycle
+     * stats FROM their full logged history and the derived phase.
+     *
+     * Flow:
+     *   1. Append a PeriodLog row.
+     *   2. computeCycleStatsFromLogs(history) — learns avgCycleLength /
+     *      avgPeriodLength / regularity / lastPeriodStartDate from the USER'S OWN
+     *      data (never the static 28/14 template once history exists).
+     *   3. Persist those learned values onto UserProfile (only fields the helper
+     *      could actually derive — null results never clobber a stored value).
+     *   4. recalculateCyclePhase -> UserStatus.cyclePhase.
+     *
+     * Gated to the caller's own userId by the route. Returns the fresh stats.
+     */
+    async logPeriod(userId: string, body: LogPeriodBody) {
+        await this.ensureProfileExists(userId);
+
+        await (this.prisma as any).periodLog.create({
+            data: {
+                userId,
+                startDate: new Date(body.startDate),
+                endDate: body.endDate ? new Date(body.endDate) : null,
+            },
+        });
+
+        const logs = await this.loadPeriodLogs(userId);
+        const stats = computeCycleStatsFromLogs(logs);
+
+        // Persist learned values. Only write fields the history could derive, so a
+        // single log (no computable gap) never wipes a user's stored cycle length.
+        const data: Record<string, unknown> = {};
+        if (stats.lastPeriodStartDate) data.lastPeriodStartDate = stats.lastPeriodStartDate;
+        if (stats.avgCycleLengthDays != null) data.avgCycleLengthDays = stats.avgCycleLengthDays;
+        if (stats.avgPeriodLengthDays != null) data.avgPeriodLengthDays = stats.avgPeriodLengthDays;
+        if (stats.cycleRegularity !== 'UNKNOWN') data.cycleRegularity = stats.cycleRegularity;
+
+        if (Object.keys(data).length > 0) {
+            await this.prisma.userProfile.update({ where: { userId }, data: data as any });
+        }
+
+        // Re-derive the phase against the freshly-learned inputs.
+        await this.recalculateCyclePhase(userId);
+
+        logger.info({ userId, loggedCycleCount: stats.loggedCycleCount }, 'Period logged + cycle stats recomputed');
+        return {
+            ...stats,
+            lastPeriodStartDate: stats.lastPeriodStartDate
+                ? stats.lastPeriodStartDate.toISOString().slice(0, 10)
+                : null,
+        };
+    }
+
+    /**
+     * Return the user's cycle history: each past cycle with its length + period
+     * length, plus the learned averages / variability. PURE-derived from logs.
+     */
+    async getCycleHistory(userId: string) {
+        const logs = await this.loadPeriodLogs(userId);
+        const stats = computeCycleStatsFromLogs(logs);
+        return {
+            cycles: buildCycleHistory(logs),
+            averages: {
+                avgCycleLengthDays: stats.avgCycleLengthDays,
+                avgPeriodLengthDays: stats.avgPeriodLengthDays,
+                cycleLengthStdDev: stats.cycleLengthStdDev,
+                cycleRegularity: stats.cycleRegularity,
+                loggedCycleCount: stats.loggedCycleCount,
+            },
+        };
+    }
+
+    /**
+     * Build the uncertainty-aware cycle forecast/calendar for a window. Combines
+     * the stored profile inputs with the LEARNED history signals (SD, logged
+     * count, regularity) and the set of actual logged days (for logged-vs-
+     * predicted), then defers to the pure computeCycleForecast.
+     *
+     * @param months  half-window in months (default 1) -> [today - m, today + m].
+     */
+    async getCycleForecast(userId: string, months = 1) {
+        const profile = await this.prisma.userProfile.findUnique({ where: { userId } });
+        const logs = await this.loadPeriodLogs(userId);
+        const stats = computeCycleStatsFromLogs(logs);
+
+        const p = (profile ?? {}) as any;
+
+        // Prefer LEARNED values from history where available; else the stored
+        // template inputs. cycleRegularity prefers a learned IRREGULAR signal.
+        const input: ForecastInput = {
+            cycleTrackingEnabled: p.cycleTrackingEnabled,
+            biologicalSex: p.biologicalSex,
+            hormonalContraception: p.hormonalContraception,
+            cycleRegularity:
+                stats.cycleRegularity !== 'UNKNOWN' ? stats.cycleRegularity : p.cycleRegularity,
+            avgCycleLengthDays: stats.avgCycleLengthDays ?? p.avgCycleLengthDays,
+            avgPeriodLengthDays: stats.avgPeriodLengthDays ?? p.avgPeriodLengthDays,
+            lastPeriodStartDate: stats.lastPeriodStartDate ?? p.lastPeriodStartDate,
+            cycleLengthStdDev: stats.cycleLengthStdDev,
+            loggedCycleCount: stats.loggedCycleCount,
+            loggedPeriodDates: this.expandLoggedDates(logs),
+        };
+
+        const now = new Date();
+        const windowStart = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, now.getUTCDate()),
+        );
+        const windowEnd = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + months, now.getUTCDate()),
+        );
+
+        return computeCycleForecast(input, windowStart, windowEnd, now);
+    }
+
+    /** Expand each logged period (start..end inclusive) into a flat ISO date set. */
+    private expandLoggedDates(logs: PeriodLogInput[]): string[] {
+        const out = new Set<string>();
+        const MS = 24 * 60 * 60 * 1000;
+        for (const l of logs) {
+            const s = l.startDate instanceof Date ? l.startDate : new Date(l.startDate);
+            if (Number.isNaN(s.getTime())) continue;
+            const startMs = Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate());
+            const e = l.endDate ? (l.endDate instanceof Date ? l.endDate : new Date(l.endDate)) : null;
+            const endMs =
+                e && !Number.isNaN(e.getTime())
+                    ? Date.UTC(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate())
+                    : startMs;
+            for (let ms = startMs; ms <= endMs && ms - startMs < 60 * MS; ms += MS) {
+                out.add(new Date(ms).toISOString().slice(0, 10));
+            }
+        }
+        return Array.from(out);
     }
 }

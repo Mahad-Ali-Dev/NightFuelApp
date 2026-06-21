@@ -7,6 +7,8 @@ import {
     updatePreferencesSchema,
     updateOnboardingSchema,
     updatePrivacySchema,
+    logPeriodSchema,
+    cycleForecastQuerySchema,
 } from './schemas';
 import { z } from 'zod';
 import { UserService } from './user.service';
@@ -270,6 +272,77 @@ export const userRoutes = async (
                 }
 
                 return reply.code(200).send(status);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── Menstrual-cycle Routes ───────────────────────────────────────────────
+    // All cycle routes require auth and are gated to the caller's OWN userId
+    // (extractUserId is the only identity source — there is no path param), so a
+    // user can never read or write another user's cycle data.
+
+    // POST /v1/users/me/cycle/period — log a period start (+ optional end).
+    // Appends a PeriodLog, then recomputes learned avgCycleLength /
+    // avgPeriodLength / regularity FROM the user's own history + the phase.
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/me/cycle/period',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { body: logPeriodSchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const stats = await service.logPeriod(userId, request.body as any);
+                return reply.code(201).send(stats);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/cycle/history — past cycles + learned averages/variability.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/cycle/history',
+        {
+            onRequest: [(fastify as any).authenticate],
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const history = await service.getCycleHistory(userId);
+                return reply.code(200).send(history);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/cycle/forecast — uncertainty-aware per-day phase calendar,
+    // predicted next-period / fertile-window / ovulation, confidence + logged flag.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/cycle/forecast',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { querystring: cycleForecastQuerySchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const { months } = request.query as { months?: number };
+                const forecast = await service.getCycleForecast(userId, months ?? 1);
+                return reply.code(200).send(forecast);
             } catch (err: any) {
                 request.log.error(err);
                 return reply.code(500).send({ error: 'Internal server error' });

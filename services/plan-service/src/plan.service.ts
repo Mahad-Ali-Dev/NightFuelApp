@@ -26,8 +26,73 @@ export class PlanService {
         });
     }
 
+    /**
+     * Map the decision-engine / protocol `planParams` (snake_case, top-level) into
+     * the EXACT logicTargets shape ai-pipeline's DayPlanRequest expects.
+     *
+     * WHY THIS EXISTS (the wiring-gap fix): plan-service historically sent only a
+     * top-level `planParams` ({calories, protein_g, volume_modifier, ...}), but
+     * DayPlanRequest has NO `planParams` field — Pydantic silently dropped it. So
+     * `request.logicTargets` was always None and the prompt's "DETERMINISTIC
+     * TARGETS (STRICT ADHERENCE REQUIRED)" block NEVER fired: the engine's numeric
+     * (and phase-adjusted) calories/volume never reached the LLM. We now translate
+     * planParams -> logicTargets so that block fires for EVERY plan.
+     *
+     * Mapping (mirrors models.py LogicTargets, all ints + a float multiplier):
+     *   calories         -> calorieTarget
+     *   protein_g        -> proteinTargetG
+     *   carbs/fat        -> carbsTargetG / fatTargetG (derived the SAME way the
+     *                       plan.generated event already derives them, so there is
+     *                       one canonical macro derivation)
+     *   volume_modifier  -> trainingVolumeMultiplier
+     *
+     * Returns null when calories/protein aren't usable numbers, so a malformed
+     * planParams degrades to "no deterministic block" (the prior behaviour) rather
+     * than emitting NaN targets. cyclePhase stays a separate top-level field.
+     */
+    private buildLogicTargets(planParams: any): {
+        calorieTarget: number;
+        proteinTargetG: number;
+        carbsTargetG: number;
+        fatTargetG: number;
+        trainingVolumeMultiplier: number;
+    } | null {
+        const p = planParams ?? {};
+        const calories = Number(p.calories);
+        const proteinG = Number(p.protein_g);
+        if (!Number.isFinite(calories) || !Number.isFinite(proteinG)) return null;
+
+        // Fat: explicit if provided, else the same 65g default the event payload uses.
+        const fatTargetG = Number.isFinite(Number(p.fat_g)) ? Number(p.fat_g) : 65;
+        // Carbs: explicit if provided, else remaining-calorie derivation
+        // (cal - protein*4 - fat*9) / 4 — identical to the plan.generated payload.
+        const carbsTargetG = Number.isFinite(Number(p.carbs_g))
+            ? Number(p.carbs_g)
+            : (calories - proteinG * 4 - fatTargetG * 9) / 4;
+
+        const volume = Number(p.volume_modifier);
+        const trainingVolumeMultiplier = Number.isFinite(volume) ? volume : 1.0;
+
+        return {
+            calorieTarget: Math.round(calories),
+            proteinTargetG: Math.round(proteinG),
+            // Carbs can go negative for absurd inputs; clamp at 0 so the prompt
+            // never shows a nonsensical negative macro target.
+            carbsTargetG: Math.max(0, Math.round(carbsTargetG)),
+            fatTargetG: Math.max(0, Math.round(fatTargetG)),
+            trainingVolumeMultiplier,
+        };
+    }
+
     private async makeAIRequest(userId: string, date: string, shiftType: string, planParams: any, circadianProfile?: any, context?: any, cyclePhase: string = 'UNKNOWN'): Promise<any> {
         logger.info(`Making HTTP request to ai-pipeline at ${this.config.AI_PIPELINE_URL}/v1/ai/generate-plan`);
+
+        // Translate planParams -> logicTargets in the EXACT shape DayPlanRequest
+        // expects so the prompt's DETERMINISTIC TARGETS block fires (see
+        // buildLogicTargets). planParams is still sent for backward compatibility
+        // (extra fields are ignored by Pydantic).
+        const logicTargets = this.buildLogicTargets(planParams);
+
         const response = await fetch(`${this.config.AI_PIPELINE_URL}/v1/ai/generate-plan`, {
             method: 'POST',
             headers: {
@@ -40,8 +105,9 @@ export class PlanService {
                 date,
                 shiftType,
                 circadianProfile,
-                planParams, // Pass deterministic parameters here
-                context,    // Pass meal/exercise context here
+                planParams,    // legacy passthrough (Pydantic ignores unknown fields)
+                logicTargets,  // canonical deterministic targets the prompt reads
+                context,       // Pass meal/exercise context here
                 // Derived menstrual-cycle phase (UNKNOWN if unavailable). The
                 // ai-pipeline applies a SMALL phase-aware prompt nudge only when
                 // != UNKNOWN, so non-tracking users see no change.

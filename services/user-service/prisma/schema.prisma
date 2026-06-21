@@ -109,6 +109,24 @@ model CoachClientRelation {
   @@map("coach_client_relations")
 }
 
+// ── PeriodLog — ongoing menstrual-period LOGGING + history ───────────────────
+// One row per logged period start (with an optional logged end). This is the
+// raw observed history from which computeCycleStatsFromLogs LEARNS the user's
+// own avgCycleLength / avgPeriodLength / regularity (replacing the static 28/14
+// template once history exists). All columns are nullable/defaulted except the
+// FK + start, so `prisma db push --accept-data-loss` applies it to existing DBs
+// without touching any existing row (no PeriodLog rows exist yet for anyone).
+model PeriodLog {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("period_logs")
+}
+
 model UserStatus {
   id                String   @id @default(uuid())
   userId            String   @unique @map("user_id")

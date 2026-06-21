@@ -77,8 +77,31 @@ export const updateOnboardingSchema = z.object({
 // the isPrivate field (consumed by community-service & chat-service).
 export const updatePrivacySchema = z.object({ isPrivate: z.boolean().optional() });
 
+// ── Period logging ────────────────────────────────────────────────────────────
+// Backs POST /v1/users/me/cycle/period. startDate is required; endDate optional.
+// Both use the same YYYY-MM-DD regex as dateOfBirth / lastPeriodStartDate (parsed
+// to UTC-midnight Date). A superset .refine guards endDate >= startDate.
+export const logPeriodSchema = z
+    .object({
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    })
+    .refine((b) => !b.endDate || b.endDate >= b.startDate, {
+        message: 'endDate must be on or after startDate',
+        path: ['endDate'],
+    });
+
+// ── Cycle forecast query ────────────────────────────────────────────────────
+// Backs GET /v1/users/me/cycle/forecast. `months` is the half-window size in
+// months around today (default 1 -> roughly the current month +/- a month).
+export const cycleForecastQuerySchema = z.object({
+    months: z.coerce.number().int().min(1).max(6).optional(),
+});
+
 // ── Exported inferred types ───────────────────────────────────────────────────
 export type UpdateProfileBody = z.infer<typeof updateProfileSchema>;
 export type UpdatePreferencesBody = z.infer<typeof updatePreferencesSchema>;
 export type UpdateOnboardingBody = z.infer<typeof updateOnboardingSchema>;
 export type UpdatePrivacyBody = z.infer<typeof updatePrivacySchema>;
+export type LogPeriodBody = z.infer<typeof logPeriodSchema>;
+export type CycleForecastQuery = z.infer<typeof cycleForecastQuerySchema>;
