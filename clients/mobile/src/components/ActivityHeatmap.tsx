@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { getRecent } from '@/api/exercises';
 import { withAlpha } from '@/theme/utils';
+import { localDateKey } from '@/components/activityHeatmapDate';
 
 const CELL   = 10;   // px per cell
 const GAP    = 2;    // px gap between cells
@@ -32,6 +33,11 @@ function getIntensity(minutes: number): number {
     if (minutes <= 75)  return 3;
     return 4;
 }
+
+// localDateKey lives in ./activityHeatmapDate (pure, dependency-free) so it can
+// be unit-tested without loading this RN/expo component. Re-export for any
+// existing importer of `@/components/ActivityHeatmap`.
+export { localDateKey };
 
 interface CellData {
     date:      string;
@@ -57,7 +63,20 @@ export function ActivityHeatmap() {
         const map = new Map<string, { duration: number; count: number }>();
         (workouts as any[]).forEach((w: any) => {
             const raw: string = w.createdAt ?? w.date ?? '';
-            const date = raw.split('T')[0] as string;
+            if (!raw) return;
+            // Key by the LOCAL calendar day so a workout lands in the same column
+            // the grid (which iterates local days) draws for that day. For a full
+            // ISO instant we parse and read LOCAL fields (a bare `split('T')[0]`
+            // would use the UTC day instead — the bug). A date-only value (no time
+            // component) already names a calendar day with no zone, so we take it
+            // verbatim rather than re-interpreting it as a UTC instant.
+            let date: string;
+            if (raw.includes('T')) {
+                const parsed = new Date(raw);
+                date = Number.isNaN(parsed.getTime()) ? (raw.split('T')[0] as string) : localDateKey(parsed);
+            } else {
+                date = raw.split('T')[0] as string;
+            }
             if (!date) return;
             const existing = map.get(date);
             if (existing) {
@@ -81,7 +100,7 @@ export function ActivityHeatmap() {
         let week = 0;
         const cursor = new Date(startDay);
         while (cursor <= today) {
-            const dateStr  = cursor.toISOString().split('T')[0] as string;
+            const dateStr  = localDateKey(cursor); // local frame — matches grid iteration
             const dayOfWeek = cursor.getDay();
             const wo        = workoutMap.get(dateStr);
             cells.push({
@@ -112,10 +131,16 @@ export function ActivityHeatmap() {
         const labels: { label: string; week: number }[] = [];
         let lastMonth = -1;
         grid.forEach(cell => {
-            const month = new Date(cell.date).getMonth();
+            // cell.date is a LOCAL `YYYY-MM-DD` key. Parse it back as LOCAL
+            // midnight (not `new Date('YYYY-MM-DD')`, which is UTC midnight and
+            // would read one day earlier for users behind UTC) so the month label
+            // stays in the same frame as the grid.
+            const [y, m, d] = cell.date.split('-').map(Number) as [number, number, number];
+            const local = new Date(y, m - 1, d);
+            const month = local.getMonth();
             if (month !== lastMonth && cell.day === 0) {
                 labels.push({
-                    label: new Date(cell.date).toLocaleString('default', { month: 'short' }),
+                    label: local.toLocaleString('default', { month: 'short' }),
                     week:  cell.week,
                 });
                 lastMonth = month;
@@ -126,7 +151,7 @@ export function ActivityHeatmap() {
 
     const activeDays   = workoutMap.size;
     const totalMinutes = Array.from(workoutMap.values()).reduce((s, d) => s + d.duration, 0);
-    const todayStr     = new Date().toISOString().split('T')[0] as string;
+    const todayStr     = localDateKey(new Date()); // local frame — matches cell date keys
 
     return (
         <View style={[s.card, {

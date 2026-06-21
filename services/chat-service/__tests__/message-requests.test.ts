@@ -6,8 +6,10 @@
  *      fake (no real DB; CI has none). This proves the actual gate semantics:
  *      a pending requester may send EXACTLY ONE message; a 2nd send throws
  *      RequestPendingError; the recipient (non-requester) may accept -> 'accepted'
- *      (unblocks) or decline -> 'declined'; only the recipient may act; GET
- *      requests returns only INCOMING pending; Ria threads are never gated.
+ *      (unblocks) or decline -> 'declined' (TERMINAL + blocking: the requester
+ *      stays blocked AND the thread is hidden from their conversation list); only
+ *      the recipient may act; GET requests returns only INCOMING pending; Ria
+ *      threads are never gated.
  *   2. REST wiring — the genuine `routes` plugin (mock ChatService) proves the
  *      send handler maps RequestPendingError to HTTP 409 {error:'request_pending'}
  *      and that the accept/decline/list endpoints are wired to the service.
@@ -173,6 +175,53 @@ describe('ChatService — message-request gate semantics (in-memory prisma)', ()
 
         const updated = await svc.declineRequest(CONV_ID, RECIPIENT);
         expect(updated.requestState).toBe('declined');
+    });
+
+    it('decline() is TERMINAL: it BLOCKS the requester’s further sends (no-op-unblock bug)', async () => {
+        const prisma = makeFakePrisma({
+            conversations: [{ id: CONV_ID, participantA: RECIPIENT, participantB: REQUESTER, requestState: 'pending', updatedAt: new Date() }],
+            messages: [{ id: 'm1', conversationId: CONV_ID, senderId: REQUESTER, text: 'hi', createdAt: new Date(1) }],
+        });
+        const svc = service(prisma);
+
+        await svc.declineRequest(CONV_ID, RECIPIENT);
+
+        // Re-read the (now-declined) conversation and confirm the requester is
+        // STILL blocked — a declined request must never silently unblock sends.
+        const conv = await prisma.conversation.findUnique({ where: { id: CONV_ID } });
+        expect(conv.requestState).toBe('declined');
+        await expect(svc.assertCanSend(conv, REQUESTER)).rejects.toBeInstanceOf(RequestPendingError);
+        // The recipient is likewise blocked from reviving a declined thread.
+        await expect(svc.assertCanSend(conv, RECIPIENT)).rejects.toBeInstanceOf(RequestPendingError);
+    });
+
+    it('an ACCEPTED conversation still allows sends after the decline fix', async () => {
+        const prisma = makeFakePrisma({
+            conversations: [{ id: CONV_ID, participantA: RECIPIENT, participantB: REQUESTER, requestState: 'accepted', updatedAt: new Date() }],
+            messages: [{ id: 'm1', conversationId: CONV_ID, senderId: REQUESTER, text: 'hi', createdAt: new Date(1) }],
+        });
+        const svc = service(prisma);
+        const conv = await prisma.conversation.findUnique({ where: { id: CONV_ID } });
+
+        await expect(svc.assertCanSend(conv, REQUESTER)).resolves.toBeUndefined();
+        await expect(svc.assertCanSend(conv, RECIPIENT)).resolves.toBeUndefined();
+    });
+
+    it('getConversations HIDES a declined thread from the requester but KEEPS it for the recipient', async () => {
+        const seed = {
+            conversations: [{ id: CONV_ID, participantA: RECIPIENT, participantB: REQUESTER, requestState: 'declined', updatedAt: new Date() }],
+            messages: [{ id: 'm1', conversationId: CONV_ID, senderId: REQUESTER, text: 'hi', createdAt: new Date(1) }],
+        };
+
+        // Requester (earliest sender) -> declined thread is hidden entirely.
+        const requesterList = await service(makeFakePrisma(seed)).getConversations(REQUESTER);
+        expect(requesterList).toHaveLength(0);
+
+        // Recipient (the one who declined) -> still sees the declined thread.
+        const recipientList = await service(makeFakePrisma(seed)).getConversations(RECIPIENT);
+        expect(recipientList).toHaveLength(1);
+        expect(recipientList[0].id).toBe(CONV_ID);
+        expect(recipientList[0].requestState).toBe('declined');
     });
 
     it('only the NON-requester may accept/decline (requester acting is Forbidden)', async () => {

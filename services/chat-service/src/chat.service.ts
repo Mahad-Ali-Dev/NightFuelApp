@@ -117,7 +117,7 @@ export class ChatService {
 
     /** List all conversations for a user with last message preview + request state. */
     async getConversations(userId: string) {
-        const conversations = await this.prisma.conversation.findMany({
+        const allConversations = await this.prisma.conversation.findMany({
             where: {
                 OR: [
                     { participantA: userId },
@@ -132,6 +132,22 @@ export class ChatService {
             },
             orderBy: { updatedAt: 'desc' },
         });
+
+        // Hide DECLINED conversations from the REQUESTER (the person who opened the
+        // thread = the earliest message's sender). A decline is terminal: the
+        // requester is fully blocked AND the thread stays out of their list. The
+        // recipient (who declined) still sees it. Only declined rows need the
+        // extra earliest-sender lookup, so non-declined threads stay single-query.
+        const conversations = (
+            await Promise.all(
+                allConversations.map(async (conv) => {
+                    if (conv.requestState !== 'declined') return conv;
+                    const { requesterId } = await this.getConversationRequestInfo(conv.id);
+                    // Drop only when THIS user is the requester; keep it for the recipient.
+                    return requesterId === userId ? null : conv;
+                }),
+            )
+        ).filter((conv): conv is (typeof allConversations)[number] => conv !== null);
 
         // Resolve the human-readable peer identity for every NON-Ria peer via the
         // user-service internal profile path. One short-lived token covers the
@@ -258,6 +274,12 @@ export class ChatService {
      * requester AND a message already exists (i.e. the requester is trying to
      * send a SECOND message before the recipient accepts).
      *
+     * 'declined' is a BLOCKING TERMINAL state: a declined request never unblocks
+     * the requester, so any send on a declined conversation is rejected outright.
+     * Only 'accepted' fully unblocks. (Reuses RequestPendingError so both the REST
+     * and WS layers map it to the existing `request_pending` response — the
+     * requester stays blocked either way.)
+     *
      * Ria conversations are always allowed: a user must be able to keep chatting
      * with the AI coach regardless of the stored request_state.
      */
@@ -268,7 +290,14 @@ export class ChatService {
         // Ria/coach AI thread — never request-blocked.
         if (conv.participantA === RIA_AI_USER_ID || conv.participantB === RIA_AI_USER_ID) return;
 
-        // Only a 'pending' conversation gates anything.
+        // 'declined' is terminal and blocking — reject the send BEFORE the
+        // pending-only branch so a declined requester can never keep messaging.
+        if (conv.requestState === 'declined') {
+            throw new RequestPendingError();
+        }
+
+        // Only a 'pending' conversation gates anything further; 'accepted'
+        // fully unblocks.
         if (conv.requestState !== 'pending') return;
 
         const { requesterId, hasMessages } = await this.getConversationRequestInfo(conv.id);

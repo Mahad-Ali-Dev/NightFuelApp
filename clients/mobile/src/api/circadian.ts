@@ -79,13 +79,22 @@ function extremeKey(curve: Record<string, number> | undefined, dir: 'max' | 'min
   return bestK;
 }
 
-/** The shift's end-time as minutes-since-(local)-midnight, or null. */
+/**
+ * The shift's end-time as minutes-since-UTC-midnight, or null.
+ *
+ * Read in the UTC frame (getUTCHours/getUTCMinutes) ON PURPOSE: the engine's
+ * `melatoninOnset` is a UTC "HH:MM" clock string, and deriveEntrainmentScore
+ * compares the two on a single 24h dial. Using local getHours/getMinutes here
+ * would offset the shift end by the device's UTC offset and inflate/deflate the
+ * computed gap (and thus the score) by that offset — so we keep BOTH signals in
+ * the same (UTC) frame.
+ */
 function shiftEndMinutes(shift: any): number | null {
   const end = shift?.endTime;
   if (typeof end !== 'string' || end.trim() === '') return null;
   const d = new Date(end);
   if (Number.isNaN(d.getTime())) return null;
-  return d.getHours() * 60 + d.getMinutes();
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
 }
 
 /** Compute the circadian profile for explicit shift parameters. */

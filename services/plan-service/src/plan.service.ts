@@ -50,6 +50,67 @@ export class PlanService {
         return (await response.json()) as any;
     }
 
+    /**
+     * Supersede the user's ACTIVE plans for `date` and create the next-versioned
+     * row, concurrency-safe.
+     *
+     * planVersion is a read-max-then-create value guarded by
+     * @@unique([userId, planDate, planVersion]). Two generations racing on the
+     * same (userId, date) can read the same max and both compute the same
+     * nextVersion — the second create then throws P2002, surfacing as a 500
+     * *after* a paid AI call. We recompute nextVersion from the current max and
+     * retry the create on P2002 (up to MAX_VERSION_RETRIES times) so the loser of
+     * the race simply takes the next free version instead of failing.
+     *
+     * The single-call happy path is unchanged: first attempt reads the max,
+     * creates version max+1, and returns — no extra round-trips on success beyond
+     * the (already present) max lookup.
+     */
+    private async createNextVersionedPlan(
+        userId: string,
+        date: string,
+        buildData: (nextVersion: number) => any,
+    ): Promise<any> {
+        const MAX_VERSION_RETRIES = 3;
+        const planDate = new Date(date);
+
+        // Supersede once — this is idempotent across retries (already-SUPERSEDED
+        // rows are simply not re-matched by the status:'ACTIVE' filter).
+        await this.prisma.dayPlan.updateMany({
+            where: { userId, planDate, status: 'ACTIVE' },
+            data: { status: 'SUPERSEDED' },
+        });
+
+        let lastErr: any;
+        for (let attempt = 0; attempt < MAX_VERSION_RETRIES; attempt++) {
+            const maxPlan = await this.prisma.dayPlan.findFirst({
+                where: { userId, planDate },
+                orderBy: { planVersion: 'desc' },
+                select: { planVersion: true },
+            });
+            const nextVersion = (maxPlan?.planVersion ?? 0) + 1;
+
+            try {
+                return await this.prisma.dayPlan.create({ data: buildData(nextVersion) });
+            } catch (err: any) {
+                // P2002 = unique constraint collision on the version: a concurrent
+                // generation grabbed this version first. Recompute + retry.
+                if (err?.code === 'P2002') {
+                    lastErr = err;
+                    logger.warn(
+                        { userId, date, attempt: attempt + 1, nextVersion },
+                        'planVersion collision (P2002) — recomputing next version and retrying',
+                    );
+                    continue;
+                }
+                throw err;
+            }
+        }
+
+        logger.error({ userId, date }, 'Exhausted planVersion retries after repeated P2002 collisions');
+        throw lastErr;
+    }
+
     async generateAndStorePlan(profileData: any, userId: string, date: string, shiftId: string | null = null, shiftType: string = 'ROTATING', aiGenerated: boolean = false): Promise<any> {
         logger.info(`Generating plan for user ${userId} on ${date}`);
 
@@ -219,31 +280,26 @@ export class PlanService {
             };
         }
 
-        // 8. Supersede existing plans
-        await this.prisma.dayPlan.updateMany({
-            where: { userId, planDate: new Date(date), status: 'ACTIVE' },
-            data: { status: 'SUPERSEDED' },
-        });
-
-        const nextVersion = (lastPlan?.planVersion ?? 0) + 1;
-
-        const createdPlan = await this.prisma.dayPlan.create({
-            data: {
-                userId,
-                planDate: new Date(date),
-                shiftId,
-                planVersion: nextVersion,
-                plan: {
-                    ...planResult.structuredPlan,
-                    parameters: planParams
-                },
-                generationModel: planResult.providerUsed ?? 'openai',
-                generationLatencyMs: latencyMs,
-                generationTokens: planResult.tokensUsed ?? null,
-                status: 'ACTIVE',
-                aiGenerated,
+        // 8. Supersede existing plans + persist the new version.
+        // Versioning is concurrency-safe: supersede, recompute nextVersion from the
+        // current max, and create — retrying on P2002 (the @@unique([userId,
+        // planDate, planVersion]) collision two racing generations would otherwise
+        // surface as a 500 AFTER the paid AI call). See createNextVersionedPlan.
+        const createdPlan = await this.createNextVersionedPlan(userId, date, (nextVersion) => ({
+            userId,
+            planDate: new Date(date),
+            shiftId,
+            planVersion: nextVersion,
+            plan: {
+                ...planResult.structuredPlan,
+                parameters: planParams
             },
-        });
+            generationModel: planResult.providerUsed ?? 'openai',
+            generationLatencyMs: latencyMs,
+            generationTokens: planResult.tokensUsed ?? null,
+            status: 'ACTIVE',
+            aiGenerated,
+        }));
 
         // 9. Publish event (non-blocking — don't crash on Redis failure)
         try {
@@ -292,32 +348,20 @@ export class PlanService {
     ): Promise<any> {
         logger.info({ userId, date }, 'Storing pre-generated plan');
 
-        await this.prisma.dayPlan.updateMany({
-            where: { userId, planDate: new Date(date), status: 'ACTIVE' },
-            data: { status: 'SUPERSEDED' },
-        });
-
-        // Get highest current version
-        const lastPlan = await this.prisma.dayPlan.findFirst({
-            where: { userId, planDate: new Date(date) },
-            orderBy: { planVersion: 'desc' },
-            select: { planVersion: true }
-        });
-        const nextVersion = (lastPlan?.planVersion ?? 0) + 1;
-
-        const createdPlan = await this.prisma.dayPlan.create({
-            data: {
-                userId,
-                planDate: new Date(date),
-                shiftId,
-                planVersion: nextVersion,
-                plan: structuredPlan,
-                generationModel: providerUsed,
-                generationLatencyMs: null,
-                generationTokens: tokensUsed,
-                status: 'ACTIVE',
-            },
-        });
+        // Supersede existing plans + persist the new version with the same
+        // concurrency-safe versioning as generateAndStorePlan (retry on the
+        // @@unique([userId, planDate, planVersion]) P2002 collision).
+        const createdPlan = await this.createNextVersionedPlan(userId, date, (nextVersion) => ({
+            userId,
+            planDate: new Date(date),
+            shiftId,
+            planVersion: nextVersion,
+            plan: structuredPlan,
+            generationModel: providerUsed,
+            generationLatencyMs: null,
+            generationTokens: tokensUsed,
+            status: 'ACTIVE',
+        }));
 
         const sp = (structuredPlan as any) ?? {};
         const planPayload: PlanGeneratedPayload = {

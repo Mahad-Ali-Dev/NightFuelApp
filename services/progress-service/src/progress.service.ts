@@ -366,7 +366,9 @@ export class ProgressService {
     async getProgressHistory(userId: string, days: number): Promise<DailyProgress[]> {
         const clampedDays = Math.min(Math.max(days, 1), 90);
         const since = new Date();
-        since.setUTCDate(since.getUTCDate() - clampedDays);
+        // Inclusive N-day window: subtract (N-1) so the window spans exactly N
+        // calendar days (today + the previous N-1), not N+1.
+        since.setUTCDate(since.getUTCDate() - (clampedDays - 1));
         const sinceDate = this.toUtcDateOnly(since);
 
         return this.prisma.dailyProgress.findMany({
@@ -382,6 +384,16 @@ export class ProgressService {
      * GET /v1/progress/streak
      * Returns current and longest streak for the user.
      * If no streak record exists, returns zeroed defaults.
+     *
+     * The stored currentStreak only advances on a positive adherence event
+     * (see updateStreak), so it can go stale after a break: a user who was on a
+     * 5-day streak but logged nothing for a week still has currentStreak=5 in the
+     * row. We recompute the *live* current streak at read time by anchoring on
+     * lastAdherentDate (UTC date-only): the streak is only "alive" if the last
+     * adherent day was today or yesterday — otherwise the run is broken and the
+     * current streak is 0. This mirrors the on-device anchor logic in
+     * clients/mobile/src/lib/streaks.ts (anchor = today or yesterday, else 0).
+     * longestStreak is a historical high-water mark and is never reset here.
      */
     async getStreak(userId: string): Promise<{
         currentStreak: number;
@@ -394,8 +406,20 @@ export class ProgressService {
             return { currentStreak: 0, longestStreak: 0, lastAdherentDate: null };
         }
 
+        const todayUtc = this.toUtcDateOnly(new Date());
+        const yesterdayUtc = new Date(todayUtc.getTime() - 24 * 60 * 60 * 1000);
+        const lastDate = streak.lastAdherentDate
+            ? this.toUtcDateOnly(streak.lastAdherentDate)
+            : null;
+
+        // Anchor = today or yesterday, else the run is broken → currentStreak 0.
+        const isAlive =
+            lastDate !== null &&
+            (lastDate.getTime() === todayUtc.getTime() ||
+                lastDate.getTime() === yesterdayUtc.getTime());
+
         return {
-            currentStreak: streak.currentStreak,
+            currentStreak: isAlive ? streak.currentStreak : 0,
             longestStreak: streak.longestStreak,
             lastAdherentDate: streak.lastAdherentDate,
         };
@@ -569,7 +593,9 @@ export class ProgressService {
 
         const clampedDays = Math.min(Math.max(days, 1), 365);
         const since = new Date();
-        since.setUTCDate(since.getUTCDate() - clampedDays);
+        // Inclusive N-day window: subtract (N-1) so the window spans exactly N
+        // calendar days (today + the previous N-1), not N+1.
+        since.setUTCDate(since.getUTCDate() - (clampedDays - 1));
         const sinceDate = this.toUtcDateOnly(since);
 
         const records = await this.prisma.dailyProgress.findMany({
@@ -618,7 +644,13 @@ export class ProgressService {
         const totalHydrationActual = sum('hydrationActual');
         const totalMealsLogged = records.reduce((acc, r) => acc + r.mealsLogged, 0);
 
-        const targetRecords = records.filter((r) => r.caloriesTarget !== null);
+        // Average over the SAME predicate as daysWithTarget (caloriesTarget !==
+        // null && > 0). A stored 0 target is not a real target and must not drag
+        // the average down (or, if all targets were 0, produce a misleading 0
+        // instead of null).
+        const targetRecords = records.filter(
+            (r) => r.caloriesTarget !== null && r.caloriesTarget > 0,
+        );
         const avgCaloriesTarget =
             targetRecords.length > 0
                 ? targetRecords.reduce((acc, r) => acc + (r.caloriesTarget ?? 0), 0) /
@@ -698,8 +730,11 @@ export class ProgressService {
     }
 
     async getBodyMetricsHistory(userId: string, days: number): Promise<any[]> {
+        const clampedDays = Math.min(days, 365);
         const since = new Date();
-        since.setUTCDate(since.getUTCDate() - Math.min(days, 365));
+        // Inclusive N-day window: subtract (N-1) so the window spans exactly N
+        // calendar days (today + the previous N-1), not N+1.
+        since.setUTCDate(since.getUTCDate() - (clampedDays - 1));
         return (this.prisma as any).bodyMetrics.findMany({
             where: { userId, recordedAt: { gte: since } },
             orderBy: { recordedAt: 'desc' },

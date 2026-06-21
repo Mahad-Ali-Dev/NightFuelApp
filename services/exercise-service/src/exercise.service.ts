@@ -551,6 +551,16 @@ export class ExerciseService {
     // ── Workout Sessions ──────────────────────────────────────────────────────
 
     async startSession(userId: string, routineId?: string) {
+        // Single-active-session invariant: a user may have at most ONE 'active'
+        // workout session at a time. Before creating the new one, atomically
+        // cancel any session the user has left active (e.g. abandoned without
+        // calling /end) so we never accumulate unbounded concurrent ACTIVE rows.
+        // The updateMany is scoped to the caller's own active sessions, mirroring
+        // the { userId, status } scoping used by the other session methods.
+        await this.prisma.workoutSession.updateMany({
+            where: { userId, status: 'active' },
+            data: { status: 'cancelled', endedAt: new Date() }
+        });
         return this.prisma.workoutSession.create({
             data: {
                 userId,
@@ -561,19 +571,25 @@ export class ExerciseService {
     }
 
     async getActiveSession(userId: string) {
+        // orderBy startedAt:desc so that — even if a stale 'active' row ever
+        // slipped through (e.g. a legacy row created before the single-active
+        // invariant was enforced) — we surface the MOST RECENT active session.
         return this.prisma.workoutSession.findFirst({
             where: { userId, status: 'active' },
+            orderBy: { startedAt: 'desc' },
             include: { logs: true }
         });
     }
 
     async logSessionExercise(sessionId: string, userId: string, exerciseName: string, sets: number, reps: number, weightKg: number, durationSecs: number) {
-        // IDOR guard: only allow logging into a session that belongs to the
-        // caller. Mirrors the getWorkout/deleteWorkout `{ id, userId }` filter —
-        // returns null when the session doesn't exist or isn't the caller's, so
-        // the route can answer 404 without mutating another user's session.
+        // IDOR + state guard: only allow logging into a session that belongs to
+        // the caller AND is still 'active'. Mirrors the getWorkout/deleteWorkout
+        // `{ id, userId }` filter, additionally scoped to status:'active' so a set
+        // cannot be appended to a completed/cancelled (terminal) session. Returns
+        // null when the session doesn't exist, isn't the caller's, or is no longer
+        // active — the route answers 404 without mutating the session.
         const session = await this.prisma.workoutSession.findFirst({
-            where: { id: sessionId, userId },
+            where: { id: sessionId, userId, status: 'active' },
             select: { id: true },
         });
         if (!session) return null;
@@ -591,12 +607,15 @@ export class ExerciseService {
     }
 
     async endSession(sessionId: string, userId: string) {
-        // IDOR guard: scope the mutation to the caller's own session via
-        // updateMany({ id, userId }) — count 0 means it doesn't exist or isn't
-        // theirs, so we return null and let the route answer 404. Mirrors the
-        // deleteWorkout deleteMany({ id, userId }) pattern.
+        // IDOR + state guard: scope the mutation to the caller's own session that
+        // is still 'active' via updateMany({ id, userId, status:'active' }) — count
+        // 0 means it doesn't exist, isn't theirs, OR is already terminal
+        // (completed/cancelled), so we return null and let the route answer 404.
+        // The status:'active' filter makes end idempotent-safe: a second /end on an
+        // already-ended session no longer re-completes it (overwriting endedAt).
+        // Mirrors the deleteWorkout deleteMany({ id, userId }) pattern.
         const result = await this.prisma.workoutSession.updateMany({
-            where: { id: sessionId, userId },
+            where: { id: sessionId, userId, status: 'active' },
             data: { status: 'completed', endedAt: new Date() }
         });
         if (result.count === 0) return null;

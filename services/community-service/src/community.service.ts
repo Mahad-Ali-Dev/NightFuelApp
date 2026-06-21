@@ -42,6 +42,12 @@ const BADGE_KEYS = {
     LEGEND: 'legend',
 } as const;
 
+// Defensive cap on the badge bonus-XP cascade. A badge can only be awarded once
+// (the per-badge idempotency guard), so the cascade self-terminates after at
+// most one pass per distinct badge; this depth limit is a belt-and-braces guard
+// against an accidental cycle in badge bonus XP causing unbounded recursion.
+const BADGE_CASCADE_MAX_DEPTH = 16;
+
 export class CommunityService {
     constructor(
         private prisma: PrismaClient,
@@ -482,16 +488,16 @@ export class CommunityService {
         await this._checkXpBadges(userId, totalXp, newLevel);
     }
 
-    private async _checkXpBadges(userId: string, xp: number, level: number) {
-        if (xp >= 500) await this._awardBadgeIfNew(userId, BADGE_KEYS.POWER_USER);
-        if (xp >= 1000) await this._awardBadgeIfNew(userId, BADGE_KEYS.ON_FIRE);
-        if (xp >= 5000) await this._awardBadgeIfNew(userId, BADGE_KEYS.ELITE);
-        if (level >= 5) await this._awardBadgeIfNew(userId, BADGE_KEYS.NEWCOMER);
-        if (level >= 10) await this._awardBadgeIfNew(userId, BADGE_KEYS.VETERAN);
-        if (level >= 20) await this._awardBadgeIfNew(userId, BADGE_KEYS.LEGEND);
+    private async _checkXpBadges(userId: string, xp: number, level: number, depth: number = 0) {
+        if (xp >= 500) await this._awardBadgeIfNew(userId, BADGE_KEYS.POWER_USER, depth);
+        if (xp >= 1000) await this._awardBadgeIfNew(userId, BADGE_KEYS.ON_FIRE, depth);
+        if (xp >= 5000) await this._awardBadgeIfNew(userId, BADGE_KEYS.ELITE, depth);
+        if (level >= 5) await this._awardBadgeIfNew(userId, BADGE_KEYS.NEWCOMER, depth);
+        if (level >= 10) await this._awardBadgeIfNew(userId, BADGE_KEYS.VETERAN, depth);
+        if (level >= 20) await this._awardBadgeIfNew(userId, BADGE_KEYS.LEGEND, depth);
     }
 
-    private async _awardBadgeIfNew(userId: string, badgeKey: string) {
+    private async _awardBadgeIfNew(userId: string, badgeKey: string, depth: number = 0) {
         try {
             const badge = await this.prisma.badge.findUnique({ where: { key: badgeKey } });
             if (!badge) return null;
@@ -505,13 +511,35 @@ export class CommunityService {
                 data: { userId, badgeId: badge.id, seen: false }
             });
 
-            // Award bonus XP for earning the badge itself (only non-XP badges)
-            if (badge.xpReward > 0) {
-                await this.prisma.userScore.upsert({
+            // Award bonus XP for earning the badge itself. The bonus can push the
+            // user across a higher XP/level threshold, so we must recompute +
+            // persist the level and re-run the XP-badge checks against the NEW
+            // total — otherwise the next badge wouldn't be granted until the
+            // user's next XP event (the cascade bug). Recursion is naturally
+            // bounded: each badge is awarded at most once (the `existing` guard
+            // short-circuits), but we also cap depth defensively against any
+            // cycle in badge bonus XP.
+            if (badge.xpReward > 0 && depth < BADGE_CASCADE_MAX_DEPTH) {
+                const score = await this.prisma.userScore.upsert({
                     where: { userId },
                     create: { userId, xp: badge.xpReward, level: xpToLevel(badge.xpReward) },
                     update: { xp: { increment: badge.xpReward } }
                 });
+
+                // Recalculate + persist level after the bonus increment.
+                const totalXp = score.xp;
+                const newLevel = xpToLevel(totalXp);
+                if (newLevel !== score.level) {
+                    await this.prisma.userScore.update({
+                        where: { userId },
+                        data: { level: newLevel }
+                    });
+                }
+
+                // Cascade: a crossed threshold may award the next XP/level badge
+                // in the same pass. _awardBadgeIfNew is idempotent per badge, so
+                // this terminates.
+                await this._checkXpBadges(userId, totalXp, newLevel, depth + 1);
             }
 
             logger.info({ userId, badgeKey }, 'Badge awarded');

@@ -14,6 +14,11 @@ const logger = createLogger('state-service:materializer');
 
 const ADHERENCE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const ADHERENCE_MAX_SAMPLES = 100; // safety cap so the JSON column can't grow unbounded
+// Neutral adherence used when the window holds no real boolean samples. MUST
+// match the schema default (UserState.last7DaysAdherence @default(1.0)) and sit
+// ABOVE the decision-engine's penalty threshold (engine.ts: < 0.7 → volume cut),
+// so an empty window is never misread as "low adherence" and never cuts volume.
+const NEUTRAL_ADHERENCE = 1.0;
 
 interface AdherenceSample {
     at: string; // ISO8601
@@ -33,22 +38,53 @@ function parseSamples(raw: unknown): AdherenceSample[] {
     );
 }
 
-/** Append the new sample, drop anything older than 7 days, and return the windowed mean. */
+/** UTC calendar day key (YYYY-MM-DD) for an ISO8601 timestamp, or null if unparseable. */
+function dayKey(at: string): string | null {
+    const t = Date.parse(at);
+    if (Number.isNaN(t)) return null;
+    return new Date(t).toISOString().slice(0, 10);
+}
+
+/**
+ * Fold the (optional) new sample into the window and return the per-DAY mean.
+ *
+ * `sample` is null when the producer sent no boolean isAdherent — in that case
+ * we still prune the stored window but append nothing (a missing verdict must
+ * never be coerced to a 0/false sample, which would drag the mean toward a false
+ * "low adherence" penalty).
+ *
+ * The mean is computed over one entry PER CALENDAR DAY, not per meal event:
+ * multiple meals on the same day collapse to that day's latest verdict, so the
+ * window measures daily adherence rather than meal volume. When the window holds
+ * no real samples the mean is the NEUTRAL_ADHERENCE sentinel (no penalty).
+ */
 function rollWindow(
     existing: AdherenceSample[],
-    sample: AdherenceSample,
+    sample: AdherenceSample | null,
     now: number
 ): { samples: AdherenceSample[]; mean: number } {
     const cutoff = now - ADHERENCE_WINDOW_MS;
-    const samples = [...existing, sample]
+    const samples = [...existing, ...(sample ? [sample] : [])]
         .filter((s) => {
             const t = Date.parse(s.at);
             return !Number.isNaN(t) && t >= cutoff;
         })
         .slice(-ADHERENCE_MAX_SAMPLES);
-    const mean = samples.length
-        ? samples.reduce((acc, s) => acc + (s.adherent ? 1 : 0), 0) / samples.length
-        : 0;
+
+    // De-duplicate to one verdict per UTC calendar day. Samples are appended in
+    // chronological order, so the LAST sample seen for a day wins (its latest
+    // verdict). Anything with an unparseable timestamp is already filtered out
+    // above, so dayKey() is non-null here.
+    const perDay = new Map<string, boolean>();
+    for (const s of samples) {
+        const key = dayKey(s.at);
+        if (key) perDay.set(key, s.adherent);
+    }
+
+    const days = [...perDay.values()];
+    const mean = days.length
+        ? days.reduce((acc, adherent) => acc + (adherent ? 1 : 0), 0) / days.length
+        : NEUTRAL_ADHERENCE;
     return { samples, mean };
 }
 
@@ -74,18 +110,33 @@ export class StateMaterializer {
         const { userId, payload } = event;
         logger.info({ userId, mealLogId: payload.mealLogId }, 'Processing meal log event');
 
-        // Read-modify-write of the rolling adherence window. Per-user events are
-        // processed sequentially by the stream consumer group, so this is race-safe.
+        // Read-modify-write of the rolling adherence window.
+        //
+        // RACE NOTE: handlers are wired via EventBus.subscribe (Redis Pub/Sub
+        // fan-out — see events.ts), NOT a consumer group, so concurrent
+        // meal-logged events for the SAME user can interleave this read →
+        // compute → upsert and lose an update (last writer wins). Within the
+        // code-only scope we minimise the window (read only adherenceSamples,
+        // do all work synchronously, single upsert) but cannot make it atomic.
+        // FOLLOW-UP: move to a consumer group with per-user ordering, or do the
+        // read-modify-write inside a DB transaction / SELECT … FOR UPDATE.
         const existing = await this.prisma.userState.findUnique({
             where: { userId },
             select: { adherenceSamples: true },
         });
 
         const now = Date.now();
-        const sample: AdherenceSample = {
-            at: payload.loggedAt ?? new Date(now).toISOString(),
-            adherent: payload.isAdherent,
-        };
+        // Only build a sample when the producer sent an explicit boolean verdict.
+        // A missing/undefined isAdherent must NOT be coerced to a false (0)
+        // sample — doing so would drag last7DaysAdherence toward 0 and trip the
+        // decision-engine's < 0.7 volume cut for users who simply lack a verdict.
+        const sample: AdherenceSample | null =
+            typeof payload.isAdherent === 'boolean'
+                ? {
+                      at: payload.loggedAt ?? new Date(now).toISOString(),
+                      adherent: payload.isAdherent,
+                  }
+                : null;
         const { samples, mean } = rollWindow(
             parseSamples(existing?.adherenceSamples),
             sample,

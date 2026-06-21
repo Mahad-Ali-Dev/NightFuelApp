@@ -141,11 +141,23 @@ export class MealService {
             userId,
             payload: {
                 mealLogId: mealLog.id,
+                // The actual time the meal was logged (NOT the event-processing
+                // time). Consumers bucket by calendar day from this — omitting it
+                // makes progress-service fall back to its own processing clock and
+                // mis-attribute near-midnight logs to the wrong day. Persisted
+                // value from the row (Prisma `loggedAt`, defaults to now()).
+                loggedAt: mealLog.loggedAt.toISOString(),
                 totalCalories,
                 totalProtein,
                 totalCarbs,
                 totalFat,
                 mealType,
+                // Forward the persisted adherence verdict so state-service can
+                // fold it into its rolling window. This is the value stamped on
+                // the row (see `isAdherent` above) — NOT a fabricated verdict.
+                // progress-service ignores this and recomputes adherence from
+                // target-vs-actual; state-service consumes it directly.
+                isAdherent: mealLog.isAdherent,
                 // Only present when this log originated from a planned slot.
                 ...(planMealId ? { planMealId } : {})
             }
@@ -285,9 +297,17 @@ export class MealService {
         });
         if (!active) throw new Error('No active fast found');
 
+        // A fast that is ended before reaching its target window was ended early
+        // (the mobile UI's "END FAST EARLY" action) and must be CANCELLED, not
+        // COMPLETED. Only a fast that reached its target counts as COMPLETED
+        // ("COMPLETE FAST"). Compute elapsed hours from the recorded startTime.
+        const endTime = new Date();
+        const elapsedHours = (endTime.getTime() - active.startTime.getTime()) / (1000 * 60 * 60);
+        const status = elapsedHours >= active.targetHours ? 'COMPLETED' : 'CANCELLED';
+
         return this.prisma.fastingLog.update({
             where: { id: active.id },
-            data: { status: 'COMPLETED', endTime: new Date() }
+            data: { status, endTime }
         });
     }
 }
