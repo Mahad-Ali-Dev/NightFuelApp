@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { setupEventSubscribers } from './events';
 import { StateMaterializer } from './materializer';
 import { purgeUser } from './purge';
+import { exportUser } from './export';
 import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
 
@@ -74,6 +75,31 @@ fastify.withTypeProvider<ZodTypeProvider>().delete('/v1/state/internal/user/:use
         return reply.code(200).send({ userId, deletedCounts });
     } catch (err: any) {
         request.log.error({ err, userId }, 'GDPR purge failed');
+        return reply.code(500).send({ error: 'Internal server error' });
+    }
+});
+
+// ── GET /v1/state/internal/user/:userId/export (GDPR data export) ───────────────
+// Read-only counterpart of the purge above, behind the SAME internalAuth guard
+// (X-Internal-Token; 404s without/with a wrong token, fails CLOSED on an empty
+// expected token). Server-to-server only (nginx 404s /v1/<svc>/internal/* at the
+// edge). RETURNS every state-service row owned by :userId across the SAME
+// user-owned table set the purge erases (user_states — the ONLY user-keyed table
+// in state-service), keyed by table name, so right-to-access and right-to-erasure
+// cover identical data. IDEMPOTENT & read-only: no writes; user_states is @unique
+// per user (at most one row) so the result is inherently bounded. NEVER exports a
+// secret/credential column — user_states holds none (push-endpoint keys live in
+// notification-service, not here).
+fastify.withTypeProvider<ZodTypeProvider>().get('/v1/state/internal/user/:userId/export', {
+    preHandler: internalAuth,
+    schema: { params: z.object({ userId: z.string().min(1).max(64) }) },
+}, async (request, reply) => {
+    const { userId } = request.params;
+    try {
+        const data = await exportUser(prisma, userId);
+        return reply.code(200).send({ userId, data });
+    } catch (err: any) {
+        request.log.error({ err, userId }, 'GDPR export failed');
         return reply.code(500).send({ error: 'Internal server error' });
     }
 });

@@ -13,6 +13,7 @@ import {
 import { z } from 'zod';
 import { UserService } from './user.service';
 import { fanOutPurge, ServicePurgeResult } from './account-deletion';
+import { fanOutExport, assembleServicesMap, DataExportBundle } from './data-export';
 
 // ── Shared userId extractor ───────────────────────────────────────────────────
 // auth-service signs JWTs with { userId, role }. @fastify/jwt attaches the
@@ -56,10 +57,15 @@ export const userRoutes = async (
         // orchestrator can be exercised without real HTTP. Defaults to the real
         // fanOutPurge (native fetch + X-Internal-Token to every owning service).
         fanOut?: typeof fanOutPurge;
+        // Seam for tests: override the data-export fan-out so the GET /me/export
+        // orchestrator can be exercised without real HTTP. Defaults to the real
+        // fanOutExport (native fetch + X-Internal-Token GET to every owning service).
+        fanOutExp?: typeof fanOutExport;
     }
 ): Promise<void> => {
     const service = opts.userService;
     const fanOut = opts.fanOut ?? fanOutPurge;
+    const fanOutExp = opts.fanOutExp ?? fanOutExport;
 
     // F34 #5: in-service guard for the server-to-server-only /internal/* routes.
     // Constant-time checks X-Internal-Token == INTERNAL_SERVICE_TOKEN; on
@@ -257,6 +263,76 @@ export const userRoutes = async (
                     ownData,
                     services,
                 });
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── GET /v1/users/me/export ───────────────────────────────────────────────
+    // GDPR "export my data" ORCHESTRATOR (Art. 20 portability). Returns a SINGLE
+    // machine-readable JSON bundle of ALL the CALLING user's data across the
+    // platform. Read-only twin of DELETE /v1/users/me.
+    //
+    // SECURITY (no IDOR): the userId comes ONLY from the verified JWT
+    // (extractUserId → request.user.userId). There is NO body/param userId, so a
+    // user can only ever export THEIR OWN data — a forged param can't redirect
+    // the export at someone else's account.
+    //
+    // Steps:
+    //   1. Gather user-service's OWN user-owned data (profile, preferences,
+    //      status, coach profile/relations, period logs, derived cycle history +
+    //      forecast) — the SAME ownership inventory the deletion orchestrator
+    //      purges, read-only.
+    //   2. Fan out GET /v1/<svc>/internal/user/:userId/export to EVERY owning
+    //      service (auth included) with the shared X-Internal-Token.
+    //   3. RESILIENT: attempt all services, fold each into the `services` map —
+    //      the exported data on success, or { error } in that slot on failure
+    //      (best-effort completeness; a single unreachable service NEVER fails
+    //      the whole export — mirrors the deletion orchestrator's partial summary).
+    //   4. SECRETS: the per-service /export endpoints already exclude credentials;
+    //      this orchestrator only relays their JSON verbatim and never injects any.
+    //
+    // Always 200 with the full bundle (per-service failures are visible in-band as
+    // { error } slots, not an HTTP failure — the user still receives a portable
+    // export of everything that responded).
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/export',
+        {
+            onRequest: [(fastify as any).authenticate],
+        },
+        async (request, reply) => {
+            try {
+                // IDENTITY: JWT only. Never read a userId from body/params here.
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                // 1. Own data + 2. fan-out to every owning service, concurrently.
+                const [self, results] = await Promise.all([
+                    service.gatherOwnUserData(userId),
+                    fanOutExp(userId, opts.internalServiceToken ?? ''),
+                ]);
+
+                // 3. Fold per-service results (data | { error }) into the bundle.
+                const services = assembleServicesMap(results);
+
+                const failures = results.filter((r) => r.error !== undefined);
+                if (failures.length > 0) {
+                    request.log.error(
+                        { userId, failures: failures.map((f) => ({ service: f.service, error: f.error })) },
+                        'GDPR export: some services failed to export (degraded slots returned as { error })'
+                    );
+                }
+
+                const bundle: DataExportBundle = {
+                    exportedAt: new Date().toISOString(),
+                    userId,
+                    self,
+                    services,
+                };
+
+                return reply.code(200).send(bundle);
             } catch (err: any) {
                 request.log.error(err);
                 return reply.code(500).send({ error: 'Internal server error' });

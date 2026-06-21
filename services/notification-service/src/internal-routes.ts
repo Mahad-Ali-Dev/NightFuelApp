@@ -43,6 +43,31 @@ export const internalRoutes = async (
             }
         },
     );
+
+    // ── GET /v1/notifications/internal/user/:userId/export (GDPR data export) ────
+    // READ-ONLY counterpart of the purge (GDPR Right of Access). Behind the SAME
+    // internal-token guard the purge uses (404 without the token). READS and
+    // returns EVERY notification-service row owned by :userId across the SAME
+    // user-owned tables the purge erases (notification_preferences, notifications,
+    // push_subscriptions), as a JSON object keyed by table name, so export and
+    // erasure stay in sync. IDEMPOTENT: a user with no rows returns empty tables,
+    // still 200; no writes ever occur. SECURITY: push_subscriptions secrets
+    // (endpoint URL / auth / p256dh) are summarized as presence booleans —
+    // exportUser NEVER emits the raw push credentials.
+    fastify.get(
+        '/v1/notifications/internal/user/:userId/export',
+        { preHandler: internalAuth },
+        async (request, reply) => {
+            const { userId } = request.params as { userId: string };
+            try {
+                const data = await service.exportUser(userId);
+                return reply.code(200).send({ userId, data });
+            } catch (err: any) {
+                request.log.error({ err, userId }, 'GDPR export failed');
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        },
+    );
 };
 
 export default internalRoutes;

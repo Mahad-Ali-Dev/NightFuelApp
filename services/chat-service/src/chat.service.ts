@@ -728,4 +728,62 @@ export class ChatService {
         };
     }
 
+    // ── GDPR data export (right of access) ──────────────────────────────────────────
+    // READ-ONLY counterpart of purgeUser: returns EVERY chat-service row owned by
+    // `userId`, keyed by table name, for an Article-15 access/portability request.
+    // Mirrors purgeUser's table set EXACTLY so export and erasure stay in sync:
+    //   • coach_profiles   — keyed by user_id (the user IS the coach).
+    //   • conversations    — the user is either participant_a OR participant_b.
+    //   • messages         — authored by the user (sender_id).
+    //
+    // SECURITY: this service's schema holds NO password/token/secret/raw-key
+    // columns, so every column is safe to export verbatim — there is nothing to
+    // redact here (unlike e.g. push-endpoint keys in other services). Should a
+    // sensitive column ever be added to these tables, it MUST be excluded/redacted
+    // here.
+    //
+    // BOUNDING: messages is the only table that can grow large for a heavy user.
+    // It is capped at EXPORT_MESSAGE_LIMIT rows (newest first) so a single export
+    // can't pull an unbounded result set; the response flags whether the cap was
+    // hit. coach_profiles (0/1 row) and conversations (small per user) are
+    // unbounded. Read-only and idempotent: no writes, repeatable with identical
+    // output for unchanged data.
+    async exportUser(userId: string): Promise<{
+        coach_profiles: any[];
+        conversations: any[];
+        messages: any[];
+        _meta: { messagesTruncated: boolean; messageLimit: number };
+    }> {
+        const EXPORT_MESSAGE_LIMIT = 50_000;
+
+        const [coachProfiles, conversations, messages] = await Promise.all([
+            // The user's own coach profile (user_id is unique; 0 or 1 row).
+            this.prisma.coachProfile.findMany({ where: { userId } }),
+            // Conversations where the user is either participant.
+            this.prisma.conversation.findMany({
+                where: { OR: [{ participantA: userId }, { participantB: userId }] },
+            }),
+            // Messages the user authored (anywhere), newest first, bounded so a
+            // heavy account can't yield an unbounded read. take is LIMIT+1 so we
+            // can detect (and flag) truncation without a second count query.
+            this.prisma.message.findMany({
+                where: { senderId: userId },
+                orderBy: { createdAt: 'desc' },
+                take: EXPORT_MESSAGE_LIMIT + 1,
+            }),
+        ]);
+
+        const messagesTruncated = messages.length > EXPORT_MESSAGE_LIMIT;
+        const boundedMessages = messagesTruncated
+            ? messages.slice(0, EXPORT_MESSAGE_LIMIT)
+            : messages;
+
+        return {
+            coach_profiles: coachProfiles,
+            conversations,
+            messages: boundedMessages,
+            _meta: { messagesTruncated, messageLimit: EXPORT_MESSAGE_LIMIT },
+        };
+    }
+
 }

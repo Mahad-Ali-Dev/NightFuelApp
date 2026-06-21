@@ -173,6 +173,87 @@ export class ShiftService {
         };
     }
 
+    // ── GDPR data export (F35a, Right of Access) ─────────────────────────────────
+    // READ-ONLY counterpart of purgeUser. Returns EVERY shift-service row owned by
+    // `userId` across the SAME three user-owned tables the purge erases (shifts,
+    // rotation_patterns, scheduled_sessions), keyed by table name, so export and
+    // erasure stay in sync. No writes ever occur; calling it twice yields the same
+    // result (idempotent).
+    //
+    // SECURITY: this service stores NO secrets/credentials/tokens — every column on
+    // all three tables is non-sensitive scheduling data — so every column is safe to
+    // emit verbatim. (There is nothing to scrub here, unlike notification-service's
+    // push_subscriptions endpoint/auth/p256dh keys.)
+    //
+    // BOUNDS: shifts is per-user but capped at one row per (user, date), and
+    // rotation_patterns / scheduled_sessions are small per user, so each findMany is
+    // bounded by `take: EXPORT_ROW_LIMIT + 1` to detect (and flag) absurd row counts
+    // rather than read unboundedly. shifts + rotation_patterns are always-present
+    // base tables; scheduled_sessions is created by a USER-GATED migration that may
+    // be un-run, so its read tolerates the missing-table error (P2021) by returning
+    // an empty list — mirroring purgeUser's graceful-degradation contract.
+    async exportUser(userId: string): Promise<{
+        shifts: Shift[];
+        rotation_patterns: any[];
+        scheduled_sessions: any[];
+        _meta: {
+            shiftsTruncated: boolean;
+            rotationPatternsTruncated: boolean;
+            scheduledSessionsTruncated: boolean;
+            rowLimit: number;
+        };
+    }> {
+        const cap = EXPORT_ROW_LIMIT;
+
+        const [shifts, rotationPatterns] = await Promise.all([
+            this.prisma.shift.findMany({
+                where: { userId },
+                orderBy: { shiftDate: 'desc' },
+                take: cap + 1,
+            }),
+            this.prisma.rotationPattern.findMany({
+                where: { userId },
+                orderBy: { createdAt: 'desc' },
+                take: cap + 1,
+            }),
+        ]);
+
+        let scheduledSessions: any[] = [];
+        try {
+            scheduledSessions = await this.prisma.scheduledSession.findMany({
+                where: { userId },
+                orderBy: { scheduledAt: 'desc' },
+                take: cap + 1,
+            });
+        } catch (err: any) {
+            // P2021 = table does not exist (un-run scheduled_sessions migration).
+            // Treat the absent table as "zero rows to export"; anything else is a
+            // genuine fault and must propagate to the 500 handler.
+            const message = typeof err?.message === 'string' ? err.message : '';
+            const missingTable =
+                err?.code === 'P2021' ||
+                /relation "scheduled_sessions" does not exist/i.test(message) ||
+                /table.*scheduled_sessions.*does not exist/i.test(message);
+            if (!missingTable) throw err;
+        }
+
+        const shiftsTruncated = shifts.length > cap;
+        const rotationPatternsTruncated = rotationPatterns.length > cap;
+        const scheduledSessionsTruncated = scheduledSessions.length > cap;
+
+        return {
+            shifts: shiftsTruncated ? shifts.slice(0, cap) : shifts,
+            rotation_patterns: rotationPatternsTruncated ? rotationPatterns.slice(0, cap) : rotationPatterns,
+            scheduled_sessions: scheduledSessionsTruncated ? scheduledSessions.slice(0, cap) : scheduledSessions,
+            _meta: {
+                shiftsTruncated,
+                rotationPatternsTruncated,
+                scheduledSessionsTruncated,
+                rowLimit: cap,
+            },
+        };
+    }
+
     async deleteShift(id: string, userId: string): Promise<void> {
         await this.prisma.shift.delete({
             where: { id, userId },
@@ -193,3 +274,9 @@ export class ShiftService {
         }
     }
 }
+
+// Sanity bound on a per-user GDPR export so a pathological row count for one user
+// cannot force an unbounded read. `take: cap + 1` lets exportUser detect (and
+// flag) truncation at the cap. Per-user shift data is tiny in practice (≤1 row
+// per day), so this cap is never reached for a real user.
+const EXPORT_ROW_LIMIT = 50_000;

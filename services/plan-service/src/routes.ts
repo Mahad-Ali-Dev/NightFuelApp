@@ -283,6 +283,37 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
         }
     );
 
+    // ── GET /v1/plans/internal/user/:userId/export (GDPR data export) ────────────
+    // Read-only counterpart of the purge above, behind the SAME internalAuth guard
+    // (X-Internal-Token; 404s without/with a wrong token, fails CLOSED on an empty
+    // expected token — F35a pattern). Server-to-server only (nginx 404s
+    // /v1/<svc>/internal/* at the edge). RETURNS every plan-service row owned by
+    // :userId across the SAME user-owned tables the purge erases (day_plans via
+    // user_id, protocol_templates via creator_id), keyed by table name, so
+    // right-to-access and right-to-erasure cover identical data. IDEMPOTENT &
+    // read-only: no writes; the per-table result is bounded (EXPORT_ROW_LIMIT, see
+    // PlanService.exportUser) with a `_meta` truncation flag. Neither table holds a
+    // secret/credential column, so nothing is redacted.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/internal/user/:userId/export',
+        {
+            preHandler: internalAuth,
+            schema: {
+                params: z.object({ userId: z.string().uuid() }),
+            },
+        },
+        async (request, reply) => {
+            const { userId } = request.params;
+            try {
+                const data = await planService.exportUser(userId);
+                return reply.code(200).send({ userId, data });
+            } catch (err: any) {
+                request.log.error({ err, userId }, 'GDPR export failed');
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
     // ── Protocol Template Routes ──────────────────────────────────────────
 
     // POST /v1/plans/protocols — Create a new protocol template

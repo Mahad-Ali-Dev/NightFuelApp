@@ -312,4 +312,70 @@ export class SleepService {
             health_samples: samples.count,
         };
     }
+
+    /**
+     * GDPR data export — READ and return EVERY sleep-service row owned by `userId`.
+     *
+     * Read-only counterpart of purgeUser: it covers the EXACT SAME user-owned table
+     * set the purge erases (sleep_sessions, sleep_preferences, health_samples), keyed
+     * by table name, so right-to-access and right-to-erasure stay in sync. If a table
+     * is ever added to / removed from purgeUser, mirror it here too.
+     *
+     * SECURITY: none of these three tables hold a credential — every column is
+     * health data (sleep timestamps, quality, disturbances, durations, HR/HRV/steps
+     * readings) or a numeric preference. There is NO password/token/secret/raw-key
+     * column to leak (push-endpoint keys live in notification-service, not here), so
+     * the rows are returned verbatim. If a secret/token/key column is EVER added to
+     * any of these tables, it MUST be stripped (or summarized as "present") here
+     * before returning.
+     *
+     * READ-ONLY & IDEMPOTENT: only findMany runs; calling it twice yields identical
+     * output and never mutates state. Bounded: each table is capped at
+     * EXPORT_ROW_LIMIT rows (newest first) so a pathological user cannot force an
+     * unbounded payload; `_meta` flags whether any table was truncated at the cap.
+     */
+    async exportUser(userId: string): Promise<{
+        sleep_sessions: any[];
+        sleep_preferences: any[];
+        health_samples: any[];
+        _meta: {
+            sleepSessionsTruncated: boolean;
+            healthSamplesTruncated: boolean;
+            rowLimit: number;
+        };
+    }> {
+        const cap = EXPORT_ROW_LIMIT;
+        const [sessions, preferences, samples] = await Promise.all([
+            this.prisma.sleepSession.findMany({
+                where: { userId },
+                orderBy: { startTime: 'desc' },
+                take: cap + 1,
+            }),
+            // sleep_preferences is keyed @unique on user_id (at most one row); no cap
+            // needed, but kept as an array for a uniform per-table shape.
+            this.prisma.sleepPreference.findMany({ where: { userId } }),
+            this.prisma.healthSample.findMany({
+                where: { userId },
+                orderBy: { startTime: 'desc' },
+                take: cap + 1,
+            }),
+        ]);
+
+        const sleepSessionsTruncated = sessions.length > cap;
+        const healthSamplesTruncated = samples.length > cap;
+
+        return {
+            sleep_sessions: sleepSessionsTruncated ? sessions.slice(0, cap) : sessions,
+            sleep_preferences: preferences,
+            health_samples: healthSamplesTruncated ? samples.slice(0, cap) : samples,
+            _meta: { sleepSessionsTruncated, healthSamplesTruncated, rowLimit: cap },
+        };
+    }
 }
+
+// Per-table row cap for the GDPR export. Generous enough that a real user's full
+// sleep/health history is returned, but bounds the payload so a pathological user
+// cannot force an unbounded read. `take: cap + 1` lets exportUser detect (and
+// flag) truncation. (sleep_preferences is @unique per user — at most one row — so
+// it is not capped.)
+const EXPORT_ROW_LIMIT = 50_000;

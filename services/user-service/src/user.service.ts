@@ -987,6 +987,79 @@ export class UserService {
         return { userId, deletedCounts };
     }
 
+    // ── GDPR data export (own-data gather, read-only) ─────────────────────────
+
+    /**
+     * Read-only twin of purgeOwnUserData: gather EVERY user-service-OWNED row for
+     * this userId into a single plain object, for the GDPR data-portability bundle
+     * (GET /v1/users/me/export). Mirrors EXACTLY the ownership inventory that the
+     * deletion orchestrator purges, so "what we delete" and "what we export" can
+     * never drift apart:
+     *   user_profiles            (user_id)
+     *   user_preferences         (user_id)
+     *   coach_profiles           (user_id)
+     *   coach_client_relations   (coach_user_id OR client_user_id)  ← both sides
+     *   period_logs              (user_id)   ← GDPR Art.9 special-category health
+     *   user_statuses            (user_id)   ← incl. the read-time-fresh cyclePhase
+     *
+     * Plus the read-only DERIVED cycle views the user can see in-app (history +
+     * forecast), so the export is a faithful, portable snapshot of their data.
+     *
+     * NO secrets/credentials live in user-service (it holds no password — auth
+     * owns that), so nothing here needs redaction; auth's own /export excludes
+     * the credential material.
+     *
+     * Best-effort per section: a failure gathering one section is captured as
+     * { error } in that slot rather than failing the whole own-data gather, so
+     * the bundle is as complete as possible (the route still fans out either way).
+     */
+    async gatherOwnUserData(userId: string): Promise<Record<string, unknown>> {
+        const p = this.prisma as any;
+
+        // Run the independent reads concurrently; each is individually guarded so
+        // one failing query degrades only its own slot.
+        const safe = async <T>(label: string, fn: () => Promise<T>): Promise<T | { error: string }> => {
+            try {
+                return await fn();
+            } catch (err: any) {
+                logger.error({ userId, section: label, err }, 'Failed to gather own-data section for export');
+                return { error: err?.message ?? 'gather failed' };
+            }
+        };
+
+        const [profile, preferences, status, coachProfile, coachClientRelations, periodLogs, cycleHistory, cycleForecast] =
+            await Promise.all([
+                safe('profile', () => this.prisma.userProfile.findUnique({ where: { userId } })),
+                safe('preferences', () => this.prisma.userPreferences.findUnique({ where: { userId } })),
+                // getStatus recomputes the read-time-fresh cyclePhase.
+                safe('status', () => this.getStatus(userId)),
+                safe('coachProfile', () => p.coachProfile.findUnique({ where: { userId } })),
+                safe('coachClientRelations', () =>
+                    this.prisma.coachClientRelation.findMany({
+                        where: { OR: [{ coachUserId: userId }, { clientUserId: userId }] },
+                    }),
+                ),
+                safe('periodLogs', () =>
+                    p.periodLog.findMany({ where: { userId }, orderBy: { startDate: 'asc' } }),
+                ),
+                // Read-only derived views the user sees in-app.
+                safe('cycleHistory', () => this.getCycleHistory(userId)),
+                safe('cycleForecast', () => this.getCycleForecast(userId, 1)),
+            ]);
+
+        return {
+            userId,
+            profile,
+            preferences,
+            status,
+            coachProfile,
+            coachClientRelations,
+            periodLogs,
+            cycleHistory,
+            cycleForecast,
+        };
+    }
+
     /**
      * Best-effort USER_DELETED event for any async consumers (caches, search
      * indexes, analytics). NEVER throws — the account deletion is already

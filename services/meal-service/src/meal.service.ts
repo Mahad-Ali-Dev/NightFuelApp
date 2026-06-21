@@ -342,4 +342,58 @@ export class MealService {
             fasting_logs: fastingLogs.count,
         };
     }
+
+    // ── GDPR data export ──────────────────────────────────────────────────────────
+    // Read-only counterpart of purgeUser: READ and return EVERY meal-service row
+    // owned by `userId` across the SAME user-owned tables the purge erases
+    // (meal_logs via MealLog.userId, fasting_logs via FastingLog.userId), keyed by
+    // table name. The export table set MUST stay EXACTLY in sync with purgeUser's
+    // table set so a user's right-to-access and right-to-erasure cover identical
+    // data — the gdpr-export test asserts this invariant.
+    //
+    // food_items / recipes are shared library data with NO per-user ownership column
+    // (same as the purge) and are deliberately NOT exported.
+    //
+    // SECURITY: neither table holds any secret/credential column — MealLog.foodItems
+    // is user-entered food/nutrition JSON, not a credential — so the full rows are
+    // returned verbatim. (If a secret/token/password column is ever added to either
+    // table, it MUST be stripped here before returning.)
+    //
+    // READ-ONLY & IDEMPOTENT: only findMany runs; calling it twice yields identical
+    // output and never mutates state. Bounded: each table is capped at EXPORT_ROW_LIMIT
+    // rows (newest first) so a pathological user cannot return an unbounded payload;
+    // `_meta` flags whether either table was truncated at the cap.
+    async exportUser(userId: string): Promise<{
+        meal_logs: any[];
+        fasting_logs: any[];
+        _meta: { mealLogsTruncated: boolean; fastingLogsTruncated: boolean; rowLimit: number };
+    }> {
+        const cap = EXPORT_ROW_LIMIT;
+        const [mealLogs, fastingLogs] = await Promise.all([
+            this.prisma.mealLog.findMany({
+                where: { userId },
+                orderBy: { loggedAt: 'desc' },
+                take: cap + 1,
+            }),
+            this.prisma.fastingLog.findMany({
+                where: { userId },
+                orderBy: { startTime: 'desc' },
+                take: cap + 1,
+            }),
+        ]);
+
+        const mealLogsTruncated = mealLogs.length > cap;
+        const fastingLogsTruncated = fastingLogs.length > cap;
+
+        return {
+            meal_logs: mealLogsTruncated ? mealLogs.slice(0, cap) : mealLogs,
+            fasting_logs: fastingLogsTruncated ? fastingLogs.slice(0, cap) : fastingLogs,
+            _meta: { mealLogsTruncated, fastingLogsTruncated, rowLimit: cap },
+        };
+    }
 }
+
+// Per-table row cap for the GDPR export. Generous enough that a real user's full
+// history is returned, but bounds the payload so a pathological user cannot force
+// an unbounded read. `take: cap + 1` lets exportUser detect (and flag) truncation.
+const EXPORT_ROW_LIMIT = 50_000;

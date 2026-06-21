@@ -503,4 +503,34 @@ export const progressRoutes: FastifyPluginAsyncZod<{
             return reply.status(500).send({ error: 'Internal server error' });
         }
     });
+
+    // -------------------------------------------------------------------------
+    // GET /v1/progress/internal/user/:userId/export  (GDPR data export)
+    // Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+    // internalAuth preHandler additionally requires X-Internal-Token). Read-only
+    // counterpart of the purge above: READS and returns EVERY progress-service row
+    // owned by :userId across the SAME six user-owned tables the purge covers
+    // (daily_progress, streaks, body_metrics, ai_usage_logs, hydration_logs,
+    // performance_reports), as a JSON object keyed by table name. The export and
+    // purge table sets are kept EXACTLY in sync so a subject-access request and an
+    // erasure cover the same data.
+    //
+    // SECURITY: this service holds no secret/credential/token/raw-key columns, so
+    // there is nothing to scrub; exportUser still caps each table to bound the
+    // payload (see _meta.truncated). IDEMPOTENT: a user with no rows returns 200
+    // with empty arrays; nothing is written.
+    // -------------------------------------------------------------------------
+    fastify.get('/internal/user/:userId/export', {
+        preHandler: internalAuth,
+    }, async (request, reply) => {
+        const { userId } = request.params as { userId: string };
+        try {
+            const data = await progressService.exportUser(userId);
+            return reply.status(200).send({ userId, data });
+        } catch (err: any) {
+            request.log.error({ err, userId }, 'GDPR export failed');
+            // Redaction: generic 5xx body, no raw err.message leak (logged above).
+            return reply.status(500).send({ error: 'Internal server error' });
+        }
+    });
 };

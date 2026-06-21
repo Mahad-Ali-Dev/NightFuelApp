@@ -205,8 +205,9 @@ fastify.register(
 // ---------------------------------------------------------------------------
 // Internal (server-to-server) routes — registered WITHOUT the JWT prefix.
 // Guarded by makeInternalAuthGuard (X-Internal-Token), not the user JWT.
-// Includes the GDPR purge endpoint:
-//   DELETE /v1/notifications/internal/user/:userId
+// Includes the GDPR endpoints:
+//   DELETE /v1/notifications/internal/user/:userId         (purge / erasure)
+//   GET    /v1/notifications/internal/user/:userId/export  (data export)
 // ---------------------------------------------------------------------------
 fastify.register(async (instance) => {
     await internalRoutes(instance, {

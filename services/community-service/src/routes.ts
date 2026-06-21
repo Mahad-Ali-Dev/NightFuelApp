@@ -333,4 +333,32 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
             }
         },
     );
+
+    // ── GET /v1/community/internal/user/:userId/export (GDPR data export) ─────────
+    // Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the SAME
+    // internalAuth preHandler the purge uses additionally requires X-Internal-Token,
+    // so a missing/wrong token gets 404 and the handler never runs). READ-ONLY
+    // counterpart of the purge: returns EVERY community-service row owned by :userId
+    // across the SAME user-owned tables the purge erases (posts, comments,
+    // post_likes, user_scores, user_badges, challenge_participants, follows), as a
+    // JSON object keyed by table name. Mirrors the purge's table set EXACTLY so
+    // export and erasure stay in sync. Idempotent (no writes).
+    //
+    // SECURITY: this service's schema has no password/token/secret/raw-key columns,
+    // so nothing is redacted; the large per-user tables (posts/comments/post_likes)
+    // are bounded inside exportUser to avoid an unbounded read for a heavy account.
+    fastify.get(
+        '/v1/community/internal/user/:userId/export',
+        { preHandler: internalAuth },
+        async (request, reply) => {
+            const { userId } = request.params as { userId: string };
+            try {
+                const data = await communityService.exportUser(userId);
+                return reply.code(200).send({ userId, data });
+            } catch (err: any) {
+                request.log.error({ err, userId }, 'GDPR export failed');
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        },
+    );
 };

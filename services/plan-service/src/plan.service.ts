@@ -639,4 +639,62 @@ export class PlanService {
             protocol_templates: protocolTemplates.count,
         };
     }
+
+    /**
+     * GDPR data export (right-to-access) — READ every plan-service row owned by
+     * `userId`, returned as a JSON object keyed by table name. This is the
+     * read-only counterpart of purgeUser and MUST mirror its table set EXACTLY so
+     * right-to-access and right-to-erasure cover identical data:
+     *   • day_plans          — owned via user_id      (DayPlan.userId)
+     *   • protocol_templates — owned via creator_id   (ProtocolTemplate.creatorId)
+     *
+     * SECURITY: neither table holds a password/token/secret/raw-key column — they
+     * store plan JSON, generation metadata, and protocol parameters — so the FULL
+     * rows are safe to export verbatim (nothing to redact). The no-secret-leak
+     * test locks this in: if a credential-looking column is ever added to either
+     * model, that test fails and forces an explicit redaction decision here.
+     *
+     * READ-ONLY & IDEMPOTENT: only findMany, no writes; a user with no rows yields
+     * empty arrays (never throws), and repeated calls return identical output.
+     *
+     * BOUNDED: each per-user table is capped at EXPORT_ROW_LIMIT rows (newest
+     * first). `take: cap + 1` lets us detect and flag truncation via `_meta` so a
+     * pathological user cannot force an unbounded read.
+     */
+    async exportUser(userId: string): Promise<{
+        day_plans: any[];
+        protocol_templates: any[];
+        _meta: { dayPlansTruncated: boolean; protocolTemplatesTruncated: boolean; rowLimit: number };
+    }> {
+        const cap = EXPORT_ROW_LIMIT;
+        const [dayPlans, protocolTemplates] = await Promise.all([
+            // The user's day plans (user_id), newest first.
+            this.prisma.dayPlan.findMany({
+                where: { userId },
+                orderBy: { createdAt: 'desc' },
+                take: cap + 1,
+            }),
+            // Protocol templates the user authored (creator_id), newest first.
+            this.prisma.protocolTemplate.findMany({
+                where: { creatorId: userId },
+                orderBy: { createdAt: 'desc' },
+                take: cap + 1,
+            }),
+        ]);
+
+        const dayPlansTruncated = dayPlans.length > cap;
+        const protocolTemplatesTruncated = protocolTemplates.length > cap;
+
+        return {
+            day_plans: dayPlansTruncated ? dayPlans.slice(0, cap) : dayPlans,
+            protocol_templates: protocolTemplatesTruncated ? protocolTemplates.slice(0, cap) : protocolTemplates,
+            _meta: { dayPlansTruncated, protocolTemplatesTruncated, rowLimit: cap },
+        };
+    }
 }
+
+// Per-table row cap for the GDPR export. Generous enough that a real user's full
+// plan/protocol history is returned, but bounds the payload so a pathological user
+// cannot force an unbounded read. `take: cap + 1` lets exportUser detect (and flag)
+// truncation.
+const EXPORT_ROW_LIMIT = 50_000;

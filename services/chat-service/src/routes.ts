@@ -388,6 +388,33 @@ export default async function (
         },
     );
 
+    // ── GET /v1/chat/internal/user/:userId/export (GDPR data export) ────────────
+    // Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+    // SAME internalAuth preHandler the purge uses additionally requires
+    // X-Internal-Token, so a missing/wrong token gets 404 and the handler never
+    // runs). READ-ONLY right-of-access counterpart of the purge above: returns
+    // EVERY chat-service row owned by :userId across the SAME three user-owned
+    // tables (coach_profiles, conversations, messages), keyed by table name, so
+    // export and erasure stay in sync. No writes; idempotent.
+    //
+    // SECURITY: this service's schema has no password/token/secret/raw-key
+    // columns, so nothing is redacted; the messages table is bounded inside
+    // exportUser to avoid an unbounded read for a heavy account.
+    fastify.get(
+        '/v1/chat/internal/user/:userId/export',
+        { preHandler: internalAuth },
+        async (request, reply) => {
+            const { userId } = request.params as { userId: string };
+            try {
+                const data = await chatService.exportUser(userId);
+                return reply.code(200).send({ userId, data });
+            } catch (err: any) {
+                request.log.error({ err, userId }, 'GDPR export failed');
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        },
+    );
+
     // ── WebSocket route for real-time chat ──────────────────────────────────
     (fastify as any).get('/v1/chat/ws', { websocket: true }, (socket: any, req: any) => {
         // Authenticate the upgrade from the Bearer token. Unlike the dev-fallback

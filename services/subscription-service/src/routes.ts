@@ -665,6 +665,71 @@ export async function subscriptionRoutes(
     },
   );
 
+  // ── GET /v1/subscriptions/internal/user/:userId/export (GDPR data export) ───
+  // READ-ONLY counterpart of the purge above (GDPR Right of Access). Behind the
+  // SAME internalAuth guard the purge uses (404 without/with-wrong X-Internal-Token
+  // so a probe can't tell a guarded route from a missing one; unset token fails
+  // CLOSED). READS and returns EVERY subscription-service row owned by :userId
+  // across the EXACT SAME three user-owned tables the purge erases (subscriptions,
+  // subscription_events, iap_transactions — each via user_id), as a JSON object
+  // keyed by table name, so export and erasure stay in sync. IDEMPOTENT: a user
+  // with no rows returns empty arrays, still 200; NO writes ever occur.
+  // SECURITY: this service stores NO password/token/secret/raw-key columns — the
+  // Stripe ids are object references (not credentials) and the raw Apple/Google
+  // receipt blob is never persisted — so the export carries no secrets.
+  fastify.get(
+    '/v1/subscriptions/internal/user/:userId/export',
+    {
+      preHandler: internalAuth,
+      schema: {
+        description: "GDPR: export all of this user's subscription-service data (read-only).",
+        tags: ['internal'],
+        params: {
+          type: 'object',
+          required: ['userId'],
+          properties: { userId: { type: 'string', minLength: 1 } },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              userId: { type: 'string' },
+              data: {
+                type: 'object',
+                properties: {
+                  subscriptions: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                  subscription_events: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                  iap_transactions: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                  _meta: {
+                    type: 'object',
+                    properties: {
+                      subscriptionsTruncated: { type: 'boolean' },
+                      subscriptionEventsTruncated: { type: 'boolean' },
+                      iapTransactionsTruncated: { type: 'boolean' },
+                      rowLimit: { type: 'number' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { userId } = request.params as { userId: string };
+      try {
+        const data = await subscriptionService.exportUser(userId);
+        return reply.status(200).send({ userId, data });
+      } catch (err) {
+        log.error({ userId, err }, 'routes: GET /internal/user/export – GDPR export failed');
+        return reply
+          .status(500)
+          .send({ statusCode: 500, error: 'Internal Server Error', message: 'Failed to export user data' });
+      }
+    },
+  );
+
   // ── Health check (internal) ────────────────────────────────────────────────
   fastify.get(
     '/health',

@@ -149,6 +149,31 @@ fastify.withTypeProvider<ZodTypeProvider>().delete('/v1/sleep/internal/user/:use
     }
 });
 
+// ── GET /v1/sleep/internal/user/:userId/export (GDPR data export) ────────────────
+// Read-only counterpart of the purge above, behind the SAME internalAuth guard
+// (X-Internal-Token; 404s without/with a wrong token, fails CLOSED on an empty
+// expected token). Server-to-server only (nginx 404s /v1/<svc>/internal/* at the
+// edge). RETURNS every sleep-service row owned by :userId across the SAME
+// user-owned tables the purge erases (sleep_sessions, sleep_preferences,
+// health_samples), keyed by table name, so right-to-access and right-to-erasure
+// cover identical data. IDEMPOTENT & read-only: no writes; each table is bounded
+// (EXPORT_ROW_LIMIT, see SleepService.exportUser) with a `_meta` truncation flag.
+// NEVER exports any secret/credential column — none of these three tables hold one
+// (push-endpoint keys live in notification-service, not here).
+fastify.withTypeProvider<ZodTypeProvider>().get('/v1/sleep/internal/user/:userId/export', {
+    preHandler: internalAuth,
+    schema: { params: z.object({ userId: z.string().uuid() }) },
+}, async (request, reply) => {
+    const { userId } = request.params;
+    try {
+        const data = await sleepSvc.exportUser(userId);
+        return reply.code(200).send({ userId, data });
+    } catch (err: any) {
+        request.log.error({ err, userId }, 'GDPR export failed');
+        return reply.code(500).send({ error: 'Internal server error' });
+    }
+});
+
 // GET /v1/sleep?limit=30
 fastify.withTypeProvider<ZodTypeProvider>().get('/v1/sleep', {
     onRequest: [(fastify as any).authenticate],

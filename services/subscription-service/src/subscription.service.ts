@@ -532,4 +532,97 @@ export class SubscriptionService {
       iap_transactions: iapTransactions.count,
     };
   }
+
+  // ── exportUser (GDPR data export / Right of Access) ──────────────────────────
+  /**
+   * GDPR data export — READ-ONLY counterpart of purgeUser (Right of Access).
+   *
+   * Returns EVERY subscription-service row owned by `userId` across the EXACT
+   * SAME three user-owned tables purgeUser erases, keyed by table name, so export
+   * and erasure stay in sync:
+   *   • subscriptions       — owned via user_id (Subscription.userId)
+   *   • subscription_events — owned via user_id (SubscriptionEvent.userId)
+   *   • iap_transactions    — owned via user_id (IAPTransaction.userId)
+   *
+   * READ-ONLY & IDEMPOTENT: only findMany — no writes. A user with no rows yields
+   * empty arrays (still resolves), and re-running yields identical output.
+   *
+   * SECURITY (never export secrets/credentials):
+   *   • subscriptions — stripe_customer_id / stripe_sub_id / stripe_connect_id are
+   *     Stripe object REFERENCES, not credentials (no Stripe secret/restricted key
+   *     is ever stored in this service), so they are safe to include as-is for the
+   *     data subject's own record. There are NO password/token/secret/raw-key
+   *     columns anywhere in this service's schema.
+   *   • iap_transactions — the bound original_transaction_id is the data subject's
+   *     OWN store transaction id (their data), but the raw Apple/Google receipt
+   *     blob is NEVER persisted by this service, so nothing secret can leak. We
+   *     return it as-is for the subject's own record.
+   *
+   * BOUNDING: each table is capped at ROW_LIMIT rows (newest-first). For a single
+   * user these tables are tiny (one subscription row; events/iap are append-only
+   * but per-user low-volume), but the cap + truncation flags keep one user's
+   * export from ever being unbounded. `_meta` reports any truncation.
+   */
+  async exportUser(userId: string): Promise<{
+    subscriptions: unknown[];
+    subscription_events: unknown[];
+    iap_transactions: unknown[];
+    _meta: {
+      subscriptionsTruncated: boolean;
+      subscriptionEventsTruncated: boolean;
+      iapTransactionsTruncated: boolean;
+      rowLimit: number;
+    };
+  }> {
+    const ROW_LIMIT = 50_000;
+    // Fetch one extra row per table to detect truncation without a separate count.
+    const take = ROW_LIMIT + 1;
+
+    const [subscriptions, subscriptionEvents, iapTransactions] = await Promise.all([
+      this.prisma.subscription.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take,
+      }),
+      this.prisma.subscriptionEvent.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take,
+      }),
+      this.prisma.iAPTransaction.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take,
+      }),
+    ]);
+
+    const subscriptionsTruncated = subscriptions.length > ROW_LIMIT;
+    const subscriptionEventsTruncated = subscriptionEvents.length > ROW_LIMIT;
+    const iapTransactionsTruncated = iapTransactions.length > ROW_LIMIT;
+
+    this.logger.info(
+      {
+        userId,
+        subscriptions: subscriptions.length,
+        subscription_events: subscriptionEvents.length,
+        iap_transactions: iapTransactions.length,
+        subscriptionsTruncated,
+        subscriptionEventsTruncated,
+        iapTransactionsTruncated,
+      },
+      'subscription.service: exportUser done',
+    );
+
+    return {
+      subscriptions: subscriptions.slice(0, ROW_LIMIT),
+      subscription_events: subscriptionEvents.slice(0, ROW_LIMIT),
+      iap_transactions: iapTransactions.slice(0, ROW_LIMIT),
+      _meta: {
+        subscriptionsTruncated,
+        subscriptionEventsTruncated,
+        iapTransactionsTruncated,
+        rowLimit: ROW_LIMIT,
+      },
+    };
+  }
 }

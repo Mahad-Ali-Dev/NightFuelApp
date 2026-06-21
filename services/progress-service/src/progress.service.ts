@@ -1048,4 +1048,100 @@ export class ProgressService {
             performance_reports: performanceReports.count,
         };
     }
+
+    // ---------------------------------------------------------------------------
+    // GDPR data export — READ every progress-service row owned by userId.
+    //
+    // Backs GET /v1/progress/internal/user/:userId/export (server-to-server only,
+    // guarded by the SAME shared X-Internal-Token check the purge uses). The
+    // read-only counterpart of purgeUser: it returns the user's rows across the
+    // EXACT SAME six user-owned tables the purge clears, keyed by table name, so
+    // export and erasure stay in sync (the gdpr-export test asserts the two key
+    // sets are identical).
+    //   daily_progress, streaks, body_metrics, ai_usage_logs, hydration_logs,
+    //   performance_reports.
+    //
+    // SECURITY: this service's schema contains NO secret/credential/token/raw-key
+    // columns in any of the six tables (every field is the user's own fitness
+    // telemetry — macros, weight/measurements, streaks, AI token *counts*, etc.),
+    // so there is nothing to scrub here. We still cap each table at ROW_LIMIT so a
+    // pathological row count can't produce an unbounded payload; _meta flags any
+    // table that was truncated.
+    //
+    // READ-ONLY & IDEMPOTENT: only findMany/findUnique are issued; a user with no
+    // rows yields empty arrays (never throws), and repeated calls return identical
+    // output without mutating anything.
+    // ---------------------------------------------------------------------------
+    async exportUser(userId: string): Promise<{
+        daily_progress: any[];
+        streaks: any[];
+        body_metrics: any[];
+        ai_usage_logs: any[];
+        hydration_logs: any[];
+        performance_reports: any[];
+        _meta: { rowLimit: number; truncated: string[] };
+    }> {
+        // Per-table cap. Per-user fitness rows are small (one daily_progress row
+        // per day, etc.), so 50k is far above any real user while still bounding a
+        // pathological/abusive row count. take = ROW_LIMIT + 1 detects overflow.
+        const ROW_LIMIT = 50_000;
+        const p = this.prisma as any;
+
+        const [
+            dailyProgress,
+            streaks,
+            bodyMetrics,
+            aiUsageLogs,
+            hydrationLogs,
+            performanceReports,
+        ] = await p.$transaction([
+            p.dailyProgress.findMany({
+                where: { userId },
+                orderBy: { date: 'desc' },
+                take: ROW_LIMIT + 1,
+            }),
+            // Streak is unique per user (0-or-1 rows); findMany keeps the
+            // by-table-array shape consistent with the rest of the export.
+            p.streak.findMany({ where: { userId }, take: ROW_LIMIT + 1 }),
+            p.bodyMetrics.findMany({
+                where: { userId },
+                orderBy: { recordedAt: 'desc' },
+                take: ROW_LIMIT + 1,
+            }),
+            p.aiUsageLog.findMany({
+                where: { userId },
+                orderBy: { createdAt: 'desc' },
+                take: ROW_LIMIT + 1,
+            }),
+            p.hydrationLog.findMany({
+                where: { userId },
+                orderBy: { date: 'desc' },
+                take: ROW_LIMIT + 1,
+            }),
+            p.performanceReport.findMany({
+                where: { userId },
+                orderBy: { date: 'desc' },
+                take: ROW_LIMIT + 1,
+            }),
+        ]);
+
+        const truncated: string[] = [];
+        const cap = (table: string, rows: any[]): any[] => {
+            if (rows.length > ROW_LIMIT) {
+                truncated.push(table);
+                return rows.slice(0, ROW_LIMIT);
+            }
+            return rows;
+        };
+
+        return {
+            daily_progress: cap('daily_progress', dailyProgress),
+            streaks: cap('streaks', streaks),
+            body_metrics: cap('body_metrics', bodyMetrics),
+            ai_usage_logs: cap('ai_usage_logs', aiUsageLogs),
+            hydration_logs: cap('hydration_logs', hydrationLogs),
+            performance_reports: cap('performance_reports', performanceReports),
+            _meta: { rowLimit: ROW_LIMIT, truncated },
+        };
+    }
 }

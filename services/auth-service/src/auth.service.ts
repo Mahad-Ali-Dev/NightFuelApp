@@ -421,4 +421,117 @@ export class AuthService {
             },
         };
     }
+
+    /**
+     * GDPR data export (Right of Access / Art. 15) — READ and return EVERY row
+     * this service owns for `userId`, mirroring purgeUserData's table set EXACTLY
+     * so export and erasure stay in sync:
+     *   - users                 (id)
+     *   - refresh_tokens        (user_id)
+     *   - password_reset_tokens (user_id)
+     *
+     * SECURITY: this is auth-service, so the rows hold live credentials/secrets.
+     * We export ONLY non-secret account metadata via Prisma `select` allowlists
+     * and NEVER the secret columns:
+     *   - users:                 passwordHash is EXCLUDED.
+     *   - refresh_tokens:        tokenHash is EXCLUDED.
+     *   - password_reset_tokens: tokenHash is EXCLUDED.
+     * The selects are explicit allowlists (not `omit`) so a future schema column
+     * is excluded by default and cannot accidentally leak.
+     *
+     * READ-ONLY and IDEMPOTENT: only findUnique/findMany run (no writes), so a
+     * user with no rows returns `users: null` and empty arrays, and repeat calls
+     * return identical data. Child token tables are bounded with a sane `take`
+     * cap so a pathological row count cannot produce an unbounded response.
+     *
+     * Returns a JSON object keyed by DB table name.
+     */
+    async exportUserData(userId: string): Promise<{
+        userId: string;
+        data: {
+            users: {
+                id: string;
+                email: string;
+                displayName: string;
+                avatarUrl: string | null;
+                timezone: string;
+                locale: string;
+                region: string;
+                role: string;
+                onboardingCompleted: boolean;
+                emailVerified: boolean;
+                createdAt: Date;
+                updatedAt: Date;
+            } | null;
+            refresh_tokens: Array<{
+                id: string;
+                deviceId: string;
+                expiresAt: Date;
+                createdAt: Date;
+            }>;
+            password_reset_tokens: Array<{
+                id: string;
+                expiresAt: Date;
+                usedAt: Date | null;
+                createdAt: Date;
+            }>;
+        };
+    }> {
+        // Bound child token tables so a per-user export can never be unbounded.
+        const TOKEN_TAKE = 1000;
+
+        const [user, refreshTokens, passwordResetTokens] = await this.prisma.$transaction([
+            // users — non-secret account metadata only; passwordHash EXCLUDED.
+            this.prisma.user.findUnique({
+                where: { id: userId },
+                select: {
+                    id: true,
+                    email: true,
+                    displayName: true,
+                    avatarUrl: true,
+                    timezone: true,
+                    locale: true,
+                    region: true,
+                    role: true,
+                    onboardingCompleted: true,
+                    emailVerified: true,
+                    createdAt: true,
+                    updatedAt: true,
+                },
+            }),
+            // refresh_tokens — metadata only; tokenHash (the secret) EXCLUDED.
+            this.prisma.refreshToken.findMany({
+                where: { userId },
+                select: {
+                    id: true,
+                    deviceId: true,
+                    expiresAt: true,
+                    createdAt: true,
+                },
+                orderBy: { createdAt: 'asc' },
+                take: TOKEN_TAKE,
+            }),
+            // password_reset_tokens — metadata only; tokenHash (the secret) EXCLUDED.
+            this.prisma.passwordResetToken.findMany({
+                where: { userId },
+                select: {
+                    id: true,
+                    expiresAt: true,
+                    usedAt: true,
+                    createdAt: true,
+                },
+                orderBy: { createdAt: 'asc' },
+                take: TOKEN_TAKE,
+            }),
+        ]);
+
+        return {
+            userId,
+            data: {
+                users: user as any,
+                refresh_tokens: refreshTokens as any,
+                password_reset_tokens: passwordResetTokens as any,
+            },
+        };
+    }
 }

@@ -677,4 +677,97 @@ export class ExerciseService {
             workout_sessions: workoutSessions.count,
         };
     }
+
+    // ── GDPR export (right-to-access) ─────────────────────────────────────────────
+    // Read-only counterpart of purgeUser: RETURNS every exercise-service row owned
+    // by `userId`, keyed by table name, so right-to-access and right-to-erasure
+    // cover IDENTICAL data and stay in sync. Mirrors the purge's table set EXACTLY:
+    //   • workouts          — keyed by user_id. The cascade-child `exercises` rows
+    //                         are nested under each workout via `include` so they
+    //                         are exported too (the purge erases them via cascade).
+    //   • workout_routines  — keyed by user_id. A NULL user_id row is a GLOBAL
+    //                         template owned by NO user, so `where: { userId }` with
+    //                         a concrete id never returns it (matches the purge).
+    //   • 1rm_logs          — keyed by user_id.
+    //   • workout_sessions  — keyed by user_id. The cascade-child `exercise_logs`
+    //                         rows are nested under each session via `include` so
+    //                         they are exported too (the purge erases them via cascade).
+    //
+    // SECURITY: this service holds NO secret/credential/token/password/raw-key
+    // column on any of these tables — every exported column is user-entered fitness
+    // data (workout/exercise names, sets/reps/weights, routine JSON, timestamps).
+    // So the full rows are returned verbatim. (If a secret/token/password column is
+    // ever added to any of these tables, it MUST be stripped here before returning.)
+    //
+    // READ-ONLY & IDEMPOTENT: only findMany runs; calling it twice yields identical
+    // output and never mutates state. BOUNDED: each top-level table is capped at
+    // EXPORT_ROW_LIMIT rows (newest first) so a pathological user cannot force an
+    // unbounded payload; `_meta` flags whether any table was truncated at the cap.
+    async exportUser(userId: string): Promise<{
+        workouts: any[];
+        workout_routines: any[];
+        '1rm_logs': any[];
+        workout_sessions: any[];
+        _meta: {
+            workoutsTruncated: boolean;
+            workoutRoutinesTruncated: boolean;
+            oneRepMaxLogsTruncated: boolean;
+            workoutSessionsTruncated: boolean;
+            rowLimit: number;
+        };
+    }> {
+        const cap = EXPORT_ROW_LIMIT;
+        const [workouts, workoutRoutines, oneRepMaxLogs, workoutSessions] =
+            await Promise.all([
+                // include child `exercises` — the rows the purge erases via cascade.
+                this.prisma.workout.findMany({
+                    where: { userId },
+                    include: { exercises: { orderBy: { order: 'asc' } } },
+                    orderBy: { completedAt: 'desc' },
+                    take: cap + 1,
+                }),
+                // A concrete userId never matches the NULL-user global templates.
+                this.prisma.workoutRoutine.findMany({
+                    where: { userId },
+                    orderBy: { createdAt: 'desc' },
+                    take: cap + 1,
+                }),
+                this.prisma.oneRepMaxLog.findMany({
+                    where: { userId },
+                    orderBy: { date: 'desc' },
+                    take: cap + 1,
+                }),
+                // include child `exercise_logs` — the rows the purge erases via cascade.
+                this.prisma.workoutSession.findMany({
+                    where: { userId },
+                    include: { logs: true },
+                    orderBy: { startedAt: 'desc' },
+                    take: cap + 1,
+                }),
+            ]);
+
+        const workoutsTruncated = workouts.length > cap;
+        const workoutRoutinesTruncated = workoutRoutines.length > cap;
+        const oneRepMaxLogsTruncated = oneRepMaxLogs.length > cap;
+        const workoutSessionsTruncated = workoutSessions.length > cap;
+
+        return {
+            workouts: workoutsTruncated ? workouts.slice(0, cap) : workouts,
+            workout_routines: workoutRoutinesTruncated ? workoutRoutines.slice(0, cap) : workoutRoutines,
+            '1rm_logs': oneRepMaxLogsTruncated ? oneRepMaxLogs.slice(0, cap) : oneRepMaxLogs,
+            workout_sessions: workoutSessionsTruncated ? workoutSessions.slice(0, cap) : workoutSessions,
+            _meta: {
+                workoutsTruncated,
+                workoutRoutinesTruncated,
+                oneRepMaxLogsTruncated,
+                workoutSessionsTruncated,
+                rowLimit: cap,
+            },
+        };
+    }
 }
+
+// Per-table row cap for the GDPR export. Generous enough that a real user's full
+// history is returned, but bounds the payload so a pathological user cannot force
+// an unbounded read. `take: cap + 1` lets exportUser detect (and flag) truncation.
+const EXPORT_ROW_LIMIT = 50_000;

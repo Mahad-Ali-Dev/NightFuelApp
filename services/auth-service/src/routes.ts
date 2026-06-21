@@ -235,4 +235,36 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService; internal
             }
         }
     );
+
+    // ── GET /v1/auth/internal/user/:userId/export ────────────────────────────
+    // GDPR data export (Right of Access, Art. 15) — server-to-server only,
+    // guarded by the SAME X-Internal-Token check as the purge above (404 on a
+    // missing/wrong token, identical to the nginx edge). READS and returns EVERY
+    // row this service owns for :userId across the SAME tables the purge covers
+    // (users, refresh_tokens, password_reset_tokens), keyed by table name, so
+    // export and erasure stay in sync.
+    //
+    // SECURITY: auth-service rows hold live credentials — the service layer
+    // (exportUserData) selects ONLY non-secret account metadata and NEVER the
+    // secret columns (users.passwordHash, refresh_tokens.tokenHash,
+    // password_reset_tokens.tokenHash). READ-ONLY (no writes) and IDEMPOTENT.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/internal/user/:userId/export',
+        {
+            preHandler: internalAuth,
+            schema: {
+                params: z.object({ userId: z.string().uuid() }),
+            },
+        },
+        async (request, reply) => {
+            try {
+                const { userId } = request.params;
+                const result = await service.exportUserData(userId);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
+            }
+        }
+    );
 };

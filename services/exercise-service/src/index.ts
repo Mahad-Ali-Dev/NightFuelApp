@@ -621,6 +621,31 @@ fastify.withTypeProvider<ZodTypeProvider>().delete('/v1/exercises/internal/user/
     }
 });
 
+// ── GET /v1/exercises/internal/user/:userId/export (GDPR data export) ────────────
+// Read-only counterpart of the purge above, behind the SAME internalAuth guard
+// (X-Internal-Token; 404s without/with a wrong token, fails CLOSED on an empty
+// expected token). Server-to-server only (nginx 404s /v1/<svc>/internal/* at the
+// edge). RETURNS every exercise-service row owned by :userId across the SAME
+// user-owned tables the purge erases (workouts, workout_routines, 1rm_logs,
+// workout_sessions) — keyed by table name, with the cascade-child rows (exercises,
+// exercise_logs) nested under their parent — so right-to-access and right-to-erasure
+// cover identical data. IDEMPOTENT & read-only: no writes; each table is bounded
+// (EXPORT_ROW_LIMIT, see ExerciseService.exportUser) with a `_meta` truncation
+// flag. NEVER exports any secret/credential column (this service holds none).
+fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/internal/user/:userId/export', {
+    preHandler: internalAuth,
+    schema: { params: z.object({ userId: z.string().uuid() }) },
+}, async (request, reply) => {
+    const { userId } = request.params;
+    try {
+        const data = await exerciseSvc.exportUser(userId);
+        return reply.code(200).send({ userId, data });
+    } catch (err: any) {
+        request.log.error({ err, userId }, 'GDPR export failed');
+        return reply.code(500).send({ error: 'Internal server error' });
+    }
+});
+
 // ── Startup ───────────────────────────────────────────────────────────────────
 
 

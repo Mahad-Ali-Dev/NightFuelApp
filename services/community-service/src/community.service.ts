@@ -763,4 +763,104 @@ export class CommunityService {
             follows: follows.count,
         };
     }
+
+    // ── GDPR data export (server-to-server only) ────────────────────────────────
+    // Read-only counterpart of purgeUser. Returns EVERY community-service row owned
+    // by `userId`, keyed by table name, across the SAME user-owned tables the purge
+    // erases — so export and erasure stay in sync (see purgeUser above):
+    //   • posts                  — author_id = userId (the user's own posts)
+    //   • comments               — author_id = userId (the user's own comments,
+    //                              including those on their own posts that the purge
+    //                              removes via the post cascade; here we report the
+    //                              full set the user authored, by author_id)
+    //   • post_likes             — user_id = userId (likes the user made)
+    //   • user_scores            — user_id = userId (the user's XP/level row)
+    //   • user_badges            — user_id = userId (badges the user earned)
+    //   • challenge_participants  — user_id = userId (the user's challenge entries)
+    //   • follows                — follower_id = userId OR following_id = userId
+    //                              (both directions of the user's own social graph)
+    //
+    // SECURITY: this service's schema has NO password/token/secret/raw-key columns
+    // (posts/comments are free text, scores/badges/participants/follows are ids +
+    // counters), so every column is safe to export verbatim — there is nothing to
+    // redact. Should a sensitive column ever be added to these tables, it MUST be
+    // excluded/redacted here.
+    //
+    // BOUNDING: posts/comments/post_likes are the only tables that can grow large
+    // for a heavy user; each is capped (newest first) so a single export can't pull
+    // an unbounded result set, and the response flags whether a cap was hit. The
+    // remaining tables are bounded by nature (0/1 score row; one badge per badge;
+    // one participant row per challenge; follows are the user's own edges).
+    // Read-only and idempotent: no writes, repeatable with identical output for
+    // unchanged data.
+    async exportUser(userId: string): Promise<{
+        posts: any[];
+        comments: any[];
+        post_likes: any[];
+        user_scores: any[];
+        user_badges: any[];
+        challenge_participants: any[];
+        follows: any[];
+        _meta: {
+            postsTruncated: boolean;
+            commentsTruncated: boolean;
+            postLikesTruncated: boolean;
+            rowLimit: number;
+        };
+    }> {
+        const EXPORT_ROW_LIMIT = 50_000;
+        // take = LIMIT+1 so we can detect (and flag) truncation without a 2nd query.
+        const TAKE = EXPORT_ROW_LIMIT + 1;
+
+        const [
+            posts,
+            comments,
+            postLikes,
+            userScores,
+            userBadges,
+            challengeParticipants,
+            follows,
+        ] = await Promise.all([
+            this.prisma.post.findMany({
+                where: { authorId: userId },
+                orderBy: { createdAt: 'desc' },
+                take: TAKE,
+            }),
+            this.prisma.comment.findMany({
+                where: { authorId: userId },
+                orderBy: { createdAt: 'desc' },
+                take: TAKE,
+            }),
+            this.prisma.postLike.findMany({
+                where: { userId },
+                take: TAKE,
+            }),
+            this.prisma.userScore.findMany({ where: { userId } }),
+            this.prisma.userBadge.findMany({ where: { userId } }),
+            this.prisma.challengeParticipant.findMany({ where: { userId } }),
+            this.prisma.follow.findMany({
+                where: { OR: [{ followerId: userId }, { followingId: userId }] },
+            }),
+        ]);
+
+        const postsTruncated = posts.length > EXPORT_ROW_LIMIT;
+        const commentsTruncated = comments.length > EXPORT_ROW_LIMIT;
+        const postLikesTruncated = postLikes.length > EXPORT_ROW_LIMIT;
+
+        return {
+            posts: postsTruncated ? posts.slice(0, EXPORT_ROW_LIMIT) : posts,
+            comments: commentsTruncated ? comments.slice(0, EXPORT_ROW_LIMIT) : comments,
+            post_likes: postLikesTruncated ? postLikes.slice(0, EXPORT_ROW_LIMIT) : postLikes,
+            user_scores: userScores,
+            user_badges: userBadges,
+            challenge_participants: challengeParticipants,
+            follows,
+            _meta: {
+                postsTruncated,
+                commentsTruncated,
+                postLikesTruncated,
+                rowLimit: EXPORT_ROW_LIMIT,
+            },
+        };
+    }
 }

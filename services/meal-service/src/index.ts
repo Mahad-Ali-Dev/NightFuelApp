@@ -97,6 +97,30 @@ fastify.withTypeProvider<ZodTypeProvider>().delete('/v1/meals/internal/user/:use
     }
 });
 
+// ── GET /v1/meals/internal/user/:userId/export (GDPR data export) ───────────────
+// Read-only counterpart of the purge above, behind the SAME internalAuth guard
+// (X-Internal-Token; 404s without/with a wrong token, fails CLOSED on an empty
+// expected token). Server-to-server only (nginx 404s /v1/<svc>/internal/* at the
+// edge). RETURNS every meal-service row owned by :userId across the SAME
+// user-owned tables the purge erases (meal_logs, fasting_logs), keyed by table
+// name, so right-to-access and right-to-erasure cover identical data. IDEMPOTENT
+// & read-only: no writes; the per-table result is bounded (EXPORT_ROW_LIMIT, see
+// MealService.exportUser) with a `_meta` truncation flag. NEVER exports any
+// secret/credential column (neither table holds one).
+fastify.withTypeProvider<ZodTypeProvider>().get('/v1/meals/internal/user/:userId/export', {
+    preHandler: internalAuth,
+    schema: { params: z.object({ userId: z.string().uuid() }) },
+}, async (request, reply) => {
+    const { userId } = request.params;
+    try {
+        const data = await mealService.exportUser(userId);
+        return reply.code(200).send({ userId, data });
+    } catch (err: any) {
+        request.log.error({ err, userId }, 'GDPR export failed');
+        return reply.code(500).send({ error: 'Internal server error' });
+    }
+});
+
 fastify.register(async (instance) => {
     await mealRoutes(instance, { mealService });
 }, { prefix: '/v1/meals' });

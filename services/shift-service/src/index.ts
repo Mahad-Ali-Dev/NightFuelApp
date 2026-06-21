@@ -91,6 +91,29 @@ fastify.withTypeProvider<ZodTypeProvider>().delete('/v1/shifts/internal/user/:us
     }
 });
 
+// ── GET /v1/shifts/internal/user/:userId/export (GDPR data export) ───────────────
+// READ-ONLY counterpart of the purge above (GDPR Right of Access). Behind the SAME
+// internalAuth guard (404 without the X-Internal-Token; unset token fails CLOSED).
+// READS and returns EVERY shift-service row owned by :userId across the SAME three
+// user-owned tables the purge erases (shifts, rotation_patterns,
+// scheduled_sessions), as a JSON object keyed by table name, so export and erasure
+// stay in sync. IDEMPOTENT: a user with no rows returns empty tables, still 200; no
+// writes ever occur. This service stores NO secrets/credentials, so every column is
+// safe to emit verbatim (nothing to scrub).
+fastify.withTypeProvider<ZodTypeProvider>().get('/v1/shifts/internal/user/:userId/export', {
+    preHandler: internalAuth,
+    schema: { params: z.object({ userId: z.string().uuid() }) },
+}, async (request, reply) => {
+    const { userId } = request.params;
+    try {
+        const data = await shiftService.exportUser(userId);
+        return reply.code(200).send({ userId, data });
+    } catch (err: any) {
+        request.log.error({ err, userId }, 'GDPR export failed');
+        return reply.code(500).send({ error: 'Internal server error' });
+    }
+});
+
 // Register routes
 fastify.register(async (instance) => {
     await shiftRoutes(instance, { shiftService });
