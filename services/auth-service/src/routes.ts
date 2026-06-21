@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { makeInternalAuthGuard } from '@nightfuel/config';
 import { registerSchema, loginSchema, refreshTokenSchema, forgotPasswordSchema, resetPasswordSchema } from './schemas';
 import { AuthService } from './auth.service';
+import { buildRefreshCookie, buildClearedRefreshCookie, readRefreshCookie } from './refresh-cookie';
 
 export const authRoutes: FastifyPluginAsync<{ authService: AuthService; internalServiceToken?: string }> = async (fastify, opts) => {
     const service = opts.authService;
@@ -92,6 +93,12 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService; internal
         async (request, reply) => {
             try {
                 const result = await service.login(request.body);
+                // HIGH #1: also set the refresh token in an httpOnly cookie so the
+                // web client never has to store it in JS-readable localStorage
+                // (XSS-stealable). The token is STILL returned in the JSON body so
+                // the mobile client (SecureStore, ignores cookies) keeps working
+                // unchanged. Web reads only accessToken from the body.
+                reply.header('Set-Cookie', buildRefreshCookie(result.refreshToken));
                 // Defence-in-depth: the service already strips passwordHash, but
                 // redact it again at the edge so the bcrypt hash can never reach
                 // the client even if a future change reintroduces it on the user
@@ -115,7 +122,21 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService; internal
         },
         async (request, reply) => {
             try {
-                const result = await service.refreshToken(request.body);
+                // Accept the refresh token from EITHER the request body (mobile)
+                // OR the httpOnly nf_refresh cookie (web). The web client sends an
+                // empty body + the cookie (axios withCredentials); the mobile
+                // client sends the token in the body and no cookie. If neither is
+                // present, it's an invalid refresh attempt.
+                const refreshToken =
+                    request.body?.refreshToken ?? readRefreshCookie(request.headers.cookie);
+                if (!refreshToken) {
+                    return reply.code(401).send({ error: 'Invalid refresh token' });
+                }
+                const result = await service.refreshToken({ refreshToken });
+                // Rotate the httpOnly cookie too (the service rotates the token),
+                // so the web client's cookie always holds the current token. The
+                // new token is also returned in the body for the mobile client.
+                reply.header('Set-Cookie', buildRefreshCookie(result.refreshToken));
                 reply.send(result);
             } catch (err: any) {
                 request.log.error(err);
@@ -175,7 +196,16 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService; internal
         },
         async (request, reply) => {
             try {
-                await service.logout(request.body.refreshToken);
+                // Read the refresh token from the body (mobile) OR the httpOnly
+                // cookie (web) so we revoke the correct server-side token row in
+                // both clients. Always clear the web cookie regardless (idempotent
+                // even if the token was only ever in the body / already gone).
+                const refreshToken =
+                    request.body?.refreshToken ?? readRefreshCookie(request.headers.cookie);
+                reply.header('Set-Cookie', buildClearedRefreshCookie());
+                if (refreshToken) {
+                    await service.logout(refreshToken);
+                }
                 reply.code(204).send();
             } catch (err: any) {
                 request.log.error(err);

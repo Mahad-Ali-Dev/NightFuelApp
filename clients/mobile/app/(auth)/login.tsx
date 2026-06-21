@@ -88,7 +88,7 @@ export default function LoginScreen() {
             </View>
             <Text style={[styles.kicker, { color: colors.accent.coral }]}>Welcome back</Text>
             <Text style={[styles.logo, { color: colors.text.primary }]}>
-              Night<Text style={{ color: colors.accent.coral }}>Fuel</Text>
+              Zeit<Text style={{ color: colors.accent.coral }}>ra</Text>
             </Text>
             <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
               Fuel your shift. Pick up right where you left off.

@@ -30,8 +30,15 @@ export const loginSchema = z.object({
     deviceId: z.string().default('unknown'),
 });
 
+// refreshToken is OPTIONAL in the body: the mobile client still sends it in the
+// body (reads it from the JSON response, stored in native SecureStore), while
+// the web client now holds it ONLY in an httpOnly cookie and sends nothing in
+// the body — the handler falls back to the nf_refresh cookie. Exactly one of the
+// two sources must be present at runtime (enforced in the route handler), but
+// the schema must allow the body to be absent so the cookie-only web path
+// validates.
 export const refreshTokenSchema = z.object({
-    refreshToken: z.string(),
+    refreshToken: z.string().optional(),
 });
 
 export const forgotPasswordSchema = z.object({

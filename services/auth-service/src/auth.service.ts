@@ -1,6 +1,6 @@
 import { PrismaClient, User } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { RegisterBody, LoginBody, RefreshTokenBody, ForgotPasswordBody, ResetPasswordBody } from './schemas';
+import { RegisterBody, LoginBody, ForgotPasswordBody, ResetPasswordBody } from './schemas';
 import bcrypt from 'bcryptjs';
 import { Channels } from '@nightfuel/types';
 import jwt from 'jsonwebtoken';
@@ -218,7 +218,7 @@ export class AuthService {
         loginFailures.delete(key);
     }
 
-    async refreshToken(body: RefreshTokenBody): Promise<{ accessToken: string; refreshToken: string }> {
+    async refreshToken(body: { refreshToken: string }): Promise<{ accessToken: string; refreshToken: string }> {
         const { refreshToken } = body;
 
         // The client holds the raw token; we store only its hash, so look up by

@@ -33,3 +33,20 @@ export const assignProtocol = (studentId: string, protocolId: string | null) =>
  */
 export const updatePrivacy = ({ isPrivate }: { isPrivate: boolean }) =>
   apiClient.patch('/v1/users/me', { isPrivate });
+
+/**
+ * GDPR data export (user-service): GET /v1/users/me/export -> the caller's full
+ * personal data as a JSON document. The mobile "Export my data" flow writes the
+ * returned body to a file and hands it to the OS share sheet so the user keeps a
+ * copy. The response is the JSON payload itself (axios `.data`), shape-open.
+ */
+export const exportMyData = () => apiClient.get('/v1/users/me/export');
+
+/**
+ * GDPR account deletion (user-service): DELETE /v1/users/me. Permanently and
+ * irreversibly removes the caller's account + personal data server-side. The
+ * mobile "Delete account" flow calls this behind a typed-confirmation gate and,
+ * on success, clears the local session and returns the user to the auth stack.
+ * Required by Apple (App Store Review 5.1.1(v)) and Google Play.
+ */
+export const deleteAccount = () => apiClient.delete('/v1/users/me');

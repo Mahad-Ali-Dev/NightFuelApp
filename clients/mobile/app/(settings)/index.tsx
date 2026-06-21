@@ -78,6 +78,7 @@ export default function SettingsIndexScreen() {
                 { label: 'Edit Profile', icon: 'person-outline', route: '/(tabs)/profile/edit' },
                 { label: 'Preferences', icon: 'settings-outline', route: '/(tabs)/profile/preferences' },
                 { label: 'Manage Subscription', icon: 'star-outline', route: '/(settings)/subscription', value: subscription?.tier },
+                { label: 'Privacy & Data', icon: 'shield-checkmark-outline', route: '/(settings)/privacy-data' },
             ]
         },
         {

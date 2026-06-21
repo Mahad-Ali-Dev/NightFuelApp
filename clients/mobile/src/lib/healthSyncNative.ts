@@ -197,8 +197,11 @@ function buildAndroidAdapter(): HealthSyncAdapter | null {
         };
       }
       await hcInitialize();
-      // READ-ONLY permissions only.
-      await hcRequestPermission([
+      // READ-ONLY permissions only. Health Connect's requestPermission RESOLVES
+      // with the set the user actually GRANTED (which may be empty if they
+      // declined every toggle) — it does NOT throw on a denial. Honour that:
+      // only report 'connected' when at least one READ permission came back.
+      const granted = await hcRequestPermission([
         { accessType: 'read', recordType: 'SleepSession' },
         { accessType: 'read', recordType: 'Steps' },
         { accessType: 'read', recordType: 'HeartRate' },
@@ -207,6 +210,16 @@ function buildAndroidAdapter(): HealthSyncAdapter | null {
         { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
         { accessType: 'read', recordType: 'ExerciseSession' },
       ]);
+      const grantedReads = (granted ?? []).filter((p) => p?.accessType === 'read');
+      if (grantedReads.length === 0) {
+        // User declined every read toggle → we have no data access. Be honest
+        // rather than claiming a connection (a sync would silently read nothing).
+        connected = false;
+        return {
+          status: 'disconnected',
+          reason: 'Health Connect permission was denied. Grant read access to sync your health data.',
+        };
+      }
       connected = true;
       return { status: 'connected' };
     } catch {

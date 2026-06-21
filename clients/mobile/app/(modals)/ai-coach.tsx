@@ -145,6 +145,11 @@ export default function AICoachScreen() {
     const [isStreaming, setIsStreaming] = useState(false);
     // Abort handle for the active stream; called on unmount / new send.
     const streamStopRef = useRef<(() => void) | null>(null);
+    // Handle for the non-streaming fallback typing-effect interval (streamText).
+    // Stored in a ref so it can be cleared on unmount AND at the start of a new
+    // turn — otherwise the timer would survive unmount and setState after the
+    // screen is gone (setState-after-unmount).
+    const typingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Daily-quota UX state. `usedToday` is the local count of user-authored
     // sends since the tracked UTC day began; it reconciles to the authoritative
@@ -227,8 +232,15 @@ export default function AICoachScreen() {
         }
     }, [historyQuery.data, hasLoaded, user]);
 
-    // Abort any in-flight stream when the screen unmounts.
-    useEffect(() => () => { streamStopRef.current?.(); }, []);
+    // Abort any in-flight stream AND stop the fallback typing-effect interval
+    // when the screen unmounts, so no timer survives to setState after unmount.
+    useEffect(() => () => {
+        streamStopRef.current?.();
+        if (typingIntervalRef.current) {
+            clearInterval(typingIntervalRef.current);
+            typingIntervalRef.current = null;
+        }
+    }, []);
 
     // ── User status for AI context ──────────────────────────────────────────
     const { data: userStatus } = useQuery({
@@ -245,6 +257,9 @@ export default function AICoachScreen() {
 
     // ── Streaming text effect ───────────────────────────────────────────────
     const streamText = useCallback((fullText: string, messageId: string) => {
+        // Clear any prior typing interval so a new turn never leaves two timers
+        // racing (and so the ref always points at the live one).
+        if (typingIntervalRef.current) clearInterval(typingIntervalRef.current);
         let idx = 0;
         const interval = setInterval(() => {
             idx += 2;
@@ -255,11 +270,13 @@ export default function AICoachScreen() {
             ));
             if (idx >= fullText.length) {
                 clearInterval(interval);
+                typingIntervalRef.current = null;
                 setMessages(prev => prev.map(m =>
                     m.id === messageId ? { ...m, streaming: false } : m
                 ));
             }
         }, TYPING_SPEED_MS);
+        typingIntervalRef.current = interval;
     }, []);
 
     // ── Send message mutation (non-streaming fallback path) ──────────────────

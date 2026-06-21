@@ -11,6 +11,7 @@ const sidebarItems = [
     { name: 'Preferences', href: '/settings/preferences', icon: Settings },
     { name: 'Notifications', href: '/settings/notifications', icon: Bell },
     { name: 'Subscription', href: '/settings/subscription', icon: CreditCard },
+    { name: 'Privacy', href: '/settings/privacy', icon: Shield },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
