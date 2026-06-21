@@ -139,6 +139,13 @@ the human-readable record.
 | `user-service` | new `period_logs` table (`id`, `user_id` idx, `start_date`, `end_date?`, `created_at`) | `services/user-service/prisma/migrations/20260621_period_log/migration.sql` | (same `user-service db push` as above — one push applies both) |
 | `sleep-service` | new `health_samples` table (append-only wearable archive; all metric cols nullable/defaulted) + **F33** `@@unique(userId,kind,startTime,source)` for re-sync idempotency | `services/sleep-service/prisma/migrations/20260621_health_samples/migration.sql` | `docker compose exec sleep-service npx prisma db push --skip-generate --accept-data-loss` |
 | `community-service` | **F33** new `post_likes` table (`user_id`, `post_id`, `@@unique([userId,postId])`) — makes likePost idempotent / un-gameable | `services/community-service/prisma/migrations/20260621_post_like/migration.sql` | `docker compose exec community-service npx prisma db push --skip-generate --accept-data-loss` |
+| `subscription-service` | **F35b** new `iap_transactions` table (`original_transaction_id @unique`, `user_id`, ...) — binds an IAP receipt to ONE account (blocks receipt replay/sharing) | `services/subscription-service/prisma/migrations/20260622_iap_transactions/migration.sql` | `docker compose exec subscription-service npx prisma db push --skip-generate --accept-data-loss` |
+
+> **F35b new env (owner `.env`).** `IAP_ALLOW_SANDBOX` (default `false` — leave false in
+> prod so Apple **sandbox** receipts can't redeem real tiers) and `APPLE_SHARED_SECRET`
+> (App Store Connect → app-specific shared secret, for auto-renewable receipt validation).
+> Also confirm **`INTERNAL_SERVICE_TOKEN`** is set for **user-service** + **meal-service**
+> (F35a added them as verifier/sender). See `.env.example`.
 
 > **F33 idempotency unique constraints.** F33 also added `@@unique([userId,startDate])`
 > to `period_logs` and `@@unique(userId,kind,startTime,source)` to `health_samples`.
@@ -438,10 +445,14 @@ exist in Expo Go and need a signed dev build + on-device testing.
 
 - [ ] Apply / confirm the original 5 migrations on the live DBs (§1) — chat & community
       via `migrate deploy`; user, exercise & plan via `db push`.
-- [ ] Apply the 4 newer migrations (§1b) — `cycle_tracker` + `period_log` (user-service
-      `db push`), `health_samples` (sleep-service `db push`), and `post_like`
-      (community-service `db push`). `period_logs` is needed for cycle logging/history;
-      `health_samples` before any watch sync; `post_likes` makes likes idempotent (F33).
+- [ ] Apply the 5 newer migrations (§1b) — `cycle_tracker` + `period_log` (user-service
+      `db push`), `health_samples` (sleep-service `db push`), `post_like`
+      (community-service `db push`), and `iap_transactions` (subscription-service
+      `db push`). `period_logs` for cycle logging/history; `health_samples` before any
+      watch sync; `post_likes` for idempotent likes (F33); `iap_transactions` blocks IAP
+      receipt replay (F35b) — apply before real purchases.
+- [ ] Set new env (§1b): `IAP_ALLOW_SANDBOX=false` + `APPLE_SHARED_SECRET` (subscription),
+      and `INTERNAL_SERVICE_TOKEN` for user-service + meal-service (F35a).
 - [ ] 🔴 Apply the exercise-service **and** plan-service `ai_generated` columns (§1/§3)
       **in the same deploy as this round's code** — the quota COUNT now references the
       column, so code-without-column makes the AI generate endpoints fail (`P2022`).
