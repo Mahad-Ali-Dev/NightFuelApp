@@ -28,6 +28,16 @@ module.exports = {
   moduleNameMapper: (() => {
     const END = String.fromCharCode(36); // literal end-of-string anchor for the regex
     return {
+      // Voice native packages (expo-speech / expo-speech-recognition) are
+      // declared in package.json for the EAS build but NOT installed for the
+      // gate. jest eagerly resolves the lazy `require('./voice.native')` in
+      // src/lib/voice.ts, so without these stubs the resolver would fail the
+      // suite. The stubs report TTS/STT unavailable → getVoiceAdapter() falls
+      // back to the honest no-op (the gate/Expo-Go behaviour). Keeps the gate
+      // green with NO `npm install` of native deps. (The `@/` mapper must come
+      // AFTER these so the more specific package names match first.)
+      [`^expo-speech-recognition${END}`]: '<rootDir>/src/mocks/expo-speech-recognition-stub.js',
+      [`^expo-speech${END}`]: '<rootDir>/src/mocks/expo-speech-stub.js',
       [`^@/(.*)${END}`]: '<rootDir>/src/$1',
     };
   })(),

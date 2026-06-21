@@ -27,6 +27,8 @@ import { sanitizeAiInput } from '@/lib/aiSafety';
 import { linkify, type LinkifySpan } from '@/lib/linkify';
 import { useRateLimit } from '@/hooks/useRateLimit';
 import { captureException } from '@/lib/sentry';
+import { getVoiceAdapter } from '@/lib/voice';
+import { VOICE_ERROR_MESSAGES, type VoiceErrorCode, type VoiceListenState } from '@/lib/voice.types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -166,6 +168,28 @@ export default function AICoachScreen() {
     // Client-side rate limit (UX guard; chat-service enforces the real limit).
     const rateLimit = useRateLimit({ max: 10, windowMs: 60_000 });
 
+    // ── Voice ("talk to Ria") — OPT-IN, default OFF ──────────────────────────
+    //
+    // The voice adapter is the ground truth for whether on-device STT/TTS exist
+    // (false in Expo Go / the jest gate; true behind an EAS dev build with the
+    // native packages). When unavailable the mic shows an honest disabled
+    // "needs dev build" state and the text chat is completely unchanged.
+    const voice = useRef(getVoiceAdapter()).current;
+    const sttAvailable = voice.isSTTAvailable();
+    const ttsAvailable = voice.isTTSAvailable();
+    // STT listening state machine (drives the mic button appearance).
+    const [listenState, setListenState] = useState<VoiceListenState>(
+        sttAvailable ? 'idle' : 'unavailable',
+    );
+    // "Ria speaks replies" toggle — OFF by default; only meaningful if TTS exists.
+    const [speakReplies, setSpeakReplies] = useState(false);
+    // Stable ref to sendMessage so the async voice handlers (defined before
+    // sendMessage) can invoke the latest closure without a dependency cycle.
+    const sendMessageRef = useRef<(text: string) => void>(() => undefined);
+    // Stable ref to speakReply so the mutation onSuccess (defined before
+    // speakReply) can speak the completed non-streamed reply.
+    const speakRef = useRef<(text: string) => void>(() => undefined);
+
     // ── Load persistent history from DB ────────────────────────────────────
     const historyQuery = useQuery({
         queryKey: ['ria-messages'],
@@ -276,6 +300,10 @@ export default function AICoachScreen() {
             setTimeout(() => streamText(result.reply, aiMsgId), 50);
             setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
             queryClient.invalidateQueries({ queryKey: ['ria-messages'] });
+            // Voice: speak the completed reply if the user enabled it. We speak
+            // the full reply text up front (the on-screen typing effect is purely
+            // visual) so the audio isn't chopped by the per-character animation.
+            speakRef.current(result.reply);
         },
     });
 
@@ -289,6 +317,22 @@ export default function AICoachScreen() {
         }]);
         setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 80);
     };
+
+    /**
+     * Speak Ria's completed reply aloud, IF the user enabled "Ria speaks
+     * replies" and TTS is available. No-op otherwise (the adapter's no-op speak
+     * still calls onDone, so this is always safe to call from a stream-complete
+     * handler). Called from BOTH reply-completion paths (stream onDone + the
+     * non-streaming mutation onSuccess) so voice replies work on either route.
+     */
+    const speakReply = useCallback((text: string) => {
+        if (!speakReplies || !ttsAvailable) return;
+        const trimmed = text.trim();
+        if (!trimmed) return;
+        voice.speak(trimmed);
+    }, [speakReplies, ttsAvailable, voice]);
+    // Keep the ref pointed at the latest speakReply for the mutation onSuccess.
+    speakRef.current = speakReply;
 
     /** AI context payload mirrored from the non-streaming sendRiaMessage path. */
     const buildContext = useCallback((): Record<string, unknown> => (
@@ -329,6 +373,10 @@ export default function AICoachScreen() {
         const aiMsgId = `ai-stream-${Date.now()}`;
         let gotFirstToken = false;
         let settled = false; // guard: only one of done/error/fallback wins
+        // Accumulate the streamed reply locally so onDone has the FULL text
+        // synchronously (reading it back out of a setState updater is unreliable).
+        // Used to speak the completed reply when "Ria speaks replies" is on.
+        let accumulated = '';
 
         // Append the empty assistant bubble.
         setMessages(prev => [...prev, {
@@ -347,6 +395,7 @@ export default function AICoachScreen() {
                 onToken: (delta) => {
                     if (settled) return;
                     if (!gotFirstToken) gotFirstToken = true;
+                    accumulated += delta;
                     setMessages(prev => prev.map(m =>
                         m.id === aiMsgId ? { ...m, text: m.text + delta, streaming: true } : m
                     ));
@@ -363,6 +412,11 @@ export default function AICoachScreen() {
                     // Reconcile with the server-persisted copy.
                     queryClient.invalidateQueries({ queryKey: ['ria-messages'] });
                     setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 60);
+                    // Voice: speak the completed reply if the user enabled it. Use
+                    // the locally-accumulated text (full, synchronous) and the ref
+                    // (always the latest speakReply) so a toggle change after this
+                    // stream started is still honoured.
+                    speakRef.current(accumulated);
                 },
                 onError: (_msg, partial) => {
                     if (settled) return;
@@ -391,6 +445,10 @@ export default function AICoachScreen() {
         const trimmed = text.trim();
         // Block while the daily quota is exhausted, or either path is busy.
         if (!trimmed || mutation.isPending || isStreaming || quota.exhausted) return;
+
+        // Barge-in: a new turn always silences any reply Ria is currently
+        // speaking (Speech.stop via the adapter). Safe no-op when TTS is off.
+        voice.stopSpeaking();
 
         // 1. Client-side rate limit — give immediate feedback instead of a
         //    delayed 429 from the server.
@@ -426,6 +484,75 @@ export default function AICoachScreen() {
         // Primary: token-by-token stream. Falls back to sendRiaMessage on error.
         startStream(safe.text);
     };
+    // Keep the ref pointed at the latest sendMessage so async voice handlers
+    // (started before this closure) invoke the current implementation.
+    sendMessageRef.current = sendMessage;
+
+    // ── Voice control handlers ───────────────────────────────────────────────
+
+    /**
+     * Tap-to-talk. First tap (idle) requests permission if needed, then starts a
+     * listening session. Tapping again while listening commits the utterance
+     * (stop → final). Interim transcripts stream live into the input; the final
+     * transcript is sent via the existing sendMessage. All failures fall back to
+     * text via an inline notice — the recogniser never throws here.
+     */
+    const handleMicPress = useCallback(async () => {
+        if (!sttAvailable) return; // disabled "needs dev build" state — inert tap.
+        if (quota.exhausted || mutation.isPending || isStreaming) return;
+
+        // Commit if we're mid-utterance.
+        if (listenState === 'listening' || listenState === 'starting') {
+            voice.stop();
+            return;
+        }
+
+        // Barge-in: stop any reply currently being spoken before a new turn.
+        voice.stopSpeaking();
+        setListenState('starting');
+
+        const granted = await voice.requestPermission();
+        if (!granted) {
+            setListenState(sttAvailable ? 'idle' : 'unavailable');
+            pushNotice(VOICE_ERROR_MESSAGES['not-allowed']);
+            return;
+        }
+
+        voice.startListening({
+            onStart: () => setListenState('listening'),
+            onTranscript: (t) => {
+                // Live interim transcript previewed in the composer as the user
+                // speaks; the committed final is handled by onFinal.
+                if (!t.isFinal) setInput(t.text);
+            },
+            onFinal: (finalText) => {
+                setListenState('idle');
+                setInput('');
+                const text = finalText.trim();
+                if (text) sendMessageRef.current(text);
+            },
+            onError: (code: VoiceErrorCode, message) => {
+                setListenState('idle');
+                pushNotice(message || VOICE_ERROR_MESSAGES[code]);
+            },
+            onEnd: () => {
+                // Settle back to idle if no final/error already did (defensive).
+                setListenState((s) => (s === 'listening' || s === 'starting' ? 'idle' : s));
+            },
+        });
+    }, [sttAvailable, quota.exhausted, mutation.isPending, isStreaming, listenState, voice]);
+
+    /** Toggle "Ria speaks replies". Turning it OFF also silences any current speech. */
+    const handleToggleSpeak = useCallback(() => {
+        setSpeakReplies((prev) => {
+            const next = !prev;
+            if (!next) voice.stopSpeaking();
+            return next;
+        });
+    }, [voice]);
+
+    // Stop listening + speaking when the screen unmounts.
+    useEffect(() => () => { voice.abort(); voice.stopSpeaking(); }, [voice]);
 
     // Bounded render window — the last N bubbles only. `messages` remains the
     // full ground truth (history + the live tail); we just cap what mounts so a
@@ -657,31 +784,80 @@ export default function AICoachScreen() {
                                 />
                             </View>
                         ) : (
-                            <View style={styles.inputArea}>
-                                <TextInput
-                                    style={[styles.textInput, {
-                                        color: colors.text.primary,
-                                        backgroundColor: colors.background.tertiary,
-                                        borderColor: input.trim() ? withAlpha(colors.accent.purple, 0.5) : colors.border.default,
-                                    }]}
-                                    placeholder="Ask Ria about your shift protocol..."
-                                    placeholderTextColor={colors.text.tertiary}
-                                    value={input}
-                                    onChangeText={setInput}
-                                    multiline
-                                    maxLength={500}
-                                    returnKeyType="send"
-                                    blurOnSubmit={false}
-                                    editable={!isTyping}
-                                />
+                            <>
+                                {/* Voice opt-in bar: a "Ria speaks replies" (TTS)
+                                    toggle. Voice is OFF by default and the text
+                                    chat below is unchanged when it's unused. When
+                                    neither engine exists (Expo Go / no dev build)
+                                    we show an honest "needs dev build" hint and no
+                                    toggle, so we never imply a feature we can't run. */}
+                                {(sttAvailable || ttsAvailable) ? (
+                                    <View style={styles.voiceBar}>
+                                        {ttsAvailable ? (
+                                            <SpeakToggle
+                                                on={speakReplies}
+                                                colors={colors}
+                                                typography={typography}
+                                                onPress={handleToggleSpeak}
+                                            />
+                                        ) : <View />}
+                                        {listenState === 'listening' ? (
+                                            <Text
+                                                style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: '800', fontSize: 11 }]}
+                                                maxFontSizeMultiplier={1.3}
+                                                accessibilityLiveRegion="polite"
+                                            >
+                                                Listening…
+                                            </Text>
+                                        ) : null}
+                                    </View>
+                                ) : (
+                                    <View style={styles.voiceBar}>
+                                        <Text
+                                            style={[typography.caption, { color: colors.text.tertiary, fontSize: 11 }]}
+                                            maxFontSizeMultiplier={1.3}
+                                            accessibilityRole="text"
+                                        >
+                                            Voice needs a dev build
+                                        </Text>
+                                    </View>
+                                )}
 
-                                <SendButton
-                                    enabled={!sendDisabled}
-                                    busy={isTyping}
-                                    colors={colors}
-                                    onPress={() => sendMessage(input)}
-                                />
-                            </View>
+                                <View style={styles.inputArea}>
+                                    {/* Mic (tap-to-talk). Disabled/honest when STT is
+                                        unavailable; active/glowing while listening. */}
+                                    <MicButton
+                                        state={sttAvailable ? listenState : 'unavailable'}
+                                        disabled={!sttAvailable || isTyping}
+                                        colors={colors}
+                                        onPress={handleMicPress}
+                                    />
+
+                                    <TextInput
+                                        style={[styles.textInput, {
+                                            color: colors.text.primary,
+                                            backgroundColor: colors.background.tertiary,
+                                            borderColor: input.trim() ? withAlpha(colors.accent.purple, 0.5) : colors.border.default,
+                                        }]}
+                                        placeholder={listenState === 'listening' ? 'Listening… speak to Ria' : 'Ask Ria about your shift protocol...'}
+                                        placeholderTextColor={colors.text.tertiary}
+                                        value={input}
+                                        onChangeText={setInput}
+                                        multiline
+                                        maxLength={500}
+                                        returnKeyType="send"
+                                        blurOnSubmit={false}
+                                        editable={!isTyping}
+                                    />
+
+                                    <SendButton
+                                        enabled={!sendDisabled}
+                                        busy={isTyping}
+                                        colors={colors}
+                                        onPress={() => sendMessage(input)}
+                                    />
+                                </View>
+                            </>
                         )}
                     </GlassCard>
                 </View>
@@ -796,6 +972,109 @@ function SendButton({ enabled, busy, colors, onPress }: { enabled: boolean; busy
                 ) : (
                     <Ionicons name="arrow-up" size={20} color={enabled ? colors.text.primary : colors.text.tertiary} />
                 )}
+            </Reanimated.View>
+        </GestureDetector>
+    );
+}
+
+// ── Mic button (tap-to-talk; honest disabled / active states) ────────────────────
+//
+// Tap-to-talk control next to the composer. It DERIVES its appearance from the
+// voice state machine (the adapter's ground truth, surfaced as `state`):
+//   - 'unavailable' → muted "mic-off" glyph, non-pressable, a11y "needs dev build".
+//   - 'idle'        → outlined mic, pressable (starts listening).
+//   - 'starting' / 'listening' → filled + glowing mic; pressing commits (stop).
+// Press feedback uses the screen's GestureDetector + shared-value idiom; only a
+// disabled/active tap is gated (the gesture is .enabled(!disabled)).
+
+function MicButton({ state, disabled, colors, onPress }: { state: VoiceListenState; disabled: boolean; colors: any; onPress: () => void }) {
+    const pressed = useSharedValue(0);
+    const active = state === 'listening' || state === 'starting';
+    const unavailable = state === 'unavailable';
+    const tap = Gesture.Tap()
+        .enabled(!disabled)
+        .onBegin(() => { pressed.set(withTiming(1, { duration: 80 })); })
+        .onFinalize(() => { pressed.set(withTiming(0, { duration: 120 })); })
+        .onEnd(() => { runOnJS(onPress)(); });
+    const animStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: interpolate(pressed.get(), [0, 1], [1, 0.92]) }],
+    }));
+    const label = unavailable
+        ? 'Voice input unavailable — needs a dev build'
+        : active
+            ? 'Stop listening and send'
+            : 'Talk to Ria';
+    return (
+        <GestureDetector gesture={tap}>
+            <Reanimated.View
+                accessibilityRole="button"
+                accessibilityLabel={label}
+                accessibilityState={{ disabled, busy: active }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                testID="mic-button"
+                style={[
+                    styles.micBtn,
+                    {
+                        backgroundColor: active ? colors.accent.purple : colors.background.tertiary,
+                        borderWidth: 1,
+                        borderColor: active
+                            ? withAlpha(colors.accent.purpleLight, 0.6)
+                            : colors.border.default,
+                        opacity: unavailable ? 0.45 : 1,
+                    },
+                    active ? shadows.glow(colors.accent.purple) : null,
+                    animStyle,
+                ]}
+            >
+                <Ionicons
+                    name={unavailable ? 'mic-off' : 'mic'}
+                    size={20}
+                    color={active ? colors.text.primary : (unavailable ? colors.text.tertiary : colors.accent.purpleLight)}
+                />
+            </Reanimated.View>
+        </GestureDetector>
+    );
+}
+
+// ── "Ria speaks replies" toggle (TTS opt-in) ─────────────────────────────────────
+//
+// A small bordered pill that flips the speak-replies preference. OFF by default;
+// only rendered when TTS is available. Press idiom matches the rest of the screen.
+
+function SpeakToggle({ on, colors, typography, onPress }: { on: boolean; colors: any; typography: any; onPress: () => void }) {
+    const pressed = useSharedValue(0);
+    const tap = Gesture.Tap()
+        .onBegin(() => { pressed.set(withTiming(1, { duration: 90 })); })
+        .onFinalize(() => { pressed.set(withTiming(0, { duration: 120 })); })
+        .onEnd(() => { runOnJS(onPress)(); });
+    const animStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: interpolate(pressed.get(), [0, 1], [1, 0.96]) }],
+        opacity: interpolate(pressed.get(), [0, 1], [1, 0.85]),
+    }));
+    return (
+        <GestureDetector gesture={tap}>
+            <Reanimated.View
+                accessibilityRole="switch"
+                accessibilityLabel="Ria speaks replies"
+                accessibilityState={{ checked: on }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                testID="speak-toggle"
+                style={[styles.speakToggle, {
+                    borderColor: on ? withAlpha(colors.accent.purpleLight, 0.6) : colors.border.default,
+                    backgroundColor: on ? withAlpha(colors.accent.purple, 0.16) : 'transparent',
+                }, animStyle]}
+            >
+                <Ionicons
+                    name={on ? 'volume-high' : 'volume-mute'}
+                    size={14}
+                    color={on ? colors.accent.purpleLight : colors.text.tertiary}
+                />
+                <Text
+                    style={[typography.caption, { color: on ? colors.accent.purpleLight : colors.text.tertiary, fontWeight: '700', fontSize: 11 }]}
+                    maxFontSizeMultiplier={1.3}
+                >
+                    Ria speaks replies
+                </Text>
             </Reanimated.View>
         </GestureDetector>
     );
@@ -1197,5 +1476,34 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 6,
+    },
+    // Voice opt-in bar above the composer: the "Ria speaks replies" toggle (and
+    // a "Listening…" hint / "needs dev build" honest fallback).
+    voiceBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 14,
+        paddingTop: 10,
+        minHeight: 28,
+    },
+    // Mic button — same 44pt touch target as the send button.
+    micBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 6,
+    },
+    speakToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: 16,
+        borderWidth: 1,
+        minHeight: 32,
     },
 });

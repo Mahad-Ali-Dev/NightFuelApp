@@ -17,14 +17,14 @@
       "bundleIdentifier": "com.zeitra.app",
       "associatedDomains": [
         "applinks:zeitra.app",
-        "applinks:www.zeitra.app",
-        "applinks:zeitra.app",
         "applinks:www.zeitra.app"
       ],
       "infoPlist": {
         "NSCameraUsageDescription": "Zeitra needs camera access for barcode food scanning.",
         "NSHealthShareUsageDescription": "Zeitra reads sleep and activity data to optimize your chrono-nutrition plan.",
         "NSHealthUpdateUsageDescription": "Zeitra writes workout and nutrition data to Apple Health.",
+        "NSMicrophoneUsageDescription": "Zeitra uses the microphone so you can talk to Ria, your AI coach, by voice.",
+        "NSSpeechRecognitionUsageDescription": "Zeitra uses speech recognition to turn what you say to Ria into text.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false
         }
@@ -56,29 +56,9 @@
             "BROWSABLE",
             "DEFAULT"
           ]
-        },
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "zeitra.app"
-            },
-            {
-              "scheme": "https",
-              "host": "www.zeitra.app"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
         }
       ],
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ]
@@ -102,6 +82,16 @@
         {
           "icon": "./assets/images/notification-icon.png",
           "color": "#FF6B35"
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Zeitra uses the microphone so you can talk to Ria, your AI coach, by voice.",
+          "speechRecognitionPermission": "Zeitra uses speech recognition to turn what you say to Ria into text.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ]
     ],
