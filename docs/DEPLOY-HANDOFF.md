@@ -179,6 +179,23 @@ docker compose exec postgres psql -U postgres -d sleep_service -c '\d health_sam
 docker compose exec postgres psql -U postgres -d community_service -c '\d post_likes'
 ```
 
+### 1c. Index-only migrations (F42 performance)
+
+**What.** F42 added missing DB indexes (no new tables/columns) — these back hot queries
+that were doing full sequential scans. They apply via the owning service's `db push` on
+restart, same as above. Records under each service's `prisma/migrations/20260622_*`:
+
+| Service | Index | Backs |
+|---|---|---|
+| `sleep-service` | `sleep_sessions(user_id, start_time DESC)` | every per-user sleep query (table had **zero** secondary indexes) |
+| `chat-service` | `conversations(participant_b)` | the inbox `OR(participantA, participantB)` query |
+| `community-service` | `posts(author_id)`, `comments(author_id)`, `challenge_participants(user_id)` | profile feed / badge counts / GDPR purge |
+| `plan-service` | `day_plans` FK `protocol_id` → SET NULL (F38, see §1b) | erasure reliability |
+
+> **Large existing tables:** `db push` emits a plain `CREATE INDEX` (brief write lock).
+> If a table already holds a lot of rows in prod, apply the DDL in each migration record
+> manually with `CREATE INDEX CONCURRENTLY` instead, to avoid blocking writes.
+
 ---
 
 ## 2. Recipe catalog re-seed
