@@ -128,6 +128,85 @@ export class UserService {
         }
     }
 
+    // Public profile shape returned by GET /v1/users/public/:userId and the
+    // POST /v1/users/public/batch endpoint. Exactly the fields the route exposes.
+    public static readonly PUBLIC_PROFILE_FIELDS = {
+        userId: true,
+        displayName: true,
+        avatarUrl: true,
+        timezone: true,
+        isPrivate: true,
+    } as const;
+
+    /**
+     * Lean read for the PUBLIC profile surface (GET /v1/users/public/:userId and
+     * the /public/batch endpoint).
+     *
+     * PERF (MEDIUM #9): unlike getProfileWithPreferences, this does NOT call
+     * ensureProfileExists() (no userProfile.count() + no auto-create on a public
+     * read) and selects ONLY the public fields — never the full over-fetched row
+     * with preferences/status. A missing profile simply returns null (the route
+     * maps it to 404); a public read must never provision a profile as a side
+     * effect.
+     */
+    async getPublicProfile(userId: string): Promise<{
+        id: string;
+        displayName: string;
+        avatarUrl: string | null;
+        timezone: string;
+        isPrivate: boolean;
+    } | null> {
+        const row = await this.prisma.userProfile.findUnique({
+            where: { userId },
+            // select only the public fields (cast: isPrivate predates the
+            // checked-in generated client — same shim precedent as elsewhere).
+            select: UserService.PUBLIC_PROFILE_FIELDS as any,
+        });
+        if (!row) return null;
+
+        const p = row as any;
+        return {
+            id: p.userId,
+            displayName: p.displayName,
+            avatarUrl: p.avatarUrl ?? null,
+            timezone: p.timezone,
+            isPrivate: p.isPrivate ?? false,
+        };
+    }
+
+    /**
+     * Batch variant of getPublicProfile for the community feed author resolver
+     * (HIGH #4). Resolves up to `ids.length` user ids in a SINGLE query and
+     * returns a map keyed by userId. Ids with no profile are simply absent from
+     * the map (mirrors the single-id 404 → "no author" degrade). Caller is
+     * responsible for bounding the id count (the route caps it).
+     */
+    async getPublicProfilesBatch(ids: string[]): Promise<
+        Array<{
+            id: string;
+            displayName: string;
+            avatarUrl: string | null;
+            timezone: string;
+            isPrivate: boolean;
+        }>
+    > {
+        const uniqueIds = [...new Set(ids.filter((id) => !!id))];
+        if (uniqueIds.length === 0) return [];
+
+        const rows = await this.prisma.userProfile.findMany({
+            where: { userId: { in: uniqueIds } },
+            select: UserService.PUBLIC_PROFILE_FIELDS as any,
+        });
+
+        return (rows as any[]).map((p) => ({
+            id: p.userId,
+            displayName: p.displayName,
+            avatarUrl: p.avatarUrl ?? null,
+            timezone: p.timezone,
+            isPrivate: p.isPrivate ?? false,
+        }));
+    }
+
     /**
      * Fetch a user's full profile including their preferences.
      * Auto-provisions defaults if missing.
@@ -634,12 +713,43 @@ export class UserService {
     }
 
     /**
-     * Internal helper to fetch all users for background workers
+     * Internal helper to fetch users for background workers (e.g. plan-service's
+     * daily-regeneration worker).
+     *
+     * PERF (HIGH #3): this used to do an UNBOUNDED userProfile.findMany() with no
+     * `take`, loading EVERY profile into memory on every 60s poll. It is now
+     * CURSOR-PAGINATED: each call returns at most `limit` rows ordered by the
+     * stable `userId` cursor plus a `nextCursor` to continue from. The worker
+     * pages through batches until `nextCursor` is null, so behaviour is
+     * equivalent (it still processes all users) but every query is bounded.
+     *
+     * @param opts.cursor  exclusive userId to resume after (omit for the first page)
+     * @param opts.limit   page size (1..MAX_INTERNAL_PAGE_LIMIT, default 500)
      */
-    async getAllUsersInternal(): Promise<Array<{ userId: string, timezone: string }>> {
-        return this.prisma.userProfile.findMany({
-            select: { userId: true, timezone: true }
+    async getAllUsersInternal(opts?: { cursor?: string; limit?: number }): Promise<{
+        users: Array<{ userId: string; timezone: string }>;
+        nextCursor: string | null;
+    }> {
+        const MAX_LIMIT = 1000;
+        const DEFAULT_LIMIT = 500;
+        const rawLimit = opts?.limit ?? DEFAULT_LIMIT;
+        const limit = Math.min(Math.max(1, Math.floor(rawLimit)), MAX_LIMIT);
+
+        const users = await this.prisma.userProfile.findMany({
+            select: { userId: true, timezone: true },
+            orderBy: { userId: 'asc' },
+            take: limit,
+            // Skip the cursor row itself when resuming a page.
+            ...(opts?.cursor
+                ? { cursor: { userId: opts.cursor }, skip: 1 }
+                : {}),
         });
+
+        // A full page MAY have more rows; a short page is the last page.
+        const nextCursor =
+            users.length === limit ? users[users.length - 1].userId : null;
+
+        return { users, nextCursor };
     }
 
     // ── Admin Methods ────────────────────────────────────────────────────────────

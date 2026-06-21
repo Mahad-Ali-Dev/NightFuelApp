@@ -21,7 +21,7 @@
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { resolvePlan } from '@nightfuel/config';
+import { resolvePlan, __clearPlanCache } from '@nightfuel/config';
 
 const USER_ID = 'user-abc-123';
 const JWT_SECRET = 'test-internal-secret';
@@ -316,5 +316,71 @@ describe('resolve-plan.ts — no module-scope fetch / Date.now', () => {
                 expect(/^\s+/.test(line)).toBe(true);
             }
         }
+    });
+});
+
+describe('resolvePlan — opt-in short-TTL per-user cache (LOW #14)', () => {
+    // The cache is module-scoped & process-wide, so clear it between cases to keep
+    // each assertion independent. (Production never needs this — entries self-expire.)
+    const FIXED_MS = Date.parse('2026-06-20T12:00:00.000Z');
+    beforeEach(() => {
+        jest.useFakeTimers();
+        jest.setSystemTime(FIXED_MS);
+        __clearPlanCache();
+    });
+    afterEach(() => {
+        jest.useRealTimers();
+        jest.clearAllMocks();
+        __clearPlanCache();
+    });
+
+    const call = (fetchImpl: jest.MockedFunction<typeof globalThis.fetch>, cacheTtlMs?: number | boolean) =>
+        resolvePlan({ userId: USER_ID, jwtSecret: JWT_SECRET, subscriptionServiceUrl: SUB_URL, fetchImpl, cacheTtlMs });
+
+    // THE core acceptance: a second call within the TTL is served from cache —
+    // subscription-service is hit exactly ONCE for a burst.
+    it('serves the second call within TTL from cache (one fetch for two calls)', async () => {
+        const fetchImpl = mockFetch(async () => makeResponse({ ok: true, body: { tier: 'PRO' } }));
+        expect(await call(fetchImpl, 30_000)).toBe('pro');
+        expect(await call(fetchImpl, 30_000)).toBe('pro'); // cache hit
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    // `cacheTtlMs: true` selects the 30s default and still collapses the burst.
+    it('accepts cacheTtlMs:true (30s default) and still caches the second call', async () => {
+        const fetchImpl = mockFetch(async () => makeResponse({ ok: true, body: { tier: 'PRO' } }));
+        expect(await call(fetchImpl, true)).toBe('pro');
+        expect(await call(fetchImpl, true)).toBe('pro');
+        expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    // Correctness: once the TTL elapses the cache re-fetches, so a tier change is
+    // reflected quickly (here free -> pro after the 30s window).
+    it('re-fetches after the TTL expires (reflects a tier change)', async () => {
+        let tier = 'FREE';
+        const fetchImpl = mockFetch(async () => makeResponse({ ok: true, body: { tier } }));
+        expect(await call(fetchImpl, 30_000)).toBe('free');
+        tier = 'PRO';
+        jest.setSystemTime(FIXED_MS + 30_001); // step just past the TTL
+        expect(await call(fetchImpl, 30_000)).toBe('pro');
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    // Default (no cacheTtlMs) is OFF — byte-identical to pre-cache behaviour: every
+    // call hits the service (this is why existing callers/tests are unaffected).
+    it('does NOT cache when cacheTtlMs is omitted (caching off by default)', async () => {
+        const fetchImpl = mockFetch(async () => makeResponse({ ok: true, body: { tier: 'PRO' } }));
+        await call(fetchImpl);
+        await call(fetchImpl);
+        expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    // A degraded 'free' fallback (here a non-OK 500) is NEVER cached, so a transient
+    // outage can't pin the user to 'free' for the whole TTL.
+    it('does not cache the degraded free fallback (non-OK 500)', async () => {
+        const fetchImpl = mockFetch(async () => makeResponse({ ok: false, status: 500 }));
+        expect(await call(fetchImpl, 30_000)).toBe('free');
+        expect(await call(fetchImpl, 30_000)).toBe('free');
+        expect(fetchImpl).toHaveBeenCalledTimes(2); // each retried, not memoised
     });
 });

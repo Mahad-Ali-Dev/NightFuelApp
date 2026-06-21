@@ -19,6 +19,22 @@ const DEFAULT_USER_SERVICE_URL = 'http://user-service:3009';
 const DEFAULT_SUBSCRIPTION_SERVICE_URL = 'http://subscription-service:3015';
 const INTERNAL_REQUEST_TIMEOUT_MS = 3_000;
 
+// ── Peer-profile cache (MEDIUM #12) ─────────────────────────────────────────────
+// resolvePeers() runs on EVERY getConversations()/getIncomingRequests() call and
+// previously re-fetched every peer's profile from user-service over HTTP with no
+// cache (unlike community's AuthorResolver). A short-lived, size-bounded in-memory
+// cache lets repeated inbox loads reuse recently-resolved peers without a second
+// HTTP round-trip, while a tight TTL keeps displayName/avatar from going stale.
+// Mirrors the community author-resolver approach: per-id entry, ~60s TTL, capped
+// size, lazy expiry on read.
+const PEER_CACHE_TTL_MS = 60_000; // ~60s in-memory TTL
+const PEER_CACHE_MAX = 5_000; // hard cap on distinct cached peers
+
+interface PeerCacheEntry {
+    peer: ConversationPeer;
+    expiresAt: number;
+}
+
 // ── Ria daily AI quota ──────────────────────────────────────────────────────────
 // Per-plan daily caps on USER-authored Ria messages, counted since UTC midnight.
 // Overridable from the environment so ops can tune without a redeploy; the
@@ -76,6 +92,9 @@ export class ChatService {
     private readonly jwtSecret: string;
     private readonly userServiceUrl: string;
     private readonly subscriptionServiceUrl: string;
+
+    // MEDIUM #12: per-id peer-profile cache (TTL + size bounded, lazy expiry).
+    private readonly peerCache = new Map<string, PeerCacheEntry>();
 
     // eventBus is OPTIONAL and additive: existing callers `new ChatService(prisma)`
     // keep compiling. When supplied, normal (non-Ria) sends emit a best-effort
@@ -638,15 +657,50 @@ export class ChatService {
             return result;
         }
 
+        // Serve from cache where a fresh entry exists; only fetch the misses.
+        // Lazy expiry: stale entries are dropped on read so we never serve beyond
+        // the TTL (correctness preserved).
+        const now = Date.now();
+        const toFetch: string[] = [];
+        for (const id of unique) {
+            const cached = this.peerCache.get(id);
+            if (cached && cached.expiresAt > now) {
+                result.set(id, cached.peer);
+            } else {
+                if (cached) this.peerCache.delete(id);
+                toFetch.push(id);
+            }
+        }
+        if (toFetch.length === 0) return result;
+
         const token = this.mintInternalToken();
-        const resolved = await Promise.all(unique.map((id) => this.fetchPeer(id, token)));
-        for (const peer of resolved) {
+        const resolved = await Promise.all(toFetch.map((id) => this.fetchPeer(id, token)));
+        for (const { peer, fromFallback } of resolved) {
             result.set(peer.userId, peer);
+            // Only cache GENUINE lookups. Caching a degraded fallback (a non-OK
+            // response / timeout / error during a transient user-service blip) would
+            // pin that peer to the generic 'Zeitra Member' name for the full TTL even
+            // after user-service recovers. Fallbacks are returned for THIS request but
+            // re-fetched next time (mirrors the resolve-plan cache-only-on-success rule).
+            if (!fromFallback) this.cachePeer(peer);
         }
         return result;
     }
 
-    private async fetchPeer(peerId: string, token: string): Promise<ConversationPeer> {
+    /**
+     * Insert/refresh a resolved peer in the bounded cache. Enforces PEER_CACHE_MAX
+     * by evicting the oldest-inserted entry (Map preserves insertion order) before
+     * adding a new key, keeping memory flat under churn.
+     */
+    private cachePeer(peer: ConversationPeer): void {
+        if (!this.peerCache.has(peer.userId) && this.peerCache.size >= PEER_CACHE_MAX) {
+            const oldest = this.peerCache.keys().next().value;
+            if (oldest !== undefined) this.peerCache.delete(oldest);
+        }
+        this.peerCache.set(peer.userId, { peer, expiresAt: Date.now() + PEER_CACHE_TTL_MS });
+    }
+
+    private async fetchPeer(peerId: string, token: string): Promise<{ peer: ConversationPeer; fromFallback: boolean }> {
         const url = `${this.userServiceUrl}/v1/users/internal/profile/${encodeURIComponent(peerId)}`;
         const fallback: ConversationPeer = { userId: peerId, displayName: 'Zeitra Member', avatarUrl: null };
 
@@ -667,17 +721,20 @@ export class ChatService {
             });
             if (!res.ok) {
                 logger.debug({ peerId, status: res.status }, 'Peer profile lookup non-OK; using fallback');
-                return fallback;
+                return { peer: fallback, fromFallback: true };
             }
             const profile = (await res.json()) as { userId?: string; displayName?: string | null; avatarUrl?: string | null };
             return {
-                userId: profile.userId ?? peerId,
-                displayName: profile.displayName?.trim() || 'Zeitra Member',
-                avatarUrl: profile.avatarUrl ?? null,
+                peer: {
+                    userId: profile.userId ?? peerId,
+                    displayName: profile.displayName?.trim() || 'Zeitra Member',
+                    avatarUrl: profile.avatarUrl ?? null,
+                },
+                fromFallback: false,
             };
         } catch (err) {
             logger.warn({ err, peerId }, 'Failed to resolve peer profile; using fallback');
-            return fallback;
+            return { peer: fallback, fromFallback: true };
         } finally {
             clearTimeout(timer);
         }

@@ -152,6 +152,14 @@ export function isWithinHeatmapWindow(
     return Date.parse(completedAtIso) >= nowMs - windowDays * 86_400_000;
 }
 
+// Upper bound on the number of per-set rows getExerciseAnalytics will scan and
+// return for a single exercise — the MOST-recent N sets. 500 matches the cap
+// already used by the GET /v1/exercises and /library routes and sits far above
+// any realistic per-exercise history, so normal analytics output is unchanged;
+// it exists only to stop a pathological history from triggering an unbounded
+// table scan / unbounded response.
+export const MAX_ANALYTICS_SETS = 500;
+
 export interface CreateWorkoutInput {
     userId: string;
     type: string;
@@ -471,11 +479,26 @@ export class ExerciseService {
     }
 
     async getExerciseAnalytics(userId: string, exerciseName: string) {
-        const exercises = await this.prisma.exercise.findMany({
+        // Bound the scan server-side: previously this ran findMany with NO take
+        // and NO date window, returning every set of this exercise the user had
+        // ever logged (the same unbounded-DB-scan class fixed for getHeatmap).
+        // We cap at the most-recent MAX_ANALYTICS_SETS sets by ordering DESC +
+        // take, then reverse back to ASCending so the emitted order is identical
+        // to the old `orderBy: completedAt asc`. Capping the MOST-recent rows
+        // (not the oldest) is required because:
+        //   - the web chart only renders the tail (history.slice(-12)) and the
+        //     1RM/volume metrics are dominated by recent sets, and
+        //   - the mobile `getLastSet` helper reads the LAST (most-recent) row,
+        //     which must never be dropped by the bound.
+        // Any history at or under the cap is therefore byte-identical to before;
+        // only pathological histories (>cap sets of one exercise) are bounded.
+        const recent = await this.prisma.exercise.findMany({
             where: { workout: { userId }, name: { equals: exerciseName, mode: 'insensitive' } },
             include: { workout: { select: { completedAt: true } } },
-            orderBy: { workout: { completedAt: 'asc' } }
+            orderBy: { workout: { completedAt: 'desc' } },
+            take: MAX_ANALYTICS_SETS
         });
+        const exercises = recent.reverse(); // back to completedAt ASC
 
         return exercises.map(ex => {
             const vol = (ex.sets || 1) * (ex.reps || 1) * (ex.weightKg || 0);

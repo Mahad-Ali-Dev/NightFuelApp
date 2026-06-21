@@ -267,11 +267,13 @@ describe('SYSTEM auto-generation paths bypass the quota gate', () => {
         const count = jest.fn(async () => 999); // would block IF the gate ran — it must NOT here
         const planService = { generateAndStorePlan, prisma: { dayPlan: { count } } } as unknown as PlanService;
 
-        // user-service /internal/all returns one user; force their local time to 04:00
-        // so checkAndRegenerate triggers regeneration.
+        // user-service /internal/all is cursor-paginated ({ users, nextCursor });
+        // return a single short page (nextCursor:null) so the worker stops after
+        // one request. Force their local time to 04:00 so checkAndRegenerate
+        // triggers regeneration.
         (global as any).fetch = jest.fn(async () => ({
             ok: true,
-            json: async () => [{ userId: USER_ID, timezone: 'UTC' }],
+            json: async () => ({ users: [{ userId: USER_ID, timezone: 'UTC' }], nextCursor: null }),
         }));
         const realDTF = Intl.DateTimeFormat;
         jest

@@ -25,6 +25,10 @@ const USER_ID = '44444444-4444-4444-4444-444444444444';
 function buildMockService() {
     return {
         getProfileWithPreferences: jest.fn(),
+        // PERF MEDIUM #9: /public/:userId now uses the lean getPublicProfile
+        // (no count()/auto-create, public fields only).
+        getPublicProfile: jest.fn(),
+        getPublicProfilesBatch: jest.fn(),
         getStatus: jest.fn(),
         updateProfile: jest.fn(),
         updatePrivacy: jest.fn(),
@@ -180,16 +184,14 @@ describe('GET /v1/users/public/:userId — additive isPrivate field', () => {
 
     it('returns isPrivate PLUS the pre-existing id/displayName/avatarUrl/timezone', async () => {
         svc = buildMockService();
-        svc.getProfileWithPreferences.mockResolvedValueOnce({
-            id: 'profile-row-id',
-            userId: USER_ID,
+        // getPublicProfile already returns the exact public shape (the lean read
+        // selects only these fields — no sensitive heightCm/weightKg ever loaded).
+        svc.getPublicProfile.mockResolvedValueOnce({
+            id: USER_ID,
             displayName: 'Aurora',
             avatarUrl: 'https://cdn.example/a.png',
             timezone: 'America/New_York',
             isPrivate: true,
-            // extra sensitive fields that must NOT be exposed
-            heightCm: 180,
-            weightKg: 75,
         } as any);
         app = await buildApp(svc);
 
@@ -200,7 +202,7 @@ describe('GET /v1/users/public/:userId — additive isPrivate field', () => {
 
         expect(res.statusCode).toBe(200);
         // Exact public shape: the four pre-existing fields are unchanged AND
-        // isPrivate is now present — nothing else leaks.
+        // isPrivate is present — nothing else leaks.
         expect(res.json()).toEqual({
             id: USER_ID,
             displayName: 'Aurora',
@@ -211,13 +213,16 @@ describe('GET /v1/users/public/:userId — additive isPrivate field', () => {
         // Sensitive profile fields stay stripped.
         expect(res.body).not.toContain('heightCm');
         expect(res.body).not.toContain('weightKg');
+        // PERF MEDIUM #9: the public read must NOT go through the count()/auto-
+        // create getProfileWithPreferences path.
+        expect(svc.getProfileWithPreferences).not.toHaveBeenCalled();
+        expect(svc.getPublicProfile).toHaveBeenCalledWith(USER_ID);
     });
 
     it('defaults isPrivate:false through for a public account', async () => {
         svc = buildMockService();
-        svc.getProfileWithPreferences.mockResolvedValueOnce({
-            id: 'profile-row-id',
-            userId: USER_ID,
+        svc.getPublicProfile.mockResolvedValueOnce({
+            id: USER_ID,
             displayName: 'Public Pete',
             avatarUrl: null,
             timezone: 'UTC',
@@ -235,9 +240,9 @@ describe('GET /v1/users/public/:userId — additive isPrivate field', () => {
         expect(res.json().id).toBe(USER_ID);
     });
 
-    it('404s when the profile does not exist', async () => {
+    it('404s when the profile does not exist (no auto-provision on a public read)', async () => {
         svc = buildMockService();
-        svc.getProfileWithPreferences.mockResolvedValueOnce(null);
+        svc.getPublicProfile.mockResolvedValueOnce(null);
         app = await buildApp(svc);
 
         const res = await app.inject({

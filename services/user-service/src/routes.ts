@@ -110,22 +110,49 @@ export const userRoutes = async (
         async (request, reply) => {
             try {
                 const { userId } = request.params as { userId: string };
-                // Using internal profile fetcher as it gets the basic data
-                const profile = await service.getProfileWithPreferences(userId);
+                // PERF (MEDIUM #9): lean public read — no ensureProfileExists()
+                // count()/auto-create, selects ONLY the public fields below. A
+                // missing profile 404s (never provisioned by a public read). The
+                // returned object is already the exact public shape.
+                const profile = await service.getPublicProfile(userId);
                 if (!profile) {
                     return reply.code(404).send({ error: 'Profile not found' });
                 }
 
-                // Strip sensitive data before sending. isPrivate is part of the
-                // public social contract (community-service composes detailed
-                // profile access from it); everything else here is unchanged.
-                return reply.code(200).send({
-                    id: profile.userId,
-                    displayName: profile.displayName,
-                    avatarUrl: profile.avatarUrl,
-                    timezone: profile.timezone,
-                    isPrivate: profile.isPrivate
-                });
+                // isPrivate is part of the public social contract (community-service
+                // composes detailed profile access from it).
+                return reply.code(200).send(profile);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── POST /v1/users/public/batch ───────────────────────────────────────────
+    // PERF (HIGH #4): batch sibling of GET /v1/users/public/:userId. Resolves an
+    // array of user ids to the SAME public profile shape in ONE round-trip, so the
+    // community feed's author resolver can enrich a whole page of posts without N
+    // separate HTTP GETs. PUBLIC route (same auth as /public/:userId — NOT
+    // internal-token guarded). Bounded to MAX_BATCH ids per request. Returns
+    // { users: PublicProfile[] }; ids with no profile are simply absent (mirrors
+    // the single-id 404 → "no author" degrade).
+    const MAX_BATCH = 100;
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/public/batch',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: {
+                body: z.object({
+                    ids: z.array(z.string()).min(1).max(MAX_BATCH),
+                }),
+            },
+        },
+        async (request, reply) => {
+            try {
+                const { ids } = request.body as { ids: string[] };
+                const users = await service.getPublicProfilesBatch(ids);
+                return reply.code(200).send({ users });
             } catch (err: any) {
                 request.log.error(err);
                 return reply.code(500).send({ error: 'Internal server error' });
@@ -701,13 +728,26 @@ export const userRoutes = async (
     );
 
     // ── GET /v1/users/internal/all ────────────────────────────────────────────────
+    // PERF (HIGH #3): CURSOR-PAGINATED. Accepts ?cursor=&limit= and returns
+    // { users, nextCursor }. Callers (plan-service worker) page through batches
+    // until nextCursor is null. Bounded per query instead of an unbounded
+    // findMany over every profile. Internal-token guarded as before.
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/internal/all',
-        { preHandler: internalAuth },
+        {
+            preHandler: internalAuth,
+            schema: {
+                querystring: z.object({
+                    cursor: z.string().optional(),
+                    limit: z.coerce.number().int().min(1).max(1000).optional(),
+                }),
+            },
+        },
         async (request, reply) => {
             try {
-                const users = await service.getAllUsersInternal();
-                return reply.code(200).send(users);
+                const { cursor, limit } = request.query as { cursor?: string; limit?: number };
+                const page = await service.getAllUsersInternal({ cursor, limit });
+                return reply.code(200).send(page);
             } catch (err: any) {
                 request.log.error(err);
                 return reply.code(500).send({ error: 'Internal server error' });

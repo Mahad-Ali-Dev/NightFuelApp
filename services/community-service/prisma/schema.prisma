@@ -20,6 +20,9 @@ model Post {
 
   comments  Comment[]
 
+  // Profile feed, post-count, like-sum (Social Butterfly badge) and the GDPR
+  // delete-by-author path all filter on authorId — none was indexed before.
+  @@index([authorId])
   @@index([createdAt(sort: Desc)])
   @@map("posts")
 }
@@ -44,6 +47,8 @@ model Comment {
 
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
 
+  // Author-scoped reads (comment count / GDPR delete-by-author) filter authorId.
+  @@index([authorId])
   @@index([postId])
   @@map("comments")
 }
@@ -109,6 +114,10 @@ model ChallengeParticipant {
 
   challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
 
+  // The composite @@unique has userId NON-leftmost, so userId-only predicates
+  // (e.g. "challenges this user has joined") can't use it. This stand-alone
+  // index serves those.
+  @@index([userId])
   @@unique([challengeId, userId])
   @@map("challenge_participants")
 }

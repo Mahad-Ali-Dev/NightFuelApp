@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -57,6 +57,70 @@ export default function MuscleMapScreen() {
         enabled:!!sel,
     });
     const exercises = (exQ.data??[]) as Exercise[];
+    const keyExtractor = useCallback((ex: Exercise) => ex.id, []);
+    const renderItem = useCallback(({ item: ex }: { item: Exercise }) => (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={ex.name} style={[s.exRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]} onPress={()=>router.push(`/(exercises)/${ex.id}` as any)} activeOpacity={0.8}>
+            <Image source={ex.imageUrl?{uri:ex.imageUrl}:EXERCISE_FALLBACK_IMG} style={s.exThumb} contentFit="cover" cachePolicy="memory-disk" recyclingKey={ex.id} transition={200} />
+            <View style={{flex:1,marginLeft:12}}>
+                <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold'}]}>{ex.name}</Text>
+                <Text style={[typography.caption,{color:colors.text.secondary}]}>{ex.equipment} • {ex.difficulty}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
+        </TouchableOpacity>
+    ), [colors, typography, router]);
+    // The muscle-group cards, the section title, and the loading/error/empty
+    // states all live ABOVE the exercise list, so they ride in the FlatList
+    // header. The list itself only ever virtualizes the (up to 200) exercise
+    // rows — fixing the previous ScrollView+map that mounted all 200 at once.
+    const ListHeader = (
+        <>
+            <View style={{gap:10}}>
+                {items.map((m)=>{
+                    const isSel = selectedId===m.id;
+                    return (
+                        <TouchableOpacity key={m.id} accessibilityRole="button" accessibilityState={{ selected: isSel }} accessibilityLabel={m.label} style={[s.card, isSel&&{borderColor:m.color,borderWidth:2}]} activeOpacity={0.85} onPress={()=>setSelectedId(isSel?null:m.id)}>
+                            <Image source={m.image} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                            <LinearGradient colors={[isSel?withAlpha(m.color,0.5):'transparent','rgba(0,0,0,0.8)']} style={StyleSheet.absoluteFillObject} />
+                            {isSel&&<View style={[s.chk,{backgroundColor:m.color}]}><Ionicons name="checkmark" size={12} color="#FFF" /></View>}
+                            <View style={s.cardContent}>
+                                <View style={[s.bar,{backgroundColor:m.color}]} />
+                                <View style={{flex:1,marginLeft:10}}>
+                                    <Text style={[typography.subhead,{color:'#FFF',fontWeight:'bold'}]}>{m.label}</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.5)" />
+                            </View>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+            {sel&&(
+                <View style={{marginTop:24}}>
+                    <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'baseline',marginBottom:14}}>
+                        <Text style={[typography.heading,{color:colors.text.primary}]}>{sel.label} Exercises</Text>
+                        {!exQ.isLoading && exercises.length > 0 && (
+                            <Text style={[typography.caption,{color:colors.text.secondary}]}>{exercises.length} total</Text>
+                        )}
+                    </View>
+                    {exQ.isLoading
+                        ? <View>{[0,1,2,3,4].map((i)=>(
+                            <View key={i} style={[s.exRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
+                                <Skeleton width={52} height={52} radius={10} />
+                                <View style={{flex:1,marginLeft:12}}>
+                                    <Skeleton width="65%" height={16} radius={6} />
+                                    <Skeleton width="45%" height={12} radius={6} style={{marginTop:8}} />
+                                </View>
+                            </View>
+                          ))}</View>
+                        : exQ.isError
+                            ? <EmptyState icon="cloud-offline-outline" title="Couldn't load exercises" subtitle="Something went wrong. Check your connection and try again." actionLabel="Try Again" onAction={()=>exQ.refetch()} />
+                            : exercises.length===0
+                                ? <EmptyState icon="barbell-outline" title="No exercises found" subtitle={`We don't have any ${sel.label.toLowerCase()} exercises tagged yet. Try another group.`} />
+                                : null
+                    }
+                </View>
+            )}
+        </>
+    );
     return (
         <View style={[s.container,{backgroundColor:colors.background.primary}]}>
             <StatusBar style="light" />
@@ -72,62 +136,19 @@ export default function MuscleMapScreen() {
                     </TouchableOpacity>
                 ))}
             </View>
-            <ScrollView contentContainerStyle={{padding:20,paddingBottom:100}} showsVerticalScrollIndicator={false}>
-                <View style={{gap:10}}>
-                    {items.map((m)=>{
-                        const isSel = selectedId===m.id;
-                        return (
-                            <TouchableOpacity key={m.id} accessibilityRole="button" accessibilityState={{ selected: isSel }} accessibilityLabel={m.label} style={[s.card, isSel&&{borderColor:m.color,borderWidth:2}]} activeOpacity={0.85} onPress={()=>setSelectedId(isSel?null:m.id)}>
-                                <Image source={m.image} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
-                                <LinearGradient colors={[isSel?withAlpha(m.color,0.5):'transparent','rgba(0,0,0,0.8)']} style={StyleSheet.absoluteFillObject} />
-                                {isSel&&<View style={[s.chk,{backgroundColor:m.color}]}><Ionicons name="checkmark" size={12} color="#FFF" /></View>}
-                                <View style={s.cardContent}>
-                                    <View style={[s.bar,{backgroundColor:m.color}]} />
-                                    <View style={{flex:1,marginLeft:10}}>
-                                        <Text style={[typography.subhead,{color:'#FFF',fontWeight:'bold'}]}>{m.label}</Text>
-                                    </View>
-                                    <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.5)" />
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
-                {sel&&(
-                    <View style={{marginTop:24}}>
-                        <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'baseline',marginBottom:14}}>
-                            <Text style={[typography.heading,{color:colors.text.primary}]}>{sel.label} Exercises</Text>
-                            {!exQ.isLoading && exercises.length > 0 && (
-                                <Text style={[typography.caption,{color:colors.text.secondary}]}>{exercises.length} total</Text>
-                            )}
-                        </View>
-                        {exQ.isLoading
-                            ? <View>{[0,1,2,3,4].map((i)=>(
-                                <View key={i} style={[s.exRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
-                                    <Skeleton width={52} height={52} radius={10} />
-                                    <View style={{flex:1,marginLeft:12}}>
-                                        <Skeleton width="65%" height={16} radius={6} />
-                                        <Skeleton width="45%" height={12} radius={6} style={{marginTop:8}} />
-                                    </View>
-                                </View>
-                              ))}</View>
-                            : exQ.isError
-                                ? <EmptyState icon="cloud-offline-outline" title="Couldn't load exercises" subtitle="Something went wrong. Check your connection and try again." actionLabel="Try Again" onAction={()=>exQ.refetch()} />
-                                : exercises.length===0
-                                    ? <EmptyState icon="barbell-outline" title="No exercises found" subtitle={`We don't have any ${sel.label.toLowerCase()} exercises tagged yet. Try another group.`} />
-                                    : exercises.map((ex)=>(
-                                    <TouchableOpacity key={ex.id} accessibilityRole="button" accessibilityLabel={ex.name} style={[s.exRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]} onPress={()=>router.push(`/(exercises)/${ex.id}` as any)} activeOpacity={0.8}>
-                                        <Image source={ex.imageUrl?{uri:ex.imageUrl}:EXERCISE_FALLBACK_IMG} style={s.exThumb} contentFit="cover" cachePolicy="memory-disk" transition={200} />
-                                        <View style={{flex:1,marginLeft:12}}>
-                                            <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold'}]}>{ex.name}</Text>
-                                            <Text style={[typography.caption,{color:colors.text.secondary}]}>{ex.equipment} • {ex.difficulty}</Text>
-                                        </View>
-                                        <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
-                                    </TouchableOpacity>
-                                ))
-                        }
-                    </View>
-                )}
-            </ScrollView>
+            <FlatList
+                data={sel && !exQ.isLoading && !exQ.isError ? exercises : []}
+                keyExtractor={keyExtractor}
+                renderItem={renderItem}
+                ListHeaderComponent={ListHeader}
+                contentContainerStyle={{padding:20,paddingBottom:100}}
+                showsVerticalScrollIndicator={false}
+                removeClippedSubviews={Platform.OS === 'android'}
+                initialNumToRender={10}
+                maxToRenderPerBatch={10}
+                windowSize={7}
+                keyboardShouldPersistTaps="handled"
+            />
         </View>
     );
 }

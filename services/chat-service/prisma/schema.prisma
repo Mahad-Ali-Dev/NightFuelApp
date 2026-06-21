@@ -36,6 +36,11 @@ model Conversation {
 
   messages  Message[]
 
+  // The inbox query is `OR [{ participantA: me }, { participantB: me }]`.
+  // participantA is covered by the leftmost prefix of the composite @@unique
+  // above, but participantB had no usable index — this adds one so that branch
+  // does an index scan instead of a seq scan.
+  @@index([participantB])
   @@unique([participantA, participantB])
   @@map("conversations")
 }

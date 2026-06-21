@@ -24,6 +24,10 @@ model SleepSession {
   createdAt               DateTime  @default(now()) @map("created_at")
   updatedAt               DateTime  @updatedAt @map("updated_at")
 
+  // Every read path filters userId and orders by startTime desc (history list,
+  // latest-session lookup). This composite index serves both the filter and the
+  // sort in one ordered scan.
+  @@index([userId, startTime(sort: Desc)])
   @@map("sleep_sessions")
 }
 

@@ -188,79 +188,98 @@ export class PlanService {
     async generateAndStorePlan(profileData: any, userId: string, date: string, shiftId: string | null = null, shiftType: string = 'ROTATING', aiGenerated: boolean = false): Promise<any> {
         logger.info(`Generating plan for user ${userId} on ${date}`);
 
-        // 1. Fetch user state from state-service
+        // MEDIUM #10: These five cross-service fetches are mutually independent
+        // (none reads another's result; the first consumer is `prefs?.activeProtocolId`
+        // below, which runs only after all have resolved). Run them concurrently so the
+        // latency is max-of-5 instead of sum-of-5. Each block keeps its own try/catch
+        // and fallback exactly as before, so one failure is isolated to its own value.
         let userState = null;
-        try {
-            const stateRes = await fetch(`${this.config.STATE_SERVICE_URL}/v1/state/${userId}`);
-            if (stateRes.ok) {
-                userState = await stateRes.json();
-                logger.info({ userId }, 'Fetched user state for decision engine');
-            }
-        } catch (err) {
-            logger.warn({ userId, err }, 'Failed to fetch user state, falling back to defaults');
-        }
-
-        // 2. Fetch user preferences
         let preferences = null;
-        try {
-            const prefRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`, {
-                // F34 #5: user-service /internal/* now requires the shared token.
-                headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
-            });
-            if (prefRes.ok) {
-                preferences = await prefRes.json();
-                logger.info({ userId }, 'Fetched user preferences for AI plan');
-            }
-        } catch (err) {
-            logger.warn({ userId, err }, 'Failed to fetch user preferences');
-        }
-
-        // 2b. Fetch the derived menstrual-cycle phase from user-service's status
+        // 2b. cyclePhase: derived menstrual-cycle phase from user-service's status
         // (digital twin). Defaults to 'UNKNOWN' if the status is missing/unreachable
         // or has no phase yet — UNKNOWN is a strict no-op downstream (decision-engine
         // modifiers + ai-pipeline prompt), so a fetch failure NEVER changes the plan
         // for non-tracking users (or anyone). This is best-effort and non-fatal.
         let cyclePhase = 'UNKNOWN';
-        try {
-            const statusRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/status/${userId}`, {
-                // F34 #5: user-service /internal/* now requires the shared token.
-                headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
-            });
-            if (statusRes.ok) {
-                const status = await statusRes.json() as any;
-                if (typeof status?.cyclePhase === 'string' && status.cyclePhase) {
-                    cyclePhase = status.cyclePhase;
-                }
-                logger.debug({ userId, cyclePhase }, 'Fetched cycle phase for plan');
-            }
-        } catch (err) {
-            logger.warn({ userId, err }, 'Failed to fetch cycle phase, defaulting to UNKNOWN');
-        }
-
-        // 3. Fetch Meal Context
         let mealContext = [];
-        try {
-            const mealRes = await fetch(`${this.config.MEAL_SERVICE_URL}/v1/meals/${userId}?date=${date}`);
-            if (mealRes.ok) {
-                mealContext = await mealRes.json() as any[];
-                logger.debug({ userId }, 'Fetched meal context for AI');
-            }
-        } catch (err) {
-            logger.warn({ userId, err }, 'Failed to fetch meal context');
-        }
-
-        // 4. Fetch Exercise Context
         let exerciseContext = [];
-        try {
-            // Fetch recent workouts (limit 5 for context)
-            const exerciseRes = await fetch(`${this.config.EXERCISE_SERVICE_URL}/v1/workouts/${userId}?limit=5`);
-            if (exerciseRes.ok) {
-                exerciseContext = await exerciseRes.json() as any[];
-                logger.debug({ userId }, 'Fetched exercise context for AI');
-            }
-        } catch (err) {
-            logger.warn({ userId, err }, 'Failed to fetch exercise context');
-        }
+
+        await Promise.all([
+            // 1. Fetch user state from state-service
+            (async () => {
+                try {
+                    const stateRes = await fetch(`${this.config.STATE_SERVICE_URL}/v1/state/${userId}`);
+                    if (stateRes.ok) {
+                        userState = await stateRes.json();
+                        logger.info({ userId }, 'Fetched user state for decision engine');
+                    }
+                } catch (err) {
+                    logger.warn({ userId, err }, 'Failed to fetch user state, falling back to defaults');
+                }
+            })(),
+
+            // 2. Fetch user preferences
+            (async () => {
+                try {
+                    const prefRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`, {
+                        // F34 #5: user-service /internal/* now requires the shared token.
+                        headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+                    });
+                    if (prefRes.ok) {
+                        preferences = await prefRes.json();
+                        logger.info({ userId }, 'Fetched user preferences for AI plan');
+                    }
+                } catch (err) {
+                    logger.warn({ userId, err }, 'Failed to fetch user preferences');
+                }
+            })(),
+
+            // 2b. Fetch the derived menstrual-cycle phase from user-service's status.
+            (async () => {
+                try {
+                    const statusRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/status/${userId}`, {
+                        // F34 #5: user-service /internal/* now requires the shared token.
+                        headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+                    });
+                    if (statusRes.ok) {
+                        const status = await statusRes.json() as any;
+                        if (typeof status?.cyclePhase === 'string' && status.cyclePhase) {
+                            cyclePhase = status.cyclePhase;
+                        }
+                        logger.debug({ userId, cyclePhase }, 'Fetched cycle phase for plan');
+                    }
+                } catch (err) {
+                    logger.warn({ userId, err }, 'Failed to fetch cycle phase, defaulting to UNKNOWN');
+                }
+            })(),
+
+            // 3. Fetch Meal Context
+            (async () => {
+                try {
+                    const mealRes = await fetch(`${this.config.MEAL_SERVICE_URL}/v1/meals/${userId}?date=${date}`);
+                    if (mealRes.ok) {
+                        mealContext = await mealRes.json() as any[];
+                        logger.debug({ userId }, 'Fetched meal context for AI');
+                    }
+                } catch (err) {
+                    logger.warn({ userId, err }, 'Failed to fetch meal context');
+                }
+            })(),
+
+            // 4. Fetch Exercise Context
+            (async () => {
+                try {
+                    // Fetch recent workouts (limit 5 for context)
+                    const exerciseRes = await fetch(`${this.config.EXERCISE_SERVICE_URL}/v1/workouts/${userId}?limit=5`);
+                    if (exerciseRes.ok) {
+                        exerciseContext = await exerciseRes.json() as any[];
+                        logger.debug({ userId }, 'Fetched exercise context for AI');
+                    }
+                } catch (err) {
+                    logger.warn({ userId, err }, 'Failed to fetch exercise context');
+                }
+            })(),
+        ]);
 
         const context = {
             meals: mealContext,

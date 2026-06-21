@@ -31,6 +31,15 @@ interface CacheEntry {
 const DEFAULT_USER_SERVICE_URL = 'http://user-service:3009';
 const CACHE_TTL_MS = 60_000; // ~60s in-memory TTL
 const REQUEST_TIMEOUT_MS = 3_000;
+// MEDIUM #15: bound the in-memory cache. Without a cap + expiry sweep the Map
+// grew unbounded (one entry per ever-seen author, never evicted). We cap the
+// live size and lazily sweep expired entries; once at the cap we drop the
+// oldest entries (insertion order) to make room.
+const CACHE_MAX_ENTRIES = 10_000;
+// Hard cap on ids resolved in a single batch round-trip — mirrors the
+// user-service POST /v1/users/public/batch bound so a huge feed page is split
+// into bounded chunks instead of being rejected.
+const BATCH_MAX_IDS = 100;
 
 /**
  * Resolves community author identities (displayName + avatarUrl) from the
@@ -58,6 +67,11 @@ export class AuthorResolver {
         if (uniqueIds.length === 0) return result;
 
         const now = Date.now();
+
+        // MEDIUM #15: opportunistically sweep expired entries on each resolve so
+        // the cache doesn't accumulate dead entries between reads.
+        this.sweepExpired(now);
+
         const toFetch: string[] = [];
 
         // Serve from cache where possible.
@@ -74,22 +88,60 @@ export class AuthorResolver {
             // Mint a single short-lived token for this batch of internal calls.
             const token = this.mintInternalToken();
 
-            const fetched = await Promise.all(
-                toFetch.map((id) => this.fetchAuthor(id, token))
-            );
+            // HIGH #4: resolve ALL uncached ids via the batch endpoint in ONE
+            // round-trip (chunked to the endpoint's bound) instead of N separate
+            // GET /public/:id calls. On any batch failure we fall back to the
+            // per-id single-fetch path for the ids that chunk still owes, so a
+            // batch-endpoint outage degrades to the old behaviour, never to an
+            // empty feed.
+            for (let i = 0; i < toFetch.length; i += BATCH_MAX_IDS) {
+                const chunk = toFetch.slice(i, i + BATCH_MAX_IDS);
+                const fetched = await this.fetchAuthorsBatch(chunk, token);
 
-            for (const author of fetched) {
-                if (author) {
-                    this.cache.set(author.id, {
-                        author,
-                        expiresAt: Date.now() + CACHE_TTL_MS,
-                    });
-                    result.set(author.id, author);
+                if (fetched) {
+                    for (const author of fetched) {
+                        this.setCache(author);
+                        result.set(author.id, author);
+                    }
+                } else {
+                    // Fallback: per-id single-fetch (the original path).
+                    const singles = await Promise.all(
+                        chunk.map((id) => this.fetchAuthor(id, token))
+                    );
+                    for (const author of singles) {
+                        if (author) {
+                            this.setCache(author);
+                            result.set(author.id, author);
+                        }
+                    }
                 }
             }
         }
 
         return result;
+    }
+
+    // ── Cache management (MEDIUM #15) ────────────────────────────────────────────
+
+    /** Insert/refresh a cache entry, enforcing the size cap (drop-oldest). */
+    private setCache(author: Author): void {
+        // Re-insert moves the key to the end (newest) of the Map's order.
+        this.cache.delete(author.id);
+        this.cache.set(author.id, { author, expiresAt: Date.now() + CACHE_TTL_MS });
+
+        // Enforce the hard cap: evict oldest (insertion-order) entries first.
+        while (this.cache.size > CACHE_MAX_ENTRIES) {
+            const oldest = this.cache.keys().next().value as string | undefined;
+            if (oldest === undefined) break;
+            this.cache.delete(oldest);
+        }
+    }
+
+    /** Remove every entry whose TTL has elapsed. O(n) but bounded by the cap. */
+    private sweepExpired(now: number = Date.now()): void {
+        for (const [id, entry] of this.cache) {
+            if (entry.expiresAt <= now) this.cache.delete(id);
+        }
     }
 
     /**
@@ -142,6 +194,55 @@ export class AuthorResolver {
             this.jwtSecret,
             { expiresIn: '60s' }
         );
+    }
+
+    /**
+     * Resolve a chunk of ids in ONE round-trip via the user-service batch
+     * endpoint POST /v1/users/public/batch (HIGH #4). Returns the resolved
+     * authors (ids with no profile are simply absent), or `null` on ANY failure
+     * (non-2xx, network/timeout, bad JSON) so the caller can fall back to the
+     * per-id path. Never throws.
+     */
+    private async fetchAuthorsBatch(ids: string[], token: string): Promise<Author[] | null> {
+        if (ids.length === 0) return [];
+        const url = `${this.baseUrl}/v1/users/public/batch`;
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    authorization: `Bearer ${token}`,
+                    accept: 'application/json',
+                    'content-type': 'application/json',
+                },
+                body: JSON.stringify({ ids }),
+                signal: controller.signal,
+            });
+
+            if (!res.ok) {
+                logger.debug({ status: res.status, count: ids.length }, 'Batch author lookup non-OK; falling back to per-id');
+                return null;
+            }
+
+            const body = (await res.json()) as { users?: PublicProfileResponse[] };
+            const profiles = body?.users;
+            if (!Array.isArray(profiles)) return null;
+
+            return profiles.map((profile) => ({
+                id: profile.id,
+                name: profile.displayName?.trim() || 'User',
+                avatarUrl: profile.avatarUrl ?? null,
+                isPrivate: profile.isPrivate ?? false,
+            }));
+        } catch (err) {
+            logger.warn({ err, count: ids.length }, 'Batch author lookup failed; falling back to per-id');
+            return null;
+        } finally {
+            clearTimeout(timer);
+        }
     }
 
     private async fetchAuthor(id: string, token: string): Promise<Author | null> {
