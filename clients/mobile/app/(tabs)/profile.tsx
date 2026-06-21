@@ -228,10 +228,31 @@ export default function ProfileScreen() {
                         </View>
                     </GlassCard>
 
-                    {/* Cycle phase card (F25) — OPT-IN-aware: renders nothing
-                        unless the user enabled cycle tracking (status.cyclePhase
-                        present). 'UNKNOWN' shows an honest tracking-only state. */}
-                    <CyclePhaseCard cyclePhase={(status as any)?.cyclePhase} />
+                    {/* Cycle tracker (F25/F28/F29) — OPT-IN, FEMALE-only. Gate on the
+                        actual profile fields, NOT status.cyclePhase: the server returns
+                        'UNKNOWN' (never null) for a status row, so a cyclePhase != null
+                        check would surface the card + link to males / opted-out users.
+                        cycleTrackingEnabled===true && biologicalSex==='FEMALE' is the
+                        same eligibility the cycle screen itself enforces, and it still
+                        shows the honest 'UNKNOWN' tracking-only card for an eligible
+                        woman whose phase can't yet be predicted (irregular / new). */}
+                    {(profile as any)?.cycleTrackingEnabled === true
+                        && (profile as any)?.biologicalSex === 'FEMALE' && (
+                        <>
+                            <CyclePhaseCard cyclePhase={(status as any)?.cyclePhase} />
+                            <TouchableOpacity
+                                accessibilityRole="button"
+                                accessibilityLabel="Open cycle tracker"
+                                activeOpacity={0.85}
+                                onPress={() => router.push('/(performance)/cycle' as any)}
+                                style={[s.circBtn, { borderColor: withAlpha(colors.accent.coral, 0.3), marginTop: 10 }]}
+                            >
+                                <Text style={[s.circBtnTxt, { color: colors.accent.coral }]}>
+                                    View Cycle Tracker →
+                                </Text>
+                            </TouchableOpacity>
+                        </>
+                    )}
 
                     {/* Achievements */}
                     <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>ACHIEVEMENTS</Text>

@@ -224,3 +224,31 @@ describe('ProfileScreen — honest secondary-query state (F4 + F7)', () => {
     expect(screen.getByText('—')).toBeTruthy();
   });
 });
+
+// F29 fix: the cycle-tracker entry (card + "View Cycle Tracker" link) must gate on
+// the actual profile fields, NOT status.cyclePhase — the server returns 'UNKNOWN'
+// (never null) for any status row, so a cyclePhase-based gate leaked the cycle UI
+// to males / opted-out users.
+describe('ProfileScreen — cycle tracker entry is FEMALE + opt-in gated', () => {
+  test('non-female / non-tracking user (cyclePhase "UNKNOWN") sees NO cycle tracker link', () => {
+    mockProfile.data = { displayName: 'T', biologicalSex: 'MALE', cycleTrackingEnabled: false };
+    mockStatus.data = { cyclePhase: 'UNKNOWN' }; // server returns UNKNOWN, not null
+    mockStats.data = undefined;
+    mockStreak.data = undefined;
+
+    renderScreen();
+
+    expect(screen.queryByText(/View Cycle Tracker/i)).toBeNull();
+  });
+
+  test('female + tracking-enabled user sees the cycle tracker link', () => {
+    mockProfile.data = { displayName: 'T', biologicalSex: 'FEMALE', cycleTrackingEnabled: true };
+    mockStatus.data = { cyclePhase: 'FOLLICULAR' };
+    mockStats.data = undefined;
+    mockStreak.data = undefined;
+
+    renderScreen();
+
+    expect(screen.queryByText(/View Cycle Tracker/i)).toBeTruthy();
+  });
+});
