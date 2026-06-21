@@ -137,7 +137,14 @@ the human-readable record.
 |---|---|---|---|
 | `user-service` | `user_profiles` cycle columns (`cycle_tracking_enabled`, `last_period_start_date`, `avg_cycle_length_days`, `avg_period_length_days`, `cycle_regularity`, `hormonal_contraception`) + `user_status.cycle_phase` | `services/user-service/prisma/migrations/20260621_cycle_tracker/migration.sql` | `docker compose exec user-service npx prisma db push --skip-generate --accept-data-loss` |
 | `user-service` | new `period_logs` table (`id`, `user_id` idx, `start_date`, `end_date?`, `created_at`) | `services/user-service/prisma/migrations/20260621_period_log/migration.sql` | (same `user-service db push` as above — one push applies both) |
-| `sleep-service` | new `health_samples` table (append-only wearable archive; all metric cols nullable/defaulted) | `services/sleep-service/prisma/migrations/20260621_health_samples/migration.sql` | `docker compose exec sleep-service npx prisma db push --skip-generate --accept-data-loss` |
+| `sleep-service` | new `health_samples` table (append-only wearable archive; all metric cols nullable/defaulted) + **F33** `@@unique(userId,kind,startTime,source)` for re-sync idempotency | `services/sleep-service/prisma/migrations/20260621_health_samples/migration.sql` | `docker compose exec sleep-service npx prisma db push --skip-generate --accept-data-loss` |
+| `community-service` | **F33** new `post_likes` table (`user_id`, `post_id`, `@@unique([userId,postId])`) — makes likePost idempotent / un-gameable | `services/community-service/prisma/migrations/20260621_post_like/migration.sql` | `docker compose exec community-service npx prisma db push --skip-generate --accept-data-loss` |
+
+> **F33 idempotency unique constraints.** F33 also added `@@unique([userId,startDate])`
+> to `period_logs` and `@@unique(userId,kind,startTime,source)` to `health_samples`.
+> Both land on the **brand-new, not-yet-applied** F25–F31 tables, so the constraint is
+> created with the table on first `db push` — **no existing rows, data-loss-free**.
+> (community-service uses `db push` per its `Dockerfile`, same as the others.)
 
 > ### 🔴 Apply these with the F28/F29/F31 code (endpoints query the new tables)
 > - **`period_logs`** — `POST /v1/users/me/cycle/period` and `GET /v1/users/me/cycle/history`
@@ -160,6 +167,8 @@ the human-readable record.
 docker compose exec postgres psql -U postgres -d user_service -c '\d user_profiles' -c '\d period_logs'
 # sleep-service: health_samples table
 docker compose exec postgres psql -U postgres -d sleep_service -c '\d health_samples'
+# community-service: post_likes table (F33)
+docker compose exec postgres psql -U postgres -d community_service -c '\d post_likes'
 ```
 
 ---
@@ -429,9 +438,10 @@ exist in Expo Go and need a signed dev build + on-device testing.
 
 - [ ] Apply / confirm the original 5 migrations on the live DBs (§1) — chat & community
       via `migrate deploy`; user, exercise & plan via `db push`.
-- [ ] Apply the 3 newer migrations (§1b) — `cycle_tracker` + `period_log` (user-service
-      `db push`) and `health_samples` (sleep-service `db push`). `period_logs` is needed
-      for cycle logging/history; `health_samples` before any watch sync.
+- [ ] Apply the 4 newer migrations (§1b) — `cycle_tracker` + `period_log` (user-service
+      `db push`), `health_samples` (sleep-service `db push`), and `post_like`
+      (community-service `db push`). `period_logs` is needed for cycle logging/history;
+      `health_samples` before any watch sync; `post_likes` makes likes idempotent (F33).
 - [ ] 🔴 Apply the exercise-service **and** plan-service `ai_generated` columns (§1/§3)
       **in the same deploy as this round's code** — the quota COUNT now references the
       column, so code-without-column makes the AI generate endpoints fail (`P2022`).
