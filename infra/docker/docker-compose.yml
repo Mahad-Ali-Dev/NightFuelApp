@@ -126,6 +126,15 @@ services:
       PORT: 3004
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-mock-key}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-mock-key}
+      # Optional LLM tuning (all default safely when unset). Set in infra/docker/.env:
+      #   OPENAI_BASE_URL — point the OpenAI branch at a budget/self-hosted
+      #     OpenAI-compatible endpoint (DeepSeek/Groq/Ollama/vLLM); unset => OpenAI cloud.
+      #   *_MODEL / *_MODEL_FAST — override the model ids per tier.
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      ANTHROPIC_MODEL_FAST: ${ANTHROPIC_MODEL_FAST:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      OPENAI_MODEL_FAST: ${OPENAI_MODEL_FAST:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
     depends_on:
       redis:
         condition: service_healthy
