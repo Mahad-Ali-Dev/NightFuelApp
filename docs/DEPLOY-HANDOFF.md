@@ -191,6 +191,13 @@ restart, same as above. Records under each service's `prisma/migrations/20260622
 | `chat-service` | `conversations(participant_b)` | the inbox `OR(participantA, participantB)` query |
 | `community-service` | `posts(author_id)`, `comments(author_id)`, `challenge_participants(user_id)` | profile feed / badge counts / GDPR purge |
 | `plan-service` | `day_plans` FK `protocol_id` → SET NULL (F38, see §1b) | erasure reliability |
+| `meal-service` | **F44** `meal_logs.idempotency_key` (nullable) + `@@unique([userId, idempotencyKey])` | meal-log idempotency (client retry can't double-log) — `migrations/20260620000001_add_meal_log_idempotency_key` |
+
+> **F44 reliability note (no migration):** state-service now consumes events via the
+> durable Redis-Stream consumer group (was Pub/Sub), and the event bus dedupes redelivered
+> events — so a state-service restart **replays** missed events instead of losing them.
+> All 16 services gained a `/health` compose healthcheck and nginx waits for them
+> (`service_healthy`) before starting. No action needed beyond a normal `docker compose up`.
 
 > **Large existing tables:** `db push` emits a plain `CREATE INDEX` (brief write lock).
 > If a table already holds a lot of rows in prod, apply the DDL in each migration record
