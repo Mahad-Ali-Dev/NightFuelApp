@@ -5,6 +5,7 @@ import { RedisEventBus } from '@nightfuel/events';
 import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized } from '@nightfuel/config';
 import { z } from 'zod';
 import { ProgressService } from './progress.service';
+import { AiUsageRetentionWorker } from './retention.worker';
 import { progressRoutes } from './routes';
 import { setupEventSubscribers } from './events';
 import fastifyJwt from '@fastify/jwt';
@@ -21,6 +22,13 @@ const envSchema = z.object({
     // F22 #8: shared token for the server-to-server call to ai-pipeline
     // (X-Internal-Token). Defaulted so boot doesn't break; prod must set it.
     INTERNAL_SERVICE_TOKEN: z.string().default(''),
+    // F34 #17 / GDPR Art. 5(1)(e): CONFIGURABLE retention for the ARCHIVAL
+    // ai_usage_logs telemetry/cost sink. DEFAULT 0 = DISABLED — no time-based
+    // purge until the owner sets a positive window (byte-identical no-op at 0).
+    // > 0 deletes ai_usage_logs rows older than that many days, daily. NEVER
+    // touches user-valuable fitness history (daily_progress, streaks,
+    // body_metrics, hydration_logs, performance_reports) — those are erasure-only.
+    AI_USAGE_RETENTION_DAYS: z.coerce.number().int().default(0),
 });
 
 const config = loadConfig(envSchema);
@@ -99,6 +107,10 @@ const start = async () => {
 
         await setupEventSubscribers(eventBus, progressService);
         logger.info('Subscribed to event bus');
+
+        // F34 #17: daily ai_usage_logs retention sweep. DEFAULT-OFF — start()
+        // no-ops (no interval, no delete) unless AI_USAGE_RETENTION_DAYS > 0.
+        new AiUsageRetentionWorker(prisma, { AI_USAGE_RETENTION_DAYS: config.AI_USAGE_RETENTION_DAYS }).start();
 
         await fastify.listen({ port: parseInt(config.PROGRESS_PORT), host: '0.0.0.0' });
         logger.info(`Progress Service running on port ${config.PROGRESS_PORT}`);

@@ -114,11 +114,16 @@ We will respond within 30 days (GDPR) or 45 days (CCPA), whichever applies to yo
 
 ## 6. Retention
 
+Our default stance is **storage-limitation by purpose**: we keep your data only while it serves you, and we delete it promptly when you ask. Unless a retention window is configured (below), your logged history is **kept until you delete it** (or close your account).
+
 - **Active accounts:** while your account is open
-- **Meal/workout/sleep logs:** indefinitely while account active; FREE tier history view limited to 30 days but data is retained
-- **AI prompts:** 90 days for abuse review, then auto-deleted
+- **Meal/workout/sleep logs and body measurements:** retained indefinitely while your account is active so your history and trends stay available; FREE tier history *view* is limited to 30 days but the data is retained. These are **never** auto-deleted on a timer — only when you delete the item, delete your account, or request erasure.
+- **Wearable / health-app samples** (raw readings imported from Apple Health / Google Health Connect): retained while your account is active. Because these are a raw archive (your derived sleep history is stored separately), we can apply an optional **time-based retention window** to age out raw samples older than a configured number of days; this is **off unless explicitly enabled** by the operator.
+- **AI prompts / interaction telemetry:** AI prompt text is retained up to 90 days for abuse review, then auto-deleted. AI usage/cost telemetry (token counts, no message content) is operational data we may age out on a configured retention window.
 - **Crash reports:** 90 days
 - **Deleted accounts:** purged within 30 days from active databases. Backups are rotated within 90 days.
+
+> **Configurable retention (storage limitation, GDPR Art. 5(1)(e)).** Zeitra implements an optional, configurable time-based purge for **archival** data (raw health samples and AI usage telemetry). It is **disabled by default** — when no retention window is set, the data is **kept until you delete it or your account**. When the operator configures a window (N days), data of that type older than N days is automatically and permanently deleted. **User-valuable history** (sleep sessions, body measurements, period/cycle logs) is **excluded** from any automatic timer and is only ever removed at your request (account deletion / right to erasure) — see §5.
 
 ## 7. Security
 

@@ -10,6 +10,7 @@ import { RedisEventBus } from '@nightfuel/events';
 import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized, makeInternalAuthGuard } from '@nightfuel/config';
 import { z } from 'zod';
 import { SleepService } from './sleep.service';
+import { SleepRetentionWorker } from './retention.worker';
 import {
     HealthSyncService,
     healthSyncSchema,
@@ -24,6 +25,14 @@ const envSchema = z.object({
     // breaks; the guard fails CLOSED on an empty/wrong token (every request 404s
     // until the token is set), matching user-service / plan-service.
     INTERNAL_SERVICE_TOKEN: z.string().default(''),
+    // F34 #17 / GDPR Art. 5(1)(e) storage-limitation: CONFIGURABLE retention for
+    // the ARCHIVAL health_samples table (raw wearable archive). DEFAULT 0 =
+    // DISABLED — no time-based purge runs until the owner sets a positive window;
+    // the sweep is a byte-identical no-op while this is 0/unset. > 0 deletes
+    // health_samples rows older than that many days, daily. Coerced from the env
+    // string; never auto-purges user-valuable history (sleep_sessions are
+    // untouched — see retention.worker.ts).
+    HEALTH_SAMPLE_RETENTION_DAYS: z.coerce.number().int().default(0),
 });
 
 const config = loadConfig(envSchema);
@@ -332,6 +341,11 @@ const start = async () => {
     try {
         await connectWithRetry(prisma, logger);
         logger.info('sleep-service: connected to database');
+
+        // F34 #17: daily health_samples retention sweep. DEFAULT-OFF — start()
+        // no-ops (no interval, no delete) unless HEALTH_SAMPLE_RETENTION_DAYS > 0.
+        new SleepRetentionWorker(prisma, { HEALTH_SAMPLE_RETENTION_DAYS: config.HEALTH_SAMPLE_RETENTION_DAYS }).start();
+
         await fastify.listen({ port: parseInt(config.SLEEP_PORT), host: '0.0.0.0' });
         logger.info(`sleep-service listening on port ${config.SLEEP_PORT}`);
     } catch (err) {

@@ -483,13 +483,47 @@ exist in Expo Go and need a signed dev build + on-device testing.
 > guards 404 and both GDPR flows degrade (erasure leaves data behind; export returns
 > empty service slots). This is the single most important env for GDPR compliance.
 
-**Your policy decision — retention / TTL (F34 #17, NOT yet automated):**
-There is no automated time-based purge of special-category data (`health_samples`,
-`period_logs`, `body_metrics`, sleep logs). On-request erasure (above) covers the
-user-initiated case, which is the main compliance requirement; a *retention schedule*
-(auto-delete data older than N months) is a **product/legal decision** — pick the
-retention period per data type, then a scheduled purge can be added to enforce it.
-Until then, document the retention stance in `docs/PRIVACY.md`.
+**Retention / TTL (F34 #17 — mechanism implemented, DEFAULT-OFF):**
+The time-based purge mechanism is now **implemented in-repo and gate-verified**, but
+ships **DISABLED by default** — nothing is auto-deleted until you opt in. It covers
+only **ARCHIVAL** special-category data; user-valuable history is deliberately left
+out (see below). To enable, set the relevant env to a positive number of days:
+
+| Env var (host `.env`) | Service | Purges (when > 0) | Default |
+|---|---|---|---|
+| `HEALTH_SAMPLE_RETENTION_DAYS` | `sleep-service` | `health_samples` rows older than N days (raw wearable archive ingested via `POST /v1/sleep/health-sync`) | `0` (off) |
+| `AI_USAGE_RETENTION_DAYS` | `progress-service` | `ai_usage_logs` rows older than N days (LLM cost/token telemetry sink) | `0` (off) |
+
+How it works: each owning service starts a daily `setInterval` sweep at boot
+(mirrors plan-service's `PlanWorker`). When the env is unset/`0`/negative the
+worker's `start()` is a **no-op** — no interval is scheduled and no delete is ever
+issued, so the default deployment is **byte-identical** to before. When set `> 0`,
+the sweep deletes (in bounded batches, idempotently) rows whose timestamp is older
+than `now − N days`. The shared cutoff/guard helper lives in
+`@nightfuel/config` (`retentionCutoff` / `retentionEnabled`,
+`packages/config/src/retention.ts`). **No schema change / migration is needed** —
+these are `DELETE`s on existing tables.
+
+> ### Perf follow-up if you ENABLE retention on a large archive
+> The sweep filters `health_samples.start_time < cutoff` / `ai_usage_logs.created_at <
+> cutoff`. Today's indexes on those tables are `userId`-leftmost, so the sweep's first
+> batch query scans the table (fine while default-off, and self-correcting once the
+> backlog drains under the daily batched cadence). If you turn retention ON and the
+> archive is large, add `@@index([startTime])` (health_samples) / `@@index([createdAt])`
+> (ai_usage_logs) and `db push` — purely a performance optimization for the enabled path.
+
+> ### Deliberately EXCLUDED — user-valuable history is NOT auto-purged
+> The sweeps cover **only** the two archival tables above. User-VALUABLE history —
+> `sleep_sessions`, `body_metrics`, `period_logs`, and the cycle data — is **never**
+> on a TTL. That data is the user's own log and is only ever deleted **on user
+> request** (the F36 `DELETE /v1/users/me` erasure flow above) or by an explicit
+> future owner policy. If you ever want a TTL on those too, add a dedicated
+> default-`0` env per type — but the default MUST stay OFF.
+
+> No owner action is required to stay compliant: on-request erasure (above) already
+> satisfies the primary GDPR requirement. Setting a retention window is an optional
+> **product/legal decision** (pick the period per archival data type). Record
+> whatever you choose in `docs/PRIVACY.md` §6.
 
 ---
 
@@ -517,8 +551,12 @@ Until then, document the retention stance in `docs/PRIVACY.md`.
       dev build, on-device mic/speech permission grants.
 - [ ] 🔴 GDPR (§8): set a strong shared `INTERNAL_SERVICE_TOKEN` (all services) — without
       it `DELETE /v1/users/me` (erasure) and `GET /v1/users/me/export` silently degrade.
-- [ ] Decide a data **retention** policy (§8 / F34 #17) and record it in `docs/PRIVACY.md`
-      (on-request erasure is already implemented; time-based auto-purge is not).
+- [ ] (Optional) Decide a data **retention** policy (§8 / F34 #17). The mechanism is
+      now implemented and **default-off**; to enable, set `HEALTH_SAMPLE_RETENTION_DAYS`
+      (sleep-service) and/or `AI_USAGE_RETENTION_DAYS` (progress-service) to a positive
+      number of days, then record the chosen period in `docs/PRIVACY.md` §6. Leaving
+      them unset keeps the current behaviour (no auto-purge). User-valuable history
+      (sleep_sessions, body_metrics, period_logs, cycle data) is never auto-purged.
 
 _This document modifies no code and executes nothing. It links other files by path
 only; it does not edit them._
