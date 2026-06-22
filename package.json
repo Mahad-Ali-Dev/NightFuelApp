@@ -18,10 +18,16 @@
     "security:scan": "gitleaks detect --config .gitleaks.toml --redact"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@next/eslint-plugin-next": "^15.5.19",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "husky": "^9.1.7",
     "prettier": "^3.7.4",
     "turbo": "^2.8.10",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "typescript-eslint": "^8.60.1"
   },
   "engines": {
     "node": ">=18"

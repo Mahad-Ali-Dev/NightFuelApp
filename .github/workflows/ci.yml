@@ -61,6 +61,11 @@ jobs:
         run: |
           cd services/${{ matrix.service }}
           pip install -r requirements.txt
+          # pytest is a TEST dependency and isn't in the services' (prod)
+          # requirements.txt, so the runner had no `pytest` module and the job
+          # died with "No module named pytest" before any test ran. Install it
+          # explicitly for the test job.
+          pip install pytest
       - name: Run tests
         env:
           ANTHROPIC_API_KEY: mock-key

@@ -122,4 +122,14 @@ regexes = [
   '''sk-real-[a-z]+''',
   # Static fixture for the Apple IAP shared-secret env in subscription tests.
   '''shared-secret-test-value''',
+  # JWT_SECRET / INTERNAL_SERVICE_TOKEN test fixtures hard-coded in service
+  # __tests__ files (gitleaks' generic-api-key rule trips on the high entropy).
+  # These are deliberately self-describing fake values used only to boot a test
+  # Fastify instance — pinned to the literal "test"/"internal-token"/"-value"
+  # shapes so a genuine high-entropy secret would NOT match.
+  '''test-jwt-secret-[A-Za-z0-9-]+''',
+  '''test-secret-of-at-least-32-char[A-Za-z-]*''',
+  '''test-internal-token-[A-Za-z0-9-]+''',
+  '''[a-z]+-internal-token-value''',
+  '''internal-shared-secret-token-[A-Za-z0-9-]+''',
 ]
