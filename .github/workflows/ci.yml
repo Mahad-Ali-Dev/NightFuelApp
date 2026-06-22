@@ -33,6 +33,14 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Build the shared @nightfuel/config package BEFORE tests. Services import
+      # `@nightfuel/config`, which resolves to packages/config/dist — absent after
+      # a clean `npm ci`, so jest fails with "Cannot find module '@nightfuel/config'".
+      # The local gate does exactly this (`tsc -b packages/config --force`); the CI
+      # job didn't. --force is required: a stale tsbuildinfo makes plain `tsc -b`
+      # report "up to date" and emit nothing.
+      - name: Build shared packages (@nightfuel/config)
+        run: npx tsc -b packages/config --force
       # Generate the Prisma client BEFORE tests. The clients
       # (services/*/src/generated/prisma) are gitignored, so a clean `npm ci`
       # leaves them absent and the jest suites fail to import them. The local
