@@ -97,4 +97,18 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Pre-build the shared @nightfuel/* packages IN DEPENDENCY ORDER before the
+      # full workspace build. `npm run build --workspaces` builds in listing order
+      # (not topological), so a service's `tsc` can run before @nightfuel/config /
+      # events / types are built and fail with "Cannot find module
+      # '@nightfuel/config'" — the 11 Build Check errors. (turbo's build SHOULD
+      # order via dependsOn:["^build"] but doesn't reliably here, so we order
+      # explicitly: types has no deps, events + config depend on types, services
+      # depend on all three. dates is source-consumed and has no build.) This
+      # passed locally only because those dist/ dirs already existed.
+      - name: Build shared packages (dependency order)
+        run: |
+          npm run build --workspace=@nightfuel/types
+          npm run build --workspace=@nightfuel/events
+          npm run build --workspace=@nightfuel/config
       - run: npm run build --workspaces --if-present

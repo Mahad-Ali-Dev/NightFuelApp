@@ -18,22 +18,13 @@ import { LogPeriodBody } from './schemas';
 
 const logger = createLogger('user-service:service');
 
+// The `isPrivate` + menstrual-cycle columns are now part of the generated Prisma
+// `UserProfile` (schema.prisma + prisma generate own them), so the old "compile
+// before generate" shims are removed: re-declaring `cycleTrackingEnabled?: boolean`
+// (optional) over the generated required `boolean` made this interface
+// "incorrectly extend" UserProfile (TS2430), which broke `tsc`/Build Check.
 export interface ProfileWithPreferences extends UserProfile {
     preferences: UserPreferences | null;
-    // Account-visibility flag. Declared here so the service/route layer compiles
-    // against the new column before `prisma generate` regenerates the client from
-    // the schema (the migration + schema.prisma own the runtime column). Once the
-    // client is regenerated this is simply redundant with the generated field.
-    isPrivate: boolean;
-    // Menstrual-cycle tracking INPUT shims (same precedent as isPrivate above):
-    // declared so the service/route layer compiles against the new columns before
-    // `prisma generate` regenerates the client. Redundant once regenerated.
-    cycleTrackingEnabled?: boolean;
-    lastPeriodStartDate?: Date | null;
-    avgCycleLengthDays?: number | null;
-    avgPeriodLengthDays?: number | null;
-    cycleRegularity?: string | null;
-    hormonalContraception?: boolean;
 }
 
 // Roles that get a CoachProfile stub automatically
