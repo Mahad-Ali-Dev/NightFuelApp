@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/utils';
+import { getExerciseVideoComponent } from '@/lib/exerciseVideo';
 
 const HEIGHT = 320;
 // How long each frame is held before cross-fading to the next. Slow enough that
@@ -26,6 +27,15 @@ export interface ExerciseDemoProps {
   frames?: readonly string[] | null;
   /** Single demo image URL. Used when `frames` is absent (treated as one frame). */
   gifUrl?: string | null;
+  /**
+   * Self-hosted MP4 demo clip URL. When present AND the gate-safe expo-video
+   * seam reports the native engine available, this takes PRECEDENCE over the
+   * image-frame paths and streams a looping muted autoplay demo. When the seam
+   * is unavailable (Expo Go / jest gate / package not installed) or no videoUrl
+   * is supplied, the component falls back to the EXISTING image-frame / gif /
+   * still / "coming soon" behaviour unchanged.
+   */
+  videoUrl?: string | null;
   /** The exercise's own header image, shown when no demo frames are available. */
   imageUrl?: string | null;
   /** Bundled neutral placeholder (require(...)) — the last-resort, no-network image. */
@@ -46,8 +56,22 @@ export interface ExerciseDemoProps {
  *
  * It NEVER renders an empty or broken player.
  */
-export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }: ExerciseDemoProps) {
+export function ExerciseDemo({ frames, gifUrl, videoUrl, imageUrl, fallback, tutorialUrl }: ExerciseDemoProps) {
   const { colors, typography } = useTheme();
+
+  // ── Self-hosted MP4 demo (gate-safe) ──────────────────────────────────────
+  // Resolve the real expo-video player ONLY when a videoUrl is present. The seam
+  // returns null when the native engine is unavailable (Expo Go / the jest gate /
+  // package not installed), in which case we fall straight through to the EXISTING
+  // image-frame paths below — the video path is purely additive and never regresses
+  // the image/gif/still/"coming soon" behaviour. Memoised on the trimmed uri so the
+  // seam's one-time probe isn't re-run each render.
+  const VideoPlayer = useMemo(() => {
+    const uri = typeof videoUrl === 'string' ? videoUrl.trim() : '';
+    if (!uri) return null;
+    return getExerciseVideoComponent();
+  }, [videoUrl]);
+  const videoUri = typeof videoUrl === 'string' ? videoUrl.trim() : '';
 
   // Normalise the demo source into an ordered, de-duped, non-empty frame list.
   const demoFrames = useMemo<string[]>(() => {
@@ -154,6 +178,36 @@ export function ExerciseDemo({ frames, gifUrl, imageUrl, fallback, tutorialUrl }
   // guard skips a redundant state update when the same uri errors twice.
   const markFailed = (uri: string) =>
     setFailed((prev) => (prev.has(uri) ? prev : new Set(prev).add(uri)));
+
+  // ── Self-hosted MP4 demo: highest-precedence path ─────────────────────────
+  // When a videoUrl is present AND the gate-safe seam resolved a real player
+  // (native engine available), stream the looping muted demo. This is rendered
+  // INSTEAD of the image-frame loop. If the seam returned null (Expo Go / jest
+  // gate / package absent), VideoPlayer is null and we fall through to the
+  // existing image paths below — so the current behaviour is preserved exactly
+  // wherever the native engine isn't available.
+  if (VideoPlayer && videoUri) {
+    return (
+      <View style={styles.wrap} accessibilityLabel="Exercise demo">
+        <VideoPlayer uri={videoUri} style={styles.media} accessibilityLabel="Exercise demo video" />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.7)', colors.background.primary]}
+          style={StyleSheet.absoluteFillObject}
+          pointerEvents="none"
+        />
+        {/* Bottom-left "Demo" status tag so the streaming clip reads as a playing
+            demo, consistent with the animated image-frame / gif paths. */}
+        <View style={styles.comingSoonRow} pointerEvents="none">
+          <View style={[styles.pill, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+            <Ionicons name="sync" size={13} color={colors.accent.cyan} />
+            <Text style={[typography.caption, { color: '#FFF', fontWeight: '700', fontSize: 11 }]}>
+              Demo
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   // ── No demo media: static image + honest "coming soon" state ──────────────
   if (!hasDemo) {

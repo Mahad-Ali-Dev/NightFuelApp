@@ -60,6 +60,11 @@ model LibraryExercise {
   instructions     String?
   imageUrl         String?  @map("image_url")
   demoUrl          String?  @map("demo_url")
+  // Self-hosted MP4 exercise-demo clip (nullable). When set, the mobile app
+  // streams it in-player via the gate-safe expo-video seam; absent it falls back
+  // to the animated image-frame loop / demoUrl tutorial link. Both imageUrl/
+  // demoUrl predate this column, so legacy rows (no MP4) stay valid.
+  videoUrl         String?  @map("video_url")
   difficulty       String?  @default("intermediate")
   bodyPart         String?  @map("body_part")
   category         String?  // "gym" | "home" | "cardio" | "kegel"

@@ -255,6 +255,11 @@ export class ExerciseService {
                     instructions: ex.instructions ?? undefined,
                     imageUrl: ex.imageUrl ?? undefined,
                     demoUrl: ex.demoUrl ?? resolveDemoUrl(ex.name) ?? undefined,
+                    // Self-hosted MP4 demo clip (nullable column). Surfaced so the
+                    // mobile app can stream it in-player via the expo-video seam;
+                    // omitted (undefined) when the row has no clip → app falls back
+                    // to the animated image-frame loop / demoUrl tutorial link.
+                    videoUrl: ex.videoUrl ?? undefined,
                     category: ex.category ?? undefined,
                     bodyPart: ex.bodyPart ?? undefined,
                 }));
@@ -303,6 +308,11 @@ export class ExerciseService {
                 instructions: dbEx.instructions ?? undefined,
                 imageUrl: dbEx.imageUrl ?? undefined,
                 demoUrl: dbEx.demoUrl ?? resolveDemoUrl(dbEx.name) ?? undefined,
+                // Self-hosted MP4 demo clip (nullable column). Surfaced on the
+                // detail response so the mobile app can stream it in-player via the
+                // expo-video seam; omitted when absent → app falls back to the
+                // animated image-frame loop / demoUrl tutorial link.
+                videoUrl: dbEx.videoUrl ?? undefined,
                 bodyPart: dbEx.bodyPart ?? undefined,
                 category: dbEx.category ?? undefined,
             };

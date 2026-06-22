@@ -212,6 +212,7 @@ export default function ExerciseDetailScreen() {
                 <ExerciseDemo
                     frames={demoFrames}
                     gifUrl={demoGifUrl ?? null}
+                    videoUrl={exercise.videoUrl ?? null}
                     imageUrl={exercise.imageUrl ?? null}
                     fallback={FALLBACK_IMAGE}
                     tutorialUrl={demoUrl}

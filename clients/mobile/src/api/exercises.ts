@@ -19,6 +19,13 @@ export interface Exercise {
   category?: string;
   /** Deep-link / watch URL for a demo video. Null/undefined when unknown. */
   demoUrl?: string;
+  /**
+   * Self-hosted MP4 demo clip URL (the `video_url` LibraryExercise column).
+   * When present the detail screen streams it in-player via the gate-safe
+   * expo-video seam; absent it falls back to the animated image-frame / gif
+   * paths. Optional/additive, so existing callers are unaffected.
+   */
+  videoUrl?: string;
   /** Animated GIF demonstrating the movement, when available. */
   demoGifUrl?: string;
   /** Secondary muscles worked (from wger), when available. */

@@ -38,6 +38,17 @@ module.exports = {
       // AFTER these so the more specific package names match first.)
       [`^expo-speech-recognition${END}`]: '<rootDir>/src/mocks/expo-speech-recognition-stub.js',
       [`^expo-speech${END}`]: '<rootDir>/src/mocks/expo-speech-stub.js',
+      // expo-video (self-hosted MP4 exercise-demo playback) is declared in
+      // package.json for the EAS build but NOT installed for the gate. jest
+      // eagerly resolves the lazy `require('./exerciseVideoNative')` in
+      // src/lib/exerciseVideo.ts, so without this stub the resolver would fail the
+      // suite. The stub's `useVideoPlayer` is NOT a function → the seam's probe
+      // reports video UNAVAILABLE → isExerciseVideoAvailable() is false and
+      // ExerciseDemo keeps the existing animated image-frame / fallback path
+      // (the gate/Expo-Go behaviour). Keeps the gate green with NO `npm install`
+      // of the native dep. (The `@/` mapper must come AFTER these so the more
+      // specific package names match first.)
+      [`^expo-video${END}`]: '<rootDir>/src/mocks/expo-video-stub.js',
       // Health-sync native packages (@kingstinct/react-native-healthkit /
       // react-native-health-connect) are declared in package.json for the EAS
       // build but NOT installed for the gate. jest eagerly resolves the lazy
