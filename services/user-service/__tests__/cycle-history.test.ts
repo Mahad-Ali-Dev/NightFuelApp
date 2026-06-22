@@ -19,8 +19,6 @@ import {
     PeriodLogInput,
 } from '../src/utils/cycleHistory';
 
-const iso = (s: string) => s; // readability marker
-
 describe('computeCycleStatsFromLogs() — regular history', () => {
     it('learns avgCycleLength=28 from evenly spaced starts (REGULAR, low SD)', () => {
         const logs: PeriodLogInput[] = [

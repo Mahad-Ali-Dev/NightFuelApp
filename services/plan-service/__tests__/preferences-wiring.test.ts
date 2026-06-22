@@ -15,7 +15,7 @@
  * every other cross-service fetch rejects so planParams falls to safe defaults and
  * the suite stays network-free. prisma.dayPlan is a minimal stub.
  */
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, jest, afterEach } from '@jest/globals';
 import { PlanService } from '../src/plan.service';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';

@@ -36,7 +36,7 @@
  * limit`, free-vs-pro selection), never a hard-coded magic count, so it stays
  * correct regardless of the production numbers the shared module ships.
  */
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, afterEach, jest } from '@jest/globals';
 
 // ── Shared-policy shapes re-declared to their documented contract ───────────────
 // AI_LIMITS: per-plan daily caps. `.generations` is the AI-routine-generator cap.

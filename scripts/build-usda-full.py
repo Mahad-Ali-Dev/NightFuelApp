@@ -133,7 +133,6 @@ def main():
         name = title_case_food(desc)
         low = (name + " " + cat_desc).lower()
         is_vegan = not NON_VEGAN.search(low) and category not in ("protein", "dairy")
-        is_veg = not NON_VEGETARIAN.search(low) and category != "protein"
         img, attrib = images.get(name.lower(), (None, None))
         out.append({
             "name": name, "category": category, "foodGroup": group,

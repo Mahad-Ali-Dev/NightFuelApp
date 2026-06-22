@@ -79,10 +79,6 @@ function toUtcMidnightMs(value: Date | string | null | undefined): number | null
     return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
-function isoToMs(iso: string): number | null {
-    return toUtcMidnightMs(iso);
-}
-
 function msToIso(ms: number): string {
     return new Date(ms).toISOString().slice(0, 10);
 }

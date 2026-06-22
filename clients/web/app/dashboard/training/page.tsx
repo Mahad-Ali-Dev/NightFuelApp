@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence, animate } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     Dumbbell, Lock, Check, ChevronLeft, ChevronRight, Play,
     Calendar, Trophy, Flame, Target, Zap,

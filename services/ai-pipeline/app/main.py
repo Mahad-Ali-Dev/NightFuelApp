@@ -31,13 +31,18 @@ from fastapi.exceptions import RequestValidationError
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     # Exact contract: HTTP 429 with body {error, retryAfterSeconds}.
+    # Coerce retry_after to a plain int rather than reading it straight off the
+    # exception into the response: it severs CodeQL's exception->response taint
+    # flow (py/stack-trace-exposure) and is defensively correct — the body is a
+    # fixed string + a bare integer, never any exception/traceback text.
+    retry_after = int(getattr(exc, "retry_after_seconds", 0) or 0)
     return JSONResponse(
         status_code=429,
         content={
             "error": "Rate limit exceeded. Please slow down and try again later.",
-            "retryAfterSeconds": exc.retry_after_seconds,
+            "retryAfterSeconds": retry_after,
         },
-        headers={"Retry-After": str(exc.retry_after_seconds)},
+        headers={"Retry-After": str(retry_after)},
     )
 
 

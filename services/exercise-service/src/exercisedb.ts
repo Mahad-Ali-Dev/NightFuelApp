@@ -314,7 +314,11 @@ function stripHtmlTags(input: string): string {
         prev = next;
         next = next.replace(/<[^>]+>/g, '');
     }
-    return next;
+    // Strip any RESIDUAL angle brackets: `<[^>]+>` only matches a tag that has
+    // its closing `>`, so an unclosed `<script` (no `>`) would survive the loop.
+    // Removing leftover `<`/`>` guarantees no partial tag remains (CodeQL
+    // js/incomplete-multi-character-sanitization).
+    return next.replace(/[<>]/g, '');
 }
 
 export function mapWgerToExercise(info: WgerExerciseInfo): Exercise | null {

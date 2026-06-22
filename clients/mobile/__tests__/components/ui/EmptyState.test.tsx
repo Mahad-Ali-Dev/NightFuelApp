@@ -11,7 +11,6 @@
  * icon mock's internals.
  */
 import React from 'react';
-import { Text } from 'react-native';
 import { render, fireEvent, screen } from '@testing-library/react-native';
 import { ThemeContext, getThemeColors, typography, spacing, borderRadius, shadows } from '@/theme';
 

@@ -146,7 +146,7 @@ jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
 import { Alert } from 'react-native';
-import { render, fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, screen } from '@testing-library/react-native';
 import {
     ThemeContext,
     getThemeColors,

@@ -20,7 +20,7 @@
  *   • REST — the genuine `planRoutes` plugin (mock PlanService) proves the guard
  *     and the 200 summary wiring, mounted on a fresh Fastify wired like src/index.ts.
  */
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, afterEach, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import fastifyJwt from '@fastify/jwt';

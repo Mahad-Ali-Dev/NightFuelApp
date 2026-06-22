@@ -15,7 +15,7 @@
  *      reports !allowed, the route returns 429 with the exact body and NEVER calls
  *      sendRiaMessage; when allowed, it calls through.
  */
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, afterEach, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import fastifyWebsocket from '@fastify/websocket';

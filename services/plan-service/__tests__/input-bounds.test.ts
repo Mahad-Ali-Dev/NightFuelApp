@@ -54,7 +54,6 @@ import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { registerFastifyErrorHandler, RANGE_REVERSED_MSG } from '@nightfuel/config';
-import { z } from 'zod';
 import {
     getPlanParamsSchema,
     getPlanHistoryQuerySchema,

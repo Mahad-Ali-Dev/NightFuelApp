@@ -37,11 +37,14 @@ export function passwordIssues(pw: string): string[] {
 
 /** Strip HTML tags and trim whitespace.
  *
- * Applies the tag-stripping pass repeatedly until the string stops changing.
- * A single pass is unsafe: overlapping/nested constructs like `<scr<script>ipt>`
- * leave a live `<script>` behind after one replace, because `String.replace`
- * does not re-scan the text it produced. Looping to a fixed point closes that
- * incomplete-multi-character-sanitization hole (CodeQL js/incomplete-multi-character-sanitization).
+ * Two stages, both required to fully close CodeQL
+ * js/incomplete-multi-character-sanitization:
+ *   1. Remove complete `<...>` tags, looped to a fixed point so overlapping /
+ *      nested constructs like `<scr<script>ipt>` can't leave a live `<script>`
+ *      behind (a single `String.replace` pass never re-scans its own output).
+ *   2. Strip any RESIDUAL angle brackets. `<[^>]*>` only matches a tag that has
+ *      its closing `>`, so an UNCLOSED `<script` (no `>`) would otherwise survive
+ *      — removing every leftover `<`/`>` guarantees no partial tag can remain.
  */
 export function sanitizeInput(text: string): string {
   let prev = text.trim();
@@ -50,7 +53,7 @@ export function sanitizeInput(text: string): string {
     prev = next;
     next = next.replace(/<[^>]*>/g, '');
   }
-  return next;
+  return next.replace(/[<>]/g, '');
 }
 
 /** Validate a time string is in HH:MM format. */

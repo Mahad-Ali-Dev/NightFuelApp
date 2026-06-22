@@ -12,7 +12,7 @@
  * SANDWICHED between two valid-timezone users, and assert the loop reaches the
  * users after the bad one (i.e. the sweep is not aborted).
  */
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, afterEach, jest } from '@jest/globals';
 import { PlanWorker } from '../src/worker';
 
 const USER_SERVICE_URL = 'http://user-service:3009';
