@@ -30,7 +30,7 @@
     "typescript-eslint": "^8.60.1"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   },
   "packageManager": "npm@11.9.0",
   "workspaces": [

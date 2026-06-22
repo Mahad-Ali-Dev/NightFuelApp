@@ -41,7 +41,7 @@ def test_generate_skeleton():
         userId="user-123",
         date="2026-03-01",
         shiftType="NIGHT",
-        circadianProfile=get_test_profile()
+        circadianProfile=get_test_profile().model_dump()
     )
     
     skeleton = generate_skeleton(request)
@@ -57,7 +57,7 @@ def test_generate_skeleton_day_shift():
         userId="user-123",
         date="2026-03-01",
         shiftType="DAY",
-        circadianProfile=get_test_profile()
+        circadianProfile=get_test_profile().model_dump()
     )
     
     skeleton = generate_skeleton(request)
@@ -73,7 +73,7 @@ def test_generate_skeleton_with_preferences():
             primaryGoal="MUSCLE_GAIN",
             splitPreference="PPL"
         ),
-        circadianProfile=get_test_profile()
+        circadianProfile=get_test_profile().model_dump()
     )
     
     skeleton = generate_skeleton(request)
@@ -98,7 +98,14 @@ def test_generate_plan_endpoint():
     data = response.json()
     assert data["userId"] == "user-123"
     assert "structuredPlan" in data
-    assert "Mocked LLM Meal: Grilled Chicken Quinoa Bowl" in data["structuredPlan"]["meals"][0]["recommendation"]
+    # The no-live-provider stub returns a fully-structured plan. Assert its SHAPE
+    # (meals with a recommendation + items) rather than a stale hard-coded string —
+    # the stub copy was updated and the old "Mocked LLM Meal: ..." literal no longer
+    # exists, which is what failed this test in CI.
+    meals = data["structuredPlan"]["meals"]
+    assert isinstance(meals, list) and len(meals) > 0
+    assert meals[0]["recommendation"]
+    assert len(meals[0]["items"]) > 0
 
 
 # ── F21: cross-provider fallback + provider-availability (Ria robustness) ────────
