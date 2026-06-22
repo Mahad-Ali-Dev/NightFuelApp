@@ -91,15 +91,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint-and-typecheck]
     env:
-      # web's `next build` shells to the runner's global yarn 1.22 for a registry
-      # check; it chokes on the npm `packageManager` field and throws an
-      # unhandledRejection. Under Node 24 an unhandled rejection is FATAL, so the
-      # build crashes even though it "Compiled successfully". (It never happens
-      # locally — no global yarn.) Disable Next telemetry (stops that call) and
-      # demote unhandled rejections to a warning so the benign side-call can't kill
-      # an otherwise-successful build. Real build errors still surface via exit code.
+      # `next build` downloads its platform SWC binary when it isn't installed
+      # (npm ci doesn't reliably install the Linux optional dep from a Windows-
+      # generated lock), and to find the registry it runs `<pkgManager> config get
+      # registry`. Next's getRegistry THROWS if that command fails instead of
+      # using its built-in default, and it picks the runner's global yarn 1.22,
+      # which errors on ANY `packageManager` field. The ROOT fix is removing that
+      # field from package.json (npm doesn't need it; Node is pinned via .nvmrc +
+      # engines), so the registry lookup succeeds and the SWC download proceeds.
+      # Telemetry off just avoids Next's separate update-check making the same call.
       NEXT_TELEMETRY_DISABLED: '1'
-      NODE_OPTIONS: '--unhandled-rejections=warn'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
