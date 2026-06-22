@@ -6,8 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Dumbbell, Home, Activity, Waves, Search,
-    Filter, ChevronRight, Flame, Target, X,
-    Loader2, RefreshCw, Info
+    Filter, ChevronRight, Target, X,
+    RefreshCw, Info
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { KEGEL_EXERCISES, type Exercise } from '@/lib/exercisedb';

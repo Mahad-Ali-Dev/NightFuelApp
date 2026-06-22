@@ -6,12 +6,11 @@ Usage: python docs/convert_to_docx.py
 import re
 import os
 from docx import Document
-from docx.shared import Pt, RGBColor, Inches, Cm, Emu
+from docx.shared import Pt, RGBColor, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-from copy import deepcopy
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
@@ -548,7 +547,8 @@ def convert(md_path: str, docx_path: str):
     add_cover(doc)
     setup_header_footer(doc)
 
-    lines = open(md_path, encoding="utf-8").readlines()
+    with open(md_path, encoding="utf-8") as f:
+        lines = f.readlines()
 
     in_code    = False
     code_buf   = []

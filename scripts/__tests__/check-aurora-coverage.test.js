@@ -38,9 +38,7 @@ const COVERAGE_PATH = path.resolve(__dirname, '..', 'check-aurora-coverage.js');
 const { __test } = require(COVERAGE_PATH);
 const {
     detectScreen,
-    detectGlassCard,
     detectCtaButton,
-    detectStatusBar,
     importsGlassCardFromUi,
     isScreenFile,
     computeCoverage,

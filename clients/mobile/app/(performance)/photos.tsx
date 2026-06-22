@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    Alert, Dimensions, Image, FlatList,
+    Alert, Dimensions, Image,
     Modal
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -12,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Card } from '@/components/ui/Card';
 import { Skeleton, EmptyState } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 
@@ -231,7 +230,7 @@ export default function ProgressPhotosScreen() {
 
                         {/* Grid */}
                         <View style={styles.grid}>
-                            {photos.map((photo, index) => (
+                            {photos.map((photo) => (
                                 <TouchableOpacity
                                     key={photo.id}
                                     activeOpacity={0.85}

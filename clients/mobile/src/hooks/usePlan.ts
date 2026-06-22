@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getToday, generate, GeneratePlanPayload, Plan } from '@/api/plans';
+import { getToday, generate, GeneratePlanPayload } from '@/api/plans';
 
 /**
  * Daily plan & timeline hook.

@@ -1,7 +1,6 @@
 // Zeitra Design System — Typography
 // Fonts: Inter (UI) + JetBrains Mono (Stats/Data)
 
-import { Platform } from 'react-native';
 
 export const fontFamilies = {
   // Inter weights mapped to font file names

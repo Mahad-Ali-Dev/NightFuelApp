@@ -6,8 +6,8 @@ import { userApi, updateMyProfile, getUserCommunityPosts, updateCommunityPost, d
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    User as UserIcon, Camera, MapPin, Calendar, Briefcase,
-    Dumbbell, Target, Building2, Edit3, Save, X, ImagePlus,
+    User as UserIcon, Camera, Calendar, Briefcase,
+    Target, Building2, Edit3, Save, X, ImagePlus,
     ChevronLeft, Heart, MessageSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';

@@ -1,7 +1,6 @@
 from pydantic_settings import BaseSettings
 from pydantic import Field
 from functools import lru_cache
-import os
 
 class Settings(BaseSettings):
     AI_PIPELINE_PORT: int = Field(default=8000, env="AI_PIPELINE_PORT")

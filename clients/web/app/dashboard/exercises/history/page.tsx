@@ -7,7 +7,7 @@ import { exerciseApi } from '@/lib/api';
 import { motion } from 'framer-motion';
 import {
     ChevronLeft, Calendar, List, Dumbbell,
-    Clock, Flame, TrendingUp, ChevronRight
+    Clock, TrendingUp, ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

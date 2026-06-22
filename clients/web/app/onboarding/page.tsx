@@ -161,11 +161,8 @@ export default function OnboardingPage() {
     const biologicalSex = watch('biologicalSex');
     const primaryGoal = watch('primaryGoal');
     const activityLevel = watch('activityLevel');
-    const experienceLevel = watch('experienceLevel');
-    const lifestyleType = watch('lifestyleType');
     const dietaryPreference = watch('dietaryPreference');
     const dietMode = watch('dietMode');
-    const healthConditions = watch('healthConditions');
 
     return (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 relative overflow-hidden">

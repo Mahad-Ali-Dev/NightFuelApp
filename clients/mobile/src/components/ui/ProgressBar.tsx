@@ -2,7 +2,6 @@ import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme';
-import { borderRadius as br } from '@/theme/spacing';
 
 interface ProgressBarProps {
   progress: number; // 0–100

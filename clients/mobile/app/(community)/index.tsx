@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Dimensions, RefreshControl, Share } from 'react-native';
+import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Share } from 'react-native';
 
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,16 +9,14 @@ import { getFeed, likePost, getChallenges, Post } from '@/api/community';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
-import { Button, Skeleton, EmptyState, GlassCard } from '@/components/ui';
+import { Skeleton, EmptyState, GlassCard } from '@/components/ui';
 import { shadows } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { safeImageUri } from '@/lib/imageUrl';
 import { formatDistanceToNow } from 'date-fns';
 
-const { width } = Dimensions.get('window');
-
 export default function CommunityFeedScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();

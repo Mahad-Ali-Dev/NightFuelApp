@@ -46,7 +46,7 @@
  * core-block length in milliseconds yields the correct absolute instant.
  */
 
-import { computeShiftTransition, OFFSETS, type ShiftLike } from '../shiftTransition';
+import { computeShiftTransition, type ShiftLike } from '../shiftTransition';
 
 const HOUR_MS = 3_600_000;
 

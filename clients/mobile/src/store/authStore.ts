@@ -35,11 +35,6 @@ const TOKEN_KEYS = {
 
 // ─── Token helpers ───────────────────────────────────────────────────
 
-async function persistTokens(tokens: AuthTokens): Promise<void> {
-  await SecureStore.setItemAsync(TOKEN_KEYS.access, tokens.accessToken);
-  await SecureStore.setItemAsync(TOKEN_KEYS.refresh, tokens.refreshToken);
-}
-
 async function clearTokens(): Promise<void> {
   await SecureStore.deleteItemAsync(TOKEN_KEYS.access);
   await SecureStore.deleteItemAsync(TOKEN_KEYS.refresh);

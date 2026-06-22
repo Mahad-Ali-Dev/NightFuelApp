@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { getPublicProfile } from '@/api/users';
@@ -14,8 +14,6 @@ import { StatusBar } from 'expo-status-bar';
 import { shadows } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { formatDistanceToNow } from 'date-fns';
-
-const { width } = Dimensions.get('window');
 
 // LIST-PERFORMANCE — one memoized post row at module scope.
 //

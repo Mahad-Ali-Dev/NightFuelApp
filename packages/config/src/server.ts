@@ -10,7 +10,7 @@ export interface BootstrapOptions {
 }
 
 export function bootstrapCluster(options: BootstrapOptions) {
-    const { logger, serviceName, port, startServer } = options;
+    const { logger, serviceName, startServer } = options;
 
     // Check if clustering is enabled via env or if we're in production
     const isClusteringEnabled = process.env.NODE_ENV === 'production' || process.env.ENABLE_CLUSTER === 'true';

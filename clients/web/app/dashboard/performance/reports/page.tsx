@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronLeft, Sparkles, TrendingUp, AlertCircle,
-    CheckCircle2, Flame, BrainCircuit, Activity, BookOpen
+    CheckCircle2, BrainCircuit, Activity, BookOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

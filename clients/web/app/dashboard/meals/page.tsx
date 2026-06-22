@@ -9,7 +9,7 @@ import Link from 'next/link';
 import {
     Utensils, Search, Plus, Trash2, ArrowLeft, ScanBarcode,
     Globe, ChevronDown, ChevronUp, Info, Minus, Flame,
-    AlertCircle, Loader2, BookOpen, Leaf, Wheat, FlameKindling,
+    AlertCircle, Loader2, BookOpen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

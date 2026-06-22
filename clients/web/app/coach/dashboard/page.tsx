@@ -8,16 +8,12 @@ import {
     Activity,
     ArrowUpRight,
     Search,
-    Filter,
-    MoreHorizontal,
-    CheckCircle2,
     AlertCircle,
     Zap,
-    ClipboardList,
     ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';

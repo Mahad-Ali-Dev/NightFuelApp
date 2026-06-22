@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import {
     ChevronLeft, Dumbbell, Clock, Target, Star,
-    Flame, Zap, Heart, Shield, Play, ChevronRight,
-    Home, Repeat, TrendingUp, Users, Loader2
+    Flame, Zap, Play, ChevronRight,
+    Home, Repeat, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

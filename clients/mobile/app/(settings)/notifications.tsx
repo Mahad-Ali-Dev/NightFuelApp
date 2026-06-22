@@ -13,7 +13,7 @@ import { getAll, markRead, Notification } from '@/api/notifications';
 import { EmptyState, Skeleton, GlassCard } from '@/components/ui';
 
 export default function NotificationsScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, spacing } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();

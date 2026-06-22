@@ -38,7 +38,6 @@ import { captureException } from '@/lib/sentry';
 // TODO(monetization): migrate to react-native-iap v15 (+ nitro modules) or
 // expo-iap, then restore the lazy require here.
 type IapModule = any;
-let iap: IapModule | null = null;
 
 function getIap(): IapModule | null {
   return null;

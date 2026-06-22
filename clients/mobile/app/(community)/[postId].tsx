@@ -8,19 +8,18 @@ import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { addComment, getComments, getPostById, Post, Comment } from '@/api/community';
+import { addComment, getComments, getPostById, Comment } from '@/api/community';
 import { colors as themeColors } from '@/theme/colors';
-import { withAlpha } from '@/theme/utils';
 import { safeImageUri } from '@/lib/imageUrl';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { Card, Button, Skeleton, EmptyState } from '@/components/ui';
+import { Skeleton, EmptyState } from '@/components/ui';
 import { shadows } from '@/theme';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function PostDetailScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();

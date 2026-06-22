@@ -24,7 +24,6 @@ Closes M5 (cost telemetry) and M6 (model version) by including them in
 the `done` event.
 """
 
-import os
 import time
 from json import dumps
 from typing import AsyncIterator, Dict, Any, List

@@ -6,8 +6,8 @@ import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { getRecentWorkouts, getExerciseHeatmap } from '@/lib/api';
 import {
-    ChevronLeft, ChevronRight, TrendingUp, Timer, Weight, Calendar,
-    ChevronDown, Dumbbell, Scale
+    ChevronLeft, Weight, Calendar,
+    ChevronDown, Scale
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

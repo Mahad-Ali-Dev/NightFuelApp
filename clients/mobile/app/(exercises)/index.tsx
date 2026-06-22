@@ -46,10 +46,8 @@ const CATEGORY_FALLBACK: Record<string, number> = {
 const MUSCLE_GROUPS = ['Chest', 'Back', 'Shoulders', 'Arms', 'Core', 'Legs', 'Glutes', 'Full Body'];
 
 
-type AppCategory = 'gym' | 'home' | 'cardio' | 'kegel';
-
 export default function ExerciseLibraryScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, spacing } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const params = useLocalSearchParams();

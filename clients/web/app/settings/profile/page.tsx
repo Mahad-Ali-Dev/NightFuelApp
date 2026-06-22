@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Save, User as UserIcon, Camera } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { useEffect } from 'react';
 
 const profileSchema = z.object({

@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/context/auth-context';
-import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,7 +21,6 @@ type LoginValues = z.infer<typeof loginSchema>;
 
 function LoginForm() {
     const { login } = useAuth();
-    const searchParams = useSearchParams();
     const [error, setError] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
 

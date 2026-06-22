@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Alert, Dimensions,
+    Alert,
 } from 'react-native';
 
 import { useRouter } from 'expo-router';
@@ -17,7 +17,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { typography as typo } from '@/theme/typography';
 
-const { width } = Dimensions.get('window');
 
 const PRESETS = [250, 500, 750];
 

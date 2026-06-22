@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-    ActivityIndicator, Alert, Dimensions,
+    ActivityIndicator, Alert,
 } from 'react-native';
 
 import { useRouter } from 'expo-router';
@@ -10,12 +10,10 @@ import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getBodyMetrics, logBodyMetrics, BodyMetrics } from '@/api/progress';
-import { Skeleton, SkeletonCard, EmptyState, GlassCard } from '@/components/ui';
-import { withAlpha } from '@/theme/utils';
+import { getBodyMetrics, logBodyMetrics } from '@/api/progress';
+import { Skeleton, EmptyState, GlassCard } from '@/components/ui';
 import { typography as typo } from '@/theme/typography';
 
-const { width } = Dimensions.get('window');
 
 // Client-side mirror of the user-service updateProfileSchema bounds
 // (services/user-service/src/schemas.ts):

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Dimensions, FlatList
+    ActivityIndicator, FlatList
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -17,7 +17,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { typography as typo } from '@/theme/typography';
 
-const { width } = Dimensions.get('window');
 
 // Hoisted Intl formatter (js-hoist-intl): the history-tab dates use a static
 // locale/style, so the DateTimeFormat is built once at module scope rather than

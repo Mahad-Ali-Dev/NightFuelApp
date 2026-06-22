@@ -4,8 +4,8 @@ import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
-    ChevronLeft, Calculator, TrendingUp, Target,
-    Dumbbell, Info, BarChart3, Award
+    ChevronLeft, Calculator,
+    Dumbbell, Info, BarChart3
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

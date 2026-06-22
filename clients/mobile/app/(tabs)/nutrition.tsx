@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     ImageBackground
@@ -498,7 +498,7 @@ export default function NutritionHubScreen() {
 }
 
 const MacroItem = React.memo(function MacroItem({ label, current, target, color, unit }: any) {
-    const { colors, typography, borderRadius } = useTheme();
+    const { colors, typography } = useTheme();
     // Coerce both operands to finite numbers (a NaN macro from a bad log would
     // otherwise yield a NaN ratio → a NaN bar width). Clamp to 0..1 so an
     // over-target macro can't overflow the track and a negative can't render a

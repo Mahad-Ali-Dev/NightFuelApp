@@ -10,7 +10,7 @@ interface CircadianClockProps {
     size?: number;
 }
 
-function CircadianClockComponent({ currentPhase = 'Active', melatoninOnset, alertnessScore = 72, size = 160 }: CircadianClockProps) {
+function CircadianClockComponent({ currentPhase = 'Active', alertnessScore = 72, size = 160 }: CircadianClockProps) {
     const radius = (size - 16) / 2;
     const circumference = 2 * Math.PI * radius;
     const progress = alertnessScore / 100;

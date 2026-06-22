@@ -9,9 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { getRecipes, getRecipe } from '@/api/meals';
 import { LinearGradient } from 'expo-linear-gradient';
-import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
-import { spacing, borderRadius } from '@/theme/spacing';
+import { borderRadius } from '@/theme/spacing';
 import { Skeleton, EmptyState, CtaButton, GlassCard } from '@/components/ui';
 // Bundled Aurora dark-glass placeholder so imageless recipes never depend on an
 // external host (no 404 / rate-limit). '@/*' resolves to ./src, so the asset is

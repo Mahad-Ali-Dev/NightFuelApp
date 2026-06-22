@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    RefreshControl, Dimensions,
+    RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -13,8 +13,6 @@ import { getRecent, getHeatmap } from '@/api/exercises';
 import { format } from 'date-fns';
 import { withAlpha } from '@/theme/utils';
 import { Skeleton, EmptyState } from '@/components/ui';
-
-const { width } = Dimensions.get('window');
 
 export default function WorkoutHistoryScreen() {
     const { colors, typography, spacing, borderRadius } = useTheme();

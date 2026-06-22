@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -19,7 +18,6 @@ import { useEntrainmentScore } from '@/components/dashboard/useEntrainmentScore'
 import { TAB_BAR_H } from './_layout';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const { width } = Dimensions.get('window');
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
 
 // ── Quick Action Links ────────────────────────────────────────────────────────

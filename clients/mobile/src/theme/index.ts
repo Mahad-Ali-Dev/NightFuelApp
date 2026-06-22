@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import { createContext, useContext } from 'react';
 import { colors, ColorScheme } from './colors';
 import { nightReadColors } from './nightRead';
 import { typography } from './typography';

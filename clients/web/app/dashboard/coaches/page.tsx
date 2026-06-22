@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getCoachDirectory, enrollAsCoach, bookCoachSession } from '@/lib/api';
 import {
     ChevronLeft, Users, Star, Award, Search,
-    Filter, ChevronRight, MessageCircle, MapPin,
+    Filter, MessageCircle, MapPin,
     Dumbbell, Apple, DollarSign
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';

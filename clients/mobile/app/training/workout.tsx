@@ -20,7 +20,7 @@ import { SetLogger } from '@/components/workout/SetLogger';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getActiveSession, logSessionExercise, endSession, startSession, getRoutines, getById } from '@/api/exercises';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeBlurView } from '@/components/SafeBlurView';
@@ -983,7 +983,10 @@ export default function ActiveWorkoutScreen() {
                         {showRestTimer && !isStarting ? (
                             <RestTimer
                                 durationSeconds={restSeconds}
-                                isRunning={showRestTimer && !isStarting}
+                                // Always true inside this branch (the parent already
+                                // gates on `showRestTimer && !isStarting`); pass the
+                                // literal rather than a redundant re-check.
+                                isRunning={true}
                                 onFinish={() => setShowRestTimer(false)}
                                 size={180}
                             />

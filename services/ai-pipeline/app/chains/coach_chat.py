@@ -1,8 +1,7 @@
-import os
 from typing import Dict, Any, List
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from .plan_generator import get_llm, LLMProvider, no_live_provider
 from ..prompts.prompts import SYSTEM_PROMPT
 from ..telemetry import TokenTelemetryHandler

@@ -3,15 +3,15 @@
 import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-    LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer
+    LineChart, Line, XAxis, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { useQuery } from '@tanstack/react-query';
 import { exerciseApi } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronLeft, Target, Dumbbell, CheckCircle2,
-    Zap, List, BookOpen, BarChart3, Share2,
-    ChevronRight, Loader2, AlertCircle
+    List, BookOpen, BarChart3,
+    Loader2, AlertCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { KEGEL_EXERCISES, BODY_PART_LABELS, type Exercise } from '@/lib/exercisedb';

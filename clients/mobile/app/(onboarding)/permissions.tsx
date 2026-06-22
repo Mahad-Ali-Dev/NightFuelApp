@@ -10,14 +10,12 @@ import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // import * as Notifications from 'expo-notifications';
 import { getHealthSyncAdapter } from '@/lib/healthSync';
 
 export default function PermissionsScreen() {
     const { colors, typography, spacing } = useTheme();
     const router = useRouter();
-    const insets = useSafeAreaInsets();
 
     const [notifications, setNotifications] = useState(false);
     const [healthKit, setHealthKit] = useState(false);

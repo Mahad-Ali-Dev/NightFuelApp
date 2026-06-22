@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    Dimensions, Share,
+    Share,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/theme';
@@ -14,8 +14,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
 import { StatusBar } from 'expo-status-bar';
-
-const { width } = Dimensions.get('window');
 
 export default function WorkoutReportScreen() {
     const { colors, typography, spacing, borderRadius } = useTheme();

@@ -1,14 +1,13 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { communityApi, createCommunityPost, deleteCommunityPost, updateCommunityPost } from '@/lib/api';
 import { useAuth } from '@/context/auth-context';
 import {
     Users, Heart, MessageSquare, Share2,
-    MoreHorizontal, Flame, Trophy, Crown,
+    Flame, Trophy, Crown,
     Image as ImageIcon, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,7 +29,6 @@ function formatTimeAgo(dateStr: string): string {
 }
 
 export default function CommunityFeedPage() {
-    const router = useRouter();
     const queryClient = useQueryClient();
     const { user } = useAuth();
 

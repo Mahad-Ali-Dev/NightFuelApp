@@ -1,6 +1,6 @@
 // Date, number, and macro formatting utilities
 
-import { format, formatDistanceToNow, differenceInMinutes, differenceInHours } from 'date-fns';
+import { format, formatDistanceToNow, differenceInMinutes } from 'date-fns';
 
 /**
  * Format a countdown like "4h 12m"

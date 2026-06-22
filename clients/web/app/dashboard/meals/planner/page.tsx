@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
     ChevronLeft, ChevronRight, Calendar, Plus,
-    Utensils, Coffee, Sun, Moon, Cookie, Trash2
+    Coffee, Sun, Moon, Cookie, Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

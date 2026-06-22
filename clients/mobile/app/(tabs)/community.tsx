@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl, ImageBackground, Share } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ImageBackground, Share } from 'react-native';
 import { GlassCard, EmptyState, Skeleton, SkeletonCard } from '@/components/ui';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,10 +12,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getFeed, likePost, getChallenges, Post } from '@/api/community';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { Card } from '@/components/ui/Card';
 import { formatDistanceToNow } from 'date-fns';
 
-const { width } = Dimensions.get('window');
 
 // Bundled Aurora dark-glass art (no external host → offline-safe, no 404 /
 // rate-limit). '@/*' resolves to ./src, so assets are required by relative path

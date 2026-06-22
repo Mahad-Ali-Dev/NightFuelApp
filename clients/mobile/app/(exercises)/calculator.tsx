@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
-    KeyboardAvoidingView, Platform, Dimensions
+    KeyboardAvoidingView, Platform
 } from 'react-native';
 
 import { useRouter } from 'expo-router';
@@ -15,8 +15,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
-
-const { width } = Dimensions.get('window');
 
 // ─── Formulas ───────────────────────────────────────────────────────────────
 

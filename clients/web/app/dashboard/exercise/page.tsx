@@ -10,13 +10,10 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Dumbbell,
-    Zap,
     Timer,
-    Flame,
     Plus,
     Trash2,
     ChevronLeft,
-    CheckCircle2,
     Activity
 } from 'lucide-react';
 import { toast } from 'sonner';

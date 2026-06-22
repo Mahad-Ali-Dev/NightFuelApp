@@ -35,7 +35,7 @@ export function validateDisplayName(name: string): string | null {
 }
 
 export default function EditProfileScreen() {
-    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
+    const { colors, typography, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();

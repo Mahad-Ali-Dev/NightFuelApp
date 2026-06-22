@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, MapPin, Coffee } from 'lucide-react';
+import { Clock, MapPin, Coffee } from 'lucide-react';
 
 const SHIFT_TYPES = ['FIXED_NIGHT', 'ROTATING', 'SPLIT', 'IRREGULAR', 'TWELVE_HOUR'] as const;
 

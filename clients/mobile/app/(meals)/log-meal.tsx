@@ -9,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { logMeal, searchFoods, getFoodById, getRecipe, FoodItem } from '@/api/meals';
 import { LinearGradient } from 'expo-linear-gradient';
-import { withAlpha } from '@/theme/utils';
 import { borderRadius } from '@/theme/spacing';
 import { GlassCard, Skeleton, EmptyState, CtaButton } from '@/components/ui';
 import { getErrorMessage } from '@/utils/validation';

@@ -15,7 +15,7 @@ import { GlassCard, Button, EmptyState, Skeleton, SkeletonCard } from '@/compone
 import { shadows } from '@/theme';
 
 export default function ChallengesScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();

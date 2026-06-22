@@ -4,7 +4,7 @@ import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    ChevronLeft, Camera, Plus, CalendarDays,
+    ChevronLeft, Camera, Plus,
     Maximize2, Trash2, ChevronRight, SplitSquareHorizontal
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';

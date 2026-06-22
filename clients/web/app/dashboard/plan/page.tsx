@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
-import { shiftApi, circadianApi, planApi, mealApi, generatePlan, userApi, getWeeklyStats, getTodayProgress, swapMeal } from '@/lib/api';
+import { shiftApi, mealApi, generatePlan, userApi, getWeeklyStats, getTodayProgress, swapMeal } from '@/lib/api';
 import InteractiveTrackingHub from '@/components/InteractiveTrackingHub';
 import WorkoutLogHub from '@/components/WorkoutLogHub';
 import { useQuery } from '@tanstack/react-query';
@@ -17,11 +17,10 @@ import {
     LineChart,
     Line,
     ComposedChart,
-    Area,
-    CartesianGrid
+    Area
 } from 'recharts';
 import Link from 'next/link';
-import { ArrowLeft, Zap, Coffee, Dumbbell, Utensils, RefreshCw, AlertCircle, CalendarDays, Activity, Droplets, Moon } from 'lucide-react';
+import { ArrowLeft, Zap, Coffee, Utensils, RefreshCw, AlertCircle, CalendarDays, Activity, Droplets, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'framer-motion';

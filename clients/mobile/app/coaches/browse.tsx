@@ -102,7 +102,7 @@ export default function CoachesBrowseScreen() {
 }
 
 function CoachCardSkeleton() {
-    const { colors, borderRadius } = useTheme();
+    const { borderRadius } = useTheme();
     return (
         <Card variant="glass" style={styles.coachCard}>
             <View style={styles.coachHeader}>

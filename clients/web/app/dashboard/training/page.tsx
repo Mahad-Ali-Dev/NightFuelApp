@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
+import { motion, AnimatePresence, animate } from 'framer-motion';
 import {
     Dumbbell, Lock, Check, ChevronLeft, ChevronRight, Play,
-    Calendar, Trophy, Flame, Target, Clock, Zap,
-    ArrowRight, RotateCcw, Layers, Sparkles, Shield
+    Calendar, Trophy, Flame, Target, Zap,
+    RotateCcw, Layers, Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { startWorkoutSession } from '@/lib/api';

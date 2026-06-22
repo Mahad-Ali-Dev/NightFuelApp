@@ -8,9 +8,9 @@ import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    Check, X, Zap, Sparkles, Crown, Building2,
+    Check, X, Zap, Crown, Building2,
     Shield, CreditCard, ChevronRight, Star, Loader2,
-    Users, Brain, LineChart, Clock, Infinity as InfinityIcon,
+    Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 

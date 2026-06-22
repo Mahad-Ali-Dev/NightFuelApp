@@ -10,8 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Loader2, Save, Settings, Target, Zap, ShieldAlert, HeartPulse, Dumbbell, Clock } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Loader2, Save, Settings, Target, ShieldAlert, HeartPulse, Dumbbell, Clock } from 'lucide-react';
 import { useEffect } from 'react';
 
 const preferencesSchema = z.object({

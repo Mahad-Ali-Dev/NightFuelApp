@@ -210,7 +210,7 @@ export default function DashboardScreen() {
     // api/shifts.list query. The card owns its own loading/error/empty branches.
     const { data: upcomingShifts, isLoading: upcomingLoading, isError: upcomingError, refetch: upcomingRefetch } =
         useQuery({ queryKey: ['shifts-upcoming'], queryFn: listShifts, retry: 1 });
-    const { data: progress, isLoading: progressLoading, isError: progressError, refetch: progressRefetch } =
+    const { data: progress, isError: progressError, refetch: progressRefetch } =
         useQuery({ queryKey: ['today-progress'], queryFn: getTodayProgress, retry: 1 });
     const { data: plan, isLoading: planLoading, isError: planError, refetch: planRefetch } =
         useQuery({ queryKey: ['today-plan'], queryFn: getTodayPlan, retry: 1 });

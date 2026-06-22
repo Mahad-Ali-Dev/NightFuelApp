@@ -10,13 +10,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createPost } from '@/api/community';
-import { Button } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 
 export default function CreatePostModal() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();

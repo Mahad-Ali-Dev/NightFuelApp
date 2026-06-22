@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/theme';
 import { Card } from '@/components/ui/Card';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +26,7 @@ function formatElapsed(totalSeconds: number): string {
 }
 
 export default function WorkoutCompleteScreen() {
-    const { colors, typography, spacing, shadows } = useTheme();
+    const { colors, typography, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();

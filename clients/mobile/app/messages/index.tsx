@@ -11,7 +11,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { withAlpha } from '@/theme/utils';
 
 export default function MessagesListScreen() {
-    const { colors, typography, borderRadius } = useTheme();
+    const { colors, typography } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
 

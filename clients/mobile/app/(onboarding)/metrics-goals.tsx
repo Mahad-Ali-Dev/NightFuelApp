@@ -26,7 +26,7 @@ const SEX_OPTIONS = [
 export const MEASUREMENT_MAX_LENGTH = 6;
 
 export default function BiologicalDataScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, spacing } = useTheme();
     const router = useRouter();
     const { data, updateData } = useOnboardingStore();
 

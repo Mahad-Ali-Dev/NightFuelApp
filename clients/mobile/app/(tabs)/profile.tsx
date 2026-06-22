@@ -12,7 +12,7 @@
 import React from 'react';
 import {
     View, Text, StyleSheet, ScrollView,
-    TouchableOpacity, Pressable, Dimensions,
+    TouchableOpacity, Pressable,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
@@ -31,10 +31,8 @@ import { Skeleton, GlassCard, CtaButton } from '@/components/ui';
 import { CyclePhaseCard } from '@/components/CyclePhaseCard';
 import { TAB_BAR_H } from './_layout';
 
-const { width } = Dimensions.get('window');
 const H_PAD = 20;
 const CARD_GAP = 12;
-const COL_W = (width - H_PAD * 2 - CARD_GAP) / 2;
 
 const ACHIEVEMENTS = [
     { title: 'Early Riser', desc: '30 Day Streak', icon: 'trophy', color: '#FFB300' },
@@ -56,7 +54,7 @@ export default function ProfileScreen() {
     // affected stat pills instead of coalescing to '0%' / '0d' / 'Level 1' — a
     // failed fetch must NOT look like a healthy brand-new (genuinely zeroed) user.
     const { data: status, isError: statusError, refetch: refetchStatus } = useQuery({ queryKey: ['my-status'], queryFn: getStatus });
-    const { data: stats, isError: statsError, refetch: refetchStats } = useQuery({ queryKey: ['profile-weekly-stats'], queryFn: getWeeklyStats });
+    const { data: stats, isError: statsError } = useQuery({ queryKey: ['profile-weekly-stats'], queryFn: getWeeklyStats });
     const { data: streak, isError: streakError, refetch: refetchStreak } = useQuery({ queryKey: ['profile-streak'], queryFn: getStreak });
 
     const isCoach = ['COACH', 'TRAINER', 'NUTRITIONIST', 'coach'].includes(user?.role ?? '');

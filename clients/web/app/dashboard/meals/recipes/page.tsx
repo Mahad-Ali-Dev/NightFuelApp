@@ -10,7 +10,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import { mealApi } from '@/lib/api';
 

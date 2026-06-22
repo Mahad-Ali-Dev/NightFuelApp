@@ -5,11 +5,10 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronLeft, Ruler, Plus, History,
-    TrendingDown, TrendingUp, Minus, Save, User, Loader2
+    TrendingDown, TrendingUp, Minus, Save, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { logBodyMetrics, getBodyMetrics } from '@/lib/api';

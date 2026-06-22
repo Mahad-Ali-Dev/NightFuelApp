@@ -24,7 +24,7 @@ export default function SettingsIndexScreen() {
     const router = useRouter();
 
     const { user } = useAuthStore();
-    const { theme, setTheme, isDarkTheme, nightRead, setNightRead } = useThemeStore();
+    const { theme, setTheme, nightRead, setNightRead } = useThemeStore();
 
     const { data: profile } = useQuery({
         queryKey: ['user-profile'],

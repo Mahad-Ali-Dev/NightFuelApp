@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    ActivityIndicator, Dimensions, Modal, TextInput, KeyboardAvoidingView, Platform, Share
+    Modal, TextInput, KeyboardAvoidingView, Share
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -10,12 +10,11 @@ import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { getGroceryList, GroceryItem } from '@/api/meals';
+import { getGroceryList } from '@/api/meals';
 import { LinearGradient } from 'expo-linear-gradient';
 import { shadows } from '@/theme/shadows';
 import { Skeleton, EmptyState, CtaButton, GlassCard } from '@/components/ui';
 
-const { width } = Dimensions.get('window');
 const STORAGE_KEY = '@nightfuel_weekly_grocery';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -39,7 +38,7 @@ const CATEGORIES = [
 ];
 
 export default function GroceryListScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
 

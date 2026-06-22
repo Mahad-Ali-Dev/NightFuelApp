@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     ActivityIndicator, Dimensions, Alert, Linking, Platform,
@@ -25,7 +25,6 @@ import {
     restorePurchases,
     acknowledgePurchase,
     openManageSubscriptions,
-    productIdToTier,
 } from '@/lib/iap';
 import { validateReceipt } from '@/api/iap';
 import { captureException } from '@/lib/sentry';

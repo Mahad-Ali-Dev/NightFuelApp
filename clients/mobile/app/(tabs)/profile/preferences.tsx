@@ -26,7 +26,7 @@ type EditTarget = { kind: 'time'; field: EditableTimeField; label: string };
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
 export default function PreferencesScreen() {
-    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
+    const { colors, typography, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();

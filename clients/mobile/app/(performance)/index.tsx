@@ -9,7 +9,7 @@ import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getToday, getWeeklyStats, TodayProgress } from '@/api/progress';
+import { getToday, getWeeklyStats } from '@/api/progress';
 import { deriveTodayScore } from '@/hooks/useProgress';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Card } from '@/components/ui/Card';

@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Plus, Trash2, Edit, Zap, CalendarDays, Moon,
-    Utensils, TrendingUp, Dumbbell, Sparkles, CheckCircle2,
+    Dumbbell, Sparkles, CheckCircle2,
     AlertCircle, Lightbulb, Waves, Activity, ChevronRight,
-    Flame, Target, Timer, Apple, BarChart3, Heart
+    Flame, Apple, BarChart3
 } from 'lucide-react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';

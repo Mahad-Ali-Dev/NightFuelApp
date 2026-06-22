@@ -10,7 +10,7 @@ import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getFastingLogs, startFasting, endFasting, FastingLog } from '@/api/meals';
+import { getFastingLogs, startFasting, endFasting } from '@/api/meals';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Button, Card, GlassCard, CtaButton, Skeleton, EmptyState } from '@/components/ui';
 import { shadows } from '@/theme/shadows';
@@ -28,7 +28,7 @@ const PROTOCOLS = [
 ];
 
 export default function FastingScreen() {
-    const { colors, typography, spacing, borderRadius } = useTheme();
+    const { colors, typography, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
