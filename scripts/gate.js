@@ -253,6 +253,19 @@ function buildReportingSteps() {
 function buildSteps() {
     return [
         {
+            // Lockfile-in-sync guard — FIRST, because GitHub CI's every npm job
+            // starts with `npm ci`, which HARD-fails when package.json and
+            // package-lock.json drift (e.g. a dep added to a workspace package.json
+            // but never written to the lock). That exact drift kept CI red while
+            // this gate was green: the gate reuses the existing node_modules and
+            // never runs `npm ci`, so it never saw the mismatch. `npm ci --dry-run`
+            // resolves the tree WITHOUT installing and exits non-zero (EUSAGE) on
+            // drift — catching it locally before push. Run `npm install` to fix.
+            name: 'lockfile-in-sync (npm ci --dry-run)',
+            cmd: NPM,
+            args: ['ci', '--dry-run', '--no-audit', '--no-fund'],
+        },
+        {
             name: 'check-no-inline-401',
             file: path.join(REPO_ROOT, 'scripts', 'check-no-inline-401.js'),
             cmd: NODE,
