@@ -393,6 +393,20 @@ function buildSteps() {
             args: ['run', 'typecheck', '--silent', '--workspace=@nightfuel/mobile'],
         },
         {
+            // Lint every workspace — the SAME command GitHub CI's "Lint & Type
+            // Check" job runs (`npm run lint --workspaces --if-present`). Added
+            // after a CI run went red while this local gate was green: the repo
+            // had no ESLint v9 flat config, so every workspace's `eslint .`
+            // hard-errored in CI but the gate never ran lint at all. Running it
+            // here closes that local-green / CI-red gap — a broken flat config, a
+            // parse error, or a re-introduced `--ext` flag now fails the gate
+            // locally instead of only in CI. (eslint exits 0 on warnings, so the
+            // light ruleset's warnings don't block; only real errors do.)
+            name: 'lint (workspaces)',
+            cmd: NPM,
+            args: ['run', 'lint', '--workspaces', '--if-present'],
+        },
+        {
             // Force-emit @nightfuel/config BEFORE the backend tests run. The 11
             // shared-family redaction suites import registerFastifyErrorHandler
             // from @nightfuel/config, which resolves to its package `main`,
