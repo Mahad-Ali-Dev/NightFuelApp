@@ -66,6 +66,12 @@ export class MealService {
                 cuisineTags:  true,
                 source:       true,
                 foodGroup:    true,
+                // Open Food Facts photo + its license credit. Included so the
+                // mobile food library can render the product image and display
+                // the attribution the license requires. Nullable for legacy
+                // FooDB / CUSTOM rows with no photo.
+                imageUrl:         true,
+                imageAttribution: true,
             },
         });
     }

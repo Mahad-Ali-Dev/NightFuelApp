@@ -29,6 +29,12 @@ model FoodItem {
   cuisineTags   String[] @default([]) @map("cuisine_tags")
   source        String   @default("OPENFOODFACTS")  // OPENFOODFACTS | FOODB | CUSTOM
   foodGroup     String?  @map("food_group")
+  // Food photo + its license attribution. imageUrl points at an openly-licensed
+  // image (Open Food Facts, ODbL/CC-BY-SA); imageAttribution carries the credit
+  // string we must display/retain to honor that license. Both nullable so legacy
+  // FooDB rows (no photo) and CUSTOM foods stay valid.
+  imageUrl         String? @map("image_url")
+  imageAttribution String? @map("image_attribution")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 

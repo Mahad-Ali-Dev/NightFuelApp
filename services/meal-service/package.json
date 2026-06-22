@@ -12,6 +12,7 @@
         "db:studio": "prisma studio",
         "seed:foodb": "ts-node src/seed-foodb.ts",
         "seed:recipes": "ts-node src/seed-recipes.ts",
+        "seed:off": "tsx prisma/seed-openfoodfacts.ts",
         "lint": "eslint .",
         "start": "node dist/index.js",
         "test": "jest --config jest.config.js"
