@@ -347,3 +347,25 @@ def test_deterministic_targets_block_absent_when_logic_targets_none():
     from app.prompts.prompts import build_user_context
     out = build_user_context({"rules": {}}, {"primaryGoal": "X"}, None, "UNKNOWN")
     assert "DETERMINISTIC TARGETS" not in out
+
+
+def test_concrete_cycle_phase_emits_phase_line():
+    # A concrete phase must surface the MENSTRUAL CYCLE PHASE block so the LLM
+    # applies the rule-10 nutrition + workout-type nudge; UNKNOWN must not.
+    from app.prompts.prompts import build_user_context
+    out = build_user_context({"rules": {}}, {"primaryGoal": "X"}, None, "LUTEAL")
+    assert "MENSTRUAL CYCLE PHASE" in out
+    assert "LUTEAL" in out
+    unknown = build_user_context({"rules": {}}, {"primaryGoal": "X"}, None, "UNKNOWN")
+    assert "MENSTRUAL CYCLE PHASE" not in unknown
+
+
+def test_system_prompt_carries_per_phase_workout_type_guidance():
+    # Rule 10 must give an explicit WORKOUT-TYPE nudge per phase (not just food),
+    # while still deferring to the deterministic trainingVolumeMultiplier.
+    from app.prompts.prompts import SYSTEM_PROMPT
+    assert "WORKOUT-TYPE" in SYSTEM_PROMPT
+    # Phase-distinct session styles are present.
+    assert "PR attempts" in SYSTEM_PROMPT          # ovulatory peak-intensity window
+    assert "Zone-2" in SYSTEM_PROMPT               # menstrual/luteal lighter work
+    assert "trainingVolumeMultiplier" in SYSTEM_PROMPT  # never overrides the deterministic cap

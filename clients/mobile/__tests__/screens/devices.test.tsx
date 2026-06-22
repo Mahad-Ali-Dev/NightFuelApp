@@ -373,7 +373,11 @@ describe('Connected Devices screen', () => {
 
         // A subsequent plain success drops the confirmation (no stale notice).
         fireEvent.press(screen.getByTestId('sync-generic_ble'));
-        await waitFor(() => expect(screen.queryByText(NOTHING_NEW)).toBeNull());
+        // Explicit 5s timeout: the two-sync state settle can exceed waitFor's
+        // default 1s under full-suite load (passes in isolation at ~1.3s), which
+        // made this assertion flaky on a busy gate run. The behavior is correct;
+        // the default was just too impatient.
+        await waitFor(() => expect(screen.queryByText(NOTHING_NEW)).toBeNull(), { timeout: 5000 });
         expect(screen.queryByTestId('notice-generic_ble')).toBeNull();
         expect(mockSyncNow).toHaveBeenCalledTimes(2);
     });

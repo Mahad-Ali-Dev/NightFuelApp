@@ -12,12 +12,36 @@ type CyclePhase = NonNullable<UserStatus['cyclePhase']>;
  * Honest, one-line tip per estimated phase. Deliberately non-prescriptive — the
  * underlying science is weak, so the copy stays as a gentle "you might…" rather
  * than instruction. UNKNOWN is handled separately as a tracking-only state.
+ *
+ * `plan` makes the (otherwise invisible) plan adjustment LEGIBLE: it states, in
+ * plain words, how today's meal + workout plan was nudged for this phase. The
+ * wording mirrors the actual deterministic modifiers applied upstream — the
+ * decision-engine eases training volume ~10% in MENSTRUAL/LUTEAL and bumps
+ * calories ~5% in LUTEAL (services/decision-engine/src/engine.ts), and the AI
+ * prompt's per-phase nutrition + workout-type guidance (prompts.py rule 10). It
+ * stays gentle and non-prescriptive to match that conservative tuning.
  */
-const PHASE_COPY: Record<Exclude<CyclePhase, 'UNKNOWN'>, { label: string; tip: string }> = {
-    MENSTRUAL: { label: 'Menstrual', tip: 'Energy may dip — be gentle with yourself and rest if you need it.' },
-    FOLLICULAR: { label: 'Follicular', tip: 'Energy often rises here — a good window for trying something new.' },
-    OVULATORY: { label: 'Ovulatory', tip: 'You may feel your strongest — great for higher-intensity days.' },
-    LUTEAL: { label: 'Luteal', tip: 'Wind-down phase — steady routines and good sleep can help.' },
+const PHASE_COPY: Record<Exclude<CyclePhase, 'UNKNOWN'>, { label: string; tip: string; plan: string }> = {
+    MENSTRUAL: {
+        label: 'Menstrual',
+        tip: 'Energy may dip — be gentle with yourself and rest if you need it.',
+        plan: 'Iron-rich foods emphasized, and training eased toward lighter, lower-impact sessions.',
+    },
+    FOLLICULAR: {
+        label: 'Follicular',
+        tip: 'Energy often rises here — a good window for trying something new.',
+        plan: 'Baseline nutrition, with training set to build volume as energy rises.',
+    },
+    OVULATORY: {
+        label: 'Ovulatory',
+        tip: 'You may feel your strongest — great for higher-intensity days.',
+        plan: 'Baseline nutrition, with higher-intensity sessions favored while strength peaks.',
+    },
+    LUTEAL: {
+        label: 'Luteal',
+        tip: 'Wind-down phase — steady routines and good sleep can help.',
+        plan: 'Complex carbs emphasized and calories nudged up slightly, with training tapered toward recovery.',
+    },
 };
 
 export interface CyclePhaseCardProps {
@@ -73,6 +97,27 @@ export function CyclePhaseCard({ cyclePhase }: CyclePhaseCardProps) {
                         : copy!.tip}
                 </Text>
 
+                {/* Plan-impact row: makes the (otherwise silent) per-phase plan
+                    adjustment legible. Only shown for a concrete phase — UNKNOWN
+                    applies no adjustment, so claiming one would be dishonest. */}
+                {isUnknown ? null : (
+                    <View
+                        style={[styles.planRow, { borderTopColor: colors.border.default }]}
+                        accessibilityRole="text"
+                        accessibilityLabel={`How your plan adjusts this phase: ${copy!.plan}`}
+                    >
+                        <Ionicons name="sparkles-outline" size={15} color={colors.accent.coral} />
+                        <View style={styles.planTextWrap}>
+                            <Text style={[typography.overline, { color: colors.text.tertiary, letterSpacing: 1 }]}>
+                                YOUR PLAN TODAY
+                            </Text>
+                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
+                                {copy!.plan}
+                            </Text>
+                        </View>
+                    </View>
+                )}
+
                 <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 10 }]}>
                     This is a wellness estimate, not medical advice.
                 </Text>
@@ -95,6 +140,17 @@ const styles = StyleSheet.create({
     label: {
         marginLeft: 8,
         letterSpacing: 1,
+    },
+    planRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    planTextWrap: {
+        flex: 1,
+        marginLeft: 8,
     },
 });
 

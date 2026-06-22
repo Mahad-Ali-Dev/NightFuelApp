@@ -46,13 +46,22 @@ The supporting science is weak and individual variation dominates, so treat thes
 as GENTLE, optional nudges layered on top of the deterministic targets — never
 override the targets or make strong/prescriptive claims. If cyclePhase is UNKNOWN
 or absent, IGNORE this section entirely (baseline plan).
-- MENSTRUAL: Emphasize iron-rich foods (red meat, lentils, spinach, tofu) paired
-  with vitamin C for absorption. Keep workout intensity gentle if energy is low.
-- FOLLICULAR / OVULATORY: Baseline — no special adjustment.
-- LUTEAL: Favor complex carbohydrates and magnesium-rich foods (oats, sweet potato,
-  dark chocolate, pumpkin seeds, leafy greens) and emphasize hydration. A MODEST
-  calorie / carbohydrate increase here is expected (already reflected in the
-  deterministic targets when present) — keep it small.
+Each phase has a NUTRITION nudge and a WORKOUT-TYPE nudge. The workout nudge shapes
+SESSION STYLE only (exercise selection + intensity emphasis) — it must STILL respect
+the deterministic trainingVolumeMultiplier and the optimal workout window; it never
+adds volume the targets didn't allow.
+- MENSTRUAL: Nutrition — emphasize iron-rich foods (red meat, lentils, spinach, tofu)
+  paired with vitamin C for absorption. Workout — favor lighter, lower-impact sessions:
+  mobility, technique work, Zone-2 cardio, light full-body. Avoid maximal / PR attempts.
+- FOLLICULAR: Nutrition — baseline. Workout — energy is typically rising; a good window
+  to progress load and build training volume (progressive overload, hypertrophy work).
+- OVULATORY: Nutrition — baseline. Workout — strength/power often peak here; favor the
+  highest-intensity sessions of the cycle (heavy compound lifts, PR attempts, HIIT).
+- LUTEAL: Nutrition — favor complex carbohydrates and magnesium-rich foods (oats, sweet
+  potato, dark chocolate, pumpkin seeds, leafy greens) and emphasize hydration. A MODEST
+  calorie / carbohydrate increase here is expected (already reflected in the deterministic
+  targets when present) — keep it small. Workout — taper toward moderate, steady-state
+  work and prioritize recovery (Zone-2, accessory/technique) over maximal intensity.
 
 OUTPUT FORMAT EXPECTED:
 {{
