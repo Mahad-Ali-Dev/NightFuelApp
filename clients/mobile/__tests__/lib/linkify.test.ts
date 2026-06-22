@@ -74,7 +74,9 @@ describe('linkify — bare www. host', () => {
     expect(ls[0]!.href).toBe('https://www.domain.com');
     // Crucial: the href must not contain a doubled 'www'.
     expect(ls[0]!.href).not.toMatch(/www\.www\./);
-    expect(ls[0]!.href.startsWith('https://www.domain')).toBe(true);
+    // Assert the full href exactly rather than a prefix: a `startsWith` prefix
+    // check accepts an arbitrary trailing host (CodeQL js/incomplete-url-substring-sanitization).
+    expect(ls[0]!.href).toBe('https://www.domain.com');
     expect(rendered(spans)).toBe('go to www.domain.com now');
   });
 

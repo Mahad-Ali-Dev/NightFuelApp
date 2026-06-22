@@ -92,7 +92,7 @@ describe('list', () => {
 
     const shifts = await list();
 
-    expect(shifts[0].type).toBe('NIGHT');
+    expect(shifts[0]!.type).toBe('NIGHT');
     // userId is server-derived from the JWT, so it must not be forwarded.
     expect(lastListParams()).not.toHaveProperty('userId');
   });

@@ -377,6 +377,22 @@ function buildSteps() {
             args: ['run', 'check-types', '--silent'],
         },
         {
+            // Mobile typecheck — EXPLICIT, run directly here rather than via the
+            // turbo step above. `turbo run check-types` keys off a `check-types`
+            // task NAME, but @nightfuel/mobile (and subscription-service) only
+            // define a `typecheck` script, so turbo SILENTLY SKIPS them — which is
+            // how 17 real `tsc --noEmit` errors sat green in the notifications
+            // surface (a `read` vs `isRead` field drift, plus noUncheckedIndexedAccess
+            // gaps) while the gate stayed green. mobile jest uses babel-jest and does
+            // NOT typecheck, so nothing else caught it. Running mobile's own
+            // `typecheck` (tsc --noEmit) directly closes that hole and, unlike the
+            // turbo convention, cannot be lost to a task-name mismatch. HARD /
+            // unconditional, matching the gate's no-silent-skip ethos.
+            name: 'check-types:mobile',
+            cmd: NPM,
+            args: ['run', 'typecheck', '--silent', '--workspace=@nightfuel/mobile'],
+        },
+        {
             // Force-emit @nightfuel/config BEFORE the backend tests run. The 11
             // shared-family redaction suites import registerFastifyErrorHandler
             // from @nightfuel/config, which resolves to its package `main`,

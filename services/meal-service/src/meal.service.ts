@@ -105,7 +105,11 @@ export class MealService {
      *   Postgres treats NULL keys as distinct, so keyless logging is unaffected.
      */
     async logMeal(userId: string, mealType: any, foodItems: any[], planMealId?: string, idempotencyKey?: string) {
-        logger.info(`Logging meal for user: ${userId}, type: ${mealType}${planMealId ? `, planMealId: ${planMealId}` : ''}${idempotencyKey ? `, idempotencyKey: ${idempotencyKey}` : ''}`);
+        // Structured fields (not string interpolation): mealType / idempotencyKey
+        // are request-controlled, and interpolating them into the message lets a
+        // newline forge fake log lines (CodeQL js/log-injection). pino JSON-encodes
+        // field values, so embedded newlines are escaped.
+        logger.info({ userId, mealType, planMealId, idempotencyKey }, 'Logging meal');
 
         // IDEMPOTENCY fast-path: if this user already has a row for this key, the
         // POST is a retry/double-tap — return the existing row and DO NOT insert
@@ -117,7 +121,7 @@ export class MealService {
                 where: { userId, idempotencyKey },
             });
             if (existing) {
-                logger.info(`Idempotent replay — returning existing meal log: ${existing.id}`);
+                logger.info({ mealLogId: existing.id }, 'Idempotent replay — returning existing meal log');
                 return planMealId ? { ...existing, planMealId } : existing;
             }
         }
@@ -174,7 +178,7 @@ export class MealService {
                     where: { userId, idempotencyKey },
                 });
                 if (winner) {
-                    logger.info(`Idempotent replay (race) — returning existing meal log: ${winner.id}`);
+                    logger.info({ mealLogId: winner.id }, 'Idempotent replay (race) — returning existing meal log');
                     return planMealId ? { ...winner, planMealId } : winner;
                 }
             }
@@ -213,14 +217,16 @@ export class MealService {
             }
         });
 
-        logger.info(`Successfully logged meal: ${mealLog.id}`);
+        logger.info({ mealLogId: mealLog.id }, 'Successfully logged meal');
         // Echo the provenance link back to the caller (route -> client) so the
         // response carries it without persisting a dedicated column.
         return planMealId ? { ...mealLog, planMealId } : mealLog;
     }
 
     async getMealLogs(userId: string, date?: string, limit: number = 20) {
-        logger.info(`Fetching meal logs for user: ${userId}, date: ${date ?? 'all'}`);
+        // `date` is a request query value — log it as a structured field so a
+        // crafted newline can't forge log lines (CodeQL js/log-injection).
+        logger.info({ userId, date: date ?? 'all' }, 'Fetching meal logs');
 
         const where: any = { userId };
 

@@ -301,6 +301,22 @@ function isEnglishTranslation(lang: number | { id: number; short_name?: string }
     return lang.id === 2 || lang.short_name === 'en';
 }
 
+// Strip HTML tags from wger's rich-text description. Applied repeatedly until
+// the string stops changing: a single `.replace(/<[^>]+>/g, '')` pass is unsafe
+// because overlapping/nested constructs like `<scr<b>ipt>` leave a live tag
+// behind (String.replace does not re-scan its own output). Looping to a fixed
+// point closes the incomplete-multi-character-sanitization hole (CodeQL
+// js/incomplete-multi-character-sanitization).
+function stripHtmlTags(input: string): string {
+    let prev = input;
+    let next = prev.replace(/<[^>]+>/g, '');
+    while (next !== prev) {
+        prev = next;
+        next = next.replace(/<[^>]+>/g, '');
+    }
+    return next;
+}
+
 export function mapWgerToExercise(info: WgerExerciseInfo): Exercise | null {
     // Find the English translation in the translations array.
     // wger v2 API returns language as a plain integer (2 = English).
@@ -325,7 +341,7 @@ export function mapWgerToExercise(info: WgerExerciseInfo): Exercise | null {
         equipment: normalizeWgerEquipment(equipName),
         gifUrl: imageUrl,
         instructions: description
-            ? [description.replace(/<[^>]+>/g, '').trim()]
+            ? [stripHtmlTags(description).trim()]
             : [],
         secondaryMuscles: info.muscles_secondary.map(m => m.name_en),
     };

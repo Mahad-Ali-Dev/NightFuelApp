@@ -69,7 +69,7 @@ describe('getAll', () => {
 
     const [n] = await getAll();
 
-    expect(n.isRead).toBe(true);
+    expect(n!.isRead).toBe(true);
   });
 });
 

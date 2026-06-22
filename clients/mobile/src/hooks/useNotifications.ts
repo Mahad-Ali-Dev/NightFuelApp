@@ -49,7 +49,8 @@ export function resolveNotificationTarget(
 
         // 2. The in-app messages route the notification service emits.
         const m = deepLink.match(/^\/messages\/([^/?#]+)\/?$/);
-        if (m && SAFE_ID.test(m[1])) return messagesRoute(m[1]);
+        const id = m?.[1];
+        if (id && SAFE_ID.test(id)) return messagesRoute(id);
 
         // Rejected: log a soft signal (path only — never the raw payload).
         captureException(new Error('notification_deeplink_rejected'), {

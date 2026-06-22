@@ -194,7 +194,12 @@ export async function resolvePlan({
     const cacheEnabled = ttlMs > 0;
 
     // Strip any trailing slash(es) so we never produce a `//v1/...` path.
-    const base = subscriptionServiceUrl.replace(/\/+$/, '');
+    // Done with a backward char scan rather than a `/\/+$/` regex: the anchored
+    // `+` quantifier backtracks polynomially on inputs with many trailing
+    // slashes (CodeQL js/polynomial-redos). This linear scan is O(n) and safe.
+    let sliceEnd = subscriptionServiceUrl.length;
+    while (sliceEnd > 0 && subscriptionServiceUrl.charCodeAt(sliceEnd - 1) === 47 /* '/' */) sliceEnd--;
+    const base = subscriptionServiceUrl.slice(0, sliceEnd);
     const cacheKey = planCacheKey(userId, base, jwtSecret);
 
     // Cache READ: serve a still-fresh entry without minting a token or touching

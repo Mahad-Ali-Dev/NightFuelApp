@@ -187,7 +187,16 @@ export default function WorkoutCompletePage() {
           return;
         }
 
-        const res = await fetch(`/api/workout/session/${sessionId}`);
+        // `sessionId` comes from the URL query, so it is attacker-controlled.
+        // Reject anything that isn't a plain id token before it reaches the
+        // request path — an unencoded value could inject `../` traversal or a
+        // `//host` segment and redirect the fetch off our API (CodeQL
+        // js/client-side-request-forgery). Session ids are uuids/cuids here.
+        if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
+          setError("No workout session found.");
+          return;
+        }
+        const res = await fetch(`/api/workout/session/${encodeURIComponent(sessionId)}`);
         if (!res.ok) throw new Error('Failed to load session');
         const data = await res.json();
 

@@ -226,7 +226,7 @@ function makeNotification(overrides: Partial<Notification> = {}): Notification {
         type: 'workout',
         title: 'Time to train',
         body: 'Your scheduled workout is ready.',
-        read: false,
+        isRead: false,
         createdAt: '2026-06-13T00:00:00.000Z',
         ...overrides,
     };
@@ -346,8 +346,8 @@ describe('NotificationsScreen (in-app notification list)', () => {
     // ── State 5: ROW A11Y + unread-only markRead wiring ────────────────────────
     it('rows expose accessibilityRole="button" + an unread-qualified label, and tapping an unread row calls markRead once with its id', () => {
         mockNotifQuery.data = [
-            makeNotification({ id: 'unread-1', title: 'New PR', body: 'You hit a new best.', read: false }),
-            makeNotification({ id: 'read-1', title: 'Old alert', body: 'Already seen.', read: true }),
+            makeNotification({ id: 'unread-1', title: 'New PR', body: 'You hit a new best.', isRead: false }),
+            makeNotification({ id: 'read-1', title: 'Old alert', body: 'Already seen.', isRead: true }),
         ];
 
         renderScreen();
@@ -379,7 +379,7 @@ describe('NotificationsScreen (in-app notification list)', () => {
         // the variables arg, and the screen stores it as the failed id.
         mockMutation.mode = 'error';
         mockNotifQuery.data = [
-            makeNotification({ id: 'unread-1', title: 'New PR', body: 'You hit a new best.', read: false }),
+            makeNotification({ id: 'unread-1', title: 'New PR', body: 'You hit a new best.', isRead: false }),
         ];
 
         renderScreen();
@@ -418,7 +418,7 @@ describe('NotificationsScreen (in-app notification list)', () => {
         // invalidates the list query.
         mockMutation.mode = 'success';
         mockNotifQuery.data = [
-            makeNotification({ id: 'unread-1', title: 'New PR', body: 'You hit a new best.', read: false }),
+            makeNotification({ id: 'unread-1', title: 'New PR', body: 'You hit a new best.', isRead: false }),
         ];
 
         renderScreen();

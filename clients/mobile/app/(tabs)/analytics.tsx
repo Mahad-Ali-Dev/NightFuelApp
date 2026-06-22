@@ -180,7 +180,7 @@ export default function AnalyticsScreen() {
                         <TouchableOpacity
                             key={action.label}
                             accessibilityRole="button"
-                            accessibilityLabel={action.label.replace('\n', ' ')}
+                            accessibilityLabel={action.label.replace(/\n/g, ' ')}
                             style={[styles.quickAction, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
                             onPress={() => router.push(action.route as any)}
                             activeOpacity={0.85}

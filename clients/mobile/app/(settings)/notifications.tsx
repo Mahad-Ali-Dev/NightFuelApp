@@ -57,19 +57,19 @@ export default function NotificationsScreen() {
             <TouchableOpacity
                 activeOpacity={0.85}
                 accessibilityRole="button"
-                accessibilityLabel={`${item.read ? '' : 'Unread. '}${item.title}. ${item.body}`}
-                style={[styles.notificationCard, { backgroundColor: item.read ? colors.background.primary : colors.background.secondary, borderBottomColor: colors.border.default }]}
-                onPress={() => !item.read && markReadMutation.mutate(item.id)}
+                accessibilityLabel={`${item.isRead ? '' : 'Unread. '}${item.title}. ${item.body}`}
+                style={[styles.notificationCard, { backgroundColor: item.isRead ? colors.background.primary : colors.background.secondary, borderBottomColor: colors.border.default }]}
+                onPress={() => !item.isRead && markReadMutation.mutate(item.id)}
             >
                 <View style={[styles.iconBox, { backgroundColor: withAlpha(iconConfig.color, 0.14), borderColor: withAlpha(iconConfig.color, 0.28) }]}>
                     <Ionicons name={iconConfig.name as any} size={24} color={iconConfig.color} />
                 </View>
                 <View style={{ flex: 1, marginLeft: 16 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: item.read ? '500' : '700', flex: 1 }]}>
+                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: item.isRead ? '500' : '700', flex: 1 }]}>
                             {item.title}
                         </Text>
-                        {!item.read && <View style={[styles.unreadDot, { backgroundColor: colors.accent.coral }]} />}
+                        {!item.isRead && <View style={[styles.unreadDot, { backgroundColor: colors.accent.coral }]} />}
                     </View>
                     <Text style={[typography.body, { color: colors.text.secondary, marginTop: 4 }]} numberOfLines={2}>
                         {item.body}

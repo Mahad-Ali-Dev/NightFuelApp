@@ -549,8 +549,8 @@ describe('swapMeal()', () => {
     const sentBody = mockedPost.mock.calls[0][1];
     expect(sentBody.userId).toBe('u_1');
     expect(sentBody.preferences.primaryGoal).toBe('WEIGHT_LOSS');
-    expect(result.alternatives[0].name).toBe('Greek Yogurt Bowl');
-    expect(result.alternatives[0].items[0].protein).toBe(20);
+    expect(result.alternatives[0]!.name).toBe('Greek Yogurt Bowl');
+    expect(result.alternatives[0]!.items[0]!.protein).toBe(20);
   });
 
   test('propagates errors (no outage fallback for swaps)', async () => {
