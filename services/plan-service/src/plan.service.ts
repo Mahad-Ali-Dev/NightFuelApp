@@ -84,7 +84,54 @@ export class PlanService {
         };
     }
 
-    private async makeAIRequest(userId: string, date: string, shiftType: string, planParams: any, circadianProfile?: any, context?: any, cyclePhase: string = 'UNKNOWN'): Promise<any> {
+    /**
+     * Shape the user-service preferences row into the EXACT subset ai-pipeline's
+     * GoalPreferences model reads for the plan prompt — most importantly
+     * `dietaryPreference` (VEGAN/HALAL/...) and `allergies` (hard exclusions),
+     * which previously NEVER reached the LLM (this is the wiring-gap fix).
+     *
+     * DEGRADES GRACEFULLY: the `preferences` arg is whatever the (best-effort,
+     * may-have-failed) user-service fetch produced — possibly null. Every field
+     * has a safe fallback (dietaryPreference 'ANY', allergies []), so a missing
+     * field or a failed fetch yields a benign no-constraint object rather than
+     * throwing. This NEVER blocks plan generation.
+     */
+    private buildAIPreferences(preferences: any): {
+        primaryGoal: string;
+        dietaryPreference: string;
+        dietMode: string;
+        allergies: string[];
+        region: string;
+        healthConditions: string[];
+        experienceLevel: string;
+    } {
+        const p = preferences ?? {};
+        // allergies/healthConditions: only pass through genuine string arrays;
+        // anything else (missing, null, malformed) degrades to [] (no constraint).
+        const allergies = Array.isArray(p.allergies)
+            ? p.allergies.filter((a: unknown): a is string => typeof a === 'string')
+            : [];
+        const healthConditions = Array.isArray(p.healthConditions)
+            ? p.healthConditions.filter((c: unknown): c is string => typeof c === 'string')
+            : [];
+        return {
+            primaryGoal: typeof p.primaryGoal === 'string' ? p.primaryGoal : 'MAINTENANCE',
+            // user-service stores 'NONE' as its no-preference default; map that (and
+            // any missing value) to the ai-pipeline 'ANY' sentinel so the prompt adds
+            // no dietary constraint when the user hasn't chosen one.
+            dietaryPreference:
+                typeof p.dietaryPreference === 'string' && p.dietaryPreference && p.dietaryPreference !== 'NONE'
+                    ? p.dietaryPreference
+                    : 'ANY',
+            dietMode: typeof p.dietMode === 'string' ? p.dietMode : 'BALANCED',
+            allergies,
+            region: typeof p.region === 'string' ? p.region : 'us',
+            healthConditions,
+            experienceLevel: typeof p.experienceLevel === 'string' ? p.experienceLevel : 'BEGINNER',
+        };
+    }
+
+    private async makeAIRequest(userId: string, date: string, shiftType: string, planParams: any, circadianProfile?: any, context?: any, cyclePhase: string = 'UNKNOWN', preferences?: any): Promise<any> {
         logger.info(`Making HTTP request to ai-pipeline at ${this.config.AI_PIPELINE_URL}/v1/ai/generate-plan`);
 
         // Translate planParams -> logicTargets in the EXACT shape DayPlanRequest
@@ -92,6 +139,11 @@ export class PlanService {
         // buildLogicTargets). planParams is still sent for backward compatibility
         // (extra fields are ignored by Pydantic).
         const logicTargets = this.buildLogicTargets(planParams);
+
+        // Shape the fetched user-profile preferences into GoalPreferences so the
+        // prompt honors dietaryPreference + allergies. Degrades to safe defaults
+        // (ANY diet, no allergies) when the fetch failed or fields are missing.
+        const aiPreferences = this.buildAIPreferences(preferences);
 
         const response = await fetch(`${this.config.AI_PIPELINE_URL}/v1/ai/generate-plan`, {
             method: 'POST',
@@ -107,6 +159,10 @@ export class PlanService {
                 circadianProfile,
                 planParams,    // legacy passthrough (Pydantic ignores unknown fields)
                 logicTargets,  // canonical deterministic targets the prompt reads
+                // User dietary preference + allergies (+ region/health/goal/experience).
+                // dietaryPreference & allergies are honored by SYSTEM_PROMPT rules 2/9;
+                // allergies are a HARD exclusion. Shaped to GoalPreferences.
+                preferences: aiPreferences,
                 context,       // Pass meal/exercise context here
                 // Derived menstrual-cycle phase (UNKNOWN if unavailable). The
                 // ai-pipeline applies a SMALL phase-aware prompt nudge only when
@@ -201,8 +257,8 @@ export class PlanService {
         // modifiers + ai-pipeline prompt), so a fetch failure NEVER changes the plan
         // for non-tracking users (or anyone). This is best-effort and non-fatal.
         let cyclePhase = 'UNKNOWN';
-        let mealContext = [];
-        let exerciseContext = [];
+        let mealContext: any[] = [];
+        let exerciseContext: any[] = [];
 
         await Promise.all([
             // 1. Fetch user state from state-service
@@ -398,7 +454,7 @@ export class PlanService {
         let latencyMs = 0;
 
         try {
-            planResult = await this.breaker.fire(userId, date, shiftType, planParams, profileData, context, cyclePhase) as any;
+            planResult = await this.breaker.fire(userId, date, shiftType, planParams, profileData, context, cyclePhase, preferences) as any;
             latencyMs = Date.now() - startMs;
             logger.info(`AI plan received in ${latencyMs}ms for user ${userId}`);
         } catch (aiErr: any) {

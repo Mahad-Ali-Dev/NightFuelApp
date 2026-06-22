@@ -33,9 +33,18 @@ import * as path from 'path';
 
 const prisma = new PrismaClient();
 
-// The fixed source tag stamped on every row this seeder writes. Matches the
-// `source` filter the /search route exposes ('OPENFOODFACTS').
+// Default source tag. Matches the `source` filter the /search route exposes.
 export const OPENFOODFACTS_SOURCE = 'OPENFOODFACTS';
+
+// Provenance allowlist. The catalog mixes Open Food Facts (image-bearing common
+// foods, ODbL) with USDA FoodData Central nutrition (the bulk catalog, public
+// domain). We honor a row's declared source when it's one of these known tags so
+// the `source` column reflects real provenance (and the right license), and fall
+// back to OPENFOODFACTS for anything else — never trusting an arbitrary value.
+const KNOWN_SOURCES = new Set(['OPENFOODFACTS', 'USDA_SR_LEGACY', 'FOODB', 'CUSTOM']);
+function resolveSource(raw: unknown): string {
+    return typeof raw === 'string' && KNOWN_SOURCES.has(raw) ? raw : OPENFOODFACTS_SOURCE;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -55,6 +64,19 @@ export interface OpenFoodFactsSeedRow {
     fiber?: number | null;
     sugar?: number | null;
     sodiumMg?: number | null;
+    // Micronutrients per serving (USDA FoodData Central, public domain). All
+    // optional — not every row reports every nutrient, and legacy rows report
+    // none. They power the cycle "best foods for your phase" ranking.
+    ironMg?: number | null;
+    magnesiumMg?: number | null;
+    calciumMg?: number | null;
+    potassiumMg?: number | null;
+    zincMg?: number | null;
+    vitaminCMg?: number | null;
+    vitaminB6Mg?: number | null;
+    vitaminB12Mcg?: number | null;
+    folateMcg?: number | null;
+    vitaminDMcg?: number | null;
     servingSize?: string | null;
     isVegan?: boolean | null;
     isGlutenFree?: boolean | null;
@@ -62,7 +84,30 @@ export interface OpenFoodFactsSeedRow {
     imageUrl?: string | null;
     imageAttribution?: string | null;
     source?: string | null;
+    // Documentary provenance string carried in the seed rows. It has NO FoodItem
+    // column, so the mapper deliberately ignores it (never writes it).
+    nutritionSource?: string | null;
 }
+
+/**
+ * The 10 nullable micronutrient columns on FoodItem, in schema order. Centralised
+ * so the mapper carries exactly this set through (each as a finite number, else
+ * null) — drift here is the one place to update if a micro is added/removed.
+ */
+export const MICRONUTRIENT_KEYS = [
+    'ironMg',
+    'magnesiumMg',
+    'calciumMg',
+    'potassiumMg',
+    'zincMg',
+    'vitaminCMg',
+    'vitaminB6Mg',
+    'vitaminB12Mcg',
+    'folateMcg',
+    'vitaminDMcg',
+] as const;
+
+export type MicronutrientKey = (typeof MICRONUTRIENT_KEYS)[number];
 
 /**
  * The exact, Prisma-writable FoodItem payload the seeder hands to
@@ -78,6 +123,18 @@ export interface FoodItemSeedData {
     fiber: number;
     sugar: number;
     sodiumMg: number;
+    // The 10 micronutrients — null when the row omits one (or carries a non-finite
+    // value). Nullable in the DB, so null is a first-class "not reported" value.
+    ironMg: number | null;
+    magnesiumMg: number | null;
+    calciumMg: number | null;
+    potassiumMg: number | null;
+    zincMg: number | null;
+    vitaminCMg: number | null;
+    vitaminB6Mg: number | null;
+    vitaminB12Mcg: number | null;
+    folateMcg: number | null;
+    vitaminDMcg: number | null;
     servingSize: string;
     isVegan: boolean;
     isGlutenFree: boolean;
@@ -104,6 +161,15 @@ function optionalNumber(v: unknown): number | null {
     return isFiniteNumber(v) ? v : null;
 }
 
+// Coerce an optional MICRONUTRIENT value. Unlike the macros above these columns
+// are NULLABLE, so "absent" maps to null (NOT 0 — null means "not reported",
+// which is the meaningful value the phase-foods ranking filters on). A present-
+// but-non-finite value (NaN, "abc") also degrades to null rather than rejecting
+// the whole row — micros are supplemental, never the headline macro.
+function optionalMicronutrient(v: unknown): number | null {
+    return isFiniteNumber(v) ? v : null;
+}
+
 /**
  * mapSeedRowToFoodItem — PURE row -> Prisma-data mapping.
  *
@@ -122,6 +188,10 @@ function optionalNumber(v: unknown): number | null {
  *   - `source` is forced to 'OPENFOODFACTS' regardless of the row's own value.
  *   - `imageUrl` + `imageAttribution` carry over verbatim (null when absent).
  *   - dietary flags pass through, defaulting to false when absent.
+ *   - the 10 micronutrients carry through (row.ironMg -> data.ironMg, etc.),
+ *     each null when the row omits it. Unknown JSON fields with no FoodItem
+ *     column — notably the documentary `nutritionSource` string — are IGNORED
+ *     (never written), since only the explicit keys below are emitted.
  */
 export function mapSeedRowToFoodItem(row: unknown): FoodItemSeedData | null {
     if (row === null || typeof row !== 'object') return null;
@@ -154,6 +224,12 @@ export function mapSeedRowToFoodItem(row: unknown): FoodItemSeedData | null {
             ? (r.category as string).trim()
             : null;
 
+    // Carry the 10 micronutrients through, each finite-number-or-null. Built from
+    // the centralised key list so the exact set stays in lockstep with the schema.
+    const micros = Object.fromEntries(
+        MICRONUTRIENT_KEYS.map((k) => [k, optionalMicronutrient(r[k])]),
+    ) as Record<MicronutrientKey, number | null>;
+
     return {
         name: r.name.trim(),
         calories: r.calories,
@@ -163,13 +239,14 @@ export function mapSeedRowToFoodItem(row: unknown): FoodItemSeedData | null {
         fiber,
         sugar,
         sodiumMg,
+        ...micros,
         servingSize: isNonEmptyString(r.servingSize) ? r.servingSize.trim() : '100g',
         isVegan: r.isVegan === true,
         isGlutenFree: r.isGlutenFree === true,
         isHalal: r.isHalal === true,
         foodGroup,
-        // Always our own source tag — never trust the row's value.
-        source: OPENFOODFACTS_SOURCE,
+        // Honor a known declared source (OFF vs USDA), else default. See resolveSource.
+        source: resolveSource(r.source),
         imageUrl: isNonEmptyString(r.imageUrl) ? r.imageUrl.trim() : null,
         imageAttribution: isNonEmptyString(r.imageAttribution)
             ? r.imageAttribution.trim()

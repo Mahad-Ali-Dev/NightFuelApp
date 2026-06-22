@@ -20,6 +20,22 @@ model FoodItem {
   fiber         Float    @default(0)
   sugar         Float    @default(0)
   sodiumMg      Float    @default(0) @map("sodium_mg")
+  // Micronutrients per serving (USDA FoodData Central, public domain). All
+  // nullable — legacy FooDB rows have none, and not every food reports every
+  // nutrient. Typed columns (not a JSON blob) so the cycle "best foods for your
+  // phase" feature can rank foods by a specific micro (e.g. orderBy ironMg desc
+  // for the menstrual phase). Units encoded in the field name (Mg = milligrams,
+  // Mcg = micrograms).
+  ironMg        Float?   @map("iron_mg")
+  magnesiumMg   Float?   @map("magnesium_mg")
+  calciumMg     Float?   @map("calcium_mg")
+  potassiumMg   Float?   @map("potassium_mg")
+  zincMg        Float?   @map("zinc_mg")
+  vitaminCMg    Float?   @map("vitamin_c_mg")
+  vitaminB6Mg   Float?   @map("vitamin_b6_mg")
+  vitaminB12Mcg Float?   @map("vitamin_b12_mcg")
+  folateMcg     Float?   @map("folate_mcg")
+  vitaminDMcg   Float?   @map("vitamin_d_mcg")
   servingSize   String   @map("serving_size")
   glycemicIndex Int?     @map("glycemic_index")
   isVegan       Boolean  @default(false) @map("is_vegan")

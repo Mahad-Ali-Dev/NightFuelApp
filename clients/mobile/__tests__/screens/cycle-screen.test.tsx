@@ -53,6 +53,13 @@ jest.mock('expo-linear-gradient', () => {
   return { LinearGradient: (props: any) => <RN.View {...props} /> };
 });
 
+// expo-image ships a native module — passthrough View so the PhaseFoodsCard food
+// tiles (rendered below the phase card) mount on the jest renderer.
+jest.mock('expo-image', () => {
+  const RN = require('react-native');
+  return { Image: (props: any) => <RN.View {...props} /> };
+});
+
 jest.mock('@/components/ui/DateTimeField', () => {
   const { Text: RNText } = require('react-native');
   return {
@@ -67,6 +74,7 @@ const mockProfile: { data: any; isLoading: boolean } = { data: undefined, isLoad
 const mockStatus: { data: any } = { data: undefined };
 const mockForecast: { data: any; isLoading: boolean; isError: boolean } = { data: undefined, isLoading: false, isError: false };
 const mockHistory: { data: any; isLoading: boolean; isError: boolean } = { data: undefined, isLoading: false, isError: false };
+const mockPhaseFoods: { data: any; isLoading: boolean; isError: boolean } = { data: undefined, isLoading: false, isError: false };
 
 jest.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
@@ -75,6 +83,7 @@ jest.mock('@tanstack/react-query', () => ({
     if (key === 'my-status') return { data: mockStatus.data, isLoading: false, refetch: jest.fn() };
     if (key === 'cycle-forecast') return { data: mockForecast.data, isLoading: mockForecast.isLoading, isError: mockForecast.isError, refetch: jest.fn() };
     if (key === 'cycle-history') return { data: mockHistory.data, isLoading: mockHistory.isLoading, isError: mockHistory.isError, refetch: jest.fn() };
+    if (key === 'phase-foods') return { data: mockPhaseFoods.data, isLoading: mockPhaseFoods.isLoading, isError: mockPhaseFoods.isError, refetch: jest.fn() };
     return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
   },
   useMutation: () => ({ mutate: jest.fn(), isPending: false }),
@@ -83,6 +92,7 @@ jest.mock('@tanstack/react-query', () => ({
 
 jest.mock('@/api/profile', () => ({ getMyProfile: jest.fn(), getStatus: jest.fn() }));
 jest.mock('@/api/cycle', () => ({ getCycleForecast: jest.fn(), getCycleHistory: jest.fn(), logPeriod: jest.fn() }));
+jest.mock('@/api/meals', () => ({ getPhaseFoods: jest.fn() }));
 
 import React from 'react';
 import { render, screen } from '@testing-library/react-native';
@@ -135,7 +145,21 @@ beforeEach(() => {
   mockHistory.data = undefined;
   mockHistory.isLoading = false;
   mockHistory.isError = false;
+  mockPhaseFoods.data = undefined;
+  mockPhaseFoods.isLoading = false;
+  mockPhaseFoods.isError = false;
 });
+
+const PHASE_FOODS = {
+  phase: 'FOLLICULAR',
+  focusNutrient: 'vitaminCMg',
+  focusLabel: 'Vitamin C',
+  rationale: 'In your follicular phase, colorful produce can complement rising energy.',
+  foods: [
+    { id: 'pf1', name: 'Bell Pepper', calories: 31, protein: 1, carbs: 6, fat: 0, servingSize: '100g', vitaminCMg: 128, imageUrl: null },
+    { id: 'pf2', name: 'Broccoli', calories: 34, protein: 3, carbs: 7, fat: 0, servingSize: '100g', vitaminCMg: 89, imageUrl: null },
+  ],
+};
 
 describe('CycleScreen (F28) — eligibility gate', () => {
   test('NON-tracking user sees no cycle UI (the feature is hidden)', () => {
@@ -162,6 +186,7 @@ describe('CycleScreen (F28) — eligibility gate', () => {
     mockStatus.data = { cyclePhase: 'FOLLICULAR' };
     mockForecast.data = FORECAST;
     mockHistory.data = HISTORY;
+    mockPhaseFoods.data = PHASE_FOODS;
     renderScreen();
 
     expect(screen.queryByTestId('cycle-not-enabled')).toBeNull();
@@ -173,8 +198,29 @@ describe('CycleScreen (F28) — eligibility gate', () => {
     expect(screen.getByText(new RegExp(`${MONTHS[M]} ${Y}`))).toBeTruthy();
     // Phase card reused.
     expect(screen.getByText('CYCLE PHASE')).toBeTruthy();
+    // NEW: best-foods-for-your-phase section is wired in below the phase card,
+    // rendering its heading + rationale + food names for the concrete phase.
+    expect(screen.getByTestId('phase-foods-card')).toBeTruthy();
+    expect(screen.getByText(/BEST FOODS FOR YOUR FOLLICULAR PHASE/i)).toBeTruthy();
+    expect(screen.getByText(PHASE_FOODS.rationale)).toBeTruthy();
+    expect(screen.getByText('Bell Pepper')).toBeTruthy();
     // Wellness disclaimer present (both the phase card note and the screen-level
     // banner carry the "not medical advice" wording).
     expect(screen.getAllByText(/not medical advice/i).length).toBeGreaterThan(0);
+  });
+
+  test('ELIGIBLE but UNKNOWN phase: the phase-foods section is hidden (no concrete focus)', () => {
+    mockProfile.data = { cycleTrackingEnabled: true, biologicalSex: 'FEMALE' };
+    mockStatus.data = { cyclePhase: 'UNKNOWN' };
+    mockForecast.data = FORECAST;
+    mockHistory.data = HISTORY;
+    mockPhaseFoods.data = PHASE_FOODS; // even if data exists, the gate hides it
+    renderScreen();
+
+    // The rest of the feature still shows…
+    expect(screen.getByText('LOG PERIOD')).toBeTruthy();
+    // …but the best-foods section is gated out for UNKNOWN.
+    expect(screen.queryByTestId('phase-foods-card')).toBeNull();
+    expect(screen.queryByText(/BEST FOODS FOR YOUR/i)).toBeNull();
   });
 });

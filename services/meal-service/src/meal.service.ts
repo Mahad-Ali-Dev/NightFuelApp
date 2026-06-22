@@ -9,6 +9,50 @@ const logger = createLogger('meal-service');
 // hung/slow plan-service from holding this request open indefinitely.
 const PLAN_FETCH_TIMEOUT_MS = 5_000;
 
+// ── Cycle "best foods for your phase" map ────────────────────────────────────
+// Each menstrual-cycle phase focuses on ONE micronutrient column on FoodItem.
+// The `focus` is the literal Prisma field name we filter/orderBy on; `label` is
+// the human nutrient name; `rationale` is a NON-PRESCRIPTIVE wellness note (no
+// medical claim). Deterministic — no randomness — so the same phase always
+// returns the same ranked foods. Keyed by the upper-cased phase name.
+export type CyclePhase = 'MENSTRUAL' | 'FOLLICULAR' | 'OVULATORY' | 'LUTEAL';
+
+export interface PhaseNutrientSpec {
+    // A nullable micronutrient column on FoodItem (e.g. 'ironMg').
+    focus: 'ironMg' | 'folateMcg' | 'zincMg' | 'magnesiumMg';
+    label: string;
+    rationale: string;
+}
+
+export const PHASE_NUTRIENT_MAP: Record<CyclePhase, PhaseNutrientSpec> = {
+    MENSTRUAL: {
+        focus: 'ironMg',
+        label: 'Iron',
+        rationale:
+            'Iron helps replenish what is lost during menstruation — pair with vitamin C for absorption.',
+    },
+    FOLLICULAR: {
+        focus: 'folateMcg',
+        label: 'Folate',
+        rationale: 'Folate supports the cell growth of the rebuilding follicular phase.',
+    },
+    OVULATORY: {
+        focus: 'zincMg',
+        label: 'Zinc',
+        rationale: 'Zinc supports hormone balance around ovulation.',
+    },
+    LUTEAL: {
+        focus: 'magnesiumMg',
+        label: 'Magnesium',
+        rationale:
+            'Magnesium may ease luteal-phase tension and supports steady energy.',
+    },
+};
+
+// phase-foods result-size bounds: default 6, clamp to 1..12.
+export const DEFAULT_PHASE_FOODS_LIMIT = 6;
+export const MAX_PHASE_FOODS_LIMIT = 12;
+
 export class MealService {
     constructor(
         private prisma: PrismaClient,
@@ -57,6 +101,19 @@ export class MealService {
                 carbs:        true,
                 fat:          true,
                 fiber:        true,
+                // Micronutrients per serving (nullable). Named explicitly so the
+                // /search response carries them to the mobile food library and
+                // the cycle "best foods for your phase" UI can show them.
+                ironMg:        true,
+                magnesiumMg:   true,
+                calciumMg:     true,
+                potassiumMg:   true,
+                zincMg:        true,
+                vitaminCMg:    true,
+                vitaminB6Mg:   true,
+                vitaminB12Mcg: true,
+                folateMcg:     true,
+                vitaminDMcg:   true,
                 servingSize:  true,
                 glycemicIndex: true,
                 isVegan:      true,
@@ -80,6 +137,57 @@ export class MealService {
         return this.prisma.foodItem.findUnique({
             where: { id },
         });
+    }
+
+    /**
+     * getPhaseFoods — deterministic "best foods for your cycle phase" suggestions.
+     *
+     * Each menstrual-cycle phase maps to ONE focus micronutrient (see
+     * PHASE_NUTRIENT_MAP). We return the foods that report the most of that
+     * nutrient: filter to rows where the focus column is non-null, order by it
+     * descending, take `limit`. Full rows are returned (image + macros + micros)
+     * so the client can render rich cards without a second fetch.
+     *
+     * NON-PRESCRIPTIVE: these are general wellness suggestions, never medical
+     * advice — the rationale strings are worded that way and make no health claim.
+     *
+     * @param phase  case-insensitive phase name; an unknown phase yields an empty
+     *               `foods` list with a clear shape (the route returns 400 for an
+     *               invalid phase, so this is defence-in-depth).
+     * @param limit  caller-clamped to 1..12 by the route; defaulted/clamped here
+     *               too so a direct service call can't pass an absurd `take`.
+     */
+    async getPhaseFoods(phase: string, limit: number = DEFAULT_PHASE_FOODS_LIMIT) {
+        const key = String(phase ?? '').trim().toUpperCase();
+        const spec = (PHASE_NUTRIENT_MAP as Record<string, PhaseNutrientSpec>)[key];
+
+        // Defensive clamp (route already clamps): keep `take` in 1..12.
+        const take = Math.min(
+            MAX_PHASE_FOODS_LIMIT,
+            Math.max(1, Math.floor(Number.isFinite(limit) ? limit : DEFAULT_PHASE_FOODS_LIMIT)),
+        );
+
+        // Unknown phase -> clearly-shaped empty result (no throw).
+        if (!spec) {
+            return { phase: key, focusNutrient: null, focusLabel: null, rationale: null, foods: [] };
+        }
+
+        logger.info({ phase: key, focusNutrient: spec.focus, take }, 'Fetching phase foods');
+
+        const foods = await this.prisma.foodItem.findMany({
+            // Only foods that actually report the focus nutrient.
+            where: { [spec.focus]: { not: null } },
+            orderBy: { [spec.focus]: 'desc' },
+            take,
+        });
+
+        return {
+            phase: key,
+            focusNutrient: spec.focus,
+            focusLabel: spec.label,
+            rationale: spec.rationale,
+            foods,
+        };
     }
 
     async listFoodGroups() {

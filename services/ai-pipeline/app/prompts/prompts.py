@@ -6,8 +6,19 @@ Your task is to take a strict circadian schedule (the Skeleton) and transform it
 
 CRITICAL RULES:
 1. SKELETON ADHERENCE: You MUST adhere to the constraints in the provided JSON Skeleton (caffeine cutoffs, insulin windows, etc.).
-2. REGIONAL FOCUS: Prioritize the user's region ('ap' for Asia-Pacific, 'eu' for Europe, 'us' for USA).
-3. STRUCTURED MEALS: Provide an 'items' array for every meal with 'name', 'amount', 'calories', 'protein', 'carbs', and 'fat'.
+2. ALLERGIES & DIETARY PREFERENCE (SAFETY — NON-NEGOTIABLE):
+   - ALLERGIES: Treat every entry in the user's `allergies` list as a HARD, ABSOLUTE exclusion. You MUST NEVER include an allergen (or any ingredient/derivative that contains it) in ANY meal, item, supplement, or alternative — no exceptions, no "small amounts", no garnishes. This is a safety constraint that OVERRIDES taste, macros, regional norms, and every other preference. If `allergies` is empty or absent, add no exclusion.
+   - dietaryPreference: Strictly honor the user's `dietaryPreference` for EVERY item:
+       * VEGAN — no animal products whatsoever (no meat, fish, dairy, eggs, honey, gelatin, whey).
+       * VEGETARIAN — no meat, poultry, or fish/seafood (dairy & eggs allowed).
+       * PESCATARIAN — no meat or poultry; fish/seafood, dairy & eggs allowed.
+       * HALAL — no pork or pork derivatives (gelatin, lard) and no alcohol; meat must be otherwise permissible.
+       * KOSHER — no pork or shellfish; do not combine meat and dairy in the same meal.
+       * KETO / LOW_CARB — keep carbohydrates minimal; favor fats and protein within the deterministic targets.
+       * ANY / NONE / absent — no dietary restriction (baseline).
+     Pick ingredients that satisfy BOTH the dietaryPreference AND the allergy exclusions simultaneously.
+3. REGIONAL FOCUS: Prioritize the user's region ('ap' for Asia-Pacific, 'eu' for Europe, 'us' for USA).
+4. STRUCTURED MEALS: Provide an 'items' array for every meal with 'name', 'amount', 'calories', 'protein', 'carbs', and 'fat'.
 
 7. REGIONAL_GUIDE (STRICT ADHERENCE):
 Adjust meal suggestions based on user.region:
@@ -130,9 +141,37 @@ You must ensure the sum of all meals matches these values within 5%:
 --------------------------------------------------------
 """
 
+    # Surface dietaryPreference + allergies as EXPLICIT, firm constraint lines (not
+    # just buried in the preferences JSON dump below) so the model reliably acts on
+    # rule 2. Allergies are SAFETY — stated as an absolute exclusion. A blank /
+    # "ANY" / "NONE" diet and an empty allergy list add NO line (baseline plan).
+    if user_preferences:
+        diet = user_preferences.get("dietaryPreference")
+        if diet and str(diet).strip().upper() not in ("ANY", "NONE"):
+            prompt += (
+                f"\n--- DIETARY PREFERENCE (STRICT) ---\n"
+                f"The user follows a {diet} diet. EVERY meal, item, supplement, and "
+                f"alternative MUST comply with it (see rule 2).\n"
+                f"-----------------------------------\n"
+            )
+
+        allergies = user_preferences.get("allergies")
+        if isinstance(allergies, (list, tuple)):
+            allergen_list = [str(a).strip() for a in allergies if str(a).strip()]
+            if allergen_list:
+                prompt += (
+                    f"\n--- ALLERGY EXCLUSIONS (SAFETY — ABSOLUTE) ---\n"
+                    f"The user is ALLERGIC to: {', '.join(allergen_list)}.\n"
+                    f"You MUST NEVER include ANY of these (or ingredients/derivatives "
+                    f"containing them) in ANY meal, item, supplement, or alternative. "
+                    f"This is a hard safety exclusion that overrides all other "
+                    f"preferences and macro targets.\n"
+                    f"----------------------------------------------\n"
+                )
+
     if skeleton:
         prompt += f"\nHere is the strict circadian skeleton for the day:\n{dumps(skeleton, indent=2)}\n"
-    
+
     if user_preferences:
         prompt += f"\nUser Preferences/Goals:\n{dumps(user_preferences, indent=2)}\n"
 

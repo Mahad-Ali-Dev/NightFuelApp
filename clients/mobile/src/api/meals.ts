@@ -13,12 +13,56 @@ export interface FoodItem {
   protein: number;
   carbs: number;
   fat: number;
+  // Optional macros some richer (USDA/FooDB-enriched) rows carry. Legacy rows
+  // omit them — render only when present.
+  fiber?: number | null;
+  sugar?: number | null;
   servingSize: string;
   servingUnit?: string;
-  imageUrl?: string;
+  imageUrl?: string | null;
+  /**
+   * Image credit string for `imageUrl`. The enriched food images are CC-BY-SA,
+   * whose license REQUIRES showing attribution wherever the image renders — so
+   * the food-detail UI must surface this whenever an image is shown.
+   */
+  imageAttribution?: string | null;
+  // ── Micronutrients (per 100g, in the unit encoded by the field suffix:
+  // `Mg` → milligrams, `Mcg` → micrograms). Any may be null for a given food;
+  // legacy FooDB rows omit all of them. Render only the non-null ones.
+  ironMg?: number | null;
+  magnesiumMg?: number | null;
+  calciumMg?: number | null;
+  potassiumMg?: number | null;
+  zincMg?: number | null;
+  vitaminCMg?: number | null;
+  vitaminB6Mg?: number | null;
+  vitaminB12Mcg?: number | null;
+  folateMcg?: number | null;
+  vitaminDMcg?: number | null;
   isVegan?: boolean;
   isGlutenFree?: boolean;
   isHalal?: boolean;
+}
+
+/**
+ * The four concrete menstrual-cycle phases the phase-foods endpoint accepts.
+ * Deliberately excludes 'UNKNOWN' — there is no nutrient focus for a phase we
+ * can't estimate, so the caller must gate on a concrete phase before calling.
+ */
+export type CyclePhaseName = 'MENSTRUAL' | 'FOLLICULAR' | 'OVULATORY' | 'LUTEAL';
+
+/**
+ * Response of GET /v1/meals/phase-foods. A curated, non-prescriptive set of
+ * foods that are naturally rich in the nutrient this phase tends to draw on,
+ * plus a wellness-worded `rationale` the UI shows verbatim. `focusNutrient` is
+ * the FoodItem micronutrient field the focus amount comes from (e.g. 'ironMg').
+ */
+export interface PhaseFoodsResponse {
+  phase: CyclePhaseName;
+  focusNutrient: keyof FoodItem;
+  focusLabel: string;
+  rationale: string;
+  foods: FoodItem[];
 }
 
 export interface Recipe {
@@ -101,6 +145,19 @@ export const getFoodById = async (id: string) => {
 
 export const listFoodGroups = async () => {
   const { data } = await apiClient.get<string[]>('/v1/meals/food-groups');
+  return data;
+};
+
+/**
+ * Best-foods-for-your-phase: a curated set of micronutrient-rich foods for a
+ * concrete menstrual-cycle phase, with a wellness-worded rationale the UI shows
+ * verbatim. Callers MUST pass a concrete phase (MENSTRUAL/FOLLICULAR/OVULATORY/
+ * LUTEAL) — there is no focus nutrient for 'UNKNOWN', so gate before calling.
+ */
+export const getPhaseFoods = async (phase: CyclePhaseName, limit?: number) => {
+  const { data } = await apiClient.get<PhaseFoodsResponse>('/v1/meals/phase-foods', {
+    params: { phase, limit },
+  });
   return data;
 };
 

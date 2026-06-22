@@ -1,8 +1,12 @@
 
 import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { MealService } from './meal.service';
+import { MealService, PHASE_NUTRIENT_MAP, DEFAULT_PHASE_FOODS_LIMIT, MAX_PHASE_FOODS_LIMIT } from './meal.service';
 import { mealSearchParamsSchema, mealSearchResponseSchema, logMealBodySchema, logMealResponseSchema, getMealLogsQuerySchema } from './schemas';
 import { z } from 'zod';
+
+// The four valid cycle phases (the keys of PHASE_NUTRIENT_MAP), upper-cased.
+// Derived from the service-side map so the route and service can never drift.
+const CYCLE_PHASES = Object.keys(PHASE_NUTRIENT_MAP) as Array<keyof typeof PHASE_NUTRIENT_MAP>;
 
 // ── Input upper bounds ──────────────────────────────────────────────────────
 // Generous caps so every currently-valid app payload still passes; only
@@ -79,6 +83,40 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
         const food = await mealService.getFoodById(id);
         if (!food) return reply.code(404).send({ error: 'Food not found' });
         return reply.send(food);
+    });
+
+    /**
+     * GET /v1/meals/phase-foods?phase=<PHASE>&limit=<n>
+     *
+     * Cycle "best foods for your phase" suggestions. PHASE is one of
+     * MENSTRUAL | FOLLICULAR | OVULATORY | LUTEAL (case-insensitive). Returns the
+     * foods richest in that phase's focus micronutrient (iron / folate / zinc /
+     * magnesium), ranked desc, as full FoodItem rows (image + macros + micros).
+     *
+     * Response: { phase, focusNutrient, focusLabel, rationale, foods: FoodItem[] }
+     *
+     * Validation matches /search: a zod querystring schema (so an unknown/invalid
+     * phase is rejected with the standard 400). `limit` defaults to 6 and is
+     * clamped to 1..12. NON-PRESCRIPTIVE — wellness suggestions, never medical advice.
+     */
+    fastify.get('/phase-foods', {
+        schema: {
+            querystring: z.object({
+                // Case-insensitive: upper-case then require a known phase. An
+                // unknown phase fails validation -> Fastify replies 400.
+                phase: z.string()
+                    .transform((s) => s.trim().toUpperCase())
+                    .pipe(z.enum(CYCLE_PHASES as [string, ...string[]])),
+                limit: z.coerce.number().int()
+                    .min(1).max(MAX_PHASE_FOODS_LIMIT)
+                    .default(DEFAULT_PHASE_FOODS_LIMIT),
+            }),
+        },
+        preHandler: [(fastify as any).authenticate]
+    }, async (request, reply) => {
+        const { phase, limit } = request.query as any;
+        const result = await mealService.getPhaseFoods(phase, limit);
+        return reply.status(200).send(result);
     });
 
     /**

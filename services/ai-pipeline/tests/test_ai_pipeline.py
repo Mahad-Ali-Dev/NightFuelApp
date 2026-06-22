@@ -369,3 +369,63 @@ def test_system_prompt_carries_per_phase_workout_type_guidance():
     assert "PR attempts" in SYSTEM_PROMPT          # ovulatory peak-intensity window
     assert "Zone-2" in SYSTEM_PROMPT               # menstrual/luteal lighter work
     assert "trainingVolumeMultiplier" in SYSTEM_PROMPT  # never overrides the deterministic cap
+
+
+# ── dietaryPreference + allergies wiring (the meal-plan safety fix) ──────────────
+# plan-service now forwards the user's dietaryPreference + allergies into the AI
+# request. These lock that (1) GoalPreferences parses `allergies`, (2) the prompt
+# surfaces the diet + allergy exclusion when present, (3) an empty/ANY diet and
+# empty allergies add NO constraint, and (4) SYSTEM_PROMPT states the rules.
+
+def test_goal_preferences_parses_allergies():
+    from app.models import GoalPreferences
+    pref = GoalPreferences(primaryGoal="MUSCLE_GAIN", dietaryPreference="VEGAN", allergies=["peanuts", "shellfish"])
+    assert pref.allergies == ["peanuts", "shellfish"]
+    assert pref.dietaryPreference == "VEGAN"
+    # Default is an empty list so users without allergies are unaffected.
+    assert GoalPreferences(primaryGoal="ENERGY").allergies == []
+
+
+def test_build_user_context_surfaces_diet_and_allergy_exclusion():
+    from app.prompts.prompts import build_user_context
+    out = build_user_context(
+        {"rules": {}},
+        {"primaryGoal": "MUSCLE_GAIN", "dietaryPreference": "VEGAN", "allergies": ["peanuts", "shellfish"]},
+        None,
+        "UNKNOWN",
+    )
+    # Diet is surfaced as an explicit STRICT line (not just buried in JSON).
+    assert "DIETARY PREFERENCE" in out
+    assert "VEGAN" in out
+    # Allergies are surfaced as an explicit ABSOLUTE safety exclusion naming each allergen.
+    assert "ALLERGY EXCLUSIONS" in out
+    assert "peanuts" in out
+    assert "shellfish" in out
+
+
+def test_build_user_context_no_constraint_for_any_diet_and_empty_allergies():
+    from app.prompts.prompts import build_user_context
+    # ANY diet + empty allergies => neither constraint block appears (baseline plan).
+    out = build_user_context(
+        {"rules": {}},
+        {"primaryGoal": "ENERGY", "dietaryPreference": "ANY", "allergies": []},
+        None,
+        "UNKNOWN",
+    )
+    assert "DIETARY PREFERENCE" not in out
+    assert "ALLERGY EXCLUSIONS" not in out
+
+    # 'NONE' (user-service's no-preference default) is likewise treated as baseline.
+    out_none = build_user_context({"rules": {}}, {"primaryGoal": "X", "dietaryPreference": "NONE"}, None, "UNKNOWN")
+    assert "DIETARY PREFERENCE" not in out_none
+    assert "ALLERGY EXCLUSIONS" not in out_none
+
+
+def test_system_prompt_states_allergy_and_diet_rules():
+    from app.prompts.prompts import SYSTEM_PROMPT
+    # Allergies are stated firmly as a hard/absolute safety exclusion.
+    assert "ALLERGIES" in SYSTEM_PROMPT
+    assert "NEVER include an allergen" in SYSTEM_PROMPT
+    # The concrete diet modes are enumerated.
+    for mode in ("VEGAN", "VEGETARIAN", "HALAL", "PESCATARIAN"):
+        assert mode in SYSTEM_PROMPT

@@ -13,6 +13,7 @@ import { shadows } from '@/theme/shadows';
 import { borderRadius } from '@/theme/spacing';
 import { Skeleton, EmptyState, CtaButton, GlassCard } from '@/components/ui';
 import { invalidateMealAndProgress } from '@/utils/invalidateMealAndProgress';
+import { getPresentMicronutrients, formatMicroAmount } from '@/lib/micronutrients';
 // Bundled Aurora dark-glass placeholder so the browse tiles never depend on an
 // external host (no 404 / rate-limit). '@/*' resolves to ./src, so the asset is
 // required by relative path (same pattern as the exercise fallbacks). The
@@ -154,6 +155,26 @@ export default function FoodEncyclopediaScreen() {
                             <ScrollView>
                                 <Text style={[typography.h1,{color:colors.text.primary,marginBottom:4}]}>{servingModal.name}</Text>
                                 <Text style={[typography.body,{color:colors.text.secondary,marginBottom:20}]}>{servingModal.servingSize} per serving</Text>
+                                {/* Food image + REQUIRED CC-BY-SA attribution. The enriched
+                                    food photos are CC-BY-SA, whose license requires showing the
+                                    credit wherever the image renders — so we only show the image
+                                    when both a URL is present (legacy FooDB rows have neither). */}
+                                {servingModal.imageUrl ? (
+                                    <View style={s.foodImgWrap} accessible accessibilityRole="image" accessibilityLabel={`Photo of ${servingModal.name}`}>
+                                        <Image
+                                            source={{ uri: servingModal.imageUrl }}
+                                            style={s.foodImg}
+                                            contentFit="cover"
+                                            cachePolicy="memory-disk"
+                                            transition={200}
+                                        />
+                                        {servingModal.imageAttribution ? (
+                                            <Text style={[typography.caption,{color:colors.text.tertiary,marginTop:6,fontSize:11}]}>
+                                                {servingModal.imageAttribution}
+                                            </Text>
+                                        ) : null}
+                                    </View>
+                                ) : null}
                                 <Text style={[typography.overline,{color:colors.text.secondary,marginBottom:8}]}>HOW MANY SERVINGS?</Text>
                                 <TextInput style={[s.numInput,{color:colors.text.primary,backgroundColor:colors.background.secondary,borderColor:colors.border.default}]} keyboardType="numeric" value={qty} onChangeText={setQty} />
                                 <Text style={[typography.overline,{color:colors.text.secondary,marginTop:20,marginBottom:8}]}>MEAL TYPE</Text>
@@ -178,8 +199,50 @@ export default function FoodEncyclopediaScreen() {
                                                 </View>
                                             ))}
                                         </View>
+                                        {/* Fiber + sugar: secondary macros only some enriched rows
+                                            carry. Scaled by serving qty like the primary macros, and
+                                            shown only when present (legacy rows omit them). */}
+                                        {(servingModal.fiber != null || servingModal.sugar != null) && (
+                                            <View style={[s.secondaryMacroRow,{borderTopColor:colors.border.default}]}>
+                                                {servingModal.fiber != null ? (
+                                                    <View style={s.secondaryMacro}>
+                                                        <Text style={[typography.caption,{color:colors.text.secondary}]}>Fiber</Text>
+                                                        <Text style={[typography.caption,{color:colors.text.primary,fontWeight:'bold'}]}>{Math.round(servingModal.fiber*parseFloat(qty||'0'))}g</Text>
+                                                    </View>
+                                                ) : null}
+                                                {servingModal.sugar != null ? (
+                                                    <View style={s.secondaryMacro}>
+                                                        <Text style={[typography.caption,{color:colors.text.secondary}]}>Sugar</Text>
+                                                        <Text style={[typography.caption,{color:colors.text.primary,fontWeight:'bold'}]}>{Math.round(servingModal.sugar*parseFloat(qty||'0'))}g</Text>
+                                                    </View>
+                                                ) : null}
+                                            </View>
+                                        )}
                                     </View>
                                 </GlassCard>
+                                {/* Micronutrients: render each PRESENT (non-null) micro as a
+                                    labeled row, with the unit derived from the field name
+                                    (Mg→mg, Mcg→mcg). Per-100g amounts shown as-is (not
+                                    serving-scaled — they're reference values). Foods with no
+                                    micros (legacy FooDB rows) render nothing extra. */}
+                                {(() => {
+                                    const micros = getPresentMicronutrients(servingModal);
+                                    if (micros.length === 0) return null;
+                                    return (
+                                        <GlassCard radius={14} style={s.sumCard} testID="micronutrients-card">
+                                            <View style={s.sumInner}>
+                                                <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold',marginBottom:4}]}>Micronutrients</Text>
+                                                <Text style={[typography.caption,{color:colors.text.tertiary,marginBottom:12}]}>Per 100g</Text>
+                                                {micros.map((m,idx)=>(
+                                                    <View key={m.key} style={[s.microRow, idx>0 && {borderTopColor:colors.border.default,borderTopWidth:StyleSheet.hairlineWidth}]}>
+                                                        <Text style={[typography.body,{color:colors.text.secondary}]}>{m.label}</Text>
+                                                        <Text style={[typography.body,{color:colors.text.primary,fontWeight:'bold'}]}>{formatMicroAmount(m,m.value)}</Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                        </GlassCard>
+                                    );
+                                })()}
                                 <CtaButton
                                     label="LOG MEAL"
                                     size="lg"
@@ -210,5 +273,10 @@ const s = StyleSheet.create({
     numInput:{height:56,paddingHorizontal:16,fontSize:20,fontWeight:'bold',borderRadius:14,borderWidth:1,marginBottom:8},
     typeBtn:{flex:1,minWidth:'45%',height:44,borderRadius:22,borderWidth:1,alignItems:'center',justifyContent:'center'},
     sumCard:{marginBottom:8}, sumInner:{padding:20},
+    foodImgWrap:{marginBottom:20},
+    foodImg:{width:'100%',height:180,borderRadius:16},
+    secondaryMacroRow:{flexDirection:'row',justifyContent:'space-around',marginTop:16,paddingTop:14,borderTopWidth:StyleSheet.hairlineWidth},
+    secondaryMacro:{flexDirection:'row',alignItems:'center',gap:6},
+    microRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingVertical:9},
     logBtnWrap:{height:60,borderRadius:30},
 });

@@ -50,6 +50,19 @@ function baseRow(overrides: Record<string, unknown> = {}) {
         imageUrl: 'https://images.openfoodfacts.org/images/products/peanut-butter.jpg',
         imageAttribution: 'Photo © Open Food Facts contributors, CC-BY-SA 3.0',
         source: 'OPENFOODFACTS',
+        // The 10 micronutrients (USDA FoodData Central). Carried through verbatim.
+        ironMg: 1.9,
+        magnesiumMg: 154,
+        calciumMg: 49,
+        potassiumMg: 564,
+        zincMg: 2.5,
+        vitaminCMg: 0,
+        vitaminB6Mg: 0.44,
+        vitaminB12Mcg: 0,
+        folateMcg: 87,
+        vitaminDMcg: 0,
+        // Documentary provenance string with NO FoodItem column — must be ignored.
+        nutritionSource: 'USDA FoodData Central (SR Legacy, public domain)',
         ...overrides,
     };
 }
@@ -66,6 +79,46 @@ describe('Open Food Facts seeder — mapSeedRowToFoodItem (pure)', () => {
         expect(data!.fiber).toBe(6);
         expect(data!.sugar).toBe(9);
         expect(data!.sodiumMg).toBe(17);
+    });
+
+    // ── (1b) Micronutrients carry through (null when absent) ─────────────────
+    it('carries the micronutrient fields through unchanged', () => {
+        const data = mapSeedRowToFoodItem(baseRow())!;
+        expect(data.ironMg).toBe(1.9);
+        expect(data.magnesiumMg).toBe(154);
+        expect(data.calciumMg).toBe(49);
+        expect(data.potassiumMg).toBe(564);
+        expect(data.zincMg).toBe(2.5);
+        expect(data.vitaminCMg).toBe(0);
+        expect(data.vitaminB6Mg).toBe(0.44);
+        expect(data.vitaminB12Mcg).toBe(0);
+        expect(data.folateMcg).toBe(87);
+        expect(data.vitaminDMcg).toBe(0);
+    });
+
+    it('nulls a micronutrient when the row omits it (not 0)', () => {
+        const data = mapSeedRowToFoodItem(
+            baseRow({ ironMg: undefined, magnesiumMg: undefined }),
+        )!;
+        // Absent micro -> null ("not reported"), distinct from a present 0.
+        expect(data.ironMg).toBeNull();
+        expect(data.magnesiumMg).toBeNull();
+        // A sibling micro that IS present still carries through.
+        expect(data.zincMg).toBe(2.5);
+    });
+
+    it('nulls a present-but-non-finite micronutrient (does not reject the row)', () => {
+        const data = mapSeedRowToFoodItem(baseRow({ ironMg: 'lots', magnesiumMg: NaN }));
+        // Garbage micros degrade to null but the row is still kept (micros are
+        // supplemental, never the headline macro that would reject a row).
+        expect(data).not.toBeNull();
+        expect(data!.ironMg).toBeNull();
+        expect(data!.magnesiumMg).toBeNull();
+    });
+
+    it('ignores the documentary nutritionSource field (no column written)', () => {
+        const data = mapSeedRowToFoodItem(baseRow()) as Record<string, unknown>;
+        expect(data).not.toHaveProperty('nutritionSource');
     });
 
     // ── (2) Image columns carry over verbatim ────────────────────────────────
@@ -124,16 +177,24 @@ describe('Open Food Facts seeder — mapSeedRowToFoodItem (pure)', () => {
         expect(data.foodGroup).toBe('Nut Butters');
     });
 
-    it('forces source to OPENFOODFACTS regardless of the row value', () => {
-        const data = mapSeedRowToFoodItem(baseRow({ source: 'CUSTOM' }))!;
-        expect(data.source).toBe(OPENFOODFACTS_SOURCE);
-        expect(data.source).toBe('OPENFOODFACTS');
+    it('honors a KNOWN declared source (USDA vs OFF) so provenance is accurate', () => {
+        expect(mapSeedRowToFoodItem(baseRow({ source: 'USDA_SR_LEGACY' }))!.source).toBe('USDA_SR_LEGACY');
+        expect(mapSeedRowToFoodItem(baseRow({ source: 'OPENFOODFACTS' }))!.source).toBe('OPENFOODFACTS');
+        expect(mapSeedRowToFoodItem(baseRow({ source: 'CUSTOM' }))!.source).toBe('CUSTOM');
+    });
+
+    it('falls back to OPENFOODFACTS for an unknown/absent source (never trusts arbitrary values)', () => {
+        expect(mapSeedRowToFoodItem(baseRow({ source: 'evil-injection' }))!.source).toBe(OPENFOODFACTS_SOURCE);
+        expect(mapSeedRowToFoodItem(baseRow({ source: undefined }))!.source).toBe('OPENFOODFACTS');
     });
 
     it('only ever emits valid FoodItem columns', () => {
         const allowed = [
             'name', 'calories', 'protein', 'carbs', 'fat', 'fiber', 'sugar',
-            'sodiumMg', 'servingSize', 'isVegan', 'isGlutenFree', 'isHalal',
+            'sodiumMg',
+            'ironMg', 'magnesiumMg', 'calciumMg', 'potassiumMg', 'zincMg',
+            'vitaminCMg', 'vitaminB6Mg', 'vitaminB12Mcg', 'folateMcg', 'vitaminDMcg',
+            'servingSize', 'isVegan', 'isGlutenFree', 'isHalal',
             'foodGroup', 'source', 'imageUrl', 'imageAttribution',
         ];
         const data = mapSeedRowToFoodItem(baseRow())!;

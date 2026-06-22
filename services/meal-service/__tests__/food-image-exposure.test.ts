@@ -54,6 +54,18 @@ function foodRow(overrides: Record<string, unknown> = {}) {
         foodGroup: 'Beverages',
         imageUrl: IMAGE_URL,
         imageAttribution: IMAGE_ATTR,
+        // Micronutrients — projected by searchFoods' explicit select, so they
+        // must reach the client on each /search result.
+        ironMg: 0.4,
+        magnesiumMg: 12,
+        calciumMg: 120,
+        potassiumMg: 39,
+        zincMg: 0.1,
+        vitaminCMg: 0,
+        vitaminB6Mg: 0,
+        vitaminB12Mcg: 1.2,
+        folateMcg: 4,
+        vitaminDMcg: 1.1,
         ...overrides,
     };
 }
@@ -62,6 +74,7 @@ function buildMockService() {
     return {
         searchFoods: jest.fn<any>().mockResolvedValue([foodRow()]),
         getFoodById: jest.fn<any>().mockResolvedValue(foodRow()),
+        getPhaseFoods: jest.fn<any>().mockResolvedValue({ phase: 'MENSTRUAL', focusNutrient: 'ironMg', focusLabel: 'Iron', rationale: '', foods: [] }),
         listFoodGroups: jest.fn<any>().mockResolvedValue([]),
         logMeal: jest.fn<any>().mockResolvedValue({}),
         getMealLogs: jest.fn<any>().mockResolvedValue([]),
@@ -123,6 +136,19 @@ describe('meal-service food image exposure', () => {
         expect(body).toHaveLength(1);
         expect(body[0]).toHaveProperty('imageUrl', IMAGE_URL);
         expect(body[0]).toHaveProperty('imageAttribution', IMAGE_ATTR);
+    });
+
+    it('GET /search carries the micronutrient fields (ironMg + magnesiumMg) on each result', async () => {
+        const res = await app.inject({
+            method: 'GET',
+            url: '/search?q=oat',
+            headers: AUTH,
+        });
+
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        expect(body[0]).toHaveProperty('ironMg', 0.4);
+        expect(body[0]).toHaveProperty('magnesiumMg', 12);
     });
 
     it('GET /food/:id returns imageUrl + imageAttribution', async () => {

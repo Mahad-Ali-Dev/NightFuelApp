@@ -37,6 +37,11 @@ class GoalPreferences(BaseModel):
     splitPreference: Optional[str] = "FULL_BODY" # "PPL", "BRO_SPLIT", "FULL_BODY"
     dietaryPreference: Optional[str] = "ANY"
     dietMode: Optional[str] = "BALANCED"
+    # Hard food exclusions (e.g. ["peanuts", "shellfish"]). SAFETY-CRITICAL: an
+    # allergen listed here must NEVER appear in any generated meal (SYSTEM_PROMPT
+    # rule 2). Empty list => no exclusion. Defaults empty so existing callers and
+    # users without allergies are unaffected.
+    allergies: Optional[List[str]] = []
     healthConditions: Optional[List[str]] = []
     region: Optional[str] = "us" # 'us', 'eu', 'ap'
     # Derived menstrual-cycle phase. UNKNOWN => no phase nudge (non-tracking users

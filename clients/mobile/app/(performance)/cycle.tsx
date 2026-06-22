@@ -11,6 +11,7 @@ import { EmptyState, Skeleton } from '@/components/ui';
 import { CyclePhaseCard } from '@/components/CyclePhaseCard';
 import { CycleCalendar } from '@/components/cycle/CycleCalendar';
 import { CycleHistoryCard } from '@/components/cycle/CycleHistoryCard';
+import { PhaseFoodsCard } from '@/components/cycle/PhaseFoodsCard';
 import { LogPeriodCard } from '@/components/cycle/LogPeriodCard';
 import { MedicalDisclaimerBanner } from '@/components/MedicalDisclaimer';
 import { getMyProfile, getStatus } from '@/api/profile';
@@ -96,6 +97,10 @@ export default function CycleScreen() {
                 <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}>
                     {/* Phase card (reused) — reads cyclePhase from status. */}
                     <CyclePhaseCard cyclePhase={(statusQuery.data as any)?.cyclePhase} />
+
+                    {/* Best foods for the user's CONCRETE phase. Self-gates: renders
+                        nothing for null / 'UNKNOWN', exactly like CyclePhaseCard. */}
+                    <PhaseFoodsCard phase={(statusQuery.data as any)?.cyclePhase} />
 
                     {/* Calendar — logged-vs-predicted + confidence-aware. */}
                     {forecastQuery.isLoading ? (
