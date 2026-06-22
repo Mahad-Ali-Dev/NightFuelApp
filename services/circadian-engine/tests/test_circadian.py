@@ -1,11 +1,14 @@
+import re
+
 from fastapi.testclient import TestClient
 from app.main import app
-from app.models import compute_mock_profile, Shift
+from app.models import compute_profile, Shift
 
 client = TestClient(app)
 
 def test_health_check():
-    response = client.get("/health")
+    # The router is mounted under /v1/circadian (app.include_router prefix).
+    response = client.get("/v1/circadian/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
@@ -31,7 +34,7 @@ def test_generate_profile_endpoint():
     assert "bodyTemperatureCurve" in data
     assert "melatoninOnset" in data
 
-def test_compute_mock_profile():
+def test_compute_profile():
     shift = Shift(
         id="test-shift-id",
         userId="test-user-id",
@@ -44,10 +47,13 @@ def test_compute_mock_profile():
         isDayOff=False
     )
     
-    profile = compute_mock_profile(shift)
+    profile = compute_profile(shift)
     
     assert profile.userId == "test-user-id"
     assert profile.shiftId == "test-shift-id"
     assert profile.date == "2026-03-01"
-    assert profile.melatoninOnset == "22:00"
+    # melatoninOnset is DERIVED from the shift's sleep window, not a fixed value.
+    # Assert it's a present, well-formed HH:MM time rather than a stale literal.
+    assert profile.melatoninOnset is not None
+    assert re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", profile.melatoninOnset)
     assert len(profile.insulinSensitivityWindows) > 0

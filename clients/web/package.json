@@ -7,7 +7,7 @@
     "dev": "set NODE_OPTIONS=--max-old-space-size=4096 && next dev --port 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "check-types": "next typegen && tsc --noEmit",
     "share": "npx ngrok http 3000"
   },

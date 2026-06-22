@@ -115,4 +115,11 @@ regexes = [
   '''REPLACE_WITH_.*''',
   # The deliberate test secret in tests/aiSafety
   '''sk-ant-abcdefghijklmnop1234567890''',
+  # Obviously-fake provider keys used as fixtures in ai-pipeline's F21 fallback
+  # tests (test_ai_pipeline.py): the literal word "real" + a run of one repeated
+  # letter — never a credential. Pinned tightly so a genuine key still trips.
+  '''sk-ant-real-[a-z]+''',
+  '''sk-real-[a-z]+''',
+  # Static fixture for the Apple IAP shared-secret env in subscription tests.
+  '''shared-secret-test-value''',
 ]

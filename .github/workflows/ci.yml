@@ -33,6 +33,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Generate the Prisma client BEFORE tests. The clients
+      # (services/*/src/generated/prisma) are gitignored, so a clean `npm ci`
+      # leaves them absent and the jest suites fail to import them. The local
+      # gate (scripts/run-backend-tests.js) already does this — replicating it
+      # here is what closes the long-standing local-green / CI-red gap.
+      - name: Generate Prisma client
+        run: |
+          if [ -f services/${{ matrix.service }}/prisma/schema.prisma ]; then
+            cd services/${{ matrix.service }} && npx prisma generate
+          fi
       - run: npm test --workspace=${{ matrix.service }} --if-present
 
   test-python:
