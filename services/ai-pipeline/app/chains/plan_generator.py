@@ -58,6 +58,11 @@ def _build_llm(provider: LLMProvider, fast: bool = True, temperature: float = 0.
             anthropic_api_key=key,
             temperature=temperature,
             max_tokens=4096,
+            # Bound a stalled provider connection so it can't hang the request
+            # indefinitely; on timeout the primary errors and .with_fallbacks()
+            # (F21) falls through to the other provider.
+            default_request_timeout=30,
+            max_retries=1,
         )
     return ChatOpenAI(
         model=OPENAI_MODEL_FAST if fast else OPENAI_MODEL,
@@ -65,6 +70,11 @@ def _build_llm(provider: LLMProvider, fast: bool = True, temperature: float = 0.
         base_url=OPENAI_BASE_URL,  # None → OpenAI cloud; set → local/alt OpenAI-compatible server
         temperature=temperature,
         max_tokens=4096,
+        # Bound a stalled provider connection so it can't hang the request
+        # indefinitely; on timeout the primary errors and .with_fallbacks()
+        # (F21) falls through to the other provider.
+        request_timeout=30,
+        max_retries=1,
     )
 
 

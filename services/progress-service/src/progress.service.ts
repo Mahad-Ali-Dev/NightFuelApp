@@ -10,6 +10,7 @@ import {
 } from '@nightfuel/types';
 import { createLogger } from '@nightfuel/config';
 import { AdaptiveGoalOptimizer } from './utils/optimizer';
+import CircuitBreaker from 'opossum';
 
 const logger = createLogger('progress-service');
 
@@ -21,11 +22,40 @@ const logger = createLogger('progress-service');
 const ADHERENCE_CALORIE_THRESHOLD = 0.8;
 
 export class ProgressService {
+    /**
+     * HIGH #3: circuit breaker guarding the weekly-audit AI call.
+     *
+     * generateWeeklyAudit() is invoked synchronously from the user-facing
+     * POST /v1/progress/weekly-audit and hits ai-pipeline's *heaviest* (slow
+     * quality-model) LLM endpoint. Previously this was a bare fetch() with no
+     * timeout/breaker/retry, so an ai-pipeline brownout pinned Fastify workers
+     * until the socket eventually died. We wrap the call in opossum — mirroring
+     * plan-service's breaker (30s timeout, 50% error threshold, 30s reset) — so
+     * a provider brownout sheds load fast (open breaker => instant fallback)
+     * instead of hanging. The per-call AbortSignal.timeout inside
+     * makeWeeklyAuditRequest is the inner bound; the breaker timeout is the
+     * outer one.
+     */
+    private aiBreaker: CircuitBreaker;
+
     constructor(
         private prisma: PrismaClient,
         private eventBus: EventBus,
         private config: { USER_SERVICE_URL: string, AI_PIPELINE_URL?: string, INTERNAL_SERVICE_TOKEN?: string }
-    ) { }
+    ) {
+        const breakerOptions = {
+            timeout: 30000,           // 30s — the slow quality-model audit call
+            errorThresholdPercentage: 50,
+            resetTimeout: 30000
+        };
+        this.aiBreaker = new CircuitBreaker(this.makeWeeklyAuditRequest.bind(this), breakerOptions);
+        // When the breaker is open (or a call times out) we fail fast: throwing
+        // here surfaces to generateWeeklyAudit's catch, which logs and rethrows,
+        // and the route returns the existing friendly 500 instead of hanging.
+        this.aiBreaker.fallback(() => {
+            throw new Error('AI Pipeline is currently unavailable (Circuit Breaker Tripped)');
+        });
+    }
 
     // ---------------------------------------------------------------------------
     // Internal helpers
@@ -852,6 +882,37 @@ export class ProgressService {
     }
 
     /**
+     * The raw HTTP call to ai-pipeline's weekly-audit endpoint, factored out so
+     * the opossum breaker (this.aiBreaker) can wrap it. AbortSignal.timeout(30s)
+     * bounds a single attempt so a stalled provider can't hold a Fastify worker;
+     * the breaker's matching 30s timeout + 50%/30s open policy sheds load across
+     * calls. Throws on non-2xx / timeout so the breaker records the failure.
+     */
+    private async makeWeeklyAuditRequest(userId: string, body: any): Promise<Record<string, any>> {
+        const aiBaseUrl = (this as any).config.AI_PIPELINE_URL || 'http://localhost:8000';
+        const response = await fetch(`${aiBaseUrl}/v1/ai/weekly-audit?userId=${userId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // F22 #8: authorize this server-to-server call to ai-pipeline.
+                'X-Internal-Token': (this as any).config.INTERNAL_SERVICE_TOKEN ?? '',
+            },
+            body: JSON.stringify(body),
+            // HIGH #3: bound a single attempt so an ai-pipeline brownout can't
+            // hang this worker; the breaker's timeout is the outer guard.
+            signal: AbortSignal.timeout(30000),
+        });
+
+        if (!response.ok) {
+            const text = await response.text();
+            logger.error({ userId, status: response.status, text }, 'AI pipeline audit failed');
+            throw new Error('AI pipeline failed to generate audit');
+        }
+
+        return (await response.json()) as Record<string, any>;
+    }
+
+    /**
      * generateWeeklyAudit
      * Fetches historical data and preferences, calls the AI pipeline for a summary.
      */
@@ -876,31 +937,16 @@ export class ProgressService {
         const stats = await this.getStats(userId, 7);
         const { chartData } = await this.getWeeklyStats(userId);
 
-        // 3. Call AI Pipeline
+        // 3. Call AI Pipeline (through the circuit breaker — HIGH #3).
         try {
-            const aiBaseUrl = (this as any).config.AI_PIPELINE_URL || 'http://localhost:8000';
-            const response = await fetch(`${aiBaseUrl}/v1/ai/weekly-audit?userId=${userId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    // F22 #8: authorize this server-to-server call to ai-pipeline.
-                    'X-Internal-Token': (this as any).config.INTERNAL_SERVICE_TOKEN ?? '',
-                },
-                body: JSON.stringify({
-                    userId,
-                    stats,
-                    history: chartData,
-                    preferences
-                })
-            });
-
-            if (!response.ok) {
-                const text = await response.text();
-                logger.error({ userId, status: response.status, text }, 'AI pipeline audit failed');
-                throw new Error('AI pipeline failed to generate audit');
-            }
-
-            const audit = await response.json() as Record<string, any>;
+            // breaker.fire applies the 30s timeout + open-circuit fast-fail; on a
+            // brownout it rejects immediately via the fallback instead of hanging.
+            const audit = await this.aiBreaker.fire(userId, {
+                userId,
+                stats,
+                history: chartData,
+                preferences
+            }) as Record<string, any>;
 
             // Generate a date range string for UI
             const today = new Date();

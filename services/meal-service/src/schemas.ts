@@ -47,7 +47,15 @@ export const logMealBodySchema = z.object({
     // originating plan-meal id so the service can persist/echo it. Additive —
     // existing callers that omit it are unaffected. Bounded to keep an absurd
     // string out of the foodItems JSON it gets stamped onto.
-    planMealId: z.string().max(200).optional()
+    planMealId: z.string().max(200).optional(),
+    // Optional client-supplied idempotency key (HIGH #6). When the client retries
+    // / double-taps the log button it re-sends the SAME key, and the service
+    // collapses the retry onto the existing row (one DB row, one meal-logged
+    // event) instead of double-logging. Additive — callers that omit it get a
+    // normal distinct log every time. Also accepted via the `Idempotency-Key`
+    // request header (the route prefers the body field, then the header).
+    // Bounded so an absurd string can't reach the DB column / unique index.
+    idempotencyKey: z.string().min(1).max(200).optional()
 });
 
 export const logMealResponseSchema = z.object({

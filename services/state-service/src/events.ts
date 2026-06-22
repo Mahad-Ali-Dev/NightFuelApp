@@ -128,34 +128,69 @@ function safeParseEvent<T>(schema: z.ZodType<T>, channel: string, event: unknown
     return result.data;
 }
 
+// Consumer-group name for ALL state-service durable subscriptions. Keeping it a
+// single shared group means a state-service restart REPLAYS every stream entry
+// unread by this group (xreadgroup backfills the PEL + new entries) — Pub/Sub's
+// at-most-once delivery (subscribe) would have permanently LOST any event
+// produced while the service was down/reconnecting, silently corrupting the
+// read-model twin. The bus dual-writes every publish to a durable Redis Stream,
+// so the entries are there to replay.
+const STATE_SERVICE_GROUP = 'state-service';
+
 export async function setupEventSubscribers(eventBus: EventBus, materializer: StateMaterializer) {
-    eventBus.subscribe(Channels.Meal.MealLogged, async (event: any) => {
-        const valid = safeParseEvent(mealLoggedSchema, Channels.Meal.MealLogged, event);
-        if (!valid) return;
-        await materializer.handleMealLogged(valid as any);
+    // All handlers now consume via subscribeDurable (xreadgroup + XACK + PEL)
+    // instead of subscribe (Redis Pub/Sub, at-most-once). subscribeDurable is
+    // at-least-once and the bus's processed-marker (nf:processed:<group>:<eventId>,
+    // set after handler success, before XACK) makes redelivery idempotent — so a
+    // handler throw or a restart with an unacked entry re-runs the handler at
+    // most once and never double-applies the stepwise fatigue / adherence folds.
+    eventBus.subscribeDurable<any>({
+        stream: Channels.Meal.MealLogged,
+        group: STATE_SERVICE_GROUP,
+        handler: async (event: any) => {
+            const valid = safeParseEvent(mealLoggedSchema, Channels.Meal.MealLogged, event);
+            if (!valid) return;
+            await materializer.handleMealLogged(valid as any);
+        },
     });
 
-    eventBus.subscribe(Channels.Sleep.SessionLogged, async (event: any) => {
-        const valid = safeParseEvent(sleepLoggedSchema, Channels.Sleep.SessionLogged, event);
-        if (!valid) return;
-        await materializer.handleSleepLogged(valid as any);
+    eventBus.subscribeDurable<any>({
+        stream: Channels.Sleep.SessionLogged,
+        group: STATE_SERVICE_GROUP,
+        handler: async (event: any) => {
+            const valid = safeParseEvent(sleepLoggedSchema, Channels.Sleep.SessionLogged, event);
+            if (!valid) return;
+            await materializer.handleSleepLogged(valid as any);
+        },
     });
 
-    eventBus.subscribe(Channels.Progress.MetricsLogged, async (event: any) => {
-        const valid = safeParseEvent(metricsLoggedSchema, Channels.Progress.MetricsLogged, event);
-        if (!valid) return;
-        await materializer.handleMetricsLogged(valid as any);
+    eventBus.subscribeDurable<any>({
+        stream: Channels.Progress.MetricsLogged,
+        group: STATE_SERVICE_GROUP,
+        handler: async (event: any) => {
+            const valid = safeParseEvent(metricsLoggedSchema, Channels.Progress.MetricsLogged, event);
+            if (!valid) return;
+            await materializer.handleMetricsLogged(valid as any);
+        },
     });
 
-    eventBus.subscribe(Channels.Plan.PlanGenerated, async (event: any) => {
-        const valid = safeParseEvent(planGeneratedSchema, Channels.Plan.PlanGenerated, event);
-        if (!valid) return;
-        await materializer.handlePlanGenerated(valid as any);
+    eventBus.subscribeDurable<any>({
+        stream: Channels.Plan.PlanGenerated,
+        group: STATE_SERVICE_GROUP,
+        handler: async (event: any) => {
+            const valid = safeParseEvent(planGeneratedSchema, Channels.Plan.PlanGenerated, event);
+            if (!valid) return;
+            await materializer.handlePlanGenerated(valid as any);
+        },
     });
 
-    eventBus.subscribe(Channels.Progress.CycleAdvanced, async (event: any) => {
-        const valid = safeParseEvent(cycleAdvancedSchema, Channels.Progress.CycleAdvanced, event);
-        if (!valid) return;
-        await materializer.handleCycleAdvanced(valid as any);
+    eventBus.subscribeDurable<any>({
+        stream: Channels.Progress.CycleAdvanced,
+        group: STATE_SERVICE_GROUP,
+        handler: async (event: any) => {
+            const valid = safeParseEvent(cycleAdvancedSchema, Channels.Progress.CycleAdvanced, event);
+            if (!valid) return;
+            await materializer.handleCycleAdvanced(valid as any);
+        },
     });
 }

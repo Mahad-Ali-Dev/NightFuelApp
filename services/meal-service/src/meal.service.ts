@@ -4,6 +4,11 @@ import { createLogger } from '@nightfuel/config';
 
 const logger = createLogger('meal-service');
 
+// MEDIUM #10: upper bound for the cross-service plan-service fetch in
+// generateGroceryList. Generous enough for a healthy internal call, but stops a
+// hung/slow plan-service from holding this request open indefinitely.
+const PLAN_FETCH_TIMEOUT_MS = 5_000;
+
 export class MealService {
     constructor(
         private prisma: PrismaClient,
@@ -89,9 +94,33 @@ export class MealService {
      *   is persisted on the MealLog's `foodItems` JSON (no DB column / migration
      *   is added) and echoed back on the returned object + the published event
      *   payload so consumers can correlate the log with its plan item.
+     *
+     * @param idempotencyKey  OPTIONAL client-supplied idempotency key (HIGH #6).
+     *   Additive 5th argument. When provided, a retry / double-tap that re-sends
+     *   the SAME key for the SAME user is DEDUPED: the existing row is returned
+     *   verbatim WITHOUT inserting a second meal_logs row and WITHOUT re-publishing
+     *   meal-logged (so a double-tap never double-counts in progress/state). The
+     *   key is scoped per user via the @@unique([userId, idempotencyKey])
+     *   constraint. When omitted (NULL key) every call is a normal DISTINCT log —
+     *   Postgres treats NULL keys as distinct, so keyless logging is unaffected.
      */
-    async logMeal(userId: string, mealType: any, foodItems: any[], planMealId?: string) {
-        logger.info(`Logging meal for user: ${userId}, type: ${mealType}${planMealId ? `, planMealId: ${planMealId}` : ''}`);
+    async logMeal(userId: string, mealType: any, foodItems: any[], planMealId?: string, idempotencyKey?: string) {
+        logger.info(`Logging meal for user: ${userId}, type: ${mealType}${planMealId ? `, planMealId: ${planMealId}` : ''}${idempotencyKey ? `, idempotencyKey: ${idempotencyKey}` : ''}`);
+
+        // IDEMPOTENCY fast-path: if this user already has a row for this key, the
+        // POST is a retry/double-tap — return the existing row and DO NOT insert
+        // or re-publish. (The unique constraint below is the authoritative guard
+        // against the concurrent-race window; this read just avoids the throw on
+        // the common sequential-retry case.)
+        if (idempotencyKey) {
+            const existing = await (this.prisma.mealLog as any).findFirst({
+                where: { userId, idempotencyKey },
+            });
+            if (existing) {
+                logger.info(`Idempotent replay — returning existing meal log: ${existing.id}`);
+                return planMealId ? { ...existing, planMealId } : existing;
+            }
+        }
 
         let totalCalories = 0;
         let totalProtein = 0;
@@ -118,18 +147,39 @@ export class MealService {
             ? { items: foodItems, _planMealId: planMealId }
             : foodItems;
 
-        const mealLog = await this.prisma.mealLog.create({
-            data: {
-                userId,
-                mealType,
-                foodItems: storedFoodItems,
-                totalCalories,
-                totalProtein,
-                totalCarbs,
-                totalFat,
-                isAdherent
+        let mealLog;
+        try {
+            mealLog = await this.prisma.mealLog.create({
+                data: {
+                    userId,
+                    mealType,
+                    foodItems: storedFoodItems,
+                    totalCalories,
+                    totalProtein,
+                    totalCarbs,
+                    totalFat,
+                    isAdherent,
+                    // NULL for keyless logs; Postgres treats NULL keys as distinct
+                    // so this never trips the @@unique([userId, idempotencyKey]).
+                    ...(idempotencyKey ? { idempotencyKey } : {}),
+                } as any
+            });
+        } catch (err: any) {
+            // CONCURRENT-RETRY race: two in-flight requests carrying the SAME key
+            // for the same user. The unique constraint lets exactly ONE insert win;
+            // the loser hits P2002. Treat it as the idempotent replay — fetch and
+            // return the row the winner created, and DO NOT publish a second event.
+            if (idempotencyKey && err?.code === 'P2002') {
+                const winner = await (this.prisma.mealLog as any).findFirst({
+                    where: { userId, idempotencyKey },
+                });
+                if (winner) {
+                    logger.info(`Idempotent replay (race) — returning existing meal log: ${winner.id}`);
+                    return planMealId ? { ...winner, planMealId } : winner;
+                }
             }
-        });
+            throw err;
+        }
 
         // Publish Event
         await this.eventBus.publish('nightfuel:meal:meal-logged', {
@@ -203,9 +253,15 @@ export class MealService {
             const cleanDate = date ? date.split('T')[0] : new Date().toISOString().split('T')[0];
             const url = `${this.config.PLAN_SERVICE_URL}/v1/plans/internal/active/${userId}?date=${cleanDate}`;
 
+            // MEDIUM #10: bound the cross-service call. Without a timeout a hung /
+            // slow plan-service would hang this request (and its connection) until
+            // an OS-level socket timeout. AbortSignal.timeout fires an AbortError
+            // after PLAN_FETCH_TIMEOUT_MS; the surrounding try/catch re-throws the
+            // friendly business error (and the route redacts it to a 400).
             const res = await fetch(url, {
                 // F34 #5: plan-service /internal/* now requires the shared token.
                 headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+                signal: AbortSignal.timeout(PLAN_FETCH_TIMEOUT_MS),
             });
             if (!res.ok) {
                 const errorData = await res.json().catch(() => ({}) as any);

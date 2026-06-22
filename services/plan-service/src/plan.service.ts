@@ -208,7 +208,12 @@ export class PlanService {
             // 1. Fetch user state from state-service
             (async () => {
                 try {
-                    const stateRes = await fetch(`${this.config.STATE_SERVICE_URL}/v1/state/${userId}`);
+                    const stateRes = await fetch(`${this.config.STATE_SERVICE_URL}/v1/state/${userId}`, {
+                        // HIGH #4: bound this context fetch so a stalled state-service
+                        // can't hang plan generation forever — a timeout aborts the
+                        // request and degrades via the catch below (defaults).
+                        signal: AbortSignal.timeout(5000),
+                    });
                     if (stateRes.ok) {
                         userState = await stateRes.json();
                         logger.info({ userId }, 'Fetched user state for decision engine');
@@ -224,6 +229,9 @@ export class PlanService {
                     const prefRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`, {
                         // F34 #5: user-service /internal/* now requires the shared token.
                         headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+                        // HIGH #4: bound this context fetch so a stalled user-service
+                        // can't hang plan generation forever (degrades via catch below).
+                        signal: AbortSignal.timeout(5000),
                     });
                     if (prefRes.ok) {
                         preferences = await prefRes.json();
@@ -240,6 +248,9 @@ export class PlanService {
                     const statusRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/status/${userId}`, {
                         // F34 #5: user-service /internal/* now requires the shared token.
                         headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+                        // HIGH #4: bound this context fetch so a stalled user-service
+                        // can't hang plan generation forever (degrades to UNKNOWN below).
+                        signal: AbortSignal.timeout(5000),
                     });
                     if (statusRes.ok) {
                         const status = await statusRes.json() as any;
@@ -256,7 +267,11 @@ export class PlanService {
             // 3. Fetch Meal Context
             (async () => {
                 try {
-                    const mealRes = await fetch(`${this.config.MEAL_SERVICE_URL}/v1/meals/${userId}?date=${date}`);
+                    const mealRes = await fetch(`${this.config.MEAL_SERVICE_URL}/v1/meals/${userId}?date=${date}`, {
+                        // HIGH #4: bound this context fetch so a stalled meal-service
+                        // can't hang plan generation forever (degrades via catch below).
+                        signal: AbortSignal.timeout(5000),
+                    });
                     if (mealRes.ok) {
                         mealContext = await mealRes.json() as any[];
                         logger.debug({ userId }, 'Fetched meal context for AI');
@@ -270,7 +285,11 @@ export class PlanService {
             (async () => {
                 try {
                     // Fetch recent workouts (limit 5 for context)
-                    const exerciseRes = await fetch(`${this.config.EXERCISE_SERVICE_URL}/v1/workouts/${userId}?limit=5`);
+                    const exerciseRes = await fetch(`${this.config.EXERCISE_SERVICE_URL}/v1/workouts/${userId}?limit=5`, {
+                        // HIGH #4: bound this context fetch so a stalled exercise-service
+                        // can't hang plan generation forever (degrades via catch below).
+                        signal: AbortSignal.timeout(5000),
+                    });
                     if (exerciseRes.ok) {
                         exerciseContext = await exerciseRes.json() as any[];
                         logger.debug({ userId }, 'Fetched exercise context for AI');
@@ -309,6 +328,10 @@ export class PlanService {
                 const decisionRes = await fetch(`${this.config.DECISION_ENGINE_URL}/v1/decision/compute-params`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    // MEDIUM #9: bound this hot-path call so a stalled decision-engine
+                    // can't hang plan generation — a timeout degrades via the catch
+                    // below to the safe-default planParams.
+                    signal: AbortSignal.timeout(5000),
                     body: JSON.stringify({
                         userState: {
                             ...(userState ?? {

@@ -31,28 +31,33 @@ export class PlanWorker {
             const users = await this.fetchAllUsersPaged();
 
             for (const user of users) {
-                // 2. Check if it's 04:00 in user's timezone
-                const userLocalTime = new Intl.DateTimeFormat('en-US', {
-                    timeZone: user.timezone,
-                    hour: 'numeric',
-                    minute: 'numeric',
-                    hour12: false
-                }).format(new Date());
+                // MEDIUM #13: the timezone formatting AND the regeneration trigger
+                // both run inside this per-user try/catch. new Intl.DateTimeFormat
+                // throws a RangeError on an invalid user.timezone — keeping it inside
+                // the catch means a single bad timezone skips ONLY that user instead
+                // of throwing out of the loop and aborting the whole daily sweep.
+                try {
+                    // 2. Check if it's 04:00 in user's timezone
+                    const userLocalTime = new Intl.DateTimeFormat('en-US', {
+                        timeZone: user.timezone,
+                        hour: 'numeric',
+                        minute: 'numeric',
+                        hour12: false
+                    }).format(new Date());
 
-                if (userLocalTime === '04:00') {
-                    logger.info({ userId: user.userId }, 'Triggering daily regeneration for user');
+                    if (userLocalTime === '04:00') {
+                        logger.info({ userId: user.userId }, 'Triggering daily regeneration for user');
 
-                    // Trigger regeneration for "tomorrow" or "today" depending on policy
-                    // Here we trigger for the current date (which just started at 04:00)
-                    const dateStr = new Date().toISOString().split('T')[0];
+                        // Trigger regeneration for "tomorrow" or "today" depending on policy
+                        // Here we trigger for the current date (which just started at 04:00)
+                        const dateStr = new Date().toISOString().split('T')[0];
 
-                    // We need a dummy profileData or fetch it from circadian-engine
-                    // For now, we'll assume the service can handle missing profileData or uses defaults
-                    try {
+                        // We need a dummy profileData or fetch it from circadian-engine
+                        // For now, we'll assume the service can handle missing profileData or uses defaults
                         await this.planService.generateAndStorePlan({}, user.userId, dateStr);
-                    } catch (err) {
-                        logger.error({ userId: user.userId, err }, 'Failed to regenerate plan for user');
                     }
+                } catch (err) {
+                    logger.error({ userId: user.userId, err }, 'Failed to regenerate plan for user');
                 }
             }
         } catch (err) {
@@ -80,6 +85,10 @@ export class PlanWorker {
             const usersRes = await fetch(url.toString(), {
                 // F34 #5: user-service /internal/* requires the shared token.
                 headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+                // LOW #14: bound the user-list fetch so a stalled user-service can't
+                // hang this 60s-interval sweep indefinitely; a timeout rejects and is
+                // handled by checkAndRegenerate's outer try/catch.
+                signal: AbortSignal.timeout(5000),
             });
             if (!usersRes.ok) throw new Error('Failed to fetch users from user-service');
 

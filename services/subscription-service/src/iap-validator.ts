@@ -270,14 +270,40 @@ export async function validateGoogleReceipt(
 // Shared
 // ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Hard ceiling for an IAP verify HTTP round-trip. Receipt validation runs on
+ * the SYNCHRONOUS purchase-verification route, so a hung App Store endpoint
+ * (DNS black-hole, TLS stall, no response) would otherwise pin the request
+ * indefinitely. We abort after this and let the error propagate — the route's
+ * catch surfaces the validation-failure path, so a timeout fails CLOSED (the
+ * tier is never granted) rather than hanging or silently upgrading. Covers
+ * both the Apple production and sandbox-retry calls (the only postJson users;
+ * Google validation is a stub that never reaches the network — see
+ * validateGoogleReceipt — but if it is wired up it MUST route through here).
+ */
+const IAP_HTTP_TIMEOUT_MS = 10_000;
+
 async function postJson(url: string, body: string): Promise<AppleVerifyResponse> {
   // Node 22+ has fetch as a global. Subscribers to subscription-service
   // are running on Node 22 LTS per the monorepo engines field.
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      // Abort a stalled App Store endpoint instead of pinning the request.
+      // On timeout fetch rejects with an AbortError, which propagates to the
+      // route's catch → validation fails closed (no tier granted).
+      signal: AbortSignal.timeout(IAP_HTTP_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      log.error({ url, timeoutMs: IAP_HTTP_TIMEOUT_MS }, 'IAP HTTP request timed out');
+      throw new Error(`IAP HTTP timeout after ${IAP_HTTP_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  }
   if (!res.ok) {
     log.error({ url, status: res.status }, 'IAP HTTP request failed');
     throw new Error(`IAP HTTP ${res.status}`);

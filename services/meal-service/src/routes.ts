@@ -102,11 +102,21 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const userId = (request.user as any).id || (request.user as any).userId;
-        const { mealType, foodItems, planMealId } = request.body;
+        const { mealType, foodItems, planMealId, idempotencyKey } = request.body;
+
+        // Idempotency key (HIGH #6): prefer the validated body field, then fall
+        // back to the standard `Idempotency-Key` request header so clients can
+        // supply it either way. A retry/double-tap re-sending the same key for
+        // the same user is deduped by the service onto the existing row.
+        const headerKey = request.headers['idempotency-key'];
+        const idemKey = idempotencyKey
+            ?? (typeof headerKey === 'string' && headerKey.length > 0 && headerKey.length <= 200
+                ? headerKey
+                : undefined);
 
         // planMealId is optional (validated by logMealBodySchema); when present
         // it links this log to the planned protocol slot it was logged from.
-        const mealLog = await mealService.logMeal(userId, mealType, foodItems, planMealId);
+        const mealLog = await mealService.logMeal(userId, mealType, foodItems, planMealId, idemKey);
         return reply.status(201).send(mealLog as any);
     });
 

@@ -47,9 +47,17 @@ model MealLog {
   totalCarbs    Float    @map("total_carbs")
   totalFat      Float    @map("total_fat")
   isAdherent    Boolean  @map("is_adherent")
+  // Optional client-supplied idempotency key. When present, a retry / double-tap
+  // that re-POSTs the SAME key for the SAME user collapses onto the existing row
+  // (one DB row, one published meal-logged event) instead of double-logging.
+  // Nullable so existing ad-hoc logs (and every legacy row) keep a NULL key —
+  // Postgres treats NULLs as distinct, so the partial unique index below never
+  // collides for keyless logs and normal distinct logging is unaffected.
+  idempotencyKey String? @map("idempotency_key")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  @@unique([userId, idempotencyKey], name: "meal_logs_user_idempotency_key")
   @@index([userId, loggedAt(sort: Desc)])
   @@map("meal_logs")
 }

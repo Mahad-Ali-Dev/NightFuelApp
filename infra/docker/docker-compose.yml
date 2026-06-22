@@ -42,23 +42,43 @@ services:
     # Front this with the host nginx (subdomain -> localhost:8080) for HTTPS.
     ports:
       - "8080:80"
+    # MEDIUM #12: gate nginx on upstream health, not mere container start.
+    # Without service_healthy, nginx could come up before the app processes are
+    # listening and start returning 502s. Each app service below carries a
+    # /health healthcheck, so wait until they actually serve traffic.
     depends_on:
-      - auth-service
-      - user-service
-      - shift-service
-      - circadian-engine
-      - ai-pipeline
-      - plan-service
-      - meal-service
-      - progress-service
-      - exercise-service
-      - sleep-service
-      - notification-service
-      - subscription-service
-      - community-service
-      - chat-service
-      - state-service
-      - decision-engine
+      auth-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      shift-service:
+        condition: service_healthy
+      circadian-engine:
+        condition: service_healthy
+      ai-pipeline:
+        condition: service_healthy
+      plan-service:
+        condition: service_healthy
+      meal-service:
+        condition: service_healthy
+      progress-service:
+        condition: service_healthy
+      exercise-service:
+        condition: service_healthy
+      sleep-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      subscription-service:
+        condition: service_healthy
+      community-service:
+        condition: service_healthy
+      chat-service:
+        condition: service_healthy
+      state-service:
+        condition: service_healthy
+      decision-engine:
+        condition: service_healthy
     restart: unless-stopped
 
   auth-service:
@@ -82,6 +102,14 @@ services:
       # Shared INTERNAL_SERVICE_TOKEN across services; guard fails closed if empty.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    # MEDIUM #12: node:alpine has no curl/wget, so probe /health via a node
+    # one-liner (exit 0 only on HTTP 200). Lets nginx wait for service_healthy.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -106,6 +134,12 @@ services:
       # (X-Internal-Token). Same INTERNAL_SERVICE_TOKEN value shared across services.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3002/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,6 +157,14 @@ services:
     environment:
       REDIS_URL: redis://redis:6379
       PORT: 3003
+    # MEDIUM #12: python:slim has no curl/wget; probe /v1/circadian/health
+    # (its router prefix) via urllib so nginx can wait for service_healthy.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:3003/v1/circadian/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       redis:
         condition: service_healthy
@@ -155,6 +197,14 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-}
       OPENAI_MODEL_FAST: ${OPENAI_MODEL_FAST:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+    # MEDIUM #12: python:slim has no curl/wget; probe /v1/ai/health (its router
+    # prefix) via urllib so nginx can wait for service_healthy.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:3004/v1/ai/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       redis:
         condition: service_healthy
@@ -186,6 +236,12 @@ services:
       # F22 #8: shared token authorizing the server-to-server call to ai-pipeline.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3005/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -215,6 +271,12 @@ services:
       # /v1/plans/internal/active/:userId (now guarded in-service).
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3006/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -241,6 +303,12 @@ services:
       # (chat/plan/progress) send the same value.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3009/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -267,6 +335,12 @@ services:
       # F22 #8: shared token authorizing the server-to-server call to ai-pipeline.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3007/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -296,6 +370,12 @@ services:
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@nightfuel.app}
       EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3008/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -321,6 +401,12 @@ services:
       # F22 #8: shared token authorizing the server-to-server call to ai-pipeline.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3011/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -346,6 +432,12 @@ services:
       # (erases sleep_sessions + health_samples). Fails closed if empty.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3012/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -378,6 +470,12 @@ services:
       # production. Set to true only in non-prod test environments.
       IAP_ALLOW_SANDBOX: ${IAP_ALLOW_SANDBOX:-false}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3010/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -405,6 +503,12 @@ services:
       # INTERNAL_SERVICE_TOKEN value shared across services.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3013/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -430,6 +534,12 @@ services:
       # F22 #8: shared token authorizing the server-to-server call to ai-pipeline.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3014/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -455,6 +565,12 @@ services:
       # (erases derived user_state). Fails closed if empty.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3015/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -477,6 +593,12 @@ services:
       DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_state?schema=public
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3016/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       redis:
         condition: service_healthy

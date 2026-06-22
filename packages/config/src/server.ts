@@ -19,15 +19,41 @@ export function bootstrapCluster(options: BootstrapOptions) {
     if (isClusteringEnabled && cluster.isPrimary) {
         logger.info({ serviceName, numCPUs }, `Primary process ${process.pid} is starting cluster`);
 
+        // MEDIUM #11: during graceful shutdown we tell workers to die; without
+        // this flag the 'exit' handler below would immediately re-fork them, so
+        // the cluster never drains and shutdown hangs (zombie workers). Once a
+        // shutdown signal arrives we stop forking and let workers exit.
+        let shuttingDown = false;
+
         // Fork workers
         for (let i = 0; i < numCPUs; i++) {
             cluster.fork();
         }
 
         cluster.on('exit', (worker, code, signal) => {
+            // While running, an unexpected worker death should be replaced
+            // (crash-restart). During shutdown, do NOT re-fork.
+            if (shuttingDown) {
+                logger.info({ pid: worker.process.pid, code, signal }, 'Worker exited during shutdown');
+                return;
+            }
             logger.warn({ pid: worker.process.pid, code, signal }, 'Worker process died. Forking replacement...');
             cluster.fork();
         });
+
+        const onShutdownSignal = (signal: NodeJS.Signals) => {
+            if (shuttingDown) return;
+            shuttingDown = true;
+            logger.info({ serviceName, signal }, 'Primary received shutdown signal — stopping cluster');
+            // Stop accepting new forks and ask each worker to exit. Workers run
+            // their own SIGTERM/SIGINT handlers (graceful HTTP close); the
+            // 'exit' handler above no longer re-forks them.
+            for (const worker of Object.values(cluster.workers ?? {})) {
+                worker?.kill(signal);
+            }
+        };
+        process.on('SIGTERM', () => onShutdownSignal('SIGTERM'));
+        process.on('SIGINT', () => onShutdownSignal('SIGINT'));
     } else {
         // Simple start (either worker or non-clustered)
         startServer().catch(err => {
