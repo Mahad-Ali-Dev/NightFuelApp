@@ -68,7 +68,7 @@ export function FoodSearchSheet({ onSearch, onSelect }: FoodSearchSheetProps) {
                 <Ionicons name="search" size={18} color={colors.text.secondary} />
                 <TextInput style={styles.input} placeholder="Search 3M+ foods..." placeholderTextColor={colors.text.tertiary} value={query} onChangeText={handleSearch} autoFocus />
                 {query.length > 0 && (
-                    <TouchableOpacity onPress={() => { setQuery(''); setResults([]); }} activeOpacity={0.85}>
+                    <TouchableOpacity onPress={() => { setQuery(''); setResults([]); }} activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Clear search">
                         <Ionicons name="close-circle" size={18} color={colors.text.secondary} />
                     </TouchableOpacity>
                 )}

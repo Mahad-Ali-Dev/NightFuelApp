@@ -33,6 +33,7 @@ export function Button({
   fullWidth = false,
   disabled,
   style,
+  accessibilityRole,
   ...props
 }: ButtonProps) {
   const { colors } = useTheme();
@@ -63,6 +64,9 @@ export function Button({
           variant === 'ghost' && { color: colors.text.secondary },
           variant === 'danger' && { color: colors.text.primary },
           (variant === 'primary' || variant === 'secondary') && { color: colors.text.primary },
+          // Primary fills with the bright coral→pink gradient; lift the white
+          // label clear of it with the same textShadow CtaButton uses (AA).
+          variant === 'primary' && styles.primaryTextShadow,
           isDisabled && { opacity: 0.5 },
         ]}
       >
@@ -76,6 +80,7 @@ export function Button({
     return (
       <Pressable
         disabled={isDisabled}
+        accessibilityRole={accessibilityRole ?? 'button'}
         style={({ pressed }) => [
           fullWidth && styles.fullWidth,
           !isDisabled && shadows.glow(colors.accent.coral),
@@ -86,7 +91,7 @@ export function Button({
       >
         {({ pressed }) => (
           <LinearGradient
-            colors={colors.gradients.coral}
+            colors={colors.gradients.coralCta}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[
@@ -114,6 +119,7 @@ export function Button({
   return (
     <Pressable
       disabled={isDisabled}
+      accessibilityRole={accessibilityRole ?? 'button'}
       style={({ pressed }) => [
         styles.button,
         sizeStyles.button,
@@ -159,6 +165,13 @@ const styles = StyleSheet.create({
   text: {
     fontWeight: '600',
     letterSpacing: 0.2,
+  },
+  // Subtle dark shadow that lifts the white primary label clear of the bright
+  // coral→pink fill for AA legibility (mirrors CtaButton's label shadow).
+  primaryTextShadow: {
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   fullWidth: {
     width: '100%',

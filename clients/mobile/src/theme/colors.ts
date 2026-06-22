@@ -45,7 +45,7 @@ export const colors = {
   text: {
     primary: '#FFFFFF',
     secondary: '#9BA3B4',  // brighter for better contrast on the deeper bg
-    tertiary: '#5A6373',
+    tertiary: '#7B8497',  // AA-lifted: 5.2:1 on background.primary (#0A0C12); was #5A6373 (3.23:1, failed AA)
     accent: '#FF6B35',
     inverse: '#0A0C12',
   },

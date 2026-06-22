@@ -92,7 +92,7 @@ export function CtaButton({
       testID={testID}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{ disabled: isDisabled }}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={({ pressed }) => [
         styles.btn,
         { minHeight: sz.minHeight, paddingVertical: sz.paddingVertical },

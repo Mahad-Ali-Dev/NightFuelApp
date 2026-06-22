@@ -107,14 +107,19 @@ function ChatBubbleComponent({ text, isOwn, timestamp, senderName, status, onRet
         accessibilityLabel={bodyA11yLabel}
       >
         <LinearGradient
-          colors={colors.gradients.coral}
+          // F46: use the darker coralCta gradient (not the brighter hero coral) so
+          // the white body text + small timestamp clear the highest contrast we can
+          // get on a coral fill — consistent with Button/CtaButton's accepted
+          // coralCta + textShadow legibility mechanism (ChatBubble was the only coral
+          // surface still on the brighter gradient).
+          colors={colors.gradients.coralCta}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={[StyleSheet.absoluteFillObject, styles.ownFill]}
         />
         <Text style={[typography.body, { color: colors.text.primary, lineHeight: 22 }]}>{text}</Text>
         <View style={styles.metaRow}>
-          <Text style={[typography.caption, { color: withAlpha(colors.text.primary, 0.7), fontSize: 10 }]}>
+          <Text style={[typography.caption, styles.ownTimestamp, { color: colors.text.primary, fontSize: 10 }]}>
             {timestamp}
           </Text>
           {status ? <StatusTick status={status} /> : null}
@@ -174,6 +179,14 @@ const styles = StyleSheet.create({
   ownFill: { borderRadius: 22, borderBottomRightRadius: 8 },
   otherBubble: { borderWidth: 1, borderBottomLeftRadius: 8 },
   dim: { opacity: 0.7 },
+  // Own-bubble timestamp sits on the bright coral fill. Full-opacity white plus a
+  // dark textShadow (mirroring the CtaButton label) lifts it clear for AA — the
+  // previous white@0.7 (~1.95:1) failed.
+  ownTimestamp: {
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
   metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 6 },
   tick: { marginLeft: 1 },
 });

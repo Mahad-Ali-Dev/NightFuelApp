@@ -55,7 +55,7 @@ export function CyclePhaseCard({ cyclePhase }: CyclePhaseCardProps) {
             radius={borderRadius['2xl']}
             style={styles.card}
         >
-            <View style={styles.inner} accessible accessibilityLabel={`Cycle phase: ${copy?.label ?? 'tracking only'}`}>
+            <View style={styles.inner}>
                 <View style={styles.header}>
                     <Ionicons name="ellipse-outline" size={18} color={colors.accent.coral} />
                     <Text style={[typography.overline, styles.label, { color: colors.text.secondary }]}>

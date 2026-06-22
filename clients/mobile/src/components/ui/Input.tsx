@@ -17,6 +17,13 @@ interface InputProps extends TextInputProps {
   icon?: keyof typeof Ionicons.glyphMap;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
+  /**
+   * Accessibility label for the icon-only rightIcon Pressable (e.g. a
+   * password show/hide toggle). Without it the control is silent to assistive
+   * tech. Callers should pass a state-aware value ('Show password' / 'Hide
+   * password').
+   */
+  rightIconAccessibilityLabel?: string;
 }
 
 export function Input({
@@ -25,6 +32,7 @@ export function Input({
   icon,
   rightIcon,
   onRightIconPress,
+  rightIconAccessibilityLabel,
   style,
   ...props
 }: InputProps) {
@@ -76,7 +84,12 @@ export function Input({
           {...props}
         />
         {rightIcon && (
-          <Pressable onPress={onRightIconPress} style={styles.rightIcon}>
+          <Pressable
+            onPress={onRightIconPress}
+            accessibilityRole="button"
+            accessibilityLabel={rightIconAccessibilityLabel}
+            style={styles.rightIcon}
+          >
             <Ionicons name={rightIcon} size={20} color={colors.text.tertiary} />
           </Pressable>
         )}

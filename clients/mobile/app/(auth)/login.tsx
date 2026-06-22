@@ -121,6 +121,7 @@ export default function LoginScreen() {
               secureTextEntry={!showPassword}
               rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
               onRightIconPress={() => setShowPassword(!showPassword)}
+              rightIconAccessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
             />
 
             <Link href="/(auth)/forgot-password" asChild>

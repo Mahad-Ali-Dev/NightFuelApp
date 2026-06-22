@@ -76,6 +76,16 @@ export default function LifestyleScreen() {
         ? 'Enter a valid time as HH:MM'
         : undefined;
 
+    // Single live-region summary of whichever sleep-window inline errors are
+    // currently active. The DateTimeField renders its OWN color-only per-field
+    // error text (no alert role), so this sibling node is the accessible
+    // announcement: a polite alert a screen reader speaks when bedtime/wake
+    // becomes invalid. Reuses the already-computed *Error strings — no
+    // duplicate validation. Mirrors metrics-goals.tsx.
+    const validationSummary = [startHourError, endHourError]
+        .filter(Boolean)
+        .join('. ');
+
     const handleNext = () => {
         updateData({
             shiftType,
@@ -153,6 +163,21 @@ export default function LifestyleScreen() {
                         <DateTimeField mode="time" label="Wake Up" value={endHour} onChange={setEndHour} error={endHourError} />
                     </View>
                 </View>
+
+                {validationSummary ? (
+                    <Text
+                        accessible
+                        accessibilityRole="alert"
+                        accessibilityLiveRegion="polite"
+                        accessibilityLabel={validationSummary}
+                        style={[
+                            typography.caption,
+                            { color: colors.error, marginTop: spacing.md },
+                        ]}
+                    >
+                        {validationSummary}
+                    </Text>
+                ) : null}
 
                 <View style={{ height: spacing.lg }} />
 

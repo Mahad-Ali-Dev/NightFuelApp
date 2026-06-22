@@ -96,6 +96,7 @@ export default function PermissionsScreen() {
                         <Switch
                             value={notifications}
                             onValueChange={setNotifications}
+                            accessibilityLabel="Push notifications"
                             trackColor={{ false: colors.border.default, true: colors.accent.coral }}
                             thumbColor={colors.text.primary}
                         />
@@ -116,6 +117,7 @@ export default function PermissionsScreen() {
                         <Switch
                             value={healthKit}
                             onValueChange={(next) => { void handleHealthToggle(next); }}
+                            accessibilityLabel="Apple Health sync"
                             trackColor={{ false: colors.border.default, true: colors.accent.cyan }}
                             thumbColor={colors.text.primary}
                         />

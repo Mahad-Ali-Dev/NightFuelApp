@@ -237,11 +237,11 @@ function PostItem({ post, onLike, onComment, onShare }: { post: Post, onLike: ()
                 ) : null}
 
                 <View style={[styles.postActions, { borderTopColor: colors.border.default }]}>
-                    <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`Like post, ${post.likes} likes`} style={styles.actionItem} onPress={onLike}>
+                    <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel={`Like post, ${post.likes} likes`} style={styles.actionItem} onPress={onLike}>
                         <Ionicons name="heart-outline" size={20} color={colors.text.tertiary} />
                         <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]}>{post.likes}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`Comment on post, ${post.commentsCount} comments`} style={styles.actionItem} onPress={onComment}>
+                    <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel={`Comment on post, ${post.commentsCount} comments`} style={styles.actionItem} onPress={onComment}>
                         <Ionicons name="chatbubble-outline" size={18} color={colors.text.tertiary} />
                         <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]}>{post.commentsCount}</Text>
                     </TouchableOpacity>

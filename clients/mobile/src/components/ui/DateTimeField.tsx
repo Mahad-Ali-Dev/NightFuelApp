@@ -179,6 +179,16 @@ export function DateTimeField({
         ) : null}
       </View>
 
+      {error ? (
+        <Text
+          style={[styles.error, { color: colors.accent.red }]}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+        >
+          {error}
+        </Text>
+      ) : null}
+
       {open ? (
         <DateTimePicker
           value={seedDate(value, mode)}
@@ -217,6 +227,10 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontFamily: themeTypography.body.fontFamily,
     fontSize: 16,
+  },
+  error: {
+    fontSize: 12,
+    marginTop: 6,
   },
   nowButton: {
     marginLeft: 10,

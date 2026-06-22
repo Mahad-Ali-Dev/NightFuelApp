@@ -61,7 +61,7 @@ export default function AIOptimizationScreen() {
                     {AI_LEVELS.map((level) => {
                         const isSelected = aiLevel === level.value;
                         return (
-                            <TouchableOpacity key={level.value} onPress={() => setAiLevel(level.value as any)} activeOpacity={0.85}>
+                            <TouchableOpacity key={level.value} onPress={() => setAiLevel(level.value as any)} activeOpacity={0.85} accessibilityRole="button" accessibilityState={{ selected: isSelected }} accessibilityLabel={level.label} accessibilityHint={level.desc}>
                                 <Card
                                     variant={isSelected ? 'elevated' : 'glass'}
                                     style={[
