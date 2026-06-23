@@ -1,0 +1,946 @@
+[
+  {
+    "file": "00281201-Barbell-Clean-and-Press_Shoulders-FIX_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "00411101-Barbell-Front-Raise_Shoulders (1).mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "00411101-Barbell-Front-Raise_Shoulders.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "00761201-Barbell-Rear-Delt-Row_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "00861201-Barbell-Seated-Behind-Head-Military-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "00911201-Barbell-Seated-Overhead-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "01201201-Barbell-Upright-Row_shoulder.mp4",
+    "folder": "Male/Upright Rows"
+  },
+  {
+    "file": "01211201-Barbell-Upright-Row_Shoulders_without-weight.mp4",
+    "folder": "Male/Upright Rows"
+  },
+  {
+    "file": "01231201-Barbell-Wide-Grip-Upright-Row_Shoulders.mp4",
+    "folder": "Male/Upright Rows"
+  },
+  {
+    "file": "01281201-Battling-Ropes.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "01371201-Body-Up_Upper-Arms-FIX_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "01621201-Cable-Front-Raise_Shoulders (1).mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "01621201-Cable-Front-Raise_Shoulders.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "01641201-Cable-Front-Shoulder-Raise_Shoulders_.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "01781201-Cable-Lateral-Raise_shoulder (1).mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "01781201-Cable-Lateral-Raise_shoulder (2).mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "01781201-Cable-Lateral-Raise_shoulder.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "01921201-Cable-One-Arm-Lateral-Raise_Shoulders.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "02031201-Cable-Rear-Delt-Row-(with-rope)_Shoulders.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "02151201-Cable-Seated-Rear-Lateral-Raise_Shoulders.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "02191201-Cable-Shoulder-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "02251201-Cable-Standing-Cross-over-High-Reverse-Fly_Shoulders_ (1).mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "02251201-Cable-Standing-Cross-over-High-Reverse-Fly_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "02331201-Cable-Standing-Rear-Delt-Row-(with-rope)_Shoulder_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "02461201-Cable-Upright-Row_shoulder (1).mp4",
+    "folder": "Male/Upright Rows"
+  },
+  {
+    "file": "02461201-Cable-Upright-Row_shoulder.mp4",
+    "folder": "Male/Upright Rows"
+  },
+  {
+    "file": "02541201-Circles-Arm-(female)_Shoulders.mp4",
+    "folder": "Female/Stretch & Mobility"
+  },
+  {
+    "file": "02561201-Circles-Elbow-Arm-(female)_Shoulders.mp4",
+    "folder": "Female/Stretch & Mobility"
+  },
+  {
+    "file": "02871201-Dumbbell-Arnold-Press-II_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "02901201-Dumbbell-Bench-Seated-Press_Shoulders-FIX_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "03101201-Dumbbell-Front-Raise_Shoulders (1).mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "03101201-Dumbbell-Front-Raise_Shoulders.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "03231201-Dumbbell-Incline-One-Arm-Lateral-Raise_Shoulders-F.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "03251201-Dumbbell-Incline-Raise_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "03261201-Dumbbell-Incline-Rear-Lateral-Raise_Shoulders (1).mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "03261201-Dumbbell-Incline-Rear-Lateral-Raise_Shoulders.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "03321201-Dumbbell-Iron-Cross_Shoulders.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "03341201-Dumbbell-Lateral-Raise_shoulder-FIX_ (1).mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "03341201-Dumbbell-Lateral-Raise_shoulder-FIX_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "03351201-Dumbbell-Lateral-to-Front-Raise_Shoulders_.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "03411201-Dumbbell-Lying-One-Arm-Deltoid-Rear_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "03481201-Dumbbell-Lying-Rear-Lateral-Raise_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "03551201-Dumbbell-One-Arm-Lateral-Raise_Shoulder.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "03601201-Dumbbell-One-Arm-Shoulder-Press-(VERSION-2)_Should.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "03631201-Dumbbell-One-Arm-Upright-Row_Shoulders_.mp4",
+    "folder": "Male/Upright Rows"
+  },
+  {
+    "file": "03771201-Dumbbell-Rear-Delt-Row_shoulder.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "03781201-Dumbbell-Rear-Fly_Shoulders.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "03791201-Dumbbell-Rear-Lateral-Raise-(support-head)_Shoulde.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "03801201-Dumbbell-Rear-Lateral-Raise_Shoulders-FIX_ (1).mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "03801201-Dumbbell-Rear-Lateral-Raise_Shoulders-FIX_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "03831201-Dumbbell-Reverse-Fly_Shoulders-FIX_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "03871201-Dumbbell-Seated-Alternate-Front-Raise_Shoulders.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "03921201-Dumbbell-Seated-Front-Raise_Shoulders.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "03951201-Dumbbell-Seated-Lateral-Raise_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "03961201-Dumbbell-Seated-Lateral-Raise_shoulder.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "04051201-Dumbbell-Seated-Shoulder-Press_Shoulders-FIX_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "04081201-Dumbbell-Side-Lying-One-Hand-Raise_Shoulders.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "04151201-Dumbbell-Standing-Alternate-Raise_Shoulders.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "04191201-Dumbbell-Standing-Front-Raise-Above-Head_Shoulders.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "04261201-Dumbbell-Standing-Overhead-Press_shoulder.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "04371201-Dumbbell-Upright-Row_Shoulders-FIX (1).mp4",
+    "folder": "Male/Upright Rows"
+  },
+  {
+    "file": "04371201-Dumbbell-Upright-Row_Shoulders-FIX.mp4",
+    "folder": "Male/Upright Rows"
+  },
+  {
+    "file": "04711201-Handstand-Push-Up_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "05231201-Kettlebell-Arnold-Press_Shoulder.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "05371201-Kettlebell-One-Arm-Clean-and-Jerk_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "05391201-Kettlebell-One-Arm-Military-Press-To-The-Side_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "05401201-Kettlebell-One-Arm-Push-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "05421201-Kettlebell-One-Arm-Snatch_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "05501201-Kettlebell-Thruster_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "05841201-Lever-Lateral-Raise_shoulder.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "05871201-Lever-Military-Press-(plate-loaded)_shoulder.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "06021201-Lever-Seated-Reverse-Fly_Shoulders.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "06691201-Rear-Deltoid-Stretch_Shoulders.mp4",
+    "folder": "Male/Stretch & Mobility"
+  },
+  {
+    "file": "07471201-Smith-Behind-Neck-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "07621201-Smith-Bent-Over-Row-(VERSION-2)_Back_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "07651201-Smith-Seated-Shoulder-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "07741201-Smith-Standing-Military-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "07751201-Smith-Upright-Row_Shoulders_.mp4",
+    "folder": "Male/Upright Rows"
+  },
+  {
+    "file": "07881201-Standing-Behind-Neck-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "08341201-Weighted-Front-Raise_Shoulders.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "08691201-Lever-Shoulder-Press-(plate-loaded)-(VERSION-2)_Shoulders_ (1).mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "08691201-Lever-Shoulder-Press-(plate-loaded)-(VERSION-2)_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "08961201-Band-face-pull_Shoulders.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "09071201-Band-Lateral-Raise-(female)_Shoulders_.mp4",
+    "folder": "Female/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "09771201-Band-front-lateral-raise_Shoulders.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "10451201-Barbell-Seated-Military-Press-(inside-squat-cage)_Shoulders (1).mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "10451201-Barbell-Seated-Military-Press-(inside-squat-cage)_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "10901201-Suspender-Reverse-Fly-(female)_Shoulders.mp4",
+    "folder": "Female/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "11331201-Suspender-Single-Arm-Rear-Delt-Row-(female)_Should.mp4",
+    "folder": "Female/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "11651201-Barbell-Standing-Military-Press-(without-rack)_Shoulders_without-weight (1).mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "11651201-Barbell-Standing-Military-Press-(without-rack)_Shoulders_without-weight.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "11761201-Dumbbell-Incline-Front-Raise_Shoulders.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "12001201-Push-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "12241201-Smith-Standing-Shoulder-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "12301201-Dumbbell-Standing-Alternate-Vertical-Front-Raises_.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "14381201-Kettlebell-Seated-Two-Arm-Military-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "14541201-Lever-Seated-Shoulder-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "14571201-Barbell-Standing-Wide-Military-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "14881201-Shoulder-Stretch-Behind-the-Back_Shoulders.mp4",
+    "folder": "Male/Stretch & Mobility"
+  },
+  {
+    "file": "14991201-Band-Behind-Neck-Shoulder-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "15031201-Band-Pull-Apart_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "17001201-Dumbbell-Push-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "19701201-Standing-Upright-Shoulders-Stretch_Shoulders_.mp4",
+    "folder": "Male/Stretch & Mobility"
+  },
+  {
+    "file": "19751201-Seated-Shoulder-Flexor-Depresor-Retractor-Stretch_.mp4",
+    "folder": "Male/Stretch & Mobility"
+  },
+  {
+    "file": "19801201-Across-Chest-Shoulder-Stretch_Back_.mp4",
+    "folder": "Male/Stretch & Mobility"
+  },
+  {
+    "file": "19861201-Arm-Up-Rotator-Stretch_Shoulders_.mp4",
+    "folder": "Male/Stretch & Mobility"
+  },
+  {
+    "file": "19881201-Kneeling-One-Arm-Cross-Body-Stretch-(female)_Shoul.mp4",
+    "folder": "Female/Stretch & Mobility"
+  },
+  {
+    "file": "19901201-External-Shoulder-Rotation-Stretch-(female)_Should.mp4",
+    "folder": "Female/Stretch & Mobility"
+  },
+  {
+    "file": "21371201-Dumbbell-Arnold-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "21431201-Dumbbell-Standing-Around-World_Shoulders.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "22301201-Cable-Front-Raise-(female)_Shoulders.mp4",
+    "folder": "Female/Front Raises (Front Delts)"
+  },
+  {
+    "file": "22311201-Cable-One-Arm-Lateral-Raise-(female)_Shoulders.mp4",
+    "folder": "Female/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "22341201-Dumbbell-Standing-Lateral-Raise-(female)_Shoulders.mp4",
+    "folder": "Female/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "22371201-Dumbbell-Seated-Shoulder-Press-(female)_Shoulders.mp4",
+    "folder": "Female/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "22921201-Dumbbell-Rear-Delt-Raise_Shoulders (1).mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "22921201-Dumbbell-Rear-Delt-Raise_Shoulders.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "23161201-Dumbbell-Standing-Bent-Arm-Lateral-raise-(female)_Shoulders.mp4",
+    "folder": "Female/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "23171201-Dumbbell-Seated-Bent-Arm-Lateral-raise_Shoulders (1).mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "23171201-Dumbbell-Seated-Bent-Arm-Lateral-raise_Shoulders.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "23181201-Lever-Shoulder-Press-(plate-loaded)-version-3_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "23661201-Barbell-Shoulder-Grip-Upright-Row-(female)_Shoulder.mp4",
+    "folder": "Female/Upright Rows"
+  },
+  {
+    "file": "23861201-Dumbbell-Arnold-Press-(female)_Shoulders.mp4",
+    "folder": "Female/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "23931201-Dumbbell-One-Arm-Bent-over-Row-(female)_Shoulders.mp4",
+    "folder": "Female/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "24151201-Dumbbell-Single-arm-Leaning-Lateral-Raise-(female).mp4",
+    "folder": "Female/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "24771201-Barbell-Front-Raise-(female)_Shoulders.mp4",
+    "folder": "Female/Front Raises (Front Delts)"
+  },
+  {
+    "file": "24871201-Dumbbell-Rear-Delt-Fly-(female)_Shoulders.mp4",
+    "folder": "Female/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "25941201-Dumbbell-Seated-Alternate-Press-(female)_Shoulders.mp4",
+    "folder": "Female/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "26041201-Barbell-Seated-Overhead-Press-(female)_Shoulders.mp4",
+    "folder": "Female/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "26371201-Barbell-Rear-Delt-Raise-(female)_shoulder.mp4",
+    "folder": "Female/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "26891201-Cable-One-Arm-Front-Raise-(female)_Shoulders (1).mp4",
+    "folder": "Female/Front Raises (Front Delts)"
+  },
+  {
+    "file": "26891201-Cable-One-Arm-Front-Raise-(female)_Shoulders.mp4",
+    "folder": "Female/Front Raises (Front Delts)"
+  },
+  {
+    "file": "27751201-Shoulder---Abduction.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "27791201-Shoulder---Lateral-Rotation-(External-Rotation).mp4",
+    "folder": "Male/Rotator Cuff (Stability)"
+  },
+  {
+    "file": "27801201-Shoulder---Medial-Rotation-(Internal-Rotation).mp4",
+    "folder": "Male/Rotator Cuff (Stability)"
+  },
+  {
+    "file": "27841201-Shoulder---Transverse-Flexion.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "28181201-Dumbbell-Incline-One-Arm-Lateral-Raise-(female)_Sh.mp4",
+    "folder": "Female/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "28821201-Cable-Standing-Rear-Delt-Row-(with-rope)-(female)_shoulder.mp4",
+    "folder": "Female/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "28831201-Lever-Seated-Shoulder-Press-(female)_Shoulders_ (1).mp4",
+    "folder": "Female/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "28831201-Lever-Seated-Shoulder-Press-(female)_Shoulders_.mp4",
+    "folder": "Female/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "29211201-Pike-Push-up_Chest.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "29341201-Kettlebell-Half-Kneeling-Shoulder-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "29621201-Lever-Seated-Hammer-Grip-Shoulder-Press_Shoulder.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "31011201-Lever-Military-Press-(plate-loaded)-(female)_shoulder.mp4",
+    "folder": "Female/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "31861201-Barbell-Military-Press-(with-hanging-band-techniqu.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "32371201-Landmine-Lateral-Raise_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "32581201-Standing-Arms-Circling-(female)_Shoulders.mp4",
+    "folder": "Female/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "33421201-Cable-Y-raise_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "33431201-Lever-Lateral-Raise-(VERSION-2).mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "33471201-Dumbbell-Curl-to-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "34011201-Pike-Push-up-(between-Benches)_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "34021201-Pike-Push-up-(between-Chairs)_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "34311201-Dumbbell-Upright-Row-(female)_Shoulder.mp4",
+    "folder": "Female/Upright Rows"
+  },
+  {
+    "file": "35161201-Shoulder-Backbend-Stretch_Shoulders_.mp4",
+    "folder": "Male/Stretch & Mobility"
+  },
+  {
+    "file": "35251201-Landmine-Kneeling-One-Arm-Shoulder-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "35411201-Dumbbell-Incline-Y-Raise_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "35421201-Dumbbell-Incline-T-Raise_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "35461201-Dumbbell-Seated-Alternate-Shoulder-Press_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "36031201-EZ-Barbell-Anti-Gravity-Press-(female)_Shoulders.mp4",
+    "folder": "Female/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "36201201-Smith-Seated-Shoulder-Press-(female)_Shoulders.mp4",
+    "folder": "Female/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "36291201-Lever-Lateral-Raise-(female)_Shoulder.mp4",
+    "folder": "Female/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "36701201-Weighted-Decline-Sit-up_Waist_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "36851201-Dumbbell-Chest-Supported-Lateral-Raises_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "36941201-Dumbbell-Incline-Alternate-Reverse-Fly_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "36971201-Cable-Kneeling-Rear-Delt-Row-(with-rope)-(male)_Sh.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "37221201-Barbell-Incline-Lying-Rear-Delt-Raise_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "37401201-Kettlebell-Lateral-Raise_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "37411201-Lateral-Raise-with-Towel_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "38251201-Mid-Air-Lateral-Raises-With-Switching-Palms_Shoulders.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "38791201-Dumbbell-Poliquin-Lateral-Raise_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "39051201-Arm-Circles_Shoulders.mp4",
+    "folder": "Male/Stretch & Mobility"
+  },
+  {
+    "file": "39121201-Cable-Bent-Over-One-Arm-Lateral-Raise_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "39151201-Decline-Pike-Press-(between-benches)_Shoulders-FIX.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "39161201-Handstand-Shoulder-Press-with-Wall-(between-benche.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "39431201-Cable-Seated-Rear-Delt-Fly-with-Chest-Support_Shou.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "39711201-Band-bent-over-rear-lateral-raise-(male)_Shoulders.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "39721201-Dumbbell-Alternate-Shoulder-Press-(male)_Shoulders.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "39761201-Band-standing-rear-delt-row-(female)_Shoulders.mp4",
+    "folder": "Female/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "39891201-EZ-bar-Incline-Front-Raise_Shoulders_.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "39901201-EZ-bar-Seated-Close-grip-Shoulder-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "40101201-Cable-Kneeling-Shoulder-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "40131201-Cable-Lying-Cross-Lateral-Raise_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "42351201-Dumbbell-Seated-Bent-Over-Rear-Delt-Row_Shoulders-.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "42391201-Dumbbell-One-Arm-Reverse-Fly-(with-support)-(VERSI.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "43461201-Bodyweight-Standing-Military-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "43751201-Medicine-Ball-Around-Head-Rotation_Shoulders_.mp4",
+    "folder": "Male/Rotator Cuff (Stability)"
+  },
+  {
+    "file": "44081201-Kettlebell-Upright-Row_Shoulders_.mp4",
+    "folder": "Male/Upright Rows"
+  },
+  {
+    "file": "45681201-Resistance-Band-Pull-Apart_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "46071201-PVC-Pass-Through_Shoulders (1).mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "46071201-PVC-Pass-Through_Shoulders.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "46511201-Standing-Overhead-Shoulder-Stretch-(VERSION-2)_Shoulders.mp4",
+    "folder": "Male/Stretch & Mobility"
+  },
+  {
+    "file": "46651201-Overhead-Clap-(female)_Shoulders.mp4",
+    "folder": "Female/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "50741201-Landmine-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "50881201-Cable-Shoulder-Internal-Rotation_Shoulders_.mp4",
+    "folder": "Male/Rotator Cuff (Stability)"
+  },
+  {
+    "file": "51631201-Handstand-Push-Up-(VERSION-2)_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "52051201-Resistance-Band-Overhead-Shoulder-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "52881201-Decline-Diamond-Pike-Push-Up_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "53281201-Barbell-Standing-Shoulders-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "54041201-Stick-Pass-Around-Stretch-(female)_Shoulders_.mp4",
+    "folder": "Female/Stretch & Mobility"
+  },
+  {
+    "file": "55231201-EZ-Bar-Standing-Front-Raise_Shoulders_.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "55241201-Cable-Standing-One-Arm-Face-Pull_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "55271201-Lever-Seated-Bent-Over-Rear-Delt-Fly_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "55691201-Front-and-Back-Arms-Rotation-(female)_Shoulders_.mp4",
+    "folder": "Female/Rotator Cuff (Stability)"
+  },
+  {
+    "file": "56071201-Band-Face-Pull-(male)_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "56091201-Cable-Standing-Face-Pull_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "56561201-Cable-Standing-Face-Pull-(with-rope)_Shoulders.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "57621201-Handstand-against-the-Wall_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "59431201-Cable-Single-Arm-Neutral-Grip-Front-Raise_Shoulder (1).mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "59431201-Cable-Single-Arm-Neutral-Grip-Front-Raise_Shoulder.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "60351201-Cable-Rear-Delt-Row-(parallel-bar)_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "60771201-Bottle-Weighted-Halo-(female)_Shoulders_.mp4",
+    "folder": "Female/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "61571201-Handstand-Push-up-against-the-Wall-(male)_Shoulder.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "64221201-Weighted-Plate-Standing-Overhead-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "66101201-Dumbbell-Incline-Reverse-Raise-with-Chest-Supported-(skier)-(male)_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "66111201-Dumbbell-Bent-Over-Reverse-Raise-(skier)-(male)_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "66681201-Sky-Punch-(male)_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "67761201-Cable-Standing-Single-Delt-Row-(male)_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "68311201-Kettlebell-Seated-Front-Raise_Shoulders_.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "68411201-Kettlebell-Prone-Rear-Delt-Swing_Shoulders_ (1).mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "68411201-Kettlebell-Prone-Rear-Delt-Swing_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "68661201-Band-Incline-T-Raise_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "70211201-Dumbbell-Seated-Bent-Arm-Lateral-Raise-(female)_Sh.mp4",
+    "folder": "Female/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "72521201-Dumbbell-Incline-Powell-Raise-(male)_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "72871201-Trap-Bar-Overhead-Press-(male)_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "73601201-Dumbbell-Standing-Hammer-Curl-to-Press_Shoulders_.mp4",
+    "folder": "Male/Overhead Press (Delts & Triceps)"
+  },
+  {
+    "file": "74751201-Dumbbell-Bent-Over-Reverse-Fly-to-Hammer-Curl-(mal.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "75881201-Weighted-Front-Raise-Hold_Shoulders_.mp4",
+    "folder": "Male/Front Raises (Front Delts)"
+  },
+  {
+    "file": "75921201-Cable-Incline-Rear-Delt-Fly-with-Back-Support-(mal.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "77431201-Cable-Half-Kneeling-Face-Pull_Shoulders_.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "77441201-Cable-Standing-Supinated-Face-Pull-(with-rope)_Sho.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "77451201-Standing-Supinated-Face-Pull-(with-towels)_Shoulde.mp4",
+    "folder": "Male/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "77491201-Elevanted-Pike-Push-up-from-deficit-with-parallett.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "77501201-Pike-Push-up-with-parallettes-(male)_Shoulders_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "79251201-Kneeling-Pike-Push-up-(on-Bench)-(female)_Shoulder.mp4",
+    "folder": "Female/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "79361201-Cable-Standing-Single-Delt-Row-(VERSION-2)-(male)_.mp4",
+    "folder": "Male/Lateral Raises (Side Delts)"
+  },
+  {
+    "file": "79371201-Bottle-Weighted-Bent-over-Y-Raise-(female)_Shoulde.mp4",
+    "folder": "Female/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  },
+  {
+    "file": "79951201-Dumbbell-Bent-over-Y-Raise-(female)_Shoulders_.mp4",
+    "folder": "Female/Rear Delts (Reverse Fly, Rows & Face Pulls)"
+  }
+]
