@@ -110,7 +110,7 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ id: s
                 </div>
                 <button
                     onClick={() => router.push('/dashboard/exercises')}
-                    className="bg-brand-500 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-brand-600 transition-colors"
+                    className="bg-brand-500 text-background px-6 py-2.5 rounded-xl font-semibold hover:bg-brand-600 transition-colors"
                 >
                     Browse Exercises
                 </button>
@@ -540,7 +540,7 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ id: s
                 >
                     <button
                         onClick={() => router.push('/dashboard/exercise')}
-                        className="flex-1 bg-brand-500 hover:bg-brand-600 text-white py-4 rounded-2xl font-bold text-sm transition-all shadow-lg shadow-brand-500/20 flex items-center justify-center gap-2"
+                        className="flex-1 bg-brand-500 hover:bg-brand-600 text-background py-4 rounded-2xl font-bold text-sm transition-all shadow-lg shadow-brand-500/20 flex items-center justify-center gap-2"
                     >
                         <Dumbbell size={16} />
                         Log This Exercise

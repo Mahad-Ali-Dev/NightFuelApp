@@ -138,7 +138,7 @@ export default function LogSleepPage() {
                     <Button
                         type="submit"
                         disabled={mutation.isPending}
-                        className="w-full py-6 bg-brand-500 hover:bg-brand-600 text-white rounded-2xl shadow-xl shadow-brand-500/20 text-lg font-bold transition-all"
+                        className="w-full py-6 bg-brand-500 hover:bg-brand-600 text-background rounded-2xl shadow-xl shadow-brand-500/20 text-lg font-bold transition-all"
                     >
                         {mutation.isPending ? 'Syncing Recovery...' : 'Log Session'}
                     </Button>

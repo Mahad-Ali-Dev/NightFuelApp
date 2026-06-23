@@ -133,7 +133,7 @@ export default function BodyMeasurementsPage() {
                     {!isAdding && (
                         <Button
                             onClick={() => setIsAdding(true)}
-                            className="bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold"
+                            className="bg-brand-500 hover:bg-brand-600 text-background rounded-xl font-bold"
                         >
                             <Plus size={16} className="mr-1.5" /> Log Check-in
                         </Button>
@@ -185,7 +185,7 @@ export default function BodyMeasurementsPage() {
                                 <Button variant="ghost" onClick={() => setIsAdding(false)} className="text-neutral-400 hover:text-white rounded-xl">
                                     Cancel
                                 </Button>
-                                <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold">
+                                <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-brand-500 hover:bg-brand-600 text-background rounded-xl font-bold">
                                     <Save size={16} className="mr-1.5" /> {saveMutation.isPending ? 'Saving...' : 'Save Measurements'}
                                 </Button>
                             </div>

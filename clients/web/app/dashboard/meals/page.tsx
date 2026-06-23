@@ -198,7 +198,7 @@ function FoodResultCard({ food, onAdd }: { food: FoodNutrition; onAdd: () => voi
                     )}
                     <button
                         onClick={onAdd}
-                        className="h-7 w-7 rounded-lg bg-brand-500/20 text-brand-400 hover:bg-brand-500 hover:text-white flex items-center justify-center transition-all active:scale-95"
+                        className="h-7 w-7 rounded-lg bg-brand-500/20 text-brand-400 hover:bg-brand-500 hover:text-background flex items-center justify-center transition-all active:scale-95"
                     >
                         <Plus className="h-3.5 w-3.5" />
                     </button>
@@ -478,7 +478,7 @@ export default function MealLoggerPage() {
                             <button
                                 onClick={() => changeMode('openfoodfacts')}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${searchMode === 'openfoodfacts'
-                                        ? 'bg-brand-500 text-white shadow'
+                                        ? 'bg-brand-500 text-background shadow'
                                         : 'text-neutral-400 hover:text-white'
                                     }`}
                             >

@@ -211,7 +211,7 @@ export default function ChallengesPage() {
                                         ) : (
                                             <Button
                                                 onClick={() => toggleJoin(challenge.id)}
-                                                className="bg-white text-black h-8 hover:bg-brand-500 hover:text-white text-xs font-bold rounded-lg group-hover:px-6 transition-all"
+                                                className="bg-white text-black h-8 hover:bg-brand-500 hover:text-background text-xs font-bold rounded-lg group-hover:px-6 transition-all"
                                             >
                                                 Join Challenge <ArrowRight size={14} className="ml-1.5 hidden group-hover:block" />
                                             </Button>

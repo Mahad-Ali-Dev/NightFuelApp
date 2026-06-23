@@ -129,7 +129,7 @@ export default function SpecialistDashboard() {
                             onClick={() => setActiveTab('students')}
                             className={cn(
                                 "px-6 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 uppercase tracking-widest",
-                                activeTab === 'students' ? "bg-brand-500 text-white shadow-lg" : "text-neutral-400 hover:text-white"
+                                activeTab === 'students' ? "bg-brand-500 text-background shadow-lg" : "text-neutral-400 hover:text-white"
                             )}
                         >
                             <Users className="h-4 w-4" /> Students
@@ -138,7 +138,7 @@ export default function SpecialistDashboard() {
                             onClick={() => setActiveTab('protocols')}
                             className={cn(
                                 "px-6 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 uppercase tracking-widest",
-                                activeTab === 'protocols' ? "bg-brand-500 text-white shadow-lg" : "text-neutral-400 hover:text-white"
+                                activeTab === 'protocols' ? "bg-brand-500 text-background shadow-lg" : "text-neutral-400 hover:text-white"
                             )}
                         >
                             <BookOpen className="h-4 w-4" /> Protocols
@@ -160,7 +160,7 @@ export default function SpecialistDashboard() {
                                     <h2 className="text-2xl font-bold text-white flex items-center gap-3">
                                         Active Students <span className="bg-brand-500/20 text-brand-400 text-xs px-2 py-1 rounded-full">{students?.length || 0}</span>
                                     </h2>
-                                    <Button variant="outline" className="border-brand-500/30 text-brand-400 hover:bg-brand-500 hover:text-white">
+                                    <Button variant="outline" className="border-brand-500/30 text-brand-400 hover:bg-brand-500 hover:text-background">
                                         <UserPlus className="h-4 w-4 mr-2" /> Invite Student
                                     </Button>
                                 </div>
@@ -196,7 +196,7 @@ export default function SpecialistDashboard() {
                                                                 setSelectedStudent(relation);
                                                                 setIsAssigningProtocol(true);
                                                             }}
-                                                            className="bg-white/5 hover:bg-brand-500 text-white border border-white/10 hover:border-brand-500 text-[10px] font-black tracking-widest uppercase px-4"
+                                                            className="bg-white/5 hover:bg-brand-500 text-background border border-white/10 hover:border-brand-500 text-[10px] font-black tracking-widest uppercase px-4"
                                                         >
                                                             Manage Plan
                                                         </Button>
@@ -219,7 +219,7 @@ export default function SpecialistDashboard() {
                                     <h2 className="text-2xl font-bold text-white flex items-center gap-3">
                                         Protocol Library <span className="bg-blue-500/20 text-blue-400 text-xs px-2 py-1 rounded-full">{protocols?.length || 0}</span>
                                     </h2>
-                                    <Button onClick={() => setIsCreatingProtocol(true)} className="bg-brand-500 hover:bg-brand-600 text-white font-bold shadow-lg">
+                                    <Button onClick={() => setIsCreatingProtocol(true)} className="bg-brand-500 hover:bg-brand-600 text-background font-bold shadow-lg">
                                         <Plus className="h-4 w-4 mr-2" /> New Protocol
                                     </Button>
                                 </div>

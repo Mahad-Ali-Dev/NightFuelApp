@@ -79,7 +79,7 @@ export default function CoachDashboard() {
     );
 
     return (
-        <div className="min-h-screen bg-transparent p-4 md:p-8 relative z-10 selection:bg-brand-500 selection:text-white mt-12">
+        <div className="min-h-screen bg-transparent p-4 md:p-8 relative z-10 selection:bg-brand-500 selection:text-background mt-12">
             <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -109,7 +109,7 @@ export default function CoachDashboard() {
                                 className="bg-white/5 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-brand-500 w-64 transition-all"
                             />
                         </div>
-                        <Button className="bg-brand-500 hover:bg-brand-600 text-white rounded-xl gap-2 font-bold shadow-lg shadow-brand-500/20">
+                        <Button className="bg-brand-500 hover:bg-brand-600 text-background rounded-xl gap-2 font-bold shadow-lg shadow-brand-500/20">
                             <Zap className="h-4 w-4 fill-white" />
                             Blast Update
                         </Button>
@@ -201,7 +201,7 @@ function StudentRow({ student, protocols, index }: { student: Student; protocols
                         {student.profile.displayName[0]}
                     </div>
                     {student.status?.currentStreak && (
-                        <div className="absolute -top-1 -right-1 bg-brand-500 text-[8px] font-black px-1.5 py-0.5 rounded-full text-white ring-2 ring-black">
+                        <div className="absolute -top-1 -right-1 bg-brand-500 text-[8px] font-black px-1.5 py-0.5 rounded-full text-background ring-2 ring-black">
                             {student.status.currentStreak}
                         </div>
                     )}

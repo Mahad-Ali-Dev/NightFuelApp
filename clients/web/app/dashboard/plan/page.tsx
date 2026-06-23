@@ -529,7 +529,7 @@ export default function PlanPage() {
             : null;
 
     return (
-        <div className="min-h-screen bg-transparent p-4 md:p-8 relative z-10 selection:bg-brand-500 selection:text-white">
+        <div className="min-h-screen bg-transparent p-4 md:p-8 relative z-10 selection:bg-brand-500 selection:text-background">
             {/* Background elements */}
             <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
                 <div className="absolute -top-[10%] right-[10%] w-[50%] h-[50%] bg-brand-500/10 rounded-full blur-[150px]" />
@@ -711,7 +711,7 @@ export default function PlanPage() {
 
                         {/* ── Generate Button ── */}
                         <Button
-                            className="w-full h-14 text-lg font-bold bg-brand-500 hover:bg-brand-600 text-white shadow-[0_0_25px_-5px_hsl(var(--brand)/0.5)] transition-all rounded-xl relative overflow-hidden group"
+                            className="w-full h-14 text-lg font-bold bg-brand-500 hover:bg-brand-600 text-background shadow-[0_0_25px_-5px_hsl(var(--brand)/0.5)] transition-all rounded-xl relative overflow-hidden group"
                             onClick={handleGenerate}
                             disabled={isGenerating || !selectedShift}
                         >

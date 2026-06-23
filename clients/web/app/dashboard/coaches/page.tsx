@@ -112,7 +112,7 @@ export default function CoachesDirectoryPage() {
                     <Button
                         onClick={handleOnboard}
                         disabled={isProcessing}
-                        className="bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold"
+                        className="bg-brand-500 hover:bg-brand-600 text-background rounded-xl font-bold"
                     >
                         <DollarSign size={16} className="mr-2" />
                         Become a Coach
@@ -141,7 +141,7 @@ export default function CoachesDirectoryPage() {
                                 className={cn(
                                     'px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border',
                                     selectedCategory === cat
-                                        ? 'bg-brand-500 text-white border-brand-500/50 shadow-lg shadow-brand-500/20'
+                                        ? 'bg-brand-500 text-background border-brand-500/50 shadow-lg shadow-brand-500/20'
                                         : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10'
                                 )}
                             >
@@ -234,7 +234,7 @@ export default function CoachesDirectoryPage() {
                                             className={cn(
                                                 "rounded-xl font-bold transition-all px-6",
                                                 coach.available
-                                                    ? "bg-white text-black hover:bg-brand-500 hover:text-white"
+                                                    ? "bg-white text-black hover:bg-brand-500 hover:text-background"
                                                     : "bg-white/5 text-neutral-500 cursor-not-allowed"
                                             )}
                                         >

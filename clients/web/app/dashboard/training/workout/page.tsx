@@ -502,7 +502,7 @@ export default function ActiveWorkoutPage() {
         </p>
         <Link
           href="/dashboard/training"
-          className="mt-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-bold px-6 py-3 rounded-xl transition-all"
+          className="mt-2 bg-brand-500 hover:bg-brand-600 text-background text-sm font-bold px-6 py-3 rounded-xl transition-all"
         >
           Go to Training
         </Link>
@@ -554,7 +554,7 @@ export default function ActiveWorkoutPage() {
             </div>
             <button
               onClick={() => setShowFinishDialog(true)}
-              className="bg-brand-500 hover:bg-brand-600 text-white text-xs font-black uppercase tracking-wider px-4 py-2 rounded-xl transition-all shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40"
+              className="bg-brand-500 hover:bg-brand-600 text-background text-xs font-black uppercase tracking-wider px-4 py-2 rounded-xl transition-all shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40"
             >
               Finish
             </button>
@@ -672,7 +672,7 @@ export default function ActiveWorkoutPage() {
                               className={cn(
                                 'flex-1 py-1.5 rounded-lg text-xs font-bold transition-all',
                                 state.restSeconds === sec
-                                  ? 'bg-brand-500 text-white'
+                                  ? 'bg-brand-500 text-background'
                                   : 'bg-white/5 text-neutral-400 hover:bg-white/10 hover:text-white'
                               )}
                             >
@@ -850,7 +850,7 @@ export default function ActiveWorkoutPage() {
             className={cn(
               'w-full py-3.5 rounded-2xl text-sm font-black uppercase tracking-wider transition-all',
               nextIncompleteSet
-                ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/25 hover:bg-brand-600 hover:shadow-brand-500/40 active:scale-[0.98]'
+                ? 'bg-brand-500 text-background shadow-lg shadow-brand-500/25 hover:bg-brand-600 hover:shadow-brand-500/40 active:scale-[0.98]'
                 : 'bg-white/5 text-neutral-600 cursor-not-allowed'
             )}
           >
@@ -1025,7 +1025,7 @@ export default function ActiveWorkoutPage() {
               {/* Resume */}
               <button
                 onClick={() => setShowPauseMenu(false)}
-                className="w-full bg-brand-500 hover:bg-brand-600 text-white font-black text-sm uppercase tracking-wider rounded-2xl py-4 transition-all shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 mt-4"
+                className="w-full bg-brand-500 hover:bg-brand-600 text-background font-black text-sm uppercase tracking-wider rounded-2xl py-4 transition-all shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 mt-4"
               >
                 <div className="flex items-center justify-center gap-2">
                   <Play size={16} />
@@ -1112,7 +1112,7 @@ export default function ActiveWorkoutPage() {
               <div className="space-y-2">
                 <button
                   onClick={handleFinish}
-                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-black text-sm uppercase tracking-wider rounded-2xl py-3.5 transition-all shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40"
+                  className="w-full bg-brand-500 hover:bg-brand-600 text-background font-black text-sm uppercase tracking-wider rounded-2xl py-3.5 transition-all shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40"
                 >
                   Finished
                 </button>

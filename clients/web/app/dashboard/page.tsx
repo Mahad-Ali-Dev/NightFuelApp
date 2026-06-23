@@ -171,7 +171,7 @@ export default function DashboardPage() {
                         </div>
                         <div className="flex items-center gap-2">
                             <Link href="/dashboard/plan">
-                                <Button className="bg-brand-500 hover:bg-brand-600 text-white rounded-xl shadow-lg shadow-brand-500/25 font-semibold">
+                                <Button className="bg-brand-500 hover:bg-brand-600 text-background rounded-xl shadow-lg shadow-brand-500/25 font-semibold">
                                     <Zap size={16} className="mr-1.5" />
                                     Today's Plan
                                 </Button>
@@ -440,7 +440,7 @@ export default function DashboardPage() {
                             <CalendarDays size={32} className="text-neutral-700 mx-auto mb-3" />
                             <p className="text-neutral-500 text-sm">No shifts found for this month.</p>
                             <Link href="/shifts/new">
-                                <Button className="mt-4 bg-brand-500 hover:bg-brand-600 text-white rounded-xl text-sm">
+                                <Button className="mt-4 bg-brand-500 hover:bg-brand-600 text-background rounded-xl text-sm">
                                     <Plus size={15} className="mr-1.5" />
                                     Create Your First Shift
                                 </Button>

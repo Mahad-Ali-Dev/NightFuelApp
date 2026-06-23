@@ -229,7 +229,7 @@ export default function ProfilePage() {
                                 </div>
                                 <button
                                     onClick={() => avatarInputRef.current?.click()}
-                                    className="absolute bottom-1 right-1 p-2 bg-brand-500 rounded-full text-white shadow-lg hover:bg-brand-600 transition-colors"
+                                    className="absolute bottom-1 right-1 p-2 bg-brand-500 rounded-full text-background shadow-lg hover:bg-brand-600 transition-colors"
                                 >
                                     <Camera className="h-4 w-4" />
                                 </button>
@@ -422,7 +422,7 @@ export default function ProfilePage() {
                                                 />
                                                 <div className="flex justify-end gap-2">
                                                     <Button size="sm" variant="ghost" onClick={() => setEditingPostId(null)} className="h-7 text-xs text-neutral-400 hover:text-white">Cancel</Button>
-                                                    <Button size="sm" onClick={() => updatePostMutation.mutate({ postId: post.id, content: editContent })} className="h-7 text-xs bg-brand-500 hover:bg-brand-600 text-white px-4">Save</Button>
+                                                    <Button size="sm" onClick={() => updatePostMutation.mutate({ postId: post.id, content: editContent })} className="h-7 text-xs bg-brand-500 hover:bg-brand-600 text-background px-4">Save</Button>
                                                 </div>
                                             </div>
                                         ) : (

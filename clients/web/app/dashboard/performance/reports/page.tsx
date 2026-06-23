@@ -75,7 +75,7 @@ export default function AIReportsPage() {
                         <Button
                             onClick={() => generateAuditMutation.mutate()}
                             disabled={generateAuditMutation.isPending}
-                            className="bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl"
+                            className="bg-brand-500 hover:bg-brand-600 text-background font-bold rounded-xl"
                         >
                             {generateAuditMutation.isPending ? 'Generating...' : 'Generate New Audit'}
                         </Button>
@@ -94,7 +94,7 @@ export default function AIReportsPage() {
                         <Button
                             onClick={() => generateAuditMutation.mutate()}
                             disabled={generateAuditMutation.isPending}
-                            className="bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl"
+                            className="bg-brand-500 hover:bg-brand-600 text-background font-bold rounded-xl"
                         >
                             {generateAuditMutation.isPending ? 'Generating...' : 'Generate First Audit'}
                         </Button>

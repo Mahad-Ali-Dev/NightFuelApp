@@ -97,7 +97,7 @@ export function KegelTrainer({ onClose }: { onClose: () => void }) {
 
                         {/* Day 2: Session */}
                         <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
-                            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-brand-500 shadow-[0_0_20px_-3px_hsl(var(--brand)/0.6)] shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 relative z-10 text-white">
+                            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-brand-500 shadow-[0_0_20px_-3px_hsl(var(--brand)/0.6)] shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 relative z-10 text-background">
                                 <Activity className="h-5 w-5" />
                             </div>
                             <Card className="w-[calc(100%-4rem)] md:w-[calc(50%-2rem)] glass-card cursor-pointer hover:bg-white/5 transition-colors border-white/20" onClick={handleStartSession}>
@@ -136,7 +136,7 @@ export function KegelTrainer({ onClose }: { onClose: () => void }) {
                 </div>
 
                 <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-black/80 to-transparent">
-                    <Button className="w-full max-w-xl mx-auto flex py-6 bg-brand-500 hover:bg-brand-600 text-white text-lg font-bold shadow-[0_0_20px_-3px_hsl(var(--brand)/0.5)]" onClick={handleStartSession}>
+                    <Button className="w-full max-w-xl mx-auto flex py-6 bg-brand-500 hover:bg-brand-600 text-background text-lg font-bold shadow-[0_0_20px_-3px_hsl(var(--brand)/0.5)]" onClick={handleStartSession}>
                         Start Today's Session
                     </Button>
                 </div>
@@ -165,7 +165,7 @@ export function KegelTrainer({ onClose }: { onClose: () => void }) {
                             <p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500 mt-1">Total Expr (XP)</p>
                         </div>
                     </div>
-                    <Button className="w-full py-6 bg-brand-500 hover:bg-brand-600 text-white font-bold" onClick={onClose}>
+                    <Button className="w-full py-6 bg-brand-500 hover:bg-brand-600 text-background font-bold" onClick={onClose}>
                         Finish
                     </Button>
                 </motion.div>

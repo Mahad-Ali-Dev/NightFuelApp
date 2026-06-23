@@ -309,7 +309,7 @@ function MessagesContent() {
                                 <div className="flex items-center justify-between mt-0.5">
                                     <p className="text-zinc-500 text-xs truncate">{contact.lastMessage}</p>
                                     {contact.unreadCount > 0 && (
-                                        <span className="bg-brand-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 shrink-0">
+                                        <span className="bg-brand-500 text-background text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-2 shrink-0">
                                             {contact.unreadCount}
                                         </span>
                                     )}
@@ -397,7 +397,7 @@ function MessagesContent() {
                                 <div className={cn(
                                     'max-w-[75%] px-4 py-2.5 rounded-2xl',
                                     msg.sender === 'me'
-                                        ? 'bg-brand-500 text-white rounded-br-md'
+                                        ? 'bg-brand-500 text-background rounded-br-md'
                                         : 'bg-white/10 text-white rounded-bl-md'
                                 )}>
                                     {renderMessageText(msg.text)}
@@ -441,7 +441,7 @@ function MessagesContent() {
                                 onClick={sendMessage}
                                 size="icon"
                                 disabled={sendMutation.isPending}
-                                className="bg-brand-500 hover:bg-brand-600 text-white rounded-full shrink-0"
+                                className="bg-brand-500 hover:bg-brand-600 text-background rounded-full shrink-0"
                             >
                                 {sendMutation.isPending ? (
                                     <Loader2 size={16} className="animate-spin" />
@@ -455,7 +455,7 @@ function MessagesContent() {
                                 size="icon"
                                 className={cn(
                                     'rounded-full shrink-0',
-                                    isRecording ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-brand-500 hover:bg-brand-600 text-white'
+                                    isRecording ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-brand-500 hover:bg-brand-600 text-background'
                                 )}
                             >
                                 <Mic size={16} />

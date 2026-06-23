@@ -178,7 +178,7 @@ export default function ExerciseProgressPage() {
                         <Dumbbell className="w-16 h-16 mx-auto text-neutral-700" />
                         <h3 className="text-white font-bold text-lg">No workouts logged yet</h3>
                         <p className="text-neutral-500 text-sm">Complete a workout to see analytics here</p>
-                        <Button onClick={() => router.push('/dashboard/training')} className="bg-brand-500 hover:bg-brand-600 text-white rounded-xl">
+                        <Button onClick={() => router.push('/dashboard/training')} className="bg-brand-500 hover:bg-brand-600 text-background rounded-xl">
                             Start a Workout
                         </Button>
                     </div>

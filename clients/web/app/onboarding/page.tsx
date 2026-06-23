@@ -224,7 +224,7 @@ export default function OnboardingPage() {
                                                         onClick={() => setValue('biologicalSex', s as any)}
                                                         className={cn(
                                                             "flex-1 py-2 rounded-lg text-sm font-medium transition-all",
-                                                            biologicalSex === s ? "bg-brand-500 text-white shadow-lg" : "text-zinc-400 hover:text-white"
+                                                            biologicalSex === s ? "bg-brand-500 text-background shadow-lg" : "text-zinc-400 hover:text-white"
                                                         )}
                                                     >
                                                         {s}
@@ -277,7 +277,7 @@ export default function OnboardingPage() {
                                         >
                                             <div className={cn(
                                                 "p-3 rounded-xl transition-all",
-                                                primaryGoal === goal.id ? "bg-brand-500 text-white" : "bg-white/5 text-zinc-400 group-hover:text-white"
+                                                primaryGoal === goal.id ? "bg-brand-500 text-background" : "bg-white/5 text-zinc-400 group-hover:text-white"
                                             )}>
                                                 <goal.icon size={20} />
                                             </div>
@@ -349,7 +349,7 @@ export default function OnboardingPage() {
                                                     onClick={() => setValue('activityLevel', level.id as any)}
                                                     className={cn(
                                                         "h-10 rounded-lg text-[10px] font-bold transition-all",
-                                                        activityLevel === level.id ? "bg-brand-500 text-white shadow-lg" : "bg-white/5 text-zinc-500 hover:text-zinc-300"
+                                                        activityLevel === level.id ? "bg-brand-500 text-background shadow-lg" : "bg-white/5 text-zinc-500 hover:text-zinc-300"
                                                     )}
                                                 >
                                                     {level.label}
@@ -460,7 +460,7 @@ export default function OnboardingPage() {
                             type="button"
                             onClick={nextStep}
                             disabled={isLoading}
-                            className="flex-[2] py-6 rounded-2xl bg-brand-500 hover:bg-brand-600 text-white shadow-[0_0_30px_rgba(251,146,60,0.3)] transition-all"
+                            className="flex-[2] py-6 rounded-2xl bg-brand-500 hover:bg-brand-600 text-background shadow-[0_0_30px_rgba(251,146,60,0.3)] transition-all"
                         >
                             {isLoading ? 'Saving...' : currentStep === STEPS.length - 1 ? 'Finish & Sync' : 'Continue'}
                             {!isLoading && <ArrowRight className="ml-2" size={18} />}

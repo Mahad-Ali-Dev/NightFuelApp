@@ -145,7 +145,7 @@ export default function CalculatorPage() {
                                                 onClick={() => setUnit(u)}
                                                 className={cn(
                                                     'px-2 rounded-lg text-xs font-bold transition-all',
-                                                    unit === u ? 'bg-brand-500 text-white' : 'text-neutral-500 hover:text-white'
+                                                    unit === u ? 'bg-brand-500 text-background' : 'text-neutral-500 hover:text-white'
                                                 )}
                                             >
                                                 {u}

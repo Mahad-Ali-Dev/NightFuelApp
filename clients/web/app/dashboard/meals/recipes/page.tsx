@@ -104,7 +104,7 @@ export default function RecipesPage() {
                                             className={cn(
                                                 'px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all border',
                                                 selectedTag === tag
-                                                    ? 'bg-brand-500 text-white border-brand-500/50 shadow-lg shadow-brand-500/20'
+                                                    ? 'bg-brand-500 text-background border-brand-500/50 shadow-lg shadow-brand-500/20'
                                                     : 'bg-white/5 text-neutral-400 border-white/10 hover:bg-white/10'
                                             )}
                                         >
@@ -234,7 +234,7 @@ export default function RecipesPage() {
                                         </div>
                                     </div>
 
-                                    <Button className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl py-6">
+                                    <Button className="w-full bg-brand-500 hover:bg-brand-600 text-background font-bold rounded-xl py-6">
                                         <Plus size={18} className="mr-2" /> Add to Meal Planner
                                     </Button>
                                 </div>

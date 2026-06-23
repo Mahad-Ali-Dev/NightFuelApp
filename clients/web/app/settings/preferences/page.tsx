@@ -357,7 +357,7 @@ export default function PreferencesPage() {
                     <Button
                         type="submit"
                         disabled={mutation.isPending || !isDirty}
-                        className="bg-brand-500 text-white hover:bg-brand-600 px-10 py-6 text-lg font-bold rounded-2xl shadow-xl shadow-brand-500/30 active:scale-95 transition-all"
+                        className="bg-brand-500 text-background hover:bg-brand-600 px-10 py-6 text-lg font-bold rounded-2xl shadow-xl shadow-brand-500/30 active:scale-95 transition-all"
                     >
                         {mutation.isPending ? (
                             <Loader2 className="h-6 w-6 animate-spin" />

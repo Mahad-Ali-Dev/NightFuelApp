@@ -147,7 +147,7 @@ export default function LogExercisePage() {
                                                 onClick={() => setType(t)}
                                                 className={cn(
                                                     "py-2 rounded-xl text-xs font-medium transition-all",
-                                                    type === t ? "bg-brand-500 text-white shadow-lg" : "bg-white/5 text-zinc-400 hover:text-white"
+                                                    type === t ? "bg-brand-500 text-background shadow-lg" : "bg-white/5 text-zinc-400 hover:text-white"
                                                 )}
                                             >
                                                 {t}
@@ -188,7 +188,7 @@ export default function LogExercisePage() {
                         <Button
                             type="submit"
                             disabled={mutation.isPending}
-                            className="w-full py-6 bg-brand-500 hover:bg-brand-600 text-white rounded-2xl shadow-xl shadow-brand-500/20 text-lg font-bold transition-all"
+                            className="w-full py-6 bg-brand-500 hover:bg-brand-600 text-background rounded-2xl shadow-xl shadow-brand-500/20 text-lg font-bold transition-all"
                         >
                             {mutation.isPending ? 'Saving...' : 'Finish Workout'}
                         </Button>

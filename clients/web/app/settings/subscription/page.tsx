@@ -128,8 +128,8 @@ const planColors: Record<string, { card: string; badge: string; btn: string; tex
     },
     brand: {
         card: 'border-brand-500/30 bg-brand-500/5',
-        badge: 'bg-brand-500 text-white',
-        btn: 'bg-brand-500 hover:bg-brand-400 text-white shadow-lg shadow-brand-500/25',
+        badge: 'bg-brand-500 text-background',
+        btn: 'bg-brand-500 hover:bg-brand-400 text-background shadow-lg shadow-brand-500/25',
         text: 'text-brand-400',
         glow: 'shadow-[0_0_40px_-10px] shadow-brand-500/30',
     },

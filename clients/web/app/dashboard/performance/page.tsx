@@ -202,7 +202,7 @@ function TabButton({ active, onClick, icon, label }: any) {
             onClick={onClick}
             className={cn(
                 "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all",
-                active ? "bg-brand-500 text-white shadow-lg shadow-brand-500/20" : "text-neutral-500 hover:text-white hover:bg-white/5"
+                active ? "bg-brand-500 text-background shadow-lg shadow-brand-500/20" : "text-neutral-500 hover:text-white hover:bg-white/5"
             )}
         >
             {icon}

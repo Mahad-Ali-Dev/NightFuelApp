@@ -262,7 +262,7 @@ export default function TrainingOnboarding() {
                     <Button
                         onClick={nextStep}
                         disabled={!canProceed()}
-                        className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-6 rounded-xl disabled:opacity-50 text-base"
+                        className="w-full bg-brand-500 hover:bg-brand-600 text-background font-bold py-6 rounded-xl disabled:opacity-50 text-base"
                     >
                         {step === 'confirm' ? 'ADD' : 'Continue'}
                         {step !== 'confirm' && <ChevronRight size={18} className="ml-2" />}

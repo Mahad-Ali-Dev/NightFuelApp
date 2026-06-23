@@ -92,7 +92,7 @@ export default function ProgressPhotosPage() {
                                 onClick={() => { setComparing(!comparing); setCompareIdxA(0); setCompareIdxB(photos.length - 1); }}
                                 className={cn(
                                     'rounded-xl text-sm font-bold',
-                                    comparing ? 'bg-brand-500 text-white' : 'bg-white/5 text-neutral-400 border border-white/10'
+                                    comparing ? 'bg-brand-500 text-background' : 'bg-white/5 text-neutral-400 border border-white/10'
                                 )}
                             >
                                 <SplitSquareHorizontal size={16} className="mr-1.5" />
@@ -101,7 +101,7 @@ export default function ProgressPhotosPage() {
                         )}
                         <Button
                             onClick={() => fileInputRef.current?.click()}
-                            className="bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold"
+                            className="bg-brand-500 hover:bg-brand-600 text-background rounded-xl font-bold"
                         >
                             <Plus size={16} className="mr-1.5" /> Add Photo
                         </Button>
@@ -163,7 +163,7 @@ export default function ProgressPhotosPage() {
                         <Camera size={48} className="text-neutral-700 mx-auto mb-4" />
                         <h3 className="text-white font-bold text-lg">No progress photos yet</h3>
                         <p className="text-neutral-500 text-sm mt-2 mb-4">Upload photos to track your visual transformation over time.</p>
-                        <Button onClick={() => fileInputRef.current?.click()} className="bg-brand-500 text-white rounded-xl font-bold">
+                        <Button onClick={() => fileInputRef.current?.click()} className="bg-brand-500 text-background rounded-xl font-bold">
                             <Camera size={16} className="mr-1.5" /> Take Your First Photo
                         </Button>
                     </div>
