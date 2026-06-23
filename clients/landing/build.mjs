@@ -42,6 +42,20 @@ const BASE_LD = {
   ],
 };
 
+// FAQ structured data (rich results + AI-search) for the home page.
+const FAQ_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: [
+    ['Is Zeitra only for night-shift workers?', 'No. Zeitra is built for any non-standard schedule — fixed nights, rotating, 12-hour, split shifts, on-call and irregular. If you do not work a clean 9-to-5, Zeitra adapts to whatever you actually work.'],
+    ['How is this different from MyFitnessPal or other trackers?', 'Regular trackers assume you eat breakfast, lunch and dinner against daylight. Zeitra times everything around your real sleep window using a circadian model, so the plan fits your body, not a 9-to-5 it was never designed for.'],
+    ['Do I need wearables or a gym?', 'No. Zeitra works from your shift schedule alone. You can add sleep and body-metric data for sharper plans, and workouts include bodyweight and beginner-friendly options that need no equipment.'],
+    ['Does it work offline?', 'Yes. A 760+ whole-food library and the full exercise demo set work offline, so you can log and train mid-shift even when signal is bad.'],
+    ['What does it cost?', 'Zeitra is free forever for the core experience — logging, basic AI plans and the offline libraries. Pro and Premium add unlimited AI, weekly coach reports, advanced analytics and human coaches. Launch pricing is announced soon.'],
+    ['When does it launch?', 'Zeitra is coming to iOS and Android. Join the waitlist and we will email you the moment it is live on the App Store and Google Play.'],
+  ].map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
+};
+
 marked.setOptions({ gfm: true, breaks: false });
 
 const read = (p) => readFileSync(p, 'utf8');
@@ -111,7 +125,7 @@ function footer() {
 </footer>`;
 }
 
-function shell({ title, description, body, active = '', wide = false, canonical = '/' }) {
+function shell({ title, description, body, active = '', wide = false, canonical = '/', extraLd = null }) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -136,6 +150,7 @@ function shell({ title, description, body, active = '', wide = false, canonical 
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
   <script type="application/ld+json">${JSON.stringify(BASE_LD)}</script>
+  ${extraLd ? `<script type="application/ld+json">${JSON.stringify(extraLd)}</script>` : ''}
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -172,6 +187,7 @@ writeFileSync(
     body: read('partials/landing.html'),
     active: 'home',
     canonical: '/',
+    extraLd: FAQ_LD,
   }),
 );
 
