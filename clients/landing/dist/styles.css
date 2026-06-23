@@ -244,6 +244,16 @@ h1, h2, h3, h4 { font-family: var(--display); letter-spacing: 0; line-height: 1.
 .shift h3 { font-size: 18px; margin-bottom: 6px; }
 .shift p { color: var(--muted); font-size: 13.5px; font-family: var(--sans); }
 
+/* ── Roles / personas ────────────────────────────────────────────────────── */
+.roles-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.role { padding: 26px; transition: transform 0.3s var(--ease), border-color 0.3s var(--ease); }
+.role:hover { transform: translateY(-4px); border-color: var(--lime); }
+.role .ri { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; margin-bottom: 14px;
+  background: linear-gradient(135deg, rgba(168, 204, 60, 0.18), rgba(0, 212, 170, 0.10)); border: 1px solid var(--border-2); color: var(--lime); }
+.role .ri svg { width: 22px; height: 22px; }
+.role h3 { font-size: 19px; margin-bottom: 6px; }
+.role p { color: var(--muted); font-size: 14px; font-family: var(--sans); }
+
 /* ── Guide preview ───────────────────────────────────────────────────────── */
 .guidecta .glass { padding: 46px; display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 36px; align-items: center; }
 .guidecta h2 { font-size: clamp(28px, 4vw, 42px); margin-bottom: 14px; }
@@ -386,7 +396,7 @@ h1, h2, h3, h4 { font-family: var(--display); letter-spacing: 0; line-height: 1.
   .hero-art { order: -1; }
   .phone { width: 244px; }
   .science-art { border-left: 0; border-top: 1px solid var(--border); min-height: 300px; }
-  .features-grid, .shifts-grid, .pricing-grid, .stat-grid, .contact-cards, .steps { grid-template-columns: 1fr 1fr; }
+  .features-grid, .shifts-grid, .pricing-grid, .stat-grid, .contact-cards, .steps, .roles-grid { grid-template-columns: 1fr 1fr; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
   .guide-wrap { grid-template-columns: 1fr; gap: 0; }
   .guide-toc { display: none; }
@@ -394,7 +404,7 @@ h1, h2, h3, h4 { font-family: var(--display); letter-spacing: 0; line-height: 1.
 }
 @media (max-width: 560px) {
   body { font-size: 16px; }
-  .features-grid, .shifts-grid, .pricing-grid, .stat-grid, .contact-cards, .steps, .footer-grid { grid-template-columns: 1fr; }
+  .features-grid, .shifts-grid, .pricing-grid, .stat-grid, .contact-cards, .steps, .roles-grid, .footer-grid { grid-template-columns: 1fr; }
   .problem .glass, .waitlist .glass, .science-copy, .guidecta .glass { padding: 30px 22px; }
   .hero-cta .btn { width: 100%; }
 }

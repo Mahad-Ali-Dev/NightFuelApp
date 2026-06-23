@@ -9,6 +9,39 @@ const OUT = 'dist';
 const REPO_CONTENT = '../web/content';
 const SITE = 'https://zeitra.app';
 
+// Sitewide structured data — helps Google and AI search understand the app.
+const BASE_LD = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': `${SITE}/#org`,
+      name: 'Zeitra',
+      url: SITE,
+      logo: `${SITE}/assets/favicon.svg`,
+      email: 'hello@zeitra.app',
+      description: 'Chrono-nutrition, training and sleep optimization for shift workers.',
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${SITE}/#website`,
+      url: SITE,
+      name: 'Zeitra',
+      publisher: { '@id': `${SITE}/#org` },
+    },
+    {
+      '@type': 'SoftwareApplication',
+      name: 'Zeitra',
+      operatingSystem: 'iOS, Android',
+      applicationCategory: 'HealthApplication',
+      description:
+        'Zeitra times your meals, workouts, caffeine and sleep to your real shift schedule — chrono-nutrition for shift workers.',
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+      publisher: { '@id': `${SITE}/#org` },
+    },
+  ],
+};
+
 marked.setOptions({ gfm: true, breaks: false });
 
 const read = (p) => readFileSync(p, 'utf8');
@@ -102,6 +135,7 @@ function shell({ title, description, body, active = '', wide = false, canonical 
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
+  <script type="application/ld+json">${JSON.stringify(BASE_LD)}</script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
