@@ -1,49 +1,55 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: hsl(240 10% 4%);
+  /* Zeitra — electric lime on cool near-black. */
+  --color-background: hsl(225 24% 5%);
   --color-foreground: hsl(0 0% 98%);
 
-  --color-card: hsl(240 10% 6%);
+  --color-card: hsl(224 22% 8%);
   --color-card-foreground: hsl(0 0% 98%);
 
-  --color-popover: hsl(240 10% 4%);
+  --color-popover: hsl(225 24% 5%);
   --color-popover-foreground: hsl(0 0% 98%);
 
-  --color-primary: hsl(24 95% 53%);
-  --color-primary-foreground: hsl(0 0% 100%);
+  /* Lime primary; INK foreground (never white on lime). */
+  --color-primary: hsl(75 60% 52%);
+  --color-primary-foreground: hsl(225 29% 6%);
 
-  --color-secondary: hsl(240 5% 15%);
+  --color-secondary: hsl(225 16% 14%);
   --color-secondary-foreground: hsl(0 0% 98%);
 
-  --color-muted: hsl(240 5% 15%);
-  --color-muted-foreground: hsl(240 5% 65%);
+  --color-muted: hsl(225 16% 14%);
+  --color-muted-foreground: hsl(225 10% 65%);
 
-  --color-accent: hsl(24 95% 53%);
-  --color-accent-foreground: hsl(0 0% 100%);
+  --color-accent: hsl(75 60% 52%);
+  --color-accent-foreground: hsl(225 29% 6%);
 
   --color-destructive: hsl(0 84% 60%);
   --color-destructive-foreground: hsl(0 0% 98%);
 
-  --color-border: hsl(240 5% 15%);
-  --color-input: hsl(240 5% 15%);
-  --color-ring: hsl(24 95% 53%);
+  --color-border: hsl(225 14% 16%);
+  --color-input: hsl(225 14% 16%);
+  --color-ring: hsl(75 60% 52%);
 
   --radius-lg: 0.75rem;
   --radius-md: calc(0.75rem - 2px);
   --radius-sm: calc(0.75rem - 4px);
 
-  --color-brand-50: #fff7ed;
-  --color-brand-100: #ffedd5;
-  --color-brand-200: #fed7aa;
-  --color-brand-300: #fdba74;
-  --color-brand-400: #fb923c;
-  --color-brand-500: #f97316;
-  --color-brand-600: #ea580c;
-  --color-brand-700: #c2410c;
-  --color-brand-800: #9a3412;
-  --color-brand-900: #7c2d12;
-  --color-brand: #f97316;
+  /* Zeitra lime brand scale (was orange). */
+  --color-brand-50: #f6faea;
+  --color-brand-100: #eaf3cc;
+  --color-brand-200: #d9ea9f;
+  --color-brand-300: #c5e06b;
+  --color-brand-400: #b6d752;
+  --color-brand-500: #a8cc3c;
+  --color-brand-600: #93b82e;
+  --color-brand-700: #769526;
+  --color-brand-800: #5d731f;
+  --color-brand-900: #4a5a1e;
+  --color-brand: #a8cc3c;
+
+  --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-barlow-condensed), var(--font-barlow), sans-serif;
 }
 
 @layer base {
@@ -53,7 +59,13 @@
 
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  h1, h2 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
   }
 }
 
