@@ -7,6 +7,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
+import { CtaButton } from '@/components/ui';
 import Svg, { Circle } from 'react-native-svg';
 import Animated, {
     FadeInDown,
@@ -324,22 +325,13 @@ export default function WorkoutCompleteScreen() {
                         </TouchableOpacity>
                     ) : null}
 
-                    <TouchableOpacity
-                        style={[styles.returnBtn, shadows.glow(colors.accent.coral)]}
+                    <CtaButton
+                        label="Done"
                         onPress={handleReturn}
-                        activeOpacity={0.9}
-                        accessibilityRole="button"
+                        size="lg"
                         accessibilityLabel="Return to dashboard"
-                    >
-                        <LinearGradient
-                            colors={colors.gradients.coralCta}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={styles.returnBtnInner}
-                        >
-                            <Text style={[typography.h3, { color: colors.text.inverse, fontWeight: '700' }]}>Done</Text>
-                        </LinearGradient>
-                    </TouchableOpacity>
+                        style={styles.returnBtn}
+                    />
                 </Animated.View>
             </View>
         </View>

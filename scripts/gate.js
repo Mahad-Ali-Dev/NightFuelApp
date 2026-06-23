@@ -385,9 +385,21 @@ function buildSteps() {
             ],
         },
         {
-            name: 'check-types (turbo)',
+            // CI runs `npm run check-types --workspaces --if-present` (NOT turbo).
+            // The previous `turbo run check-types` here needed a root
+            // `packageManager` field to resolve the workspace graph — but that
+            // field was REMOVED to fix the CI Build Check (next build's getRegistry
+            // picks the runner's global yarn 1.22, which hard-errors on the field's
+            // mere presence). With it gone, turbo can no longer resolve workspaces
+            // locally ("Could not resolve workspaces. Missing packageManager field")
+            // even though CI stays green — a gate-vs-CI gap. Running the SAME
+            // npm --workspaces command CI runs removes the turbo dependency and
+            // closes that gap. (Mobile defines `typecheck`, not `check-types`, so
+            // --if-present skips it — the explicit check-types:mobile step below
+            // covers it, same as before.)
+            name: 'check-types (npm --workspaces, matches CI)',
             cmd: NPM,
-            args: ['run', 'check-types', '--silent'],
+            args: ['run', 'check-types', '--workspaces', '--if-present', '--silent'],
         },
         {
             // Mobile typecheck — EXPLICIT, run directly here rather than via the

@@ -129,10 +129,10 @@ import SettingsIndexScreen from '../../app/(settings)/index';
 // No React, no mocks consumed — direct assertions against the real selectors.
 
 describe('Night Read selectors — pure contract', () => {
-  test('getThemeColors("dark") is unchanged (Aurora dark palette, coral brand)', () => {
+  test('getThemeColors("dark") is unchanged (Aurora dark palette, lime brand)', () => {
     const dark = getThemeColors('dark');
     expect(dark.background.primary).toBe('#0A0C12');
-    expect(dark.brand).toBe('#FF6B35');
+    expect(dark.brand).toBe('#A8CC3C');
     // The deep-red Night Read primary must NOT have leaked into Aurora dark.
     expect(dark.background.primary).not.toBe('#0A0000');
   });
@@ -199,9 +199,9 @@ describe('Night Read provider — useTheme() consumer re-themes', () => {
     expect(screen.getByText('bg:#0A0000|brand:#8C1A1A')).toBeTruthy();
   });
 
-  test('OFF → consumer reads the unchanged Aurora dark primary + coral brand', () => {
+  test('OFF → consumer reads the unchanged Aurora dark primary + lime brand', () => {
     renderProbe(false);
-    expect(screen.getByText('bg:#0A0C12|brand:#FF6B35')).toBeTruthy();
+    expect(screen.getByText('bg:#0A0C12|brand:#A8CC3C')).toBeTruthy();
   });
 });
 

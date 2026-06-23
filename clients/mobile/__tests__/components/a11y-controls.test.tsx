@@ -444,8 +444,10 @@ describe('a11y guard — active-workout set rows (rendered)', () => {
 
   test('the seeded exercise renders set rows with a "Complete set" button exposing selected state', () => {
     renderWithTheme(<ActiveWorkoutScreen />);
-    // The exercise card seeded from the active session must be present.
-    expect(screen.getByText('Bench Press')).toBeTruthy();
+    // The exercise card seeded from the active session must be present. The
+    // redesign surfaces the exercise name in more than one spot (hero header +
+    // the set-rows card), so assert presence via getAllByText.
+    expect(screen.getAllByText('Bench Press').length).toBeGreaterThan(0);
 
     // Two sets → two "Complete set" controls, each a button starting unselected.
     const completes = screen.getAllByLabelText('Complete set');

@@ -16,6 +16,7 @@ import { EmptyState, GlassCard, Skeleton } from '@/components/ui';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { CountUpText } from '@/components/CountUpText';
 import { LinearGradient } from 'expo-linear-gradient';
+import { CtaButton } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import { typography as typo } from '@/theme/typography';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -241,25 +242,15 @@ export default function HydrationTrackerScreen() {
                     style={styles.ctaFade}
                     pointerEvents="none"
                 />
-                <PressableScale
-                    accessibilityRole="button"
-                    accessibilityLabel="Add 250 ml of water"
-                    accessibilityState={{ disabled: mutation.isPending }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={[styles.cta, shadows.glow(colors.accent.coral)]}
+                <CtaButton
+                    label="Add 250 ml"
+                    icon="add"
                     onPress={() => handleAdd(250)}
                     disabled={mutation.isPending}
-                >
-                    <LinearGradient
-                        colors={colors.gradients.coralCta}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.ctaGradient}
-                    >
-                        <Ionicons name="add" size={24} color={colors.text.inverse} />
-                        <Text style={[styles.ctaText, { color: colors.text.inverse }]}>Add 250 ml</Text>
-                    </LinearGradient>
-                </PressableScale>
+                    accessibilityLabel="Add 250 ml of water"
+                    size="lg"
+                    style={styles.cta}
+                />
             </View>
               </>
             )}

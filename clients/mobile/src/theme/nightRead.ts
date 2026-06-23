@@ -36,6 +36,11 @@ export const nightReadColors = {
     coral: '#8C1A1A',      // Primary CTA, brand (was bright coral)
     coralLight: '#A02020',
     coralDark: '#701414',
+    // Brand-accurate lime aliases — mirror coral* (in Aurora, lime === coral).
+    // Red-shifted to the same dim red here; present for shape parity (colors.ts).
+    lime: '#8C1A1A',
+    limeLight: '#A02020',
+    limeDark: '#701414',
     pink: '#8C1A1A',       // Aurora gradient partner — flattened to red
     cyan: '#8C1A1A',       // Success/progress — aliased to red per spec
     cyanLight: '#A02020',
@@ -77,6 +82,10 @@ export const nightReadColors = {
     // shape-parity holds when the Night Read flag is ON; flattened to the same
     // dim red as `coral` per this variant's single-wavelength convention.
     coralCta: ['#8C1A1A', '#8C1A1A'] as const,
+    // lime / limeCta — brand-accurate aliases of coral / coralCta (Aurora's lime
+    // gradients === the coral ones). Flattened to the same dim red here.
+    lime: ['#8C1A1A', '#8C1A1A'] as const,
+    limeCta: ['#8C1A1A', '#8C1A1A'] as const,
     cyan: ['#8C1A1A', '#8C1A1A'] as const,
     purple: ['#3A1010', '#3A1010'] as const,
     dark: ['#140404', '#0A0000'] as const,
