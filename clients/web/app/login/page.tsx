@@ -50,7 +50,7 @@ function LoginForm() {
             {/* Logo */}
             <div className="flex flex-col items-center mb-8">
                 <div className="h-14 w-14 rounded-2xl bg-brand-500 flex items-center justify-center shadow-2xl shadow-brand-500/40 mb-4">
-                    <Zap className="h-7 w-7 text-white" strokeWidth={2.5} />
+                    <Zap className="h-7 w-7 text-background" strokeWidth={2.5} />
                 </div>
                 <h1 className="text-2xl font-black text-white tracking-tight">Zeitra</h1>
                 <p className="text-neutral-500 text-sm mt-1">Chrono-nutrition for shift workers</p>
@@ -122,7 +122,7 @@ function LoginForm() {
                     <Button
                         type="submit"
                         disabled={isSubmitting}
-                        className="w-full h-11 bg-brand-500 hover:bg-brand-400 text-white font-semibold shadow-lg shadow-brand-500/25 transition-all active:scale-95"
+                        className="w-full h-11 bg-brand-500 hover:bg-brand-400 text-background font-bold shadow-lg shadow-brand-500/25 transition-all active:scale-95"
                     >
                         {isSubmitting ? (
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in...</>
