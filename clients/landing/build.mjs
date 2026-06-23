@@ -13,13 +13,14 @@ marked.setOptions({ gfm: true, breaks: false });
 
 const read = (p) => readFileSync(p, 'utf8');
 
+// Zeitra mark — a circadian "Z" in ink on the electric-lime brand tile.
 const LOGO = `<svg class="logo-mark" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false">
   <defs><linearGradient id="zg" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#FF8C42"/><stop offset="1" stop-color="#FF5A5F"/>
+    <stop offset="0" stop-color="#C5E06B"/><stop offset="1" stop-color="#93B82E"/>
   </linearGradient></defs>
   <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#zg)"/>
-  <path d="M10 11h12l-9 10h9" fill="none" stroke="#0b0c12" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="22.5" cy="9.5" r="2.1" fill="#0b0c12"/>
+  <path d="M10 11h12l-9 10h9" fill="none" stroke="#0a0c12" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="22.5" cy="9.5" r="2.1" fill="#0a0c12"/>
 </svg>`;
 
 function nav(active) {
@@ -31,8 +32,9 @@ function nav(active) {
     <button class="nav-toggle" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
     <nav class="nav-links">
       ${link('/index.html#how', 'How it works', '')}
-      ${link('/index.html#shifts', 'Your shift', '')}
+      ${link('/index.html#features', 'Features', '')}
       ${link('/index.html#pricing', 'Pricing', '')}
+      ${link('/guide.html', 'Guide', 'guide')}
       ${link('/support.html', 'Support', 'support')}
       <a class="btn btn-primary btn-sm" href="/index.html#waitlist">Join the waitlist</a>
     </nav>
@@ -46,33 +48,37 @@ function footer() {
   <div class="container footer-grid">
     <div class="footer-brand">
       <a class="brand" href="/index.html" aria-label="Zeitra home">${LOGO}<span>Zeitra</span></a>
-      <p>Chrono-nutrition for the 1.8&nbsp;billion people who work while the world sleeps.</p>
+      <p>Chrono-nutrition, training and sleep for the 1.8&nbsp;billion people who work while the world sleeps.</p>
     </div>
     <div class="footer-col">
       <h4>Product</h4>
       <a href="/index.html#how">How it works</a>
-      <a href="/index.html#shifts">Your shift</a>
+      <a href="/index.html#features">Features</a>
+      <a href="/index.html#shifts">Shift types</a>
       <a href="/index.html#pricing">Pricing</a>
     </div>
     <div class="footer-col">
-      <h4>Legal</h4>
-      <a href="/privacy.html">Privacy</a>
-      <a href="/terms.html">Terms</a>
+      <h4>Learn</h4>
+      <a href="/guide.html">User guide</a>
+      <a href="/index.html#science">The science</a>
+      <a href="/index.html#faq">FAQ</a>
+      <a href="/support.html">Support</a>
     </div>
     <div class="footer-col">
-      <h4>Get in touch</h4>
-      <a href="/support.html">Support</a>
+      <h4>Company</h4>
+      <a href="/privacy.html">Privacy</a>
+      <a href="/terms.html">Terms</a>
       <a href="mailto:hello@zeitra.app">hello@zeitra.app</a>
     </div>
   </div>
   <div class="container footer-base">
     <span>&copy; ${y} Tase LLC. All rights reserved.</span>
-    <span>Made for people who don't sleep at night.</span>
+    <span>Strong today. Better everyday.</span>
   </div>
 </footer>`;
 }
 
-function shell({ title, description, body, active = '', wide = false }) {
+function shell({ title, description, body, active = '', wide = false, canonical = '/' }) {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -80,18 +86,21 @@ function shell({ title, description, body, active = '', wide = false }) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${title}</title>
   <meta name="description" content="${description}">
-  <meta name="theme-color" content="#07080d">
+  <meta name="theme-color" content="#0a0c12">
   <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
-  <link rel="canonical" href="${SITE}/">
+  <link rel="canonical" href="${SITE}${canonical}">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Zeitra">
   <meta property="og:title" content="${title}">
   <meta property="og:description" content="${description}">
-  <meta property="og:url" content="${SITE}/">
+  <meta property="og:url" content="${SITE}${canonical}">
+  <meta property="og:image" content="${SITE}/assets/og.svg">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${title}">
+  <meta name="twitter:description" content="${description}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -125,9 +134,22 @@ writeFileSync(
   shell({
     title: 'Zeitra — Meals, Workouts & Sleep on Your Shift, Not a 9-to-5',
     description:
-      'Zeitra is chrono-nutrition for shift workers. It times your meals, workouts, caffeine and sleep to your real schedule. Coming soon to iOS and Android.',
+      'Zeitra is chrono-nutrition, training and sleep optimization for shift workers. It times your meals, workouts, caffeine and sleep to your real schedule. Coming soon to iOS and Android.',
     body: read('partials/landing.html'),
     active: 'home',
+    canonical: '/',
+  }),
+);
+
+writeFileSync(
+  `${OUT}/guide.html`,
+  shell({
+    title: 'User Guide — How to Use Zeitra',
+    description:
+      'The complete Zeitra guide: set your shift, read your daily fuel plan, log meals, time caffeine, train around fatigue, optimize sleep, and work with Ria, your AI coach.',
+    body: read('partials/guide.html'),
+    active: 'guide',
+    canonical: '/guide.html',
   }),
 );
 
@@ -138,6 +160,7 @@ writeFileSync(
     description: 'Get help with Zeitra: FAQs, contact, account and subscription help.',
     body: read('partials/support.html'),
     active: 'support',
+    canonical: '/support.html',
   }),
 );
 
@@ -148,6 +171,7 @@ writeFileSync(
     description: 'How Zeitra collects, uses and protects your personal and health data.',
     body: `<article class="prose container">${legal(`${REPO_CONTENT}/privacy.md`)}</article>`,
     wide: true,
+    canonical: '/privacy.html',
   }),
 );
 
@@ -158,21 +182,23 @@ writeFileSync(
     description: 'The terms that govern your use of Zeitra.',
     body: `<article class="prose container">${legal(`${REPO_CONTENT}/terms.md`)}</article>`,
     wide: true,
+    canonical: '/terms.html',
   }),
 );
 
 copyFileSync('styles.css', `${OUT}/styles.css`);
 copyFileSync('app.js', `${OUT}/app.js`);
 copyFileSync('assets/favicon.svg', `${OUT}/assets/favicon.svg`);
+copyFileSync('assets/og.svg', `${OUT}/assets/og.svg`);
 
 writeFileSync(`${OUT}/robots.txt`, `User-agent: *\nAllow: /\nSitemap: ${SITE}/sitemap.xml\n`);
 writeFileSync(
   `${OUT}/sitemap.xml`,
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-    ['/', '/support.html', '/privacy.html', '/terms.html']
+    ['/', '/guide.html', '/support.html', '/privacy.html', '/terms.html']
       .map((u) => `  <url><loc>${SITE}${u}</loc></url>`)
       .join('\n') +
     `\n</urlset>\n`,
 );
 
-console.log('Built dist/ — index, support, privacy, terms, robots, sitemap.');
+console.log('Built dist/ — index, guide, support, privacy, terms, robots, sitemap.');

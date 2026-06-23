@@ -86,4 +86,28 @@
       }
     });
   }
+
+  // ── Guide TOC scroll-spy ─────────────────────────────────────────────
+  var toc = document.querySelector('.guide-toc');
+  if (toc && 'IntersectionObserver' in window) {
+    var tocLinks = {};
+    toc.querySelectorAll('a[href^="#"]').forEach(function (a) {
+      tocLinks[a.getAttribute('href').slice(1)] = a;
+    });
+    var spy = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) {
+            Object.keys(tocLinks).forEach(function (id) {
+              tocLinks[id].classList.toggle('active', id === e.target.id);
+            });
+          }
+        });
+      },
+      { rootMargin: '-40% 0px -55% 0px' },
+    );
+    document.querySelectorAll('.guide-section[id]').forEach(function (s) {
+      spy.observe(s);
+    });
+  }
 })();
