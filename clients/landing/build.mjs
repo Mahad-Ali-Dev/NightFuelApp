@@ -220,6 +220,21 @@ writeFileSync(
   }),
 );
 
+writeFileSync(
+  `${OUT}/404.html`,
+  shell({
+    title: 'Page not found — Zeitra',
+    description: "The page you were looking for couldn't be found.",
+    body: `<section class="notfound"><div class="container">
+      <span class="eyebrow">404</span>
+      <h1>This page slipped past the night shift.</h1>
+      <p>The page you're looking for doesn't exist or has moved. Let's get you back on schedule.</p>
+      <div class="hero-cta"><a class="btn btn-primary" href="/index.html">Back to home</a><a class="btn btn-ghost" href="/guide.html">Read the guide</a></div>
+    </div></section>`,
+    canonical: '/404.html',
+  }),
+);
+
 copyFileSync('styles.css', `${OUT}/styles.css`);
 copyFileSync('app.js', `${OUT}/app.js`);
 copyFileSync('assets/favicon.svg', `${OUT}/assets/favicon.svg`);
@@ -235,4 +250,4 @@ writeFileSync(
     `\n</urlset>\n`,
 );
 
-console.log('Built dist/ — index, guide, support, privacy, terms, robots, sitemap.');
+console.log('Built dist/ — index, guide, support, privacy, terms, 404, robots, sitemap.');
