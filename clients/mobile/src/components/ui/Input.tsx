@@ -24,6 +24,13 @@ interface InputProps extends TextInputProps {
    * password').
    */
   rightIconAccessibilityLabel?: string;
+  /**
+   * Current on/off state of the rightIcon toggle (e.g. password visible).
+   * Exposed to assistive tech as accessibilityState.expanded so the toggle's
+   * state is announced, not just its flipping label. Optional — when omitted
+   * the toggle is treated as a plain button.
+   */
+  rightIconActive?: boolean;
 }
 
 export function Input({
@@ -33,6 +40,7 @@ export function Input({
   rightIcon,
   onRightIconPress,
   rightIconAccessibilityLabel,
+  rightIconActive,
   style,
   ...props
 }: InputProps) {
@@ -88,7 +96,11 @@ export function Input({
             onPress={onRightIconPress}
             accessibilityRole="button"
             accessibilityLabel={rightIconAccessibilityLabel}
-            style={styles.rightIcon}
+            accessibilityState={
+              rightIconActive === undefined ? undefined : { expanded: rightIconActive }
+            }
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={({ pressed }) => [styles.rightIcon, pressed && styles.rightIconPressed]}
           >
             <Ionicons name={rightIcon} size={20} color={colors.text.tertiary} />
           </Pressable>
@@ -128,6 +140,10 @@ const styles = StyleSheet.create({
   rightIcon: {
     padding: spacing.xs,
     marginLeft: spacing.sm,
+  },
+  rightIconPressed: {
+    opacity: 0.6,
+    transform: [{ scale: 0.92 }],
   },
   error: {
     fontSize: 12,

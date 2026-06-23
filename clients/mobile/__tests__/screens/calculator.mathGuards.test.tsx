@@ -133,6 +133,19 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
 }));
 
+// react-native-gifted-charts ships a native dep AND transitively pulls
+// gifted-charts-core (untransformed ESM). The redesigned calculator imports
+// <BarChart>; stub the charts to host views so the import graph resolves
+// (mirrors analytics.test.tsx / exercise-detail.test.tsx).
+jest.mock('react-native-gifted-charts', () => {
+  const RN = require('react-native');
+  return {
+    BarChart: (props: any) => <RN.View {...props} />,
+    LineChart: (props: any) => <RN.View {...props} />,
+    PieChart: (props: any) => <RN.View {...props} />,
+  };
+});
+
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
 import { render, fireEvent, screen, within } from '@testing-library/react-native';
@@ -207,7 +220,15 @@ function expectAllKgFiniteNonNegative(): number[] {
  * toxic token exists anywhere.
  */
 function expectNumeral(expected: number) {
-  expect(screen.getByText(String(expected))).toBeTruthy();
+  // The redesigned result ring wraps the giant numeral in an `accessible` View
+  // (accessibilityRole="text") so the whole value announces as ONE phrase to a
+  // screen reader — which means RTL collapses the inner <Text> nodes and they are
+  // no longer independently queryable by `getByText`. The exact estimate is now
+  // pinned via that single accessibility label instead, which embeds the same
+  // rounded value the numeral renders.
+  expect(
+    screen.getByLabelText(`Estimated one-rep max ${expected} kilograms`),
+  ).toBeTruthy();
   expect(screen.queryByText(INFINITY_RE)).toBeNull();
   expect(screen.queryByText(NAN_RE)).toBeNull();
 }
@@ -231,14 +252,17 @@ describe('CalculatorScreen — 1RM divide-by-zero guards + inline save surface',
     // Infinity pre-guard) must STILL show a finite chip + finite zone rows: the
     // `safe` guard collapses the Infinity to 0 rather than leaking it. So the
     // numeral and the Brzycki chip both read 0 here, and NO 'Infinity' appears.
-    fireEvent.press(screen.getByLabelText('brzycki formula'));
+    // The redesigned formula chips append the formula's value + a ", selected"
+    // suffix to the a11y label (e.g. "brzycki formula, 0 kilograms"), so match the
+    // formula name by anchored prefix rather than the bare old label.
+    fireEvent.press(screen.getByLabelText(/^brzycki formula/));
     expectNumeral(0);
     const valuesB = expectAllKgFiniteNonNegative();
     expect(valuesB.length).toBeGreaterThan(0);
 
     // Lander at r=37: 10000/(101.3 - 2.67123·37) = round(4057.6) = 4058 — finite &
     // positive; still no toxic token leaks.
-    fireEvent.press(screen.getByLabelText('lander formula'));
+    fireEvent.press(screen.getByLabelText(/^lander formula/));
     expectNumeral(4058);
     expectAllKgFiniteNonNegative();
 
@@ -261,7 +285,7 @@ describe('CalculatorScreen — 1RM divide-by-zero guards + inline save surface',
     // Brzycki at r=40 → 100·(36/(37-40)) = 100·(36/-3) = -1200 < 0 pre-guard. `safe`
     // clamps the negative estimate to 0 → the numeral reads 0 (never '-1200'), and
     // no toxic token / negative kg leaks anywhere.
-    fireEvent.press(screen.getByLabelText('brzycki formula'));
+    fireEvent.press(screen.getByLabelText(/^brzycki formula/));
     expectNumeral(0);
 
     // No "-<n>kg" negative anywhere (the guard clamps the negative estimate to 0).

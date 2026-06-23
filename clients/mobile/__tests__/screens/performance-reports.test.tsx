@@ -184,8 +184,9 @@ describe('AIReportsScreen — finite-guard + honest generate-audit state', () =>
     expect(screen.getByText('84')).toBeTruthy();
     // …alongside its week range (rendered in both the history tab and banner).
     expect(screen.getAllByText('Jun 9 – Jun 15').length).toBeGreaterThanOrEqual(1);
-    // …and the summary body. None of the guard symptoms leak for valid data.
-    expect(screen.getByText('"Strong adherence this week."')).toBeTruthy();
+    // …and the summary body (rendered verbatim, no surrounding quotes). None of
+    // the guard symptoms leak for valid data.
+    expect(screen.getByText('Strong adherence this week.')).toBeTruthy();
     assertNoGarbage();
   });
 
@@ -242,7 +243,7 @@ describe('AIReportsScreen — finite-guard + honest generate-audit state', () =>
     expect(() => toJSON()).not.toThrow();
     expect(toJSON()).not.toBeNull();
     // The header is always present; the loaded score banner is not reached yet.
-    expect(screen.getByText('AI Performance Reports')).toBeTruthy();
+    expect(screen.getByText('AI Reports')).toBeTruthy();
     assertNoGarbage();
   });
 
@@ -312,11 +313,11 @@ describe('AIReportsScreen — finite-guard + honest generate-audit state', () =>
   });
 
   // ── Empty branch → the generate affordance (CTA) stays present ─────────────
-  test('empty: renders the "No Reports Yet" CTA so the generate affordance is always reachable', () => {
+  test('empty: renders the empty-state CTA so the generate affordance is always reachable', () => {
     mockReportsState.data = [];
     renderScreen();
 
-    expect(screen.getByText('No Reports Yet')).toBeTruthy();
+    expect(screen.getByText('Your first report awaits')).toBeTruthy();
     const cta = screen.getByText('Generate First Audit');
     expect(cta).toBeTruthy();
     fireEvent.press(cta);

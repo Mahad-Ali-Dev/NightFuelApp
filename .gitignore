@@ -86,3 +86,11 @@ __pycache__/
 scripts/.cache/demo-urls/*
 !scripts/.cache/demo-urls/.gitkeep
 
+
+# Exercise demo videos — large binaries (several GB across muscle groups).
+# Belong on a CDN/bucket, NOT git. The small catalog JSON/xlsx + build scripts
+# ARE tracked. Add videos to git-LFS or a bucket; reference them via videoUrl.
+exercises/**/*.mp4
+exercises/**/*.mov
+exercises/**/*.webm
+exercises/**/*.MP4

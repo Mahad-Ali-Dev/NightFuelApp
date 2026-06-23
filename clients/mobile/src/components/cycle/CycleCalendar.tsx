@@ -245,7 +245,7 @@ export function CycleCalendar({
                                     <Text
                                         style={[
                                             typography.caption,
-                                            { color: isLogged ? '#fff' : colors.text.primary },
+                                            { color: isLogged ? colors.text.inverse : colors.text.primary },
                                         ]}
                                     >
                                         {cell.day}

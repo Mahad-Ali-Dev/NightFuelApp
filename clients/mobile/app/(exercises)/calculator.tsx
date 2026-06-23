@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput,
-    KeyboardAvoidingView, Platform
+    KeyboardAvoidingView, Platform, Pressable, Dimensions,
 } from 'react-native';
 
 import { useRouter } from 'expo-router';
@@ -11,10 +11,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { logOneRepMax } from '@/api/exercises';
 import { GlassCard, CtaButton } from '@/components/ui';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
+import { BarChart } from 'react-native-gifted-charts';
+import Svg, { Circle } from 'react-native-svg';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
+
+const { width } = Dimensions.get('window');
+
+// Diameter of the hero progress ring. The lime is now a real stroked SVG arc
+// (not a flat radial band): RING_SIZE is the outer box, RING_STROKE the band.
+const RING_SIZE = 224;
+const RING_STROKE = 10;
 
 // ─── Formulas ───────────────────────────────────────────────────────────────
 
@@ -75,6 +84,38 @@ export default function CalculatorScreen() {
 
     const estimated1RM = results[activeFormula];
 
+    // Zone drop-off chart data: estimated load (estimated1RM × pct/100) at each
+    // %1RM band. The 100% / top bar is anchored in brand-primary lime; the rest
+    // recede to cyan so the hero 1RM reads as the primary accent (matching the
+    // analytics screen, where lime carries the headline data and cyan is
+    // secondary). Reversed so %1RM rises left→right toward the 100% lime anchor.
+    const zoneChartData = useMemo(() => {
+        if (estimated1RM <= 0) return [];
+        return [...ZONES].reverse().map((zone) => {
+            const isTop = zone.pct === 100;
+            return {
+                value: safe((estimated1RM * zone.pct) / 100),
+                label: `${zone.pct}%`,
+                frontColor: isTop ? colors.accent.coral : withAlpha(colors.accent.cyan, 0.85),
+                gradientColor: isTop ? colors.accent.coralDark : colors.accent.cyan,
+                topLabelComponent: () => (
+                    <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 9 }]}>
+                        {safe((estimated1RM * zone.pct) / 100)}
+                    </Text>
+                ),
+            };
+        });
+    }, [estimated1RM, colors, typography]);
+
+    // Ring fill fraction: the active formula's estimate against the top of the
+    // three formulas, so the lime arc reads as "how this estimate compares" and
+    // is always a full sweep when this formula is the highest. Guarded /0.
+    const ringMax = Math.max(results.epley, results.brzycki, results.lander, 1);
+    const ringProgress = estimated1RM > 0 ? Math.min(1, estimated1RM / ringMax) : 0;
+    const ringRadius = (RING_SIZE - RING_STROKE) / 2;
+    const ringCircumference = 2 * Math.PI * ringRadius;
+    const ringOffset = ringCircumference - ringProgress * ringCircumference;
+
     // The server's POST /v1/exercises/1rm schema requires weightKg AND
     // estimated1RMKg to be z.number().positive() — a 0 is rejected with a 400.
     // estimated1RM collapses to 0 whenever `safe` clamps a non-finite/negative
@@ -124,7 +165,7 @@ export default function CalculatorScreen() {
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>1RM Calculator</Text>
+                <Text style={[typography.h3, { color: colors.text.primary }]}>1RM Calculator</Text>
                 <View style={{ width: 40 }} />
             </View>
 
@@ -134,7 +175,8 @@ export default function CalculatorScreen() {
             >
                 <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}>
                     {/* Input Card */}
-                    <GlassCard intensity={40} radius={borderRadius['2xl']}>
+                    <Animated.View entering={FadeInDown.duration(400).springify().damping(18).mass(0.7)}>
+                      <GlassCard intensity={40} radius={borderRadius['2xl']}>
                       <View style={styles.card}>
                         <View style={styles.inputRow}>
                             <View style={styles.inputStack}>
@@ -146,6 +188,8 @@ export default function CalculatorScreen() {
                                     onChangeText={setWeight}
                                     placeholder="0"
                                     placeholderTextColor={colors.text.tertiary}
+                                    accessibilityLabel="Weight in kilograms"
+                                    accessibilityHint="Enter the weight you lifted, in kilograms"
                                 />
                             </View>
                             <View style={styles.inputStack}>
@@ -157,6 +201,8 @@ export default function CalculatorScreen() {
                                     onChangeText={setReps}
                                     placeholder="0"
                                     placeholderTextColor={colors.text.tertiary}
+                                    accessibilityLabel="Repetitions"
+                                    accessibilityHint="Enter how many reps you completed at this weight"
                                 />
                             </View>
                         </View>
@@ -168,49 +214,101 @@ export default function CalculatorScreen() {
                             onChangeText={setExerciseName}
                             placeholder="e.g. Bench Press"
                             placeholderTextColor={colors.text.tertiary}
+                            accessibilityLabel="Exercise name"
                         />
                       </View>
-                    </GlassCard>
+                      </GlassCard>
+                    </Animated.View>
 
-                    {/* Result Circle */}
-                    <View style={styles.resultContainer}>
-                        <LinearGradient
-                            colors={colors.gradients.coral}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 1 }}
+                    {/* Result Ring — a real stroked lime arc (react-native-svg)
+                        rather than a flat radial band, so the hero element reads
+                        as a premium progress ring. The whole value announces as
+                        one phrase to a screen reader. */}
+                    <Animated.View
+                        entering={FadeInDown.delay(60).duration(400).springify().damping(18).mass(0.7)}
+                        style={styles.resultContainer}
+                    >
+                        <View
+                            accessible
+                            accessibilityRole="text"
+                            accessibilityLabel={`Estimated one-rep max ${estimated1RM} kilograms`}
                             style={[styles.resultRing, shadows.glow(colors.accent.coral)]}
                         >
-                            <View style={[styles.resultCircle, { backgroundColor: colors.background.secondary }]}>
+                            <Svg
+                                width={RING_SIZE}
+                                height={RING_SIZE}
+                                style={StyleSheet.absoluteFill}
+                                importantForAccessibility="no-hide-descendants"
+                            >
+                                {/* Track */}
+                                <Circle
+                                    cx={RING_SIZE / 2}
+                                    cy={RING_SIZE / 2}
+                                    r={ringRadius}
+                                    stroke={colors.border.default}
+                                    strokeWidth={RING_STROKE}
+                                    fill="none"
+                                />
+                                {/* Lime progress arc */}
+                                <Circle
+                                    cx={RING_SIZE / 2}
+                                    cy={RING_SIZE / 2}
+                                    r={ringRadius}
+                                    stroke={colors.accent.coral}
+                                    strokeWidth={RING_STROKE}
+                                    fill="none"
+                                    strokeDasharray={ringCircumference}
+                                    strokeDashoffset={ringOffset}
+                                    strokeLinecap="round"
+                                    transform={`rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`}
+                                />
+                            </Svg>
+                            <View
+                                style={[styles.resultCircle, { backgroundColor: colors.background.secondary }]}
+                                importantForAccessibility="no-hide-descendants"
+                            >
                                 <Text style={[typography.overline, { color: colors.text.secondary }]}>ESTIMATED 1RM</Text>
                                 <Text style={[typography.statLarge, { color: colors.text.primary, marginVertical: 4 }]}>
                                     {estimated1RM}
                                 </Text>
                                 <Text style={[typography.subhead, { color: colors.text.secondary, fontWeight: 'bold' }]}>KILOGRAMS</Text>
                             </View>
-                        </LinearGradient>
-                    </View>
+                        </View>
+                    </Animated.View>
 
                     {/* Formula Selector */}
-                    <View style={[styles.formulaRow, { backgroundColor: colors.background.tertiary, borderRadius: borderRadius.xl }]}>
-                        {(Object.keys(formulas) as Array<keyof typeof formulas>).map(f => (
-                            <TouchableOpacity
+                    <Animated.View
+                        entering={FadeInDown.delay(120).duration(400).springify().damping(18).mass(0.7)}
+                        style={[styles.formulaRow, { backgroundColor: colors.background.tertiary, borderRadius: borderRadius.xl }]}
+                    >
+                        {(Object.keys(formulas) as Array<keyof typeof formulas>).map((f, idx) => (
+                            <Animated.View
                                 key={f}
-                                onPress={() => setActiveFormula(f)}
-                                activeOpacity={0.85}
-                                accessibilityRole="button"
-                                accessibilityState={{ selected: activeFormula === f }}
-                                accessibilityLabel={`${f} formula`}
-                                style={[styles.formulaBtn, activeFormula === f && { backgroundColor: withAlpha(colors.accent.coral, 0.18), borderRadius: borderRadius.lg, borderWidth: 1, borderColor: withAlpha(colors.accent.coral, 0.4) }]}
+                                entering={FadeInDown.delay(140 + idx * 40).duration(360)}
+                                style={styles.formulaCell}
                             >
-                                <Text style={[styles.formulaText, { color: activeFormula === f ? colors.accent.coral : colors.text.tertiary }]}>
-                                    {f.toUpperCase()}
-                                </Text>
-                                <Text style={[styles.formulaVal, { color: activeFormula === f ? colors.accent.coral : colors.text.secondary }]}>
-                                    {results[f]}kg
-                                </Text>
-                            </TouchableOpacity>
+                                <Pressable
+                                    onPress={() => setActiveFormula(f)}
+                                    hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                                    accessibilityRole="button"
+                                    accessibilityState={{ selected: activeFormula === f }}
+                                    accessibilityLabel={`${f} formula, ${results[f]} kilograms${activeFormula === f ? ', selected' : ''}`}
+                                    style={({ pressed }) => [
+                                        styles.formulaBtn,
+                                        activeFormula === f && { backgroundColor: withAlpha(colors.accent.coral, 0.18), borderRadius: borderRadius.lg, borderWidth: 1, borderColor: withAlpha(colors.accent.coral, 0.4) },
+                                        pressed && { transform: [{ scale: 0.96 }], opacity: 0.9 },
+                                    ]}
+                                >
+                                    <Text style={[styles.formulaText, { color: activeFormula === f ? colors.accent.coral : colors.text.tertiary }]}>
+                                        {f.toUpperCase()}
+                                    </Text>
+                                    <Text style={[styles.formulaVal, { color: activeFormula === f ? colors.accent.coral : colors.text.secondary }]}>
+                                        {results[f]}kg
+                                    </Text>
+                                </Pressable>
+                            </Animated.View>
                         ))}
-                    </View>
+                    </Animated.View>
 
                     <CtaButton
                         label="SAVE TO RECORDS"
@@ -300,24 +398,95 @@ export default function CalculatorScreen() {
                     ) : null}
 
                     {/* Zone Table */}
-                    <Text style={[typography.heading, { color: colors.text.primary, marginTop: spacing['2xl'], marginBottom: spacing.md }]}>
-                        Training Zones
-                    </Text>
-                    <GlassCard intensity={40} radius={borderRadius['2xl']}>
-                        {ZONES.map((zone, idx) => (
-                            <View key={zone.pct} style={[styles.zoneRow, idx < ZONES.length - 1 && { borderBottomColor: colors.border.default, borderBottomWidth: 1 }]}>
-                                <View style={styles.zoneLeft}>
-                                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{zone.pct}%</Text>
-                                    <Text style={[typography.caption, { color: colors.text.secondary }]}>{zone.label}</Text>
+                    <Animated.View entering={FadeInDown.delay(180).duration(400).springify().damping(18).mass(0.7)}>
+                        <Text style={[typography.heading, { color: colors.text.primary, marginTop: spacing['2xl'], marginBottom: spacing.md }]}>
+                            Training Zones
+                        </Text>
+                    </Animated.View>
+
+                    {/* Zone drop-off chart — the % load curve across %1RM bands,
+                        lime-anchored at 100% with cyan receding. Empty/zero state
+                        when there's no estimate yet. */}
+                    <Animated.View entering={FadeInDown.delay(220).duration(400).springify().damping(18).mass(0.7)}>
+                        <GlassCard intensity={40} radius={borderRadius['2xl']} style={{ marginBottom: spacing.md }}>
+                            <View style={styles.chartCard}>
+                                <View style={styles.chartHeader}>
+                                    <View>
+                                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>Load by %1RM</Text>
+                                        <Text style={[typography.caption, { color: colors.text.secondary }]}>Estimated kg at each intensity</Text>
+                                    </View>
+                                    <Ionicons name="barbell-outline" size={20} color={colors.accent.coral} />
                                 </View>
-                                <View style={styles.zoneRight}>
-                                    <Text style={[typography.statTiny, { color: colors.accent.cyan, fontSize: 18 }]}>
-                                        {safe(estimated1RM * zone.pct / 100)}kg
-                                    </Text>
-                                    <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>~{zone.reps} reps</Text>
-                                </View>
+
+                                {zoneChartData.length > 0 ? (
+                                    <>
+                                        <View style={{ alignItems: 'center', marginTop: spacing.sm }}>
+                                            <BarChart
+                                                data={zoneChartData}
+                                                width={width - 96}
+                                                height={150}
+                                                barWidth={16}
+                                                spacing={14}
+                                                initialSpacing={12}
+                                                roundedTop
+                                                showGradient
+                                                noOfSections={4}
+                                                yAxisThickness={0}
+                                                xAxisThickness={0}
+                                                rulesColor={colors.border.default}
+                                                yAxisTextStyle={{ color: colors.text.secondary, fontSize: 10 }}
+                                                xAxisLabelTextStyle={{ color: colors.text.secondary, fontSize: 10 }}
+                                                isAnimated
+                                            />
+                                        </View>
+                                        {/* Legend — color is never the only signal (labelled). */}
+                                        <View style={styles.legendRow}>
+                                            <View style={styles.legendItem}>
+                                                <View style={[styles.legendDot, { backgroundColor: colors.accent.coral }]} />
+                                                <Text style={[typography.caption, { color: colors.text.secondary }]}>100% (1RM)</Text>
+                                            </View>
+                                            <View style={styles.legendItem}>
+                                                <View style={[styles.legendDot, { backgroundColor: colors.accent.cyan }]} />
+                                                <Text style={[typography.caption, { color: colors.text.secondary }]}>Sub-max zones</Text>
+                                            </View>
+                                        </View>
+                                    </>
+                                ) : (
+                                    <View style={styles.emptyChart}>
+                                        <Ionicons name="bar-chart-outline" size={36} color={colors.text.tertiary} />
+                                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.sm, textAlign: 'center' }]}>
+                                            Enter a weight and reps to see your zones
+                                        </Text>
+                                    </View>
+                                )}
                             </View>
-                        ))}
+                        </GlassCard>
+                    </Animated.View>
+
+                    <GlassCard intensity={40} radius={borderRadius['2xl']}>
+                        {ZONES.map((zone, idx) => {
+                            const isTop = zone.pct === 100;
+                            return (
+                                <Animated.View
+                                    key={zone.pct}
+                                    entering={FadeInDown.delay(260 + idx * 35).duration(340)}
+                                    style={[styles.zoneRow, idx < ZONES.length - 1 && { borderBottomColor: colors.border.default, borderBottomWidth: 1 }]}
+                                >
+                                    <View style={styles.zoneLeft}>
+                                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{zone.pct}%</Text>
+                                        <Text style={[typography.caption, { color: colors.text.secondary }]}>{zone.label}</Text>
+                                    </View>
+                                    <View style={styles.zoneRight}>
+                                        {/* Top (100%) zone is the 1RM anchor → brand-primary lime; the
+                                            sub-max zones recede to secondary cyan. */}
+                                        <Text style={[typography.statTiny, { color: isTop ? colors.accent.coral : colors.accent.cyan, fontSize: 18, fontWeight: isTop ? '800' : '600' }]}>
+                                            {safe(estimated1RM * zone.pct / 100)}kg
+                                        </Text>
+                                        <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>~{zone.reps} reps</Text>
+                                    </View>
+                                </Animated.View>
+                            );
+                        })}
                     </GlassCard>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -337,10 +506,22 @@ const styles = StyleSheet.create({
     resultRing: { width: 224, height: 224, borderRadius: 112, alignItems: 'center', justifyContent: 'center' },
     resultCircle: { width: 208, height: 208, borderRadius: 104, alignItems: 'center', justifyContent: 'center' },
     formulaRow: { flexDirection: 'row', padding: 6, gap: 4, marginTop: 10 },
-    formulaBtn: { flex: 1, alignItems: 'center', paddingVertical: 10 },
+    formulaCell: { flex: 1 },
+    // paddingVertical 14 + two text lines (10/14) → ~48pt effective target
+    // (>=44pt min); hitSlop on the Pressable extends it further.
+    formulaBtn: { alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
     formulaText: { fontSize: 10, fontWeight: 'bold', marginBottom: 2 },
     formulaVal: { fontSize: 14, fontWeight: '800' },
-    saveBtn: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+    // Layout (height/flex/align) is owned by the CtaButton primitive (size="lg"
+    // → minHeight 56 + paddingVertical 16); this only carries radius + top gap.
+    saveBtn: {},
+    // Zone drop-off chart
+    chartCard: { padding: 20 },
+    chartHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    emptyChart: { height: 150, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+    legendRow: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 12 },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    legendDot: { width: 8, height: 8, borderRadius: 4 },
     // Save-status surface (rendered inside a GlassCard, which owns no padding):
     // a hairline-tinted body holding the icon + copy and, on error, the Retry.
     statusBody: { padding: 16, borderWidth: 1, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },

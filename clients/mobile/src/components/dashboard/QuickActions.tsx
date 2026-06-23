@@ -16,7 +16,7 @@ interface QuickActionsProps {
 
 const DEFAULT_ACTIONS: QuickAction[] = [
     { icon: 'water', label: 'Hydrate', color: '#4FC3F7' },
-    { icon: 'restaurant', label: 'Log Meal', color: '#FF6B35' },
+    { icon: 'restaurant', label: 'Log Meal', color: '#A8CC3C' },
     { icon: 'barbell', label: 'Workout', color: '#00D4AA' },
     { icon: 'moon', label: 'Sleep', color: '#A78BFA' },
 ];

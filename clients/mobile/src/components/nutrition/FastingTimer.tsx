@@ -29,7 +29,7 @@ export function FastingTimer({ isFasting, elapsedMinutes, targetMinutes = 960, o
         <View style={styles.container}>
             <View style={styles.header}>
                 <View style={styles.headerLeft}>
-                    <Ionicons name="timer" size={18} color="#FF6B35" />
+                    <Ionicons name="timer" size={18} color="#A8CC3C" />
                     <Text style={styles.headerText}>FASTING</Text>
                 </View>
                 <Text style={styles.protocol}>{targetH}:{String(targetMinutes % 60).padStart(2, '0')} Protocol</Text>
@@ -56,13 +56,13 @@ const styles = StyleSheet.create({
     container: { backgroundColor: colors.background.secondary, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: colors.border.default, marginBottom: 16 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    headerText: { color: '#FF6B35', fontWeight: '800', fontSize: 12, letterSpacing: 1 },
+    headerText: { color: '#A8CC3C', fontWeight: '800', fontSize: 12, letterSpacing: 1 },
     protocol: { color: colors.text.secondary, fontSize: 12 },
     timerRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 16 },
     time: { color: '#FFFFFF', fontSize: 42, fontWeight: '800', fontFamily: 'monospace' },
     unit: { color: colors.text.secondary, fontSize: 16 },
     barBg: { height: 6, backgroundColor: colors.border.light, borderRadius: 3, marginBottom: 16 },
-    barFill: { height: '100%', backgroundColor: '#FF6B35', borderRadius: 3 },
+    barFill: { height: '100%', backgroundColor: '#A8CC3C', borderRadius: 3 },
     toggleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 44, borderRadius: 22, gap: 8 },
     startBtn: { backgroundColor: '#00D4AA' },
     stopBtn: { backgroundColor: '#FF4444' },

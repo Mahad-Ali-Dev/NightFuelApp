@@ -28,8 +28,10 @@ export interface Exercise {
   videoUrl?: string;
   /** Animated GIF demonstrating the movement, when available. */
   demoGifUrl?: string;
-  /** Secondary muscles worked (from wger), when available. */
+  /** Secondary muscles worked (wger or self-hosted catalog), when available. */
   secondaryMuscles?: string[];
+  /** Demo model's gender ("Male" | "Female") for the library's Male/Female split; absent = unisex. */
+  gender?: string;
 }
 
 export interface WorkoutSession {

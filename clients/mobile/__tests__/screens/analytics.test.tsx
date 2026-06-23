@@ -149,6 +149,20 @@ jest.mock('expo-linear-gradient', () => {
 // expo-status-bar renders nothing in the tree under test.
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
+// react-native-gifted-charts ships a native dep AND transitively pulls
+// gifted-charts-core (untransformed ESM). The Sleep-vs-Performance chart card
+// renders <BarChart> via src/components/analytics/SleepPerformanceChart; stub it
+// to a host view so the import graph resolves and the card's surrounding
+// heading/content still mounts (mirrors exercise-detail.test.tsx).
+jest.mock('react-native-gifted-charts', () => {
+  const RN = require('react-native');
+  return {
+    BarChart: (props: any) => <RN.View {...props} />,
+    LineChart: (props: any) => <RN.View {...props} />,
+    PieChart: (props: any) => <RN.View {...props} />,
+  };
+});
+
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
 import { render, screen } from '@testing-library/react-native';
@@ -216,11 +230,14 @@ describe('AnalyticsScreen (Insights tab)', () => {
     // passthrough) renders its children — the conversion dropped no content.
     expect(screen.getByText('Sleep vs. Performance')).toBeTruthy(); // chart card
     expect(screen.getByText('PEAK FATIGUE')).toBeTruthy();          // stat card
-    expect(screen.getByText('Correlation Score')).toBeTruthy();     // correlation card
+    expect(screen.getByText('Correlation score')).toBeTruthy();     // correlation card
 
     // The populated stat/correlation values render too.
     expect(screen.getByText('14:30')).toBeTruthy();
-    expect(screen.getByText('82%')).toBeTruthy();
+    // Correlation value + unit now render as split <Text> nodes; assert the
+    // load-bearing value (the '%' unit glyph is a static decoration).
+    expect(screen.getByText('82')).toBeTruthy();
+    expect(screen.getAllByText('%').length).toBeGreaterThan(0);
     // The deep-sleep delta ternary (was `&&`, now `? … : null`) renders its
     // truthy branch for a non-null delta.
     expect(screen.getByText('+12m vs avg')).toBeTruthy();

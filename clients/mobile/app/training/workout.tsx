@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     Alert, Modal, Dimensions,
-    KeyboardAvoidingView, Platform
+    KeyboardAvoidingView, Platform, Keyboard
 } from 'react-native';
 
 import { useTheme } from '@/theme';
@@ -27,10 +27,15 @@ import { SafeBlurView } from '@/components/SafeBlurView';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
 import ConfettiCannon from 'react-native-confetti-cannon';
+import Animated, { FadeInDown, FadeIn, useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { withAlpha } from '@/theme/utils';
 import { typography as typo } from '@/theme/typography';
 import { getCuratedDemo, getCuratedDemoFrames } from '@/constants/curatedDemos';
 import { invalidateWorkoutCaches } from '@/utils/invalidateWorkoutCaches';
+// Screen-local presentation pieces: a pulsing "in motion" cyan beacon for the
+// header and a segmented set-completion rail for whole-session orientation. Both
+// are pure (no data/theme), so they never touch the shared primitives or theme.
+import { WorkoutLiveBeacon, SetDots } from '@/components/WorkoutLiveBeacon';
 
 // Bundled neutral placeholder shown when a resolved exercise has no curated
 // thumbnail (no network hit). Reuses the same asset the exercise-detail screen
@@ -116,7 +121,7 @@ function formatTime(totalSeconds: number): string {
 // (libraryId != null). Both pieces are React.memo'd and derive their own data,
 // so toggling a set on another card never re-renders them
 // (list-performance-function-references / list-performance-callbacks).
-const THUMB = 44;
+const THUMB = 48;
 
 // Leading visual: a curated demo thumbnail (FEDB first-frame / gif — zero
 // network for FEDB, which reuses data the app already ships), falling back to
@@ -201,6 +206,33 @@ export default function ActiveWorkoutScreen() {
     // self-resetting interval), so this screen no longer owns a restTimerRef.
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const persistenceRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    // ── Keyboard-aware footer ─────────────────────────────────────────────────
+    // The thumb-zone FINISH bar is position:'absolute' (out of flow), so the
+    // KeyboardAvoidingView's padding insertion does NOT lift it. When the user
+    // taps an inline KG/REPS TextInput inside an expanded SetLogger card, the
+    // floating footer would otherwise sit UNDER the keyboard (iOS) with nothing
+    // adjusting on Android at all. We subscribe to the keyboard show/hide events
+    // and slide the footer DOWN off-screen while the keyboard is up (transform
+    // only — interruptible, off the JS thread), so the bottom set row stays
+    // reachable above the keyboard and the bar returns when editing ends.
+    const footerShift = useSharedValue(0);
+    const footerStyle = useAnimatedStyle(() => ({
+        transform: [{ translateY: footerShift.value }],
+        // Fade out as it slides so a partially-revealed bar never peeks over the
+        // keyboard mid-transition.
+        opacity: 1 - Math.min(1, footerShift.value / 120),
+    }));
+    useEffect(() => {
+        const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+        const timing = { duration: 220, easing: Easing.out(Easing.cubic) };
+        const onShow = () => { footerShift.value = withTiming(160, timing); };
+        const onHide = () => { footerShift.value = withTiming(0, timing); };
+        const showSub = Keyboard.addListener(showEvt, onShow);
+        const hideSub = Keyboard.addListener(hideEvt, onHide);
+        return () => { showSub.remove(); hideSub.remove(); };
+    }, [footerShift]);
 
     // ── Fetch Session ───────────────────────────────────────────────────────
     // `isError`/`refetch` drive the honest retryable error state below: when the
@@ -604,34 +636,99 @@ export default function ActiveWorkoutScreen() {
         }
     };
 
+    // ── Derived session orientation ───────────────────────────────────────────
+    // Whole-session progress for the focus hero + header: total planned sets and
+    // how many are completed across every exercise. Memoised on exerciseStates so
+    // a set toggle is the only thing that recomputes it (cheap, pure reduce).
+    const { totalSets, completedSets, progress, nextUp } = useMemo(() => {
+        let total = 0;
+        let done = 0;
+        // The "next" set the lifter is oriented toward: the first incomplete set
+        // of the first exercise that still has one. Drives the big VALUE in the
+        // focus card so the screen keeps the user pointed at their current target.
+        let next: { name: string; reps: number; kg: number; setNo: number; ofSets: number; eIdx: number } | null = null;
+        exerciseStates.forEach((ex, eIdx) => {
+            total += ex.sets.length;
+            ex.sets.forEach((s) => { if (s.completed) done += 1; });
+            if (!next) {
+                const sIdx = ex.sets.findIndex((s) => !s.completed);
+                const s = sIdx !== -1 ? ex.sets[sIdx] : undefined;
+                if (s) {
+                    next = { name: ex.name, reps: s.reps, kg: s.kg, setNo: sIdx + 1, ofSets: ex.sets.length, eIdx };
+                }
+            }
+        });
+        return {
+            totalSets: total,
+            completedSets: done,
+            progress: total > 0 ? done / total : 0,
+            nextUp: next as null | { name: string; reps: number; kg: number; setNo: number; ofSets: number; eIdx: number },
+        };
+    }, [exerciseStates]);
+
+    const allSetsDone = totalSets > 0 && completedSets >= totalSets;
+
     // ── UI Components ───────────────────────────────────────────────────────
 
+    // Sticky top bar: ACTIVE WORKOUT overline + the big condensed live clock
+    // (VALUE dominates its label). The live timer keeps the functional cyan
+    // (progress / "in motion"), reserving lime for the one primary action. The
+    // former inline FINISH button moves to the thumb-zone footer; a thin progress
+    // hairline under the bar gives constant whole-session orientation.
     const renderHeader = () => (
-        <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
-            <View>
-                <Text style={[typography.overline, { color: colors.text.secondary }]}>
-                    ACTIVE WORKOUT
-                </Text>
-                <Text
-                    style={[styles.timer, {
-                        color: colors.accent.cyan,
-                        textShadowColor: withAlpha(colors.accent.cyan, 0.35),
-                        textShadowOffset: { width: 0, height: 0 },
-                        textShadowRadius: 12,
-                    }]}
-                    maxFontSizeMultiplier={1.3}
-                >
-                    {formatTime(elapsedSeconds)}
-                </Text>
+        <View style={[styles.header, { borderBottomColor: colors.border.default, backgroundColor: withAlpha(colors.background.primary, 0.6) }]}>
+            <View style={styles.headerRow}>
+                <View style={styles.headerClock}>
+                    {/* Pulsing "in motion" beacon (functional cyan, never lime) —
+                        the live, breathing signal that a session is recording. */}
+                    <View style={styles.liveDot}>
+                        <WorkoutLiveBeacon color={colors.accent.cyan} size={9} />
+                    </View>
+                    <View>
+                        <Text style={[typography.overline, { color: colors.text.secondary }]}>
+                            ACTIVE WORKOUT
+                        </Text>
+                        <Text
+                            style={[styles.timer, {
+                                color: colors.accent.cyan,
+                                textShadowColor: withAlpha(colors.accent.cyan, 0.35),
+                                textShadowOffset: { width: 0, height: 0 },
+                                textShadowRadius: 12,
+                            }]}
+                            maxFontSizeMultiplier={1.3}
+                        >
+                            {formatTime(elapsedSeconds)}
+                        </Text>
+                    </View>
+                </View>
+                {/* Whole-session set tally — a calm secondary readout (VALUE bigger
+                    than its label) so finishing the clock isn't the only sense of
+                    progress. Lime stays off it; the count is text. */}
+                {totalSets > 0 ? (
+                    <View style={styles.headerTally}>
+                        <Text style={[styles.tallyValue, { color: colors.text.primary }]} maxFontSizeMultiplier={1.3}>
+                            {completedSets}
+                            <Text style={[styles.tallyTotal, { color: colors.text.tertiary }]}>/{totalSets}</Text>
+                        </Text>
+                        <Text style={[typography.overline, { color: colors.text.tertiary }]}>SETS</Text>
+                    </View>
+                ) : null}
             </View>
-            <Button
-                variant="primary"
-                size="md"
-                title="FINISH"
-                onPress={handleEnd}
-                accessibilityLabel="Finish workout"
-                icon={<Ionicons name="flag" size={16} color="#FFF" />}
-            />
+            {/* Progress hairline — the single thin lime indicator (key active
+                state) reading the whole-session completion at a glance. */}
+            {totalSets > 0 ? (
+                <View style={[styles.headerTrack, { backgroundColor: colors.border.default }]}>
+                    <View
+                        style={[styles.headerFill, {
+                            // Same minimum-width floor as the focus-hero bar (:890) so the
+                            // two progress readouts agree at low completion: once the first
+                            // set is logged the hairline shows a visible sliver too.
+                            width: `${Math.max(progress * 100, completedSets > 0 ? 4 : 0)}%`,
+                            backgroundColor: colors.accent.coral,
+                        }]}
+                    />
+                </View>
+            ) : null}
         </View>
     );
 
@@ -664,23 +761,31 @@ export default function ActiveWorkoutScreen() {
 
     if (!isInitialized) {
         // Honest loading scaffold mirroring the active-workout chrome (header +
-        // an expanded exercise card with set rows) instead of a bare spinner, so
+        // focus hero + exercise cards with set rows) instead of a bare spinner, so
         // the screen doesn't "pop" when the session initializes.
         return (
             <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
                 <StatusBar style="light" />
                 <View style={{ paddingTop: insets.top, flex: 1 }}>
                     {/* Header placeholder: ACTIVE WORKOUT overline + timer block on
-                        the left, FINISH button block on the right. */}
+                        the left, set-tally block on the right. */}
                     <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
-                        <View>
-                            <Skeleton width={110} height={11} radius={borderRadius.sm} />
-                            <Skeleton width={90} height={34} radius={borderRadius.md} style={{ marginTop: 6 }} />
+                        <View style={styles.headerRow}>
+                            <View style={styles.headerClock}>
+                                <Skeleton width={8} height={8} radius={borderRadius.full} />
+                                <View style={{ marginLeft: spacing.sm }}>
+                                    <Skeleton width={110} height={11} radius={borderRadius.sm} />
+                                    <Skeleton width={90} height={34} radius={borderRadius.md} style={{ marginTop: 6 }} />
+                                </View>
+                            </View>
+                            <Skeleton width={48} height={40} radius={borderRadius.md} />
                         </View>
-                        <Skeleton width={96} height={44} radius={borderRadius.lg} />
+                        <Skeleton width="100%" height={4} radius={borderRadius.full} style={{ marginTop: spacing.md }} />
                     </View>
 
                     <View style={{ padding: spacing.lg }}>
+                        {/* Focus-hero placeholder. */}
+                        <Skeleton width="100%" height={132} radius={borderRadius['2xl']} style={{ marginBottom: spacing.lg }} />
                         {Array.from({ length: 3 }).map((_, i) => (
                             <Card
                                 key={i}
@@ -690,7 +795,7 @@ export default function ActiveWorkoutScreen() {
                             >
                                 <View style={styles.exHeader}>
                                     <View style={styles.exTitleRow}>
-                                        <Skeleton width={44} height={44} radius={12} />
+                                        <Skeleton width={48} height={48} radius={12} />
                                         <View style={{ flex: 1, marginLeft: spacing.md }}>
                                             <Skeleton width="60%" height={16} radius={borderRadius.sm} />
                                             <Skeleton width="40%" height={12} radius={borderRadius.sm} style={{ marginTop: 8 }} />
@@ -732,209 +837,388 @@ export default function ActiveWorkoutScreen() {
                 {renderHeader()}
 
                 <ScrollView
-                    contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}
+                    contentContainerStyle={{ padding: spacing.lg, paddingBottom: 132 }}
                     keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
                 >
+                    {/* ── Focus hero ──────────────────────────────────────────
+                        Keeps the lifter oriented: one dominant condensed VALUE
+                        (target reps × weight) for the very next set, with its
+                        exercise + "Set N of M" as the quieter label. This is the
+                        recurring focal point of the screen — the peak-end micro
+                        beat between sets. When every planned set is logged it
+                        flips to an affirming "all sets done" state that points at
+                        the thumb-zone FINISH. Lime appears here only as the active
+                        progress fill / the one "next" pip — used sparingly. */}
+                    {exerciseStates.length > 0 ? (
+                        <Animated.View entering={FadeInDown.duration(420)}>
+                            <Card
+                                variant="glass"
+                                noPadding
+                                style={{
+                                    marginBottom: spacing.lg,
+                                    borderColor: allSetsDone ? colors.accent.cyan : withAlpha(colors.accent.coral, 0.4),
+                                    ...shadows.glow(allSetsDone ? colors.accent.cyan : colors.accent.coral),
+                                }}
+                            >
+                                <View style={styles.focus}>
+                                    <View style={styles.focusTopRow}>
+                                        {/* The 'WORKOUT COMPLETE' cyan is a functional success
+                                            signal (kept); 'UP NEXT' is a decorative section label,
+                                            so it reads in text.secondary — lime is reserved for the
+                                            progress fill + the CTA, not overlines (60/30/10). */}
+                                        <Text style={[typography.overline, { color: allSetsDone ? colors.accent.cyan : colors.text.secondary }]}>
+                                            {allSetsDone ? 'WORKOUT COMPLETE' : 'UP NEXT'}
+                                        </Text>
+                                        <Text style={[typography.overline, { color: colors.text.tertiary }]}>
+                                            {Math.round(progress * 100)}%
+                                        </Text>
+                                    </View>
+
+                                    {allSetsDone ? (
+                                        <View style={styles.focusDoneRow}>
+                                            <View style={[styles.focusDoneIcon, { backgroundColor: withAlpha(colors.accent.cyan, 0.12), borderColor: withAlpha(colors.accent.cyan, 0.3) }]}>
+                                                <Ionicons name="checkmark-done" size={26} color={colors.accent.cyan} />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={[styles.focusDoneTitle, { color: colors.text.primary }]} maxFontSizeMultiplier={1.2}>
+                                                    Every set logged
+                                                </Text>
+                                                <Text style={[typography.bodySm, { color: colors.text.secondary }]} numberOfLines={2}>
+                                                    Strong work. Tap Finish to bank the session.
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    ) : nextUp ? (
+                                        <>
+                                            {/* The dominant VALUE: reps × weight. Condensed
+                                                hero numerals; the unit + multiplier stay small
+                                                so the numbers read first. */}
+                                            <View style={styles.focusValueRow}>
+                                                <Text style={[styles.focusValue, { color: colors.text.primary }]} maxFontSizeMultiplier={1.15}>
+                                                    {nextUp.reps}
+                                                    <Text style={[styles.focusValueUnit, { color: colors.text.tertiary }]}> reps</Text>
+                                                </Text>
+                                                <Text style={[styles.focusMult, { color: colors.text.tertiary }]}>×</Text>
+                                                <Text style={[styles.focusValue, { color: colors.text.primary }]} maxFontSizeMultiplier={1.15}>
+                                                    {nextUp.kg > 0 ? nextUp.kg : 'BW'}
+                                                    {nextUp.kg > 0 ? (
+                                                        <Text style={[styles.focusValueUnit, { color: colors.text.tertiary }]}> kg</Text>
+                                                    ) : null}
+                                                </Text>
+                                            </View>
+                                            <Text style={[typography.subhead, { color: colors.text.primary }]} numberOfLines={1} ellipsizeMode="tail">
+                                                {nextUp.name}
+                                            </Text>
+                                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
+                                                Set {nextUp.setNo} of {nextUp.ofSets}
+                                            </Text>
+                                        </>
+                                    ) : null}
+
+                                    {/* Whole-session progress bar — lime active fill is the
+                                        screen's key indicator; the track is neutral. */}
+                                    <View style={[styles.focusTrack, { backgroundColor: colors.border.default }]}>
+                                        <View
+                                            style={[styles.focusFill, {
+                                                width: `${Math.max(progress * 100, completedSets > 0 ? 4 : 0)}%`,
+                                                backgroundColor: allSetsDone ? colors.accent.cyan : colors.accent.coral,
+                                            }]}
+                                        />
+                                    </View>
+
+                                    {/* Segmented set rail + count — pairs the bar with a
+                                        glanceable per-set view and an explicit "n of m"
+                                        so progress reads instantly (color is never the
+                                        only signal). The count VALUE leads its label. */}
+                                    <View style={styles.focusDotsRow}>
+                                        <SetDots
+                                            total={totalSets}
+                                            completed={completedSets}
+                                            activeColor={allSetsDone ? colors.accent.cyan : colors.accent.coral}
+                                            trackColor={colors.border.light}
+                                            nextColor={colors.accent.coral}
+                                        />
+                                        <Text style={[styles.focusCount, { color: colors.text.secondary }]} maxFontSizeMultiplier={1.3}>
+                                            {completedSets}
+                                            <Text style={[styles.focusCountTotal, { color: colors.text.tertiary }]}>/{totalSets} sets</Text>
+                                        </Text>
+                                    </View>
+                                </View>
+                            </Card>
+                        </Animated.View>
+                    ) : null}
+
                     {exerciseStates.map((ex, eIdx) => {
                         const isExpanded = expandedIndex === eIdx;
                         const completedCount = ex.sets.filter(s => s.completed).length;
+                        const exDone = ex.sets.length > 0 && completedCount >= ex.sets.length;
+                        // The exercise the focus hero is pointing at (its first
+                        // incomplete set) — gets a quiet "active" accent so the
+                        // active card and the hero agree.
+                        const isActive = !allSetsDone && nextUp?.eIdx === eIdx;
                         // Resolved → seeded LibraryExercise: render the rich, tappable
                         // card (thumbnail + sets×reps + equipment + deep-link). Null →
                         // a clean text-only card. Never drops/hides the exercise.
                         const libraryId = ex.libraryId ?? null;
                         const isResolved = !!libraryId;
                         const targetReps = ex.sets[0]?.reps ?? 0;
+                        // Accent for the card edge: cyan when this exercise is fully
+                        // logged (functional success), lime ONLY for the single
+                        // active exercise (the 10% accent), neutral otherwise.
+                        const edgeColor = exDone
+                            ? colors.accent.cyan
+                            : isActive
+                                ? colors.accent.coral
+                                : colors.border.default;
 
                         return (
-                            <Card
+                            <Animated.View
                                 // Stable key: name + index survives reorder/recycle better
                                 // than a bare index, without assuming names are unique
                                 // within a routine (list-performance-function-references).
                                 key={`${ex.name}-${eIdx}`}
-                                variant="glass"
-                                noPadding
-                                style={{
-                                    marginBottom: spacing.md,
-                                    borderColor: isExpanded ? colors.accent.coral : colors.border.default,
-                                    ...(isExpanded ? shadows.glow(colors.accent.coral) : null),
-                                }}
+                                entering={FadeInDown.delay(120 + eIdx * 45).springify().damping(18).mass(0.7)}
                             >
-                                <TouchableOpacity
-                                    style={styles.exHeader}
-                                    onPress={() => setExpandedIndex(isExpanded ? -1 : eIdx)}
-                                    activeOpacity={0.7}
-                                    accessibilityRole="button"
-                                    accessibilityState={{ expanded: isExpanded }}
-                                    accessibilityLabel={`${ex.name}, ${completedCount} of ${ex.sets.length} sets done`}
+                                <Card
+                                    variant="glass"
+                                    noPadding
+                                    style={{
+                                        marginBottom: spacing.md,
+                                        borderColor: isExpanded || isActive || exDone ? edgeColor : colors.border.default,
+                                        ...((isExpanded || isActive) && !exDone ? shadows.glow(colors.accent.coral) : null),
+                                    }}
                                 >
-                                    <View style={styles.exTitleRow}>
-                                        {isResolved ? (
-                                            // Thumbnail doubles as the deep-link into the
-                                            // exercise detail (>=44pt touch target). Stops
-                                            // propagation so the row's expand toggle and the
-                                            // detail tap don't fight.
-                                            <TouchableOpacity
-                                                accessibilityRole="button"
-                                                accessibilityLabel={`View ${ex.name} details`}
-                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                                activeOpacity={0.8}
-                                                onPress={() => openExerciseDetail(libraryId!)}
-                                            >
-                                                <ResolvedExerciseThumb
-                                                    name={ex.name}
-                                                    libraryId={libraryId!}
-                                                    backgroundColor={colors.background.tertiary}
-                                                />
-                                            </TouchableOpacity>
-                                        ) : (
-                                            <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.coral, 0.12) }]}>
-                                                <Ionicons name="barbell" size={22} color={colors.accent.coral} />
-                                            </View>
-                                        )}
-                                        <View style={{ flex: 1, marginLeft: spacing.md }}>
-                                            {/* When expanded, the SetLogger below owns the
-                                                exercise-name heading, so the header shows the
-                                                title only while collapsed — the name stays
-                                                visible in both states without being rendered
-                                                (and read by a screen reader) twice. The
-                                                touchable's accessibilityLabel still carries
-                                                the name in either state. */}
-                                            {isExpanded ? null : (
-                                                <Text
-                                                    style={[typography.subhead, { color: colors.text.primary, fontWeight: '600' }]}
-                                                    numberOfLines={1}
-                                                    ellipsizeMode="tail"
-                                                >
-                                                    {ex.name}
-                                                </Text>
-                                            )}
-                                            <Text style={[typography.caption, { color: colors.text.secondary }]}>
-                                                {completedCount}/{ex.sets.length} Sets Done
-                                                {isResolved && targetReps > 0
-                                                    ? ` · ${ex.sets.length} × ${targetReps}`
-                                                    : ` · ${ex.muscleGroup}`}
-                                            </Text>
-                                            {isResolved ? (
-                                                <ResolvedExerciseEquipment
-                                                    libraryId={libraryId!}
-                                                    style={[typography.caption, { color: colors.text.tertiary, marginTop: 2 }]}
-                                                />
-                                            ) : null}
-                                        </View>
-                                        {isResolved ? (
-                                            <TouchableOpacity
-                                                accessibilityRole="button"
-                                                accessibilityLabel={`Open ${ex.name} details`}
-                                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                                activeOpacity={0.7}
-                                                onPress={() => openExerciseDetail(libraryId!)}
-                                                style={{ paddingHorizontal: 4 }}
-                                            >
-                                                <Ionicons name="information-circle-outline" size={20} color={colors.accent.cyan} />
-                                            </TouchableOpacity>
-                                        ) : null}
-                                        <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={20} color={colors.text.tertiary} />
-                                    </View>
-                                </TouchableOpacity>
-
-                                {/* Ternary-null (rendering-no-falsy-and): never `{isExpanded && …}`. */}
-                                {isExpanded ? (
-                                    <View style={styles.exContent}>
-                                        {/* Set entry routes through the F10-hardened SetLogger:
-                                            its Number.isFinite + reps>=1 / weight>=0 guard
-                                            rejects junk ('abc', '0', negative) BEFORE it reaches
-                                            onLogSet — the unguarded parseFloat(v)||0 /
-                                            parseInt(v)||0 TextInputs this screen used are gone.
-                                            Each accepted set marks the next planned set complete
-                                            and fires the rest cycle (logSet), so handleEnd's
-                                            completed-set logging + AsyncStorage persistence are
-                                            unchanged. */}
-                                        <SetLogger
-                                            exerciseName={ex.name}
-                                            targetSets={ex.sets.length}
-                                            // Seed from ALL planned sets carrying their REAL
-                                            // completed flag, so SetLogger row i maps 1:1 to
-                                            // ex.sets[i] — the index the persist callbacks
-                                            // below pass straight through to ex.sets. A
-                                            // resumed session still opens at N / M (the
-                                            // already-completed sets keep completed:true) and
-                                            // the SetLogger count agrees with the header's
-                                            // `${completedCount}/${ex.sets.length} Sets Done`.
-                                            // Purely visual — initialSets does NOT call
-                                            // onLogSet, so handleEnd's volume (computed from
-                                            // ex.sets[].completed) still counts each set once.
-                                            initialSets={ex.sets.map((s) => ({
-                                                reps: s.reps,
-                                                weightKg: s.kg,
-                                                completed: s.completed,
-                                            }))}
-                                            // Routed-screen in-place affordances: per-set
-                                            // DONE toggle + editable KG/REPS + add/remove.
-                                            // The input-row add still flows through logSet
-                                            // (rest-trigger + ex.sets advance) unchanged, and
-                                            // the three persist callbacks below mirror each
-                                            // in-row mutation to exerciseStates[eIdx].sets so
-                                            // the header count, the AsyncStorage snapshot, and
-                                            // finish-time logging stop diverging from the UI.
-                                            allowEdit
-                                            allowAddRemove
-                                            onLogSet={(data) => logSet(eIdx, data)}
-                                            onToggleDone={(idx) => toggleSetDone(eIdx, idx)}
-                                            onEditSet={(idx, v) =>
-                                                updateSet(eIdx, idx, { reps: v.reps, kg: v.weightKg, completed: true })
-                                            }
-                                            onRemoveSet={(idx) => removeSetAt(eIdx, idx)}
+                                    {/* Left active-rail: a thin lime bar marks the one
+                                        active exercise (sparing 10% accent), cyan marks a
+                                        finished one — color is never the only signal (the
+                                        chevron + done chip carry it too). */}
+                                    {(isActive || exDone) ? (
+                                        <View
+                                            style={[styles.cardRail, { backgroundColor: exDone ? colors.accent.cyan : colors.accent.coral }]}
+                                            pointerEvents="none"
                                         />
-                                    </View>
-                                ) : null}
-                            </Card>
+                                    ) : null}
+                                    <TouchableOpacity
+                                        style={styles.exHeader}
+                                        onPress={() => setExpandedIndex(isExpanded ? -1 : eIdx)}
+                                        activeOpacity={0.7}
+                                        accessibilityRole="button"
+                                        accessibilityState={{ expanded: isExpanded }}
+                                        accessibilityLabel={`${ex.name}, ${completedCount} of ${ex.sets.length} sets done`}
+                                    >
+                                        <View style={styles.exTitleRow}>
+                                            {isResolved ? (
+                                                // Thumbnail doubles as the deep-link into the
+                                                // exercise detail (>=44pt touch target). Stops
+                                                // propagation so the row's expand toggle and the
+                                                // detail tap don't fight.
+                                                <TouchableOpacity
+                                                    accessibilityRole="button"
+                                                    accessibilityLabel={`View ${ex.name} details`}
+                                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                                    activeOpacity={0.8}
+                                                    onPress={() => openExerciseDetail(libraryId!)}
+                                                >
+                                                    <ResolvedExerciseThumb
+                                                        name={ex.name}
+                                                        libraryId={libraryId!}
+                                                        backgroundColor={colors.background.tertiary}
+                                                    />
+                                                </TouchableOpacity>
+                                            ) : (
+                                                <View style={[styles.iconBox, {
+                                                    backgroundColor: exDone
+                                                        ? withAlpha(colors.accent.cyan, 0.12)
+                                                        : withAlpha(colors.accent.coral, 0.12),
+                                                }]}>
+                                                    {/* exDone keeps the functional cyan check. The
+                                                        not-done barbell glyph is neutral (text.secondary)
+                                                        rather than full lime — the lime active rail +
+                                                        progress bars already carry the 10% accent, so the
+                                                        icon stays a tinted/calm treatment (60/30/10). */}
+                                                    <Ionicons
+                                                        name={exDone ? 'checkmark-done' : 'barbell'}
+                                                        size={22}
+                                                        color={exDone ? colors.accent.cyan : colors.text.secondary}
+                                                    />
+                                                </View>
+                                            )}
+                                            <View style={{ flex: 1, marginLeft: spacing.md }}>
+                                                {/* When expanded, the SetLogger below owns the
+                                                    exercise-name heading, so the header shows the
+                                                    title only while collapsed — the name stays
+                                                    visible in both states without being rendered
+                                                    (and read by a screen reader) twice. The
+                                                    touchable's accessibilityLabel still carries
+                                                    the name in either state. */}
+                                                {isExpanded ? null : (
+                                                    <Text
+                                                        style={[typography.subhead, { color: colors.text.primary, fontWeight: '600' }]}
+                                                        numberOfLines={1}
+                                                        ellipsizeMode="tail"
+                                                    >
+                                                        {ex.name}
+                                                    </Text>
+                                                )}
+                                                {/* Per-exercise set progress: a value-forward
+                                                    "n/m" chip + a thin meter so the card carries
+                                                    its own completion at a glance. */}
+                                                <View style={styles.exMetaRow}>
+                                                    <Text style={[typography.caption, {
+                                                        color: exDone ? colors.accent.cyan : colors.text.secondary,
+                                                        fontWeight: '600',
+                                                    }]}>
+                                                        {completedCount}/{ex.sets.length} sets
+                                                    </Text>
+                                                    <Text style={[typography.caption, { color: colors.text.tertiary }]}>
+                                                        {isResolved && targetReps > 0
+                                                            ? `· ${ex.sets.length} × ${targetReps}`
+                                                            : `· ${ex.muscleGroup}`}
+                                                    </Text>
+                                                </View>
+                                                {isResolved ? (
+                                                    <ResolvedExerciseEquipment
+                                                        libraryId={libraryId!}
+                                                        style={[typography.caption, { color: colors.text.tertiary, marginTop: 2 }]}
+                                                    />
+                                                ) : null}
+                                            </View>
+                                            {isResolved ? (
+                                                <TouchableOpacity
+                                                    accessibilityRole="button"
+                                                    accessibilityLabel={`Open ${ex.name} details`}
+                                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                                    activeOpacity={0.7}
+                                                    onPress={() => openExerciseDetail(libraryId!)}
+                                                    style={{ paddingHorizontal: 4 }}
+                                                >
+                                                    <Ionicons name="information-circle-outline" size={20} color={colors.accent.cyan} />
+                                                </TouchableOpacity>
+                                            ) : null}
+                                            <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={20} color={colors.text.tertiary} />
+                                        </View>
+                                    </TouchableOpacity>
+
+                                    {/* Ternary-null (rendering-no-falsy-and): never `{isExpanded && …}`. */}
+                                    {isExpanded ? (
+                                        <View style={styles.exContent}>
+                                            {/* Set entry routes through the F10-hardened SetLogger:
+                                                its Number.isFinite + reps>=1 / weight>=0 guard
+                                                rejects junk ('abc', '0', negative) BEFORE it reaches
+                                                onLogSet — the unguarded parseFloat(v)||0 /
+                                                parseInt(v)||0 TextInputs this screen used are gone.
+                                                Each accepted set marks the next planned set complete
+                                                and fires the rest cycle (logSet), so handleEnd's
+                                                completed-set logging + AsyncStorage persistence are
+                                                unchanged. */}
+                                            <SetLogger
+                                                exerciseName={ex.name}
+                                                targetSets={ex.sets.length}
+                                                // Seed from ALL planned sets carrying their REAL
+                                                // completed flag, so SetLogger row i maps 1:1 to
+                                                // ex.sets[i] — the index the persist callbacks
+                                                // below pass straight through to ex.sets. A
+                                                // resumed session still opens at N / M (the
+                                                // already-completed sets keep completed:true) and
+                                                // the SetLogger count agrees with the header's
+                                                // `${completedCount}/${ex.sets.length} Sets Done`.
+                                                // Purely visual — initialSets does NOT call
+                                                // onLogSet, so handleEnd's volume (computed from
+                                                // ex.sets[].completed) still counts each set once.
+                                                initialSets={ex.sets.map((s) => ({
+                                                    reps: s.reps,
+                                                    weightKg: s.kg,
+                                                    completed: s.completed,
+                                                }))}
+                                                // Routed-screen in-place affordances: per-set
+                                                // DONE toggle + editable KG/REPS + add/remove.
+                                                // The input-row add still flows through logSet
+                                                // (rest-trigger + ex.sets advance) unchanged, and
+                                                // the three persist callbacks below mirror each
+                                                // in-row mutation to exerciseStates[eIdx].sets so
+                                                // the header count, the AsyncStorage snapshot, and
+                                                // finish-time logging stop diverging from the UI.
+                                                allowEdit
+                                                allowAddRemove
+                                                onLogSet={(data) => logSet(eIdx, data)}
+                                                onToggleDone={(idx) => toggleSetDone(eIdx, idx)}
+                                                onEditSet={(idx, v) =>
+                                                    updateSet(eIdx, idx, { reps: v.reps, kg: v.weightKg, completed: true })
+                                                }
+                                                onRemoveSet={(idx) => removeSetAt(eIdx, idx)}
+                                            />
+                                        </View>
+                                    ) : null}
+                                </Card>
+                            </Animated.View>
                         );
                     })}
 
-                    {/* Ternary-null (rendering-no-falsy-and): `length === 0` is a boolean
-                        here, but we keep the explicit ternary so a future numeric edit
-                        can't leak a falsy 0 into the tree. */}
+                    {/* Empty state — never a blank screen. Icon + guidance + CTA via
+                        the shared primitive, routed straight to the exercise browser.
+                        Ternary-null (rendering-no-falsy-and): `length === 0` is a
+                        boolean here, but the explicit ternary keeps a future numeric
+                        edit from leaking a falsy 0 into the tree. */}
                     {exerciseStates.length === 0 ? (
-                        <View style={{ alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 }}>
-                            <Ionicons name="barbell-outline" size={56} color={colors.text.tertiary} />
-                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 16, textAlign: 'center' }]}>
-                                No exercises yet
-                            </Text>
-                            <Text style={[typography.body, { color: colors.text.secondary, marginTop: 6, textAlign: 'center' }]}>
-                                Add your first exercise to this session using the button below.
-                            </Text>
-                        </View>
+                        <Animated.View entering={FadeIn.duration(360)}>
+                            <EmptyState
+                                icon="barbell-outline"
+                                title="No exercises yet"
+                                subtitle="Add your first move to this session and start logging sets."
+                                actionLabel="Browse Exercises"
+                                onAction={() => router.push('/(exercises)')}
+                                style={{ paddingVertical: spacing['3xl'] }}
+                            />
+                        </Animated.View>
                     ) : null}
 
-                    <TouchableOpacity
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel="Browse exercises"
-                        style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            paddingVertical: 16,
-                            borderWidth: 1,
-                            borderColor: colors.accent.cyan,
-                            borderRadius: borderRadius.xl,
-                            marginTop: spacing.lg,
-                            borderStyle: 'dashed'
-                        }}
-                        onPress={() => router.push('/(exercises)')}
-                    >
-                        <Ionicons name="search" size={20} color={colors.accent.cyan} />
-                        <Text style={[typography.subhead, { color: colors.accent.cyan, marginLeft: 8, fontWeight: 'bold' }]}>
-                            BROWSE EXERCISES
-                        </Text>
-                    </TouchableOpacity>
+                    {/* Browse — a secondary affordance kept off the lime (lime is the
+                        one primary FINISH action in the footer). Cyan dashed "add"
+                        target, only shown when the session already has exercises (the
+                        empty state already carries its own browse CTA). */}
+                    {exerciseStates.length > 0 ? (
+                        <TouchableOpacity
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel="Browse exercises"
+                            style={[styles.browseBtn, { borderColor: withAlpha(colors.accent.cyan, 0.5) }]}
+                            onPress={() => router.push('/(exercises)')}
+                        >
+                            <Ionicons name="add" size={20} color={colors.accent.cyan} />
+                            <Text style={[typography.subhead, { color: colors.accent.cyan, marginLeft: 8 }]}>
+                                Add exercise
+                            </Text>
+                        </TouchableOpacity>
+                    ) : null}
                 </ScrollView>
+
+                {/* ── Thumb-zone footer ───────────────────────────────────────
+                    The single full-lime PRIMARY action lives here, in reach of the
+                    thumb, with safe-area padding. Ink label (text.inverse) on the
+                    lime fill — never white on lime. A frosted bar floats it above
+                    the scroll so FINISH is always one tap away. */}
+                <Animated.View style={[styles.footer, footerStyle, { paddingBottom: insets.bottom + spacing.md, borderTopColor: colors.border.default }]}>
+                    <SafeBlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+                    <Button
+                        variant="primary"
+                        size="lg"
+                        fullWidth
+                        title={allSetsDone ? 'FINISH WORKOUT' : 'FINISH'}
+                        onPress={handleEnd}
+                        accessibilityLabel="Finish workout"
+                        icon={<Ionicons name="flag" size={18} color={colors.text.inverse} />}
+                    />
+                </Animated.View>
             </View>
 
             {/* Initial Startup Countdown Overlay */}
             {isStarting && (
                 <View style={[StyleSheet.absoluteFillObject, { zIndex: 1000 }]}>
                     <SafeBlurView intensity={80} tint="dark" style={[StyleSheet.absoluteFillObject, { justifyContent: 'center', alignItems: 'center' }]}>
+                        {/* Decorative section label → text.secondary; the big lime
+                            countdown numeral below stays the single key indicator. */}
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 8 }]}>GET READY</Text>
                         <Text
                             style={[styles.countdownNum, {
                                 color: colors.accent.coral,
@@ -946,74 +1230,136 @@ export default function ActiveWorkoutScreen() {
                         >
                             {startupCountdown}
                         </Text>
-                        <Text style={[typography.h3, { color: colors.text.primary, marginTop: 20, letterSpacing: 2 }]} maxFontSizeMultiplier={1.3}>
-                            GET READY!
+                        <Text style={[typography.h3, { color: colors.text.primary, marginTop: 12, letterSpacing: 2 }]} maxFontSizeMultiplier={1.3}>
+                            LET'S GO!
                         </Text>
                     </SafeBlurView>
                 </View>
             )}
 
-            {/* Rest Timer Modal */}
-            <Modal transparent visible={showRestTimer && !isStarting} animationType="fade">
-                <View style={styles.modalOverlay}>
-                    <SafeBlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+            {/* Rest Timer Modal — presented as a bottom sheet: a drag handle + an X
+                give a clear dismiss affordance, and the content is safe-area padded.
+                The primary SKIP action sits in the thumb zone. */}
+            <Modal transparent visible={showRestTimer && !isStarting} animationType="slide" onRequestClose={() => setShowRestTimer(false)}>
+                <View style={styles.sheetRoot}>
+                    <SafeBlurView intensity={60} tint="dark" style={StyleSheet.absoluteFill} />
+                    {/* Tapping the scrim dismisses (skips) rest, like the SKIP button. */}
+                    <TouchableOpacity
+                        style={StyleSheet.absoluteFill}
+                        activeOpacity={1}
+                        accessibilityRole="button"
+                        accessibilityLabel="Dismiss rest timer"
+                        onPress={() => setShowRestTimer(false)}
+                    />
                     <Card
                         variant="glass"
+                        noPadding
                         style={{
                             width: '100%',
-                            padding: 30,
-                            alignItems: 'center',
-                            borderRadius: borderRadius['2xl'],
+                            borderTopLeftRadius: borderRadius['3xl'],
+                            borderTopRightRadius: borderRadius['3xl'],
+                            borderBottomLeftRadius: 0,
+                            borderBottomRightRadius: 0,
+                            borderColor: withAlpha(colors.accent.coral, 0.4),
                             ...shadows.glow(colors.accent.coral),
                             ...shadows.xl,
                         }}
                         accessibilityViewIsModal={true}
                         accessibilityLabel={`Rest timer. Up next: ${exerciseStates[restExerciseIdx]?.name ?? 'next exercise'}`}
                     >
-                        {/* The hardened RestTimer owns the single self-resetting
-                            countdown interval (no parent interval) and announces the
-                            live remaining time via its own accessibilityRole="timer".
-                            durationSeconds is `restSeconds` — the rest length seeded by
-                            logSet and bumped by the +15s chip below; RestTimer re-arms
-                            from the new total whenever that prop changes, and onFinish
-                            closes the modal at zero. Gated on the same condition as the
-                            Modal's `visible`, so each new rest cycle mounts a fresh timer
-                            (remaining = durationSeconds) and it tears down when the modal
-                            hides — no stale 00:00 on reopen. */}
-                        {showRestTimer && !isStarting ? (
-                            <RestTimer
-                                durationSeconds={restSeconds}
-                                // Always true inside this branch (the parent already
-                                // gates on `showRestTimer && !isStarting`); pass the
-                                // literal rather than a redundant re-check.
-                                isRunning={true}
-                                onFinish={() => setShowRestTimer(false)}
-                                size={180}
-                            />
-                        ) : null}
-
-                        <Text style={[typography.subhead, { color: colors.text.secondary, marginTop: spacing.lg }]} numberOfLines={1}>
-                            Up next: {exerciseStates[restExerciseIdx]?.name ?? 'next exercise'}
-                        </Text>
-
-                        <View style={styles.modalActions}>
+                        <View style={[styles.sheetBody, { paddingBottom: insets.bottom + spacing.lg }]}>
+                            {/* Drag handle + dismiss affordance */}
+                            <View style={[styles.dragHandle, { backgroundColor: colors.border.light }]} />
                             <TouchableOpacity
-                                activeOpacity={0.85}
+                                style={styles.sheetClose}
                                 accessibilityRole="button"
-                                accessibilityLabel="Add 15 seconds"
-                                style={[styles.restChip, { backgroundColor: colors.background.tertiary, borderWidth: 1, borderColor: colors.border.default }]}
-                                onPress={() => setRestSeconds(prev => prev + 15)}
-                            >
-                                <Text style={[typography.body, { color: colors.text.primary, fontWeight: 'bold' }]}>+15s</Text>
-                            </TouchableOpacity>
-                            <Button
-                                variant="primary"
-                                size="md"
-                                title="SKIP"
-                                style={{ flex: 1, height: 50 }}
-                                accessibilityLabel="Skip rest"
+                                accessibilityLabel="Close rest timer"
+                                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                                 onPress={() => setShowRestTimer(false)}
-                            />
+                            >
+                                <Ionicons name="close" size={22} color={colors.text.secondary} />
+                            </TouchableOpacity>
+
+                            {/* Decorative section label → text.secondary; the RestTimer's
+                                lime progress ring below remains the key indicator. */}
+                            <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.lg }]}>
+                                REST
+                            </Text>
+
+                            {/* The hardened RestTimer owns the single self-resetting
+                                countdown interval (no parent interval) and announces the
+                                live remaining time via its own accessibilityRole="timer".
+                                durationSeconds is `restSeconds` — the rest length seeded by
+                                logSet and bumped by the +15s chip below; RestTimer re-arms
+                                from the new total whenever that prop changes, and onFinish
+                                closes the modal at zero. Gated on the same condition as the
+                                Modal's `visible`, so each new rest cycle mounts a fresh timer
+                                (remaining = durationSeconds) and it tears down when the modal
+                                hides — no stale 00:00 on reopen. */}
+                            {showRestTimer && !isStarting ? (
+                                <RestTimer
+                                    durationSeconds={restSeconds}
+                                    // Always true inside this branch (the parent already
+                                    // gates on `showRestTimer && !isStarting`); pass the
+                                    // literal rather than a redundant re-check.
+                                    isRunning={true}
+                                    onFinish={() => setShowRestTimer(false)}
+                                    size={184}
+                                />
+                            ) : null}
+
+                            {/* UP NEXT, framed as a self-contained chip so the lifter
+                                stays oriented through the rest: the next exercise +,
+                                when known, its pending target in the same reps × weight
+                                language as the focus hero (value-forward). */}
+                            <View style={[styles.restNext, { backgroundColor: withAlpha(colors.background.tertiary, 0.6), borderColor: colors.border.default }]}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[typography.overline, { color: colors.text.tertiary }]}>
+                                        UP NEXT
+                                    </Text>
+                                    <Text style={[typography.subhead, { color: colors.text.primary, marginTop: 2 }]} numberOfLines={1} ellipsizeMode="tail">
+                                        {exerciseStates[restExerciseIdx]?.name ?? 'next exercise'}
+                                    </Text>
+                                </View>
+                                {(() => {
+                                    // Pure lookup on the render path: the first still-
+                                    // pending set of the rested exercise, shown as
+                                    // reps × weight. Null/no-pending → render nothing.
+                                    const ex = exerciseStates[restExerciseIdx];
+                                    const s = ex?.sets.find((x) => !x.completed);
+                                    if (!s) return null;
+                                    return (
+                                        <Text style={[styles.restTarget, { color: colors.text.primary }]} maxFontSizeMultiplier={1.2}>
+                                            {s.reps}
+                                            <Text style={[styles.restTargetUnit, { color: colors.text.tertiary }]}>×</Text>
+                                            {s.kg > 0 ? s.kg : 'BW'}
+                                            {s.kg > 0 ? <Text style={[styles.restTargetUnit, { color: colors.text.tertiary }]}> kg</Text> : null}
+                                        </Text>
+                                    );
+                                })()}
+                            </View>
+
+                            <View style={styles.modalActions}>
+                                <TouchableOpacity
+                                    activeOpacity={0.85}
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Add 15 seconds"
+                                    style={[styles.restChip, { backgroundColor: colors.background.tertiary, borderWidth: 1, borderColor: colors.border.default }]}
+                                    onPress={() => setRestSeconds(prev => prev + 15)}
+                                >
+                                    <Ionicons name="add" size={18} color={colors.text.primary} />
+                                    <Text style={[typography.subhead, { color: colors.text.primary }]}>15s</Text>
+                                </TouchableOpacity>
+                                <Button
+                                    variant="primary"
+                                    size="lg"
+                                    title="SKIP REST"
+                                    style={{ flex: 1.6 }}
+                                    accessibilityLabel="Skip rest"
+                                    iconRight={<Ionicons name="play-skip-forward" size={18} color={colors.text.inverse} />}
+                                    onPress={() => setShowRestTimer(false)}
+                                />
+                            </View>
                         </View>
                     </Card>
                 </View>
@@ -1036,19 +1382,81 @@ export default function ActiveWorkoutScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
-    timer: { fontFamily: typo.statMedium.fontFamily, fontSize: 32, lineHeight: 38, marginTop: 2 },
-    exHeader: { padding: 16, minHeight: 64, justifyContent: 'center' },
+    header: { paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
+    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    headerClock: { flexDirection: 'row', alignItems: 'center' },
+    // Wrapper that hosts the pulsing beacon (its halo extends past the core dot,
+    // so a slight negative left margin keeps the visual dot optically aligned).
+    liveDot: { marginLeft: -8, marginRight: 4 },
+    timer: { fontFamily: typo.statMedium.fontFamily, fontSize: 34, lineHeight: 40, marginTop: 2 },
+    headerTally: { alignItems: 'flex-end' },
+    tallyValue: { fontFamily: typo.statMedium.fontFamily, fontSize: 26, lineHeight: 30 },
+    tallyTotal: { fontFamily: typo.statSmall.fontFamily, fontSize: 16 },
+    headerTrack: { height: 4, borderRadius: 2, marginTop: 12, overflow: 'hidden' },
+    headerFill: { height: 4, borderRadius: 2 },
+
+    // Focus hero
+    focus: { padding: 18 },
+    focusTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    focusValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginVertical: 2 },
+    // The dominant beat of the screen — big condensed numerals so the target
+    // reads first and its unit/label stay quiet (value>label).
+    focusValue: { fontFamily: typo.statLarge.fontFamily, fontSize: 52, lineHeight: 56 },
+    focusValueUnit: { fontFamily: typo.statTiny.fontFamily, fontSize: 16 },
+    focusMult: { fontFamily: typo.statSmall.fontFamily, fontSize: 24 },
+    focusTrack: { height: 6, borderRadius: 3, marginTop: 16, overflow: 'hidden' },
+    focusFill: { height: 6, borderRadius: 3 },
+    focusDotsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 12 },
+    focusCount: { fontFamily: typo.statSmall.fontFamily, fontSize: 18, lineHeight: 20 },
+    focusCountTotal: { fontFamily: typo.statTiny.fontFamily, fontSize: 13 },
+    focusDoneRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 4 },
+    focusDoneIcon: { width: 52, height: 52, borderRadius: 26, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    focusDoneTitle: { fontFamily: typo.h3.fontFamily, fontSize: 22, lineHeight: 26 },
+
+    // Exercise cards
+    exHeader: { padding: 16, paddingLeft: 18, minHeight: 64, justifyContent: 'center' },
     exTitleRow: { flexDirection: 'row', alignItems: 'center' },
-    iconBox: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    exMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
+    cardRail: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, borderTopLeftRadius: 20, borderBottomLeftRadius: 20 },
+    iconBox: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     exContent: { paddingHorizontal: 16, paddingBottom: 16 },
     // The per-set entry rows (setRow/setNum/setInput/checkBtn/removeSetBtn/
     // addSetBtn + their rowLabel/label header) used to live here when this screen
     // owned an inline set grid. That entry surface is now the hardened
     // <SetLogger/> (which carries its own styles), so those orphaned keys were
     // removed — no dead StyleSheet entries left behind.
-    modalOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+
+    browseBtn: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        paddingVertical: 14, borderWidth: 1, borderRadius: 20, borderStyle: 'dashed',
+        marginTop: 8,
+    },
+
+    // Thumb-zone footer
+    footer: {
+        position: 'absolute', left: 0, right: 0, bottom: 0,
+        paddingHorizontal: 20, paddingTop: 12,
+        borderTopWidth: 1,
+    },
+
+    // Startup countdown
     countdownNum: { fontFamily: typo.statLarge.fontFamily, fontSize: 120, lineHeight: 130 },
-    modalActions: { flexDirection: 'row', gap: 16, marginTop: 20, alignSelf: 'stretch' },
-    restChip: { flex: 1, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+
+    // Rest sheet
+    sheetRoot: { flex: 1, justifyContent: 'flex-end' },
+    sheetBody: { paddingHorizontal: 24, paddingTop: 12, alignItems: 'center' },
+    dragHandle: { width: 40, height: 4, borderRadius: 2, marginBottom: 18 },
+    sheetClose: { position: 'absolute', top: 14, right: 16, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+    // UP NEXT chip: full-width inside the centered sheet body, exercise label on
+    // the left and its pending reps × weight target on the right.
+    restNext: {
+        flexDirection: 'row', alignItems: 'center', gap: 12,
+        alignSelf: 'stretch', marginTop: 16,
+        paddingHorizontal: 16, paddingVertical: 12,
+        borderRadius: 16, borderWidth: 1,
+    },
+    restTarget: { fontFamily: typo.statSmall.fontFamily, fontSize: 26, lineHeight: 30 },
+    restTargetUnit: { fontFamily: typo.statTiny.fontFamily, fontSize: 14 },
+    modalActions: { flexDirection: 'row', gap: 12, marginTop: 16, alignSelf: 'stretch' },
+    restChip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, flex: 1, height: 56, borderRadius: 16 },
 });

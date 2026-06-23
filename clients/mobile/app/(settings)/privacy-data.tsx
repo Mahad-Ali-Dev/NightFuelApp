@@ -16,15 +16,21 @@
  *     authStore.logout(), and replace to the auth stack. It is permanent and
  *     irreversible, and the copy says so.
  *
- * Patterns mirror app/(settings)/notification-preferences.tsx (header, inline
- * GlassCard status surface, react-query mutations) and the Log Out confirmation
- * recipe in app/(settings)/index.tsx.
+ * Patterns mirror app/(settings)/notification-preferences.tsx (header, overline
+ * SectionHeader, staggered FadeInDown entrances, inline GlassCard status surface,
+ * react-query mutations, red-tinted/separated Danger Zone) and the Log Out
+ * confirmation recipe in app/(settings)/index.tsx.
+ *
+ * 60/30/10: the deep OLED bg + dark-glass surfaces carry the screen; lime is
+ * reserved for the ONE primary action (Export my data) — every other accent is
+ * functional (calm purple for the trust banner, red for the destructive zone).
  */
 import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable,
     Share, Alert,
 } from 'react-native';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
@@ -40,6 +46,10 @@ import { useAuthStore } from '@/store/authStore';
 
 // The exact word the user must type to arm the destructive delete CTA.
 const DELETE_CONFIRM_WORD = 'DELETE';
+
+// What the export contains — surfaced as legible chips so the value (the scope
+// of the data) dominates the label, rather than burying it in prose.
+const EXPORT_INCLUDES = ['Profile', 'Workouts', 'Nutrition', 'Settings'] as const;
 
 /**
  * Write the export payload to a file and open the OS share sheet so the user
@@ -157,127 +167,244 @@ export default function PrivacyDataScreen() {
                 <View style={{ width: 32 }} />
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: insets.bottom + spacing['4xl'] }}
+            >
+                {/* ── Trust banner ─────────────────────────────────────────────
+                    Calm purple (the "AI + calm" hue), lock glyph: sets the
+                    GDPR/ownership tone before the controls. Not lime — lime is
+                    reserved for the one primary action below. */}
+                <Animated.View entering={FadeInDown.duration(360).springify().damping(18)}>
+                    <View
+                        style={[
+                            styles.trustBanner,
+                            {
+                                backgroundColor: withAlpha(colors.accent.purple, 0.1),
+                                borderColor: withAlpha(colors.accent.purple, 0.25),
+                            },
+                        ]}
+                        accessible
+                        accessibilityRole="summary"
+                        accessibilityLabel="Your data is yours. Under GDPR you can export a full copy at any time, or permanently delete your account."
+                    >
+                        <View style={[styles.trustIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.16) }]}>
+                            <Ionicons name="lock-closed-outline" size={20} color={colors.accent.purpleLight} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>
+                                Your data is yours
+                            </Text>
+                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 3, lineHeight: 18 }]}>
+                                Under GDPR you can export a full copy at any time, or permanently delete
+                                your account. We never sell your data.
+                            </Text>
+                        </View>
+                    </View>
+                </Animated.View>
+
                 {/* ── Export my data ───────────────────────────────────────── */}
-                <Text style={[styles.sectionLabel, { color: colors.text.secondary }]}>YOUR DATA</Text>
-                <GlassCard radius={br.lg} style={styles.card}>
-                    <View style={styles.cardBody}>
-                        <View style={styles.cardHeadRow}>
-                            <Ionicons name="download-outline" size={20} color={colors.accent.cyan} />
-                            <Text style={[typography.subhead, styles.cardTitle, { color: colors.text.primary }]}>
-                                Export my data
-                            </Text>
-                        </View>
-                        <Text style={[typography.caption, { color: colors.text.secondary, lineHeight: 18 }]}>
-                            Download a copy of your Zeitra account data as a JSON file. We&apos;ll prepare
-                            it and open the share sheet so you can save or send it.
-                        </Text>
-
-                        {exportStatus === 'success' ? (
-                            <View
-                                style={styles.statusContent}
-                                accessible
-                                accessibilityRole="alert"
-                                accessibilityLiveRegion="polite"
-                                accessibilityLabel="Your data export is ready to share."
-                                testID="export-status-success"
-                            >
-                                <Ionicons name="checkmark-circle" size={18} color={colors.accent.emerald} />
-                                <Text style={[typography.caption, styles.statusText, { color: colors.text.primary }]}>
-                                    Your data export is ready to share.
-                                </Text>
+                <Animated.View entering={FadeInDown.delay(80).duration(360).springify().damping(18)}>
+                    <SectionHeader
+                        label="Your data"
+                        icon="server-outline"
+                        tag="GDPR"
+                        colors={colors}
+                        typography={typography}
+                    />
+                    <GlassCard radius={br.lg} style={styles.card}>
+                        <View style={styles.cardBody}>
+                            <View style={styles.cardHeadRow}>
+                                <View style={[styles.cardIconBox, { backgroundColor: withAlpha(colors.accent.cyan, 0.12) }]}>
+                                    <Ionicons name="download-outline" size={20} color={colors.accent.cyan} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[typography.subhead, styles.cardTitle, { color: colors.text.primary }]}>
+                                        Export my data
+                                    </Text>
+                                    <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 1 }]}>
+                                        JSON file · ready to share
+                                    </Text>
+                                </View>
                             </View>
-                        ) : null}
 
-                        {exportStatus === 'error' ? (
-                            <View
-                                style={styles.statusContent}
-                                accessible
-                                accessibilityRole="alert"
-                                accessibilityLiveRegion="polite"
-                                accessibilityLabel="Export failed. Please try again."
-                                testID="export-status-error"
-                            >
-                                <Ionicons name="alert-circle" size={18} color={colors.accent.coral} />
-                                <Text style={[typography.caption, styles.statusText, { color: colors.text.primary }]}>
-                                    Export failed. Please try again.
-                                </Text>
+                            <Text style={[typography.caption, { color: colors.text.secondary, lineHeight: 18, marginTop: spacing.md }]}>
+                                Download a copy of your Zeitra account data as a JSON file. We&apos;ll prepare
+                                it and open the share sheet so you can save or send it.
+                            </Text>
+
+                            {/* Value-forward "what's included" chips — the scope of
+                                the export reads at a glance instead of as prose. */}
+                            <View style={styles.chipRow}>
+                                {EXPORT_INCLUDES.map((label) => (
+                                    <View
+                                        key={label}
+                                        style={[styles.chip, { backgroundColor: withAlpha(colors.accent.cyan, 0.1), borderColor: withAlpha(colors.accent.cyan, 0.22) }]}
+                                    >
+                                        <Text style={[typography.caption, styles.chipText, { color: colors.accent.cyan }]}>
+                                            {label}
+                                        </Text>
+                                    </View>
+                                ))}
                             </View>
-                        ) : null}
 
-                        <CtaButton
-                            label="Export my data"
-                            icon="download-outline"
-                            onPress={handleExport}
-                            loading={exportMutation.isPending}
-                            accessibilityLabel="Export my data"
-                            testID="export-cta"
-                            style={{ marginTop: spacing.lg }}
-                        />
-                    </View>
-                </GlassCard>
+                            {exportStatus === 'success' ? (
+                                <Animated.View entering={FadeIn.duration(220)}>
+                                    <View
+                                        style={[styles.statusContent, { backgroundColor: withAlpha(colors.accent.emerald, 0.1), borderColor: withAlpha(colors.accent.emerald, 0.25) }]}
+                                        accessible
+                                        accessibilityRole="alert"
+                                        accessibilityLiveRegion="polite"
+                                        accessibilityLabel="Your data export is ready to share."
+                                        testID="export-status-success"
+                                    >
+                                        <Ionicons name="checkmark-circle" size={18} color={colors.accent.emerald} />
+                                        <Text style={[typography.caption, styles.statusText, { color: colors.text.primary }]}>
+                                            Your data export is ready to share.
+                                        </Text>
+                                    </View>
+                                </Animated.View>
+                            ) : null}
 
-                {/* ── Delete account ───────────────────────────────────────── */}
-                <Text style={[styles.sectionLabel, { color: colors.text.secondary, marginTop: spacing['2xl'] }]}>
-                    DANGER ZONE
-                </Text>
-                <GlassCard
-                    radius={br.lg}
-                    style={styles.card}
-                    glow={colors.accent.coral}
-                >
-                    <View style={styles.cardBody}>
-                        <View style={styles.cardHeadRow}>
-                            <Ionicons name="trash-outline" size={20} color={colors.accent.coral} />
-                            <Text style={[typography.subhead, styles.cardTitle, { color: colors.accent.coral }]}>
-                                Delete account
-                            </Text>
+                            {exportStatus === 'error' ? (
+                                <Animated.View entering={FadeIn.duration(220)}>
+                                    <View
+                                        style={[styles.statusContent, { backgroundColor: withAlpha(colors.accent.red, 0.1), borderColor: withAlpha(colors.accent.red, 0.25) }]}
+                                        accessible
+                                        accessibilityRole="alert"
+                                        accessibilityLiveRegion="polite"
+                                        accessibilityLabel="Export failed. Please try again."
+                                        testID="export-status-error"
+                                    >
+                                        <Ionicons name="alert-circle" size={18} color={colors.accent.red} />
+                                        <Text style={[typography.caption, styles.statusText, { color: colors.text.primary }]}>
+                                            Export failed. Please try again.
+                                        </Text>
+                                    </View>
+                                </Animated.View>
+                            ) : null}
+
+                            {/* The screen's ONE primary action — ink-on-lime CTA. */}
+                            <CtaButton
+                                label="Export my data"
+                                icon="download-outline"
+                                onPress={handleExport}
+                                loading={exportMutation.isPending}
+                                accessibilityLabel="Export my data"
+                                testID="export-cta"
+                                style={{ marginTop: spacing.lg }}
+                            />
                         </View>
-                        <Text style={[typography.caption, { color: colors.text.secondary, lineHeight: 18 }]}>
-                            This permanently deletes your account and all of your data. This action is
-                            irreversible — there is no way to recover your account afterwards.
-                        </Text>
+                    </GlassCard>
+                </Animated.View>
 
-                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.lg }]}>
-                            Type <Text style={{ color: colors.text.primary, fontWeight: '800' }}>DELETE</Text> to confirm.
-                        </Text>
-                        <Input
-                            value={confirmText}
-                            onChangeText={setConfirmText}
-                            placeholder="DELETE"
-                            autoCapitalize="characters"
-                            autoCorrect={false}
-                            accessibilityLabel="Type DELETE to confirm account deletion"
-                            testID="delete-confirm-input"
-                        />
+                {/* ── Danger Zone — destructive controls, visually separated and
+                    red-tinted so they never read as a normal section. ───────── */}
+                <Animated.View entering={FadeInDown.delay(160).duration(360).springify().damping(18)}>
+                    <SectionHeader
+                        label="Danger Zone"
+                        icon="warning-outline"
+                        tone={colors.accent.red}
+                        colors={colors}
+                        typography={typography}
+                    />
+                    <GlassCard
+                        radius={br.lg}
+                        style={[styles.card, { borderColor: withAlpha(colors.accent.red, 0.3) }]}
+                        glow={colors.accent.red}
+                    >
+                        <View style={styles.cardBody}>
+                            <View style={styles.cardHeadRow}>
+                                <View style={[styles.cardIconBox, { backgroundColor: withAlpha(colors.accent.red, 0.12) }]}>
+                                    <Ionicons name="trash-outline" size={20} color={colors.accent.red} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[typography.subhead, styles.cardTitle, { color: colors.accent.red }]}>
+                                        Delete account
+                                    </Text>
+                                    <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 1 }]}>
+                                        Permanent · cannot be undone
+                                    </Text>
+                                </View>
+                            </View>
 
-                        <Pressable
-                            onPress={handleDelete}
-                            disabled={!deleteArmed || deleteMutation.isPending}
-                            accessibilityRole="button"
-                            accessibilityLabel="Delete account"
-                            accessibilityState={{
-                                disabled: !deleteArmed || deleteMutation.isPending,
-                                busy: deleteMutation.isPending,
-                            }}
-                            testID="delete-cta"
-                            style={({ pressed }) => [
-                                styles.deleteBtn,
-                                {
-                                    borderColor: colors.accent.coral,
-                                    backgroundColor: withAlpha(colors.accent.coral, pressed ? 0.18 : 0.1),
-                                    opacity: !deleteArmed || deleteMutation.isPending ? 0.5 : 1,
-                                },
-                            ]}
-                        >
-                            <Ionicons name="trash-outline" size={17} color={colors.accent.coral} />
-                            <Text style={[typography.subhead, { color: colors.accent.coral, fontWeight: '800', marginLeft: 8 }]}>
-                                {deleteMutation.isPending ? 'Deleting…' : 'Delete account'}
+                            <Text style={[typography.caption, { color: colors.text.secondary, lineHeight: 18, marginTop: spacing.md }]}>
+                                This permanently deletes your account and all of your data. This action is
+                                irreversible — there is no way to recover your account afterwards.
                             </Text>
-                        </Pressable>
-                    </View>
-                </GlassCard>
+
+                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.lg, marginBottom: spacing.sm }]}>
+                                Type <Text style={{ color: colors.text.primary, fontWeight: '800' }}>DELETE</Text> to confirm.
+                            </Text>
+                            <Input
+                                value={confirmText}
+                                onChangeText={setConfirmText}
+                                placeholder="DELETE"
+                                autoCapitalize="characters"
+                                autoCorrect={false}
+                                accessibilityLabel="Type DELETE to confirm account deletion"
+                                testID="delete-confirm-input"
+                            />
+
+                            <Pressable
+                                onPress={handleDelete}
+                                disabled={!deleteArmed || deleteMutation.isPending}
+                                accessibilityRole="button"
+                                accessibilityLabel="Delete account"
+                                accessibilityState={{
+                                    disabled: !deleteArmed || deleteMutation.isPending,
+                                    busy: deleteMutation.isPending,
+                                }}
+                                testID="delete-cta"
+                                style={({ pressed }) => [
+                                    styles.deleteBtn,
+                                    {
+                                        borderColor: colors.accent.red,
+                                        backgroundColor: withAlpha(colors.accent.red, pressed ? 0.2 : 0.12),
+                                        opacity: !deleteArmed || deleteMutation.isPending ? 0.5 : 1,
+                                        transform: [{ scale: pressed && deleteArmed && !deleteMutation.isPending ? 0.97 : 1 }],
+                                    },
+                                ]}
+                            >
+                                <Ionicons name="trash-outline" size={17} color={colors.accent.red} />
+                                <Text style={[typography.subhead, { color: colors.accent.red, fontWeight: '800', marginLeft: 8 }]}>
+                                    {deleteMutation.isPending ? 'Deleting…' : 'Delete account'}
+                                </Text>
+                            </Pressable>
+                        </View>
+                    </GlassCard>
+                </Animated.View>
             </ScrollView>
+        </View>
+    );
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+// Grouped-section overline header: quiet leading glyph + overline label, with an
+// optional trailing tag pill (e.g. "GDPR") as a calm detail. When `tone` is
+// passed (Danger Zone) the glyph + label adopt that hue so the destructive
+// section reads as red before the user reaches its card.
+function SectionHeader({ label, icon, tag, tone, colors, typography }: any) {
+    const headerColor = tone ?? colors.text.secondary;
+    return (
+        <View
+            style={styles.sectionHeader}
+            accessibilityRole="header"
+            accessibilityLabel={tag ? `${label}, ${tag}` : label}
+        >
+            <Ionicons name={icon} size={14} color={headerColor} />
+            <Text style={[typography.overline, { color: headerColor, marginLeft: 6 }]}>
+                {label}
+            </Text>
+            <View style={{ flex: 1 }} />
+            {tag ? (
+                <View style={[styles.tagPill, { backgroundColor: withAlpha(colors.text.tertiary, 0.12) }]}>
+                    <Text style={[typography.caption, styles.tagText, { color: colors.text.tertiary }]}>
+                        {tag}
+                    </Text>
+                </View>
+            ) : null}
         </View>
     );
 }
@@ -292,13 +419,41 @@ const styles = StyleSheet.create({
         paddingVertical: spacing.md,
         borderBottomWidth: 1,
     },
-    sectionLabel: {
-        fontWeight: 'bold',
-        letterSpacing: 1,
-        fontSize: 11,
+    // Trust banner — calm purple notice that opens the screen.
+    trustBanner: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: spacing.md,
+        marginHorizontal: spacing.xl,
+        marginTop: spacing.lg,
+        padding: spacing.lg,
+        borderRadius: br.lg,
+        borderWidth: 1,
+    },
+    trustIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    // Grouped-section header (leading glyph + overline label + optional tag).
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
         paddingHorizontal: spacing.xl,
         paddingTop: spacing['2xl'],
         paddingBottom: spacing.sm,
+    },
+    tagPill: {
+        paddingHorizontal: spacing.sm,
+        paddingVertical: 3,
+        borderRadius: br.full,
+    },
+    tagText: {
+        fontWeight: '700',
+        fontSize: 10,
+        letterSpacing: 0.5,
     },
     card: {
         marginHorizontal: spacing.xl,
@@ -309,16 +464,43 @@ const styles = StyleSheet.create({
     cardHeadRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: spacing.sm,
+        gap: spacing.md,
+    },
+    cardIconBox: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     cardTitle: {
         fontWeight: '700',
-        marginLeft: spacing.sm,
+    },
+    // "What's included" chips for the export scope.
+    chipRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: spacing.sm,
+        marginTop: spacing.lg,
+    },
+    chip: {
+        paddingHorizontal: spacing.md,
+        paddingVertical: 5,
+        borderRadius: br.full,
+        borderWidth: 1,
+    },
+    chipText: {
+        fontWeight: '700',
+        fontSize: 11,
+        letterSpacing: 0.2,
     },
     statusContent: {
         flexDirection: 'row',
         alignItems: 'center',
         marginTop: spacing.lg,
+        padding: spacing.md,
+        borderRadius: br.md,
+        borderWidth: 1,
     },
     statusText: {
         flex: 1,

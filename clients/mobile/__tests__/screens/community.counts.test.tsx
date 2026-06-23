@@ -373,9 +373,9 @@ describe('CommunityTab — counter clamp (safeCount): missing / NaN / negative �
   });
 
   // ── (5) Challenge strip: invalid `participants` clamps to 0 the same way ────
-  // The strip renders "{safeCount(chall.participants)} participating" with the
-  // same value echoed in the card's a11y label. A NaN participant count surfaces
-  // as "0 participating" — never "NaN participating" — and the strip mounts.
+  // The strip renders "{safeCount(chall.participants)} in" with the same value
+  // echoed in the card's a11y label ("… participating"). A NaN participant count
+  // surfaces as "0 in" — never "NaN in" — and the strip mounts.
   test('challenge strip clamps an invalid participants count to 0 (visible text + label)', () => {
     // Feed empty so the strip is the only counter source under test here.
     mockFeed.data = [];
@@ -383,11 +383,11 @@ describe('CommunityTab — counter clamp (safeCount): missing / NaN / negative �
 
     expect(() => renderScreen()).not.toThrow();
 
-    // Visible strip caption is clamped, not 'NaN participating'.
-    expect(screen.getByText('0 participating')).toBeTruthy();
-    expect(screen.queryByText('NaN participating')).toBeNull();
+    // Visible strip caption is clamped ('{n} in'), not 'NaN in'.
+    expect(screen.getByText('0 in')).toBeTruthy();
+    expect(screen.queryByText('NaN in')).toBeNull();
 
-    // The card's a11y label echoes the SAME clamped value.
+    // The card's a11y label echoes the SAME clamped value ('… participating').
     expect(screen.getByRole('button', { name: 'Step Challenge, 0 participating' })).toBeTruthy();
   });
 
@@ -398,7 +398,7 @@ describe('CommunityTab — counter clamp (safeCount): missing / NaN / negative �
 
     renderScreen();
 
-    expect(screen.getByText('42 participating')).toBeTruthy();
+    expect(screen.getByText('42 in')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Step Challenge, 42 participating' })).toBeTruthy();
   });
 

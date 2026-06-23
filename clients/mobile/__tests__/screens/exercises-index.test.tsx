@@ -198,8 +198,10 @@ describe('ExerciseLibraryScreen — render-state coverage', () => {
     expect(screen.getByText('Cardio')).toBeTruthy();
     expect(screen.getByText('Recovery')).toBeTruthy();
 
-    // A muscle chip from the "Browse by Muscle" row renders too.
-    expect(screen.getByText('Chest')).toBeTruthy();
+    // A muscle chip labelled "Chest" renders. The Zeitra redesign surfaces the
+    // muscle filter in TWO places (the top snapping chip carousel AND the
+    // "Browse by Muscle" grid), so assert at least one rather than exactly one.
+    expect(screen.getAllByText('Chest').length).toBeGreaterThan(0);
 
     // Tapping the Gym category drives the screen into a category filter: the
     // clear/back "GYM EXERCISES" affordance appears (state branch unchanged).

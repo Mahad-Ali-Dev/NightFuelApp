@@ -239,7 +239,11 @@ describe('ai-coach screen — daily-quota 429 → upgrade state', () => {
 
     renderScreen();
 
-    // free default cap 5, used today 2 → "3 left today".
-    await waitFor(() => expect(screen.getByText('3 left today')).toBeTruthy());
+    // free default cap 5, used today 2 → 3 remaining. The redesigned pill is
+    // value-dominant: the count ("3") and the word "LEFT" render in separate
+    // <Text> nodes, so assert the count and the pill's accessibilityLabel
+    // ("3 AI messages left today") rather than a combined string.
+    await waitFor(() => expect(screen.getByText('3')).toBeTruthy());
+    expect(screen.getByLabelText('3 AI messages left today')).toBeTruthy();
   });
 });

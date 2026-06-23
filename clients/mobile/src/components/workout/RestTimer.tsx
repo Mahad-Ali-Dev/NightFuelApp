@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { colors } from '@/theme';
+import { typography as typo } from '@/theme/typography';
 
 interface RestTimerProps {
     durationSeconds: number;
@@ -121,6 +122,9 @@ export function RestTimer({ durationSeconds, isRunning, onFinish, size = 140 }: 
 const styles = StyleSheet.create({
     container: { alignItems: 'center', justifyContent: 'center' },
     center: { position: 'absolute', alignItems: 'center' },
-    time: { color: colors.text.primary, fontSize: 32, fontWeight: '800', fontFamily: 'monospace' },
-    label: { color: colors.accent.coral, fontSize: 12, fontWeight: '800', letterSpacing: 2, marginTop: 4 },
+    // Big condensed stat numerals (Barlow Condensed via typo.statMedium), matching
+    // the workout screen's live clock / focus value — not the off-brand 'monospace'
+    // clock. Size stays 32 (statMedium.fontSize) so the dial layout is unchanged.
+    time: { color: colors.text.primary, fontSize: typo.statMedium.fontSize, fontFamily: typo.statMedium.fontFamily },
+    label: { color: colors.accent.coral, fontSize: 12, fontFamily: typo.overline.fontFamily, letterSpacing: 2, marginTop: 4 },
 });

@@ -200,7 +200,7 @@ describe('messages/[id] — DM composer send bound + honest a11y', () => {
   // ── (i) maxLength bound — the chat-service cap, asserted via the prop ───────
   test('the message TextInput enforces maxLength={4000}', () => {
     renderScreen();
-    const input = screen.getByPlaceholderText('Type a message…');
+    const input = screen.getByPlaceholderText('Message…');
     expect(input.props.maxLength).toBe(4000);
   });
 
@@ -222,7 +222,7 @@ describe('messages/[id] — DM composer send bound + honest a11y', () => {
   test('whitespace-only input keeps Send disabled and does not send', () => {
     renderScreen();
 
-    const input = screen.getByPlaceholderText('Type a message…');
+    const input = screen.getByPlaceholderText('Message…');
     fireEvent.changeText(input, '    ');
 
     // The trim guard means whitespace never enables the affordance.
@@ -241,7 +241,7 @@ describe('messages/[id] — DM composer send bound + honest a11y', () => {
     // optimistic send path takes the socket branch (not the failed fallback).
     await waitFor(() => expect(mockSocket.on).toHaveBeenCalled());
 
-    const input = screen.getByPlaceholderText('Type a message…');
+    const input = screen.getByPlaceholderText('Message…');
     fireEvent.changeText(input, 'hello world');
 
     // Now the control reads ENABLED: honest label flips + accessibilityState clears.
@@ -259,7 +259,7 @@ describe('messages/[id] — DM composer send bound + honest a11y', () => {
     renderScreen();
     await waitFor(() => expect(mockSocket.on).toHaveBeenCalled());
 
-    const input = screen.getByPlaceholderText('Type a message…');
+    const input = screen.getByPlaceholderText('Message…');
     fireEvent.changeText(input, '  hi coach  ');
 
     // Padding still enables the control (there is real content to send)…

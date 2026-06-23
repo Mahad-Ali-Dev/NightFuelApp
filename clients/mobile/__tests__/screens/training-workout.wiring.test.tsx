@@ -242,14 +242,14 @@ describe('ActiveWorkoutScreen — RestTimer + SetLogger wiring', () => {
       clearStartupCountdown();
 
       // Seeded fresh: 0 of 3 done, no rest timer.
-      expect(screen.getByText(/0\/3 Sets Done/)).toBeTruthy();
+      expect(screen.getAllByText(/0\/3 sets/)[0]).toBeTruthy();
 
       logViaSetLogger(badReps, '40');
 
       // SetLogger's Number.isFinite + reps>=1 guard rejected it: the completed
       // count stayed 0/3 (no ex.set marked complete) and the rest cycle never
       // opened (no RestTimer).
-      expect(screen.getByText(/0\/3 Sets Done/)).toBeTruthy();
+      expect(screen.getAllByText(/0\/3 sets/)[0]).toBeTruthy();
       expect(screen.queryByRole('timer')).toBeNull();
     },
   );
@@ -259,11 +259,11 @@ describe('ActiveWorkoutScreen — RestTimer + SetLogger wiring', () => {
     await flushInit();
     clearStartupCountdown();
 
-    expect(screen.getByText(/0\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getAllByText(/0\/3 sets/)[0]).toBeTruthy();
 
     logViaSetLogger('5', '-20');
 
-    expect(screen.getByText(/0\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getAllByText(/0\/3 sets/)[0]).toBeTruthy();
     expect(screen.queryByRole('timer')).toBeNull();
   });
 
@@ -273,7 +273,7 @@ describe('ActiveWorkoutScreen — RestTimer + SetLogger wiring', () => {
     clearStartupCountdown();
 
     // Sanity: 0 of 3 done / no timer before the valid entry.
-    expect(screen.getByText(/0\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getAllByText(/0\/3 sets/)[0]).toBeTruthy();
     expect(screen.queryByRole('timer')).toBeNull();
 
     logViaSetLogger('12', '50');
@@ -281,7 +281,7 @@ describe('ActiveWorkoutScreen — RestTimer + SetLogger wiring', () => {
     // The valid set was accepted: logSet marked the next pending ex.set complete
     // (header → 1/3 Sets Done) AND the screen opened the rest cycle (real
     // RestTimer mounted).
-    expect(screen.getByText(/1\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getAllByText(/1\/3 sets/)[0]).toBeTruthy();
     expect(screen.getByRole('timer')).toBeTruthy();
   });
 });
@@ -338,7 +338,7 @@ describe('ActiveWorkoutScreen — restored-session seed + summary read-side', ()
 
     // The first card is expanded by default, so its SetLogger is mounted. Both
     // the header count and the SetLogger count read the SAME ground truth: 2 / 3.
-    expect(screen.getByText(/2\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getAllByText(/2\/3 sets/)[0]).toBeTruthy();
     expect(screen.getByText('2 / 3 sets')).toBeTruthy();
   });
 
@@ -448,7 +448,7 @@ describe('ActiveWorkoutScreen — in-row toggle / edit / remove persist to ex.se
     await renderRestored();
 
     // Opens at 2 / 3 (both the header — from ex.sets — and the SetLogger agree).
-    expect(screen.getByText(/2\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getAllByText(/2\/3 sets/)[0]).toBeTruthy();
     expect(screen.getByText('2 / 3 sets')).toBeTruthy();
 
     // Toggle set 1 OFF via the SetLogger's per-set DONE control. This now flows
@@ -457,7 +457,7 @@ describe('ActiveWorkoutScreen — in-row toggle / edit / remove persist to ex.se
 
     // The header count (derived from ex.sets) drops to 1 / 3 — proof the toggle
     // reached the PERSISTED sets, not just SetLogger-local state.
-    expect(screen.getByText(/1\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getAllByText(/1\/3 sets/)[0]).toBeTruthy();
     expect(screen.getByText('1 / 3 sets')).toBeTruthy();
 
     // …and finish-time volume now counts only the 1 remaining completed set:
@@ -483,14 +483,14 @@ describe('ActiveWorkoutScreen — in-row toggle / edit / remove persist to ex.se
   test('removing a logged set drops it from the header count AND the persisted finish-time volume', async () => {
     await renderRestored();
 
-    expect(screen.getByText(/2\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getAllByText(/2\/3 sets/)[0]).toBeTruthy();
 
     // Remove set 1 via the SetLogger's per-set remove → onRemoveSet → removeSetAt
     // drops exerciseStates[0].sets[0]. The exercise now has 2 sets (1 completed).
     fireEvent.press(screen.getByRole('button', { name: 'Remove set 1' }));
 
     // Header total + completed both drop: 1 completed of 2 remaining.
-    expect(screen.getByText(/1\/2 Sets Done/)).toBeTruthy();
+    expect(screen.getAllByText(/1\/2 sets/)[0]).toBeTruthy();
 
     // Finish-time volume now counts only the single remaining completed set:
     // 50×10 = 500 (the removed completed set is gone).

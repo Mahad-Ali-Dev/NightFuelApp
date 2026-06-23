@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getStatus } from '@/api/subscriptions';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
     SUBSCRIPTION_PRODUCT_IDS,
     type SubscriptionProductId,
@@ -30,6 +31,7 @@ import { validateReceipt } from '@/api/iap';
 import { captureException } from '@/lib/sentry';
 import { BiometricGate } from '@/components/BiometricGate';
 import { Skeleton, GlassCard, CtaButton } from '@/components/ui';
+import { PressableScale } from '@/components/ui/PressableScale';
 
 const { width } = Dimensions.get('window');
 
@@ -53,7 +55,7 @@ const TIERS: TierUI[] = [
         fallbackPrice: 'Free',
         period: 'forever',
         color: palette.text.secondary,
-        gradient: [withAlpha(palette.text.secondary, 0.1), 'rgba(0,0,0,0)'],
+        gradient: [withAlpha(palette.text.secondary, 0.1), withAlpha(palette.background.primary, 0)],
         features: [
             'Basic Workout Logging & 1RM',
             'ExerciseDB Library (Standard)',
@@ -68,7 +70,7 @@ const TIERS: TierUI[] = [
         period: '/mo',
         productIdMonthly: SUBSCRIPTION_PRODUCT_IDS.PRO_MONTHLY,
         color: palette.accent.coral,
-        gradient: [withAlpha(palette.accent.coral, 0.18), withAlpha(palette.accent.pink, 0.06)],
+        gradient: [withAlpha(palette.accent.coral, 0.12), withAlpha(palette.background.primary, 0)],
         recommended: true,
         features: [
             'Advanced Analytics & Real-time Insights',
@@ -84,7 +86,7 @@ const TIERS: TierUI[] = [
         period: '/mo',
         productIdMonthly: SUBSCRIPTION_PRODUCT_IDS.PREMIUM_MONTHLY,
         color: palette.accent.blue,
-        gradient: [withAlpha(palette.accent.blue, 0.16), 'rgba(0,0,0,0)'],
+        gradient: [withAlpha(palette.accent.blue, 0.12), withAlpha(palette.background.primary, 0)],
         features: [
             'Everything in Pro tier',
             'Direct Chat with Professional Coaches',
@@ -99,7 +101,7 @@ const TIERS: TierUI[] = [
         period: '/mo',
         productIdMonthly: SUBSCRIPTION_PRODUCT_IDS.ENTERPRISE_MONTHLY,
         color: palette.accent.purpleLight,
-        gradient: [withAlpha(palette.accent.purpleLight, 0.16), 'rgba(0,0,0,0)'],
+        gradient: [withAlpha(palette.accent.purpleLight, 0.12), withAlpha(palette.background.primary, 0)],
         features: [
             'Client Management Dashboard (For Coaches)',
             'Global Template Creation',
@@ -108,6 +110,30 @@ const TIERS: TierUI[] = [
         ],
     },
 ];
+
+// Definite (never-undefined) handles into TIERS for the hero card + primary
+// CTA. The `!` satisfies `noUncheckedIndexedAccess` — TIERS is a non-empty
+// literal, so index 0 always exists.
+const FREE_TIER: TierUI = TIERS[0]!;
+const PRO_TIER: TierUI = TIERS.find((t) => t.id === 'pro') ?? FREE_TIER;
+
+/** Split a localized price ("$9.99", "£19.99", "Free") into a leading symbol,
+ *  the dominant numeric value and any trailing fraction so the VALUE can be the
+ *  largest glyph on the current-plan card (value > label). Falls back to
+ *  rendering the whole string as the value when it doesn't parse. */
+function splitPrice(raw: string): { symbol: string; value: string; suffix: string } {
+    const m = raw.match(/^([^\d]*)(\d[\d.,]*)(.*)$/);
+    if (!m) return { symbol: '', value: raw, suffix: '' };
+    return { symbol: (m[1] ?? '').trim(), value: m[2] ?? raw, suffix: (m[3] ?? '').trim() };
+}
+
+/** Human renewal date — "12 Jul 2026" — from the ISO `expiresAt`, or null. */
+function formatRenewal(iso?: string): string | null {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 // Exported (additive — the default export below still wraps this in
 // BiometricGate) so screen tests can mount the content directly, without the
@@ -272,6 +298,28 @@ export function SubscriptionScreenContent() {
         return tier.fallbackPrice;
     };
 
+    // Resolve the user's CURRENT plan + its visual identity for the hero card.
+    const activeTier: TierUI = TIERS.find((t) => t.id === activeTierId) ?? FREE_TIER;
+    const isPaid = activeTierId !== 'free';
+    const renewalDate = formatRenewal(sub?.expiresAt);
+    const activePrice = priceFor(activeTier);
+    const { symbol: priceSymbol, value: priceValue, suffix: priceSuffix } = splitPrice(activePrice);
+
+    // Status pill — colour must MATCH its meaning (color carries the signal):
+    // ACTIVE → cyan (success/active), EXPIRING → amber (caution, NOT the
+    // success green), FREE → muted secondary. Never colour a caution state with
+    // the success hue.
+    const isExpiring = isPaid && !sub?.active;
+    const statusLabel = isPaid ? (sub?.active ? 'ACTIVE' : 'EXPIRING') : 'FREE';
+    const statusColor = isExpiring
+        ? colors.accent.amber
+        : isPaid
+            ? colors.accent.cyan
+            : colors.text.secondary;
+    // The single primary action lives in the thumb zone. For a paying member it
+    // manages the live subscription; for a free member it starts the upgrade to
+    // the recommended (Pro) plan via the same handler the carousel uses.
+
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             <StatusBar style="light" />
@@ -284,36 +332,39 @@ export function SubscriptionScreenContent() {
             </View>
 
             {isLoading ? (
-                <ScrollView contentContainerStyle={{ paddingBottom: 100 }} scrollEnabled={false}>
-                    {/* Hero copy placeholder */}
-                    <View style={styles.heroTextContainer}>
-                        <Skeleton width="70%" height={36} radius={borderRadius.md} style={{ alignSelf: 'center' }} />
-                        <Skeleton width="90%" height={16} radius={borderRadius.sm} style={{ alignSelf: 'center', marginTop: spacing.lg }} />
+                <ScrollView contentContainerStyle={{ paddingBottom: 120 + insets.bottom }} scrollEnabled={false}>
+                    {/* Current-plan hero placeholder */}
+                    <View style={{ paddingHorizontal: spacing['2xl'], paddingTop: spacing.xl }}>
+                        <Skeleton width="100%" height={188} radius={borderRadius['2xl']} />
+                        <Skeleton width="100%" height={56} radius={borderRadius.lg} style={{ marginTop: spacing.lg }} />
                     </View>
 
-                    {/* Tier card placeholders (mirrors the horizontal carousel) */}
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        scrollEnabled={false}
-                        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
-                    >
-                        {[0, 1].map((i) => (
-                            <Skeleton
-                                key={i}
-                                width={width * 0.75}
-                                height={450}
-                                radius={borderRadius['2xl']}
-                                style={{ marginRight: spacing.lg }}
-                            />
-                        ))}
-                    </ScrollView>
+                    {/* Plan carousel placeholders */}
+                    <View style={{ marginTop: spacing['3xl'] }}>
+                        <Skeleton width="45%" height={16} radius={borderRadius.sm} style={{ marginLeft: spacing['2xl'], marginBottom: spacing.lg }} />
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            scrollEnabled={false}
+                            contentContainerStyle={{ paddingHorizontal: 20 }}
+                        >
+                            {[0, 1].map((i) => (
+                                <Skeleton
+                                    key={i}
+                                    width={width * 0.72}
+                                    height={420}
+                                    radius={borderRadius['2xl']}
+                                    style={{ marginRight: spacing.lg }}
+                                />
+                            ))}
+                        </ScrollView>
+                    </View>
 
-                    {/* Subscription tools placeholders */}
-                    <View style={{ paddingHorizontal: spacing['2xl'], marginTop: spacing['2xl'] }}>
-                        <Skeleton width="55%" height={24} radius={borderRadius.md} style={{ marginBottom: spacing.lg }} />
-                        <Skeleton width="100%" height={72} radius={borderRadius.xl} />
-                        <Skeleton width="100%" height={72} radius={borderRadius.xl} style={{ marginTop: spacing.md }} />
+                    {/* Billing tools placeholders */}
+                    <View style={{ paddingHorizontal: spacing['2xl'], marginTop: spacing['3xl'] }}>
+                        <Skeleton width="40%" height={14} radius={borderRadius.sm} style={{ marginBottom: spacing.lg }} />
+                        <Skeleton width="100%" height={68} radius={borderRadius.xl} />
+                        <Skeleton width="100%" height={68} radius={borderRadius.xl} style={{ marginTop: spacing.md }} />
                     </View>
                 </ScrollView>
             ) : isError ? (
@@ -354,164 +405,317 @@ export function SubscriptionScreenContent() {
                     </GlassCard>
                 </View>
             ) : (
-                <ScrollView contentContainerStyle={{ paddingBottom: 100 }}>
-                    <View style={styles.heroTextContainer}>
-                        <Text style={[typography.display, { color: colors.text.primary, textAlign: 'center' }]}>
-                            Choose Your Plan
-                        </Text>
-                        <Text style={[typography.body, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing.md }]}>
-                            Unlock your true potential with the plan that fits your goals.
-                        </Text>
-                    </View>
-
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
-                        snapToInterval={width * 0.75 + 16}
-                        decelerationRate="fast"
+                <ScrollView contentContainerStyle={{ paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={false}>
+                    {/* ───────── CURRENT PLAN — the hero. Tier + status + renewal,
+                        price as the dominant condensed number. ───────── */}
+                    <Animated.View
+                        entering={FadeInDown.duration(420).springify().damping(18)}
+                        style={styles.heroWrap}
                     >
-                        {TIERS.map((tier) => {
-                            const isActive = activeTierId === tier.id;
-                            const isSelected = selectedTier === tier.id;
-                            const displayPrice = priceFor(tier);
-
-                            return (
-                                <TouchableOpacity
-                                    key={tier.id}
-                                    activeOpacity={0.9}
-                                    accessibilityRole="button"
-                                    accessibilityLabel={`${tier.name} plan, ${displayPrice} ${tier.period}${isActive ? ', current plan' : ''}`}
-                                    accessibilityState={{ selected: isSelected }}
-                                    onPress={() => setSelectedTier(tier.id)}
-                                >
-                                    <LinearGradient
-                                        colors={isSelected ? tier.gradient : [colors.background.secondary, colors.background.secondary]}
-                                        start={{ x: 0, y: 0 }}
-                                        end={{ x: 1, y: 1 }}
+                        <GlassCard
+                            glow={isPaid ? activeTier.color : undefined}
+                            style={styles.heroCard}
+                            testID="subscription-current-plan"
+                        >
+                            <LinearGradient
+                                colors={isPaid ? activeTier.gradient : [withAlpha(colors.text.primary, 0.04), withAlpha(colors.background.primary, 0)]}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.heroInner}
+                            >
+                                <View style={styles.heroTopRow}>
+                                    <Text style={[typography.overline, { color: colors.text.tertiary }]}>
+                                        Current Plan
+                                    </Text>
+                                    <View
                                         style={[
-                                            styles.tierCard,
+                                            styles.statusPill,
                                             {
-                                                width: width * 0.75,
-                                                borderRadius: borderRadius['2xl'],
-                                                borderColor: isSelected ? tier.color : colors.border.default,
-                                                borderWidth: isSelected ? 2 : 1,
-                                                backgroundColor: colors.background.secondary,
+                                                backgroundColor: withAlpha(statusColor, 0.14),
+                                                borderColor: withAlpha(statusColor, 0.3),
                                             },
-                                            isSelected && shadows.glow(tier.color),
                                         ]}
                                     >
-                                        {tier.recommended && !isActive && (
-                                            <View style={[styles.badgeTop, { backgroundColor: tier.color }]}>
-                                                <Text style={[typography.caption, { color: '#000', fontWeight: '900', letterSpacing: 0.5 }]}>RECOMMENDED</Text>
-                                            </View>
-                                        )}
-                                        {isActive && (
-                                            <View style={[styles.badgeTop, { backgroundColor: colors.accent.cyan }]}>
-                                                <Text style={[typography.caption, { color: '#000', fontWeight: '900', letterSpacing: 0.5 }]}>CURRENT PLAN</Text>
-                                            </View>
-                                        )}
-
-                                        <Text style={[typography.display, { color: isSelected ? tier.color : colors.text.primary, fontSize: 28, marginTop: (tier.recommended || isActive) ? 10 : 0 }]}>
-                                            {tier.name}
+                                        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                                        <Text style={[typography.captionMedium, { color: statusColor, letterSpacing: 0.4 }]}>
+                                            {statusLabel}
                                         </Text>
+                                    </View>
+                                </View>
 
-                                        <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: spacing.sm }}>
-                                            <Text style={[typography.statMedium, { color: colors.text.primary }]}>{displayPrice}</Text>
-                                            <Text style={[typography.body, { color: colors.text.secondary, marginLeft: spacing.xs, fontWeight: 'bold' }]}>{tier.period}</Text>
-                                        </View>
+                                <Text style={[typography.display, { color: colors.text.primary, marginTop: spacing.sm }]}>
+                                    {activeTier.name}
+                                </Text>
 
-                                        <View style={[styles.divider, { backgroundColor: colors.border.default }]} />
+                                {/* The VALUE dominates — big condensed numeral, small symbol + period. */}
+                                <View style={styles.priceRow}>
+                                    {priceSymbol ? (
+                                        <Text style={[typography.statSmall, { color: isPaid ? activeTier.color : colors.text.secondary, marginRight: 2 }]}>{priceSymbol}</Text>
+                                    ) : null}
+                                    {/* The dominant numeral stays white so the single solid-lime hero
+                                        CtaButton is the only full-lime focal point. Tier identity rides
+                                        on the small currency symbol tint only. */}
+                                    <Text style={[typography.statLarge, { color: colors.text.primary }]}>
+                                        {priceValue}
+                                    </Text>
+                                    {priceSuffix ? (
+                                        <Text style={[typography.h3, { color: colors.text.secondary, marginLeft: 4 }]}>{priceSuffix}</Text>
+                                    ) : null}
+                                    {isPaid ? (
+                                        <Text style={[typography.subhead, { color: colors.text.tertiary, marginLeft: 6 }]}>{activeTier.period}</Text>
+                                    ) : null}
+                                </View>
 
-                                        <View style={{ gap: 14 }}>
-                                            {tier.features.map((feat, idx) => (
-                                                <View key={idx} style={styles.featureRow}>
-                                                    <Ionicons name="checkmark-circle" size={20} color={tier.color} />
-                                                    <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: 12, flex: 1 }]}>
-                                                        {feat}
-                                                    </Text>
-                                                </View>
-                                            ))}
-                                        </View>
+                                <View style={[styles.heroDivider, { backgroundColor: colors.border.default }]} />
 
-                                        <View style={{ flex: 1 }} />
+                                {/* Renewal — visual row, never a bare date list. Empty (free)
+                                    state gets a one-line nudge instead of a blank slot. */}
+                                <View style={styles.renewRow}>
+                                    <Ionicons
+                                        name={isPaid ? 'sync-outline' : 'sparkles-outline'}
+                                        size={18}
+                                        color={isPaid ? colors.accent.cyan : colors.accent.coral}
+                                    />
+                                    <Text style={[typography.bodySm, { color: colors.text.secondary, marginLeft: 10, flex: 1 }]}>
+                                        {isPaid
+                                            ? renewalDate
+                                                ? `Renews ${renewalDate}`
+                                                : 'Renews automatically'
+                                            : 'Upgrade to unlock analytics, AI meal planning & more'}
+                                    </Text>
+                                </View>
+                            </LinearGradient>
+                        </GlassCard>
 
-                                        <TouchableOpacity
-                                            disabled={isActive || purchaseInFlight || tier.id === 'free'}
-                                            activeOpacity={0.85}
-                                            accessibilityRole="button"
-                                            accessibilityLabel={isActive ? 'Current Plan' : (tier.id === 'free' ? 'Downgrade to Free' : `Upgrade to ${tier.name}`)}
-                                            accessibilityState={{ disabled: isActive || purchaseInFlight || tier.id === 'free', busy: purchaseInFlight && isSelected }}
-                                            onPress={() => handleUpgrade(tier)}
+                        {/* PRIMARY ACTION — thumb-reachable, single full-lime CTA. */}
+                        <CtaButton
+                            label={isPaid ? 'Manage Subscription' : 'Upgrade to Pro'}
+                            icon={isPaid ? 'settings-outline' : 'rocket-outline'}
+                            size="lg"
+                            accessibilityLabel={isPaid ? 'Manage your subscription' : 'Upgrade to the Pro plan'}
+                            onPress={() => (isPaid ? handleManage() : handleUpgrade(PRO_TIER))}
+                            style={styles.heroCta}
+                        />
+                    </Animated.View>
+
+                    {/* ───────── PLANS — compare & upgrade. ───────── */}
+                    <Animated.View entering={FadeInDown.delay(80).duration(420).springify().damping(18)}>
+                        <View style={styles.sectionHeaderRow}>
+                            <Text style={[typography.overline, { color: colors.text.tertiary }]}>
+                                {isPaid ? 'Change Plan' : 'Choose Your Plan'}
+                            </Text>
+                        </View>
+
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
+                            snapToInterval={width * 0.75 + 16}
+                            decelerationRate="fast"
+                        >
+                            {TIERS.map((tier) => {
+                                const isActive = activeTierId === tier.id;
+                                const isSelected = selectedTier === tier.id;
+                                const displayPrice = priceFor(tier);
+
+                                // Tier identity is a RESTRAINED hint only — a thin accent
+                                // border + small badge + reduced-opacity check tint. The card
+                                // body and its action button are NEVER filled with the tier's
+                                // solid colour; the one solid-lime fill on the screen is the
+                                // thumb-zone hero CtaButton.
+                                const isFree = tier.id === 'free';
+                                return (
+                                    <PressableScale
+                                        key={tier.id}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={`${tier.name} plan, ${displayPrice} ${tier.period}${isActive ? ', current plan' : ''}`}
+                                        accessibilityState={{ selected: isSelected }}
+                                        onPress={() => setSelectedTier(tier.id)}
+                                    >
+                                        <LinearGradient
+                                            colors={isSelected ? tier.gradient : [colors.background.secondary, colors.background.secondary]}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 1 }}
                                             style={[
-                                                styles.actionBtn,
+                                                styles.tierCard,
                                                 {
-                                                    backgroundColor: isActive ? 'transparent' : isSelected ? tier.color : colors.background.tertiary,
-                                                    borderColor: isActive ? colors.text.tertiary : 'transparent',
-                                                    borderWidth: isActive ? 1 : 0,
-                                                    opacity: purchaseInFlight ? 0.6 : 1,
+                                                    width: width * 0.75,
+                                                    borderRadius: borderRadius['2xl'],
+                                                    borderColor: isSelected ? withAlpha(tier.color, 0.55) : colors.border.default,
+                                                    borderWidth: isSelected ? 1.5 : 1,
+                                                    backgroundColor: colors.background.secondary,
                                                 },
-                                                isSelected && !isActive && tier.id !== 'free' && shadows.glow(tier.color),
+                                                isSelected && shadows.glow(tier.color),
                                             ]}
                                         >
-                                            {purchaseInFlight && isSelected ? (
-                                                <ActivityIndicator color="#000" />
-                                            ) : (
-                                                <Text style={[
-                                                    typography.subhead,
-                                                    {
-                                                        color: isActive ? colors.text.tertiary : (isSelected && tier.id !== 'free') ? '#000' : colors.text.primary,
-                                                        fontWeight: 'bold',
-                                                    }
-                                                ]}>
-                                                    {isActive ? 'Current Plan' : (tier.id === 'free' ? 'Downgrade to Free' : `Upgrade to ${tier.name}`)}
-                                                </Text>
+                                            {tier.recommended && !isActive && (
+                                                <View style={[styles.badgeTop, { backgroundColor: withAlpha(tier.color, 0.16), borderColor: withAlpha(tier.color, 0.4), borderWidth: 1 }]}>
+                                                    <Text style={[typography.caption, { color: tier.color, fontWeight: '900', letterSpacing: 0.5 }]}>RECOMMENDED</Text>
+                                                </View>
                                             )}
-                                        </TouchableOpacity>
-                                    </LinearGradient>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </ScrollView>
+                                            {isActive && (
+                                                <View style={[styles.badgeTop, { backgroundColor: withAlpha(colors.accent.cyan, 0.16), borderColor: withAlpha(colors.accent.cyan, 0.4), borderWidth: 1 }]}>
+                                                    <Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: '900', letterSpacing: 0.5 }]}>CURRENT PLAN</Text>
+                                                </View>
+                                            )}
 
-                    {/* Required by Apple guideline 3.1.1: visible "Restore Purchases" + "Manage Subscription". */}
-                    <View style={{ paddingHorizontal: spacing['2xl'], marginTop: spacing['2xl'] }}>
-                        <Text style={[typography.h2, { color: colors.text.primary, marginBottom: spacing.lg }]}>Subscription Tools</Text>
+                                            <Text style={[typography.display, { color: colors.text.primary, fontSize: 28, marginTop: (tier.recommended || isActive) ? 10 : 0 }]}>
+                                                {tier.name}
+                                            </Text>
 
-                        <TouchableOpacity
-                            activeOpacity={0.85}
-                            onPress={handleRestore}
-                            disabled={restoreInFlight}
-                            accessibilityRole="button"
-                            accessibilityLabel="Restore Purchases"
-                            accessibilityState={{ disabled: restoreInFlight, busy: restoreInFlight }}
-                            style={[styles.billingItem, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl, borderColor: colors.border.default }]}
+                                            <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: spacing.sm }}>
+                                                <Text style={[typography.statMedium, { color: colors.text.primary }]}>{displayPrice}</Text>
+                                                <Text style={[typography.body, { color: colors.text.secondary, marginLeft: spacing.xs, fontWeight: 'bold' }]}>{tier.period}</Text>
+                                            </View>
+
+                                            <View style={[styles.divider, { backgroundColor: colors.border.default }]} />
+
+                                            <View style={{ gap: 14 }}>
+                                                {tier.features.map((feat, idx) => (
+                                                    <View key={idx} style={styles.featureRow}>
+                                                        <Ionicons name="checkmark-circle" size={20} color={withAlpha(tier.color, 0.7)} />
+                                                        <Text style={[typography.subhead, { color: colors.text.primary, marginLeft: 12, flex: 1 }]}>
+                                                            {feat}
+                                                        </Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+
+                                            <View style={{ flex: 1 }} />
+
+                                            {/* SUBORDINATE selection affordance — outline / tertiary fill
+                                                with accent-tinted ink, NOT a second solid-lime CTA. The one
+                                                solid primary lives in the thumb zone (hero). Free is not a
+                                                purchasable SKU, so it shows no action button at all — a paid
+                                                user downgrades via the red Danger Zone "Cancel" row below. */}
+                                            {isFree ? null : (
+                                                <PressableScale
+                                                    disabled={isActive || purchaseInFlight}
+                                                    accessibilityRole="button"
+                                                    accessibilityLabel={isActive ? 'Current Plan' : `Upgrade to ${tier.name}`}
+                                                    accessibilityState={{ disabled: isActive || purchaseInFlight, busy: purchaseInFlight && isSelected }}
+                                                    onPress={() => handleUpgrade(tier)}
+                                                    style={[
+                                                        styles.actionBtn,
+                                                        {
+                                                            backgroundColor: isActive ? 'transparent' : colors.background.tertiary,
+                                                            borderColor: isActive ? colors.border.light : withAlpha(tier.color, 0.4),
+                                                            borderWidth: 1,
+                                                            opacity: purchaseInFlight ? 0.6 : 1,
+                                                        },
+                                                    ]}
+                                                >
+                                                    {purchaseInFlight && isSelected ? (
+                                                        <ActivityIndicator color={tier.color} />
+                                                    ) : (
+                                                        <Text style={[
+                                                            typography.subhead,
+                                                            {
+                                                                color: isActive ? colors.text.tertiary : tier.color,
+                                                                fontWeight: 'bold',
+                                                            }
+                                                        ]}>
+                                                            {isActive ? 'Current Plan' : `Upgrade to ${tier.name}`}
+                                                        </Text>
+                                                    )}
+                                                </PressableScale>
+                                            )}
+                                        </LinearGradient>
+                                    </PressableScale>
+                                );
+                            })}
+                        </ScrollView>
+                    </Animated.View>
+
+                    {/* ───────── BILLING & TOOLS — grouped rows with chevrons.
+                        Required by Apple guideline 3.1.1: visible "Restore
+                        Purchases" + "Manage Subscription". ───────── */}
+                    <Animated.View
+                        entering={FadeInDown.delay(140).duration(420).springify().damping(18)}
+                        style={{ paddingHorizontal: spacing['2xl'], marginTop: spacing['3xl'] }}
+                    >
+                        <Text style={[typography.overline, { color: colors.text.tertiary, marginBottom: spacing.md }]}>Billing & History</Text>
+
+                        <GlassCard style={styles.groupCard} radius={borderRadius.xl}>
+                            <PressableScale
+                                onPress={handleRestore}
+                                disabled={restoreInFlight}
+                                accessibilityRole="button"
+                                accessibilityLabel="Restore Purchases"
+                                accessibilityState={{ disabled: restoreInFlight, busy: restoreInFlight }}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                style={styles.row}
+                            >
+                                <View style={[styles.rowIcon, { backgroundColor: withAlpha(colors.accent.cyan, 0.12) }]}>
+                                    <Ionicons name="refresh" size={18} color={colors.accent.cyan} />
+                                </View>
+                                <View style={styles.rowText}>
+                                    <Text style={[typography.subhead, { color: colors.text.primary }]}>Restore Purchases</Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
+                                        {Platform.OS === 'ios' ? 'Re-link a subscription tied to your Apple ID' : 'Re-link a subscription tied to your Google account'}
+                                    </Text>
+                                </View>
+                                {restoreInFlight ? <ActivityIndicator size="small" color={colors.text.tertiary} /> : <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} />}
+                            </PressableScale>
+
+                            <View style={[styles.rowDivider, { backgroundColor: colors.border.default }]} />
+
+                            <PressableScale
+                                onPress={handleManage}
+                                accessibilityRole="button"
+                                accessibilityLabel="Manage Subscription"
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                style={styles.row}
+                            >
+                                <View style={[styles.rowIcon, { backgroundColor: withAlpha(colors.accent.blue, 0.12) }]}>
+                                    <Ionicons name="card-outline" size={18} color={colors.accent.blue} />
+                                </View>
+                                <View style={styles.rowText}>
+                                    <Text style={[typography.subhead, { color: colors.text.primary }]}>Manage & Billing History</Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
+                                        View invoices or change plan in {Platform.OS === 'ios' ? 'the App Store' : 'Google Play'}
+                                    </Text>
+                                </View>
+                                <Ionicons name="open-outline" size={18} color={colors.text.tertiary} />
+                            </PressableScale>
+                        </GlassCard>
+                    </Animated.View>
+
+                    {/* ───────── DANGER — cancel, red + visually separated. The store
+                        sheet is also where cancellation happens, so we route there. ───────── */}
+                    {isPaid ? (
+                        <Animated.View
+                            entering={FadeInDown.delay(200).duration(420).springify().damping(18)}
+                            style={{ paddingHorizontal: spacing['2xl'], marginTop: spacing['3xl'] }}
                         >
-                            <View>
-                                <Text style={[typography.subhead, { color: colors.text.primary }]}>Restore Purchases</Text>
-                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>
-                                    {Platform.OS === 'ios' ? 'Re-link a subscription tied to your Apple ID' : 'Re-link a subscription tied to your Google account'}
-                                </Text>
-                            </View>
-                            {restoreInFlight ? <ActivityIndicator size="small" color={colors.text.tertiary} /> : <Ionicons name="refresh" size={20} color={colors.text.tertiary} />}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            activeOpacity={0.85}
-                            onPress={handleManage}
-                            accessibilityRole="button"
-                            accessibilityLabel="Manage Subscription"
-                            style={[styles.billingItem, { backgroundColor: colors.background.secondary, borderRadius: borderRadius.xl, borderColor: colors.border.default, marginTop: 12 }]}
-                        >
-                            <View>
-                                <Text style={[typography.subhead, { color: colors.text.primary }]}>Manage Subscription</Text>
-                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>
-                                    Cancel, change plan, or update billing in {Platform.OS === 'ios' ? 'the App Store' : 'Google Play'}
-                                </Text>
-                            </View>
-                            <Ionicons name="open-outline" size={20} color={colors.text.tertiary} />
-                        </TouchableOpacity>
-                    </View>
+                            <Text style={[typography.overline, { color: colors.text.tertiary, marginBottom: spacing.md }]}>Danger Zone</Text>
+                            <PressableScale
+                                onPress={handleManage}
+                                accessibilityRole="button"
+                                accessibilityLabel="Cancel Subscription"
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                style={[
+                                    styles.dangerRow,
+                                    {
+                                        backgroundColor: withAlpha(colors.accent.red, 0.08),
+                                        borderColor: withAlpha(colors.accent.red, 0.28),
+                                        borderRadius: borderRadius.xl,
+                                    },
+                                ]}
+                            >
+                                <View style={[styles.rowIcon, { backgroundColor: withAlpha(colors.accent.red, 0.14) }]}>
+                                    <Ionicons name="close-circle-outline" size={18} color={colors.accent.red} />
+                                </View>
+                                <View style={styles.rowText}>
+                                    <Text style={[typography.subhead, { color: colors.accent.red }]}>Cancel Subscription</Text>
+                                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
+                                        Keep access until {renewalDate ?? 'the end of your billing period'}
+                                    </Text>
+                                </View>
+                                <Ionicons name="open-outline" size={18} color={withAlpha(colors.accent.red, 0.8)} />
+                            </PressableScale>
+                        </Animated.View>
+                    ) : null}
 
                     {/* Required by Apple guideline 3.1.2(b): subscription terms must be visible AT POINT OF PURCHASE. */}
                     <View style={{ paddingHorizontal: 24, marginTop: 32 }}>
@@ -520,12 +724,12 @@ export function SubscriptionScreenContent() {
                         </Text>
 
                         <View style={{ flexDirection: 'row', gap: 16, marginTop: 16 }}>
-                            <TouchableOpacity accessibilityRole="link" accessibilityLabel="Terms of Service" onPress={() => Linking.openURL('https://zeitra.app/terms')}>
+                            <PressableScale accessibilityRole="link" accessibilityLabel="Terms of Service" hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }} onPress={() => Linking.openURL('https://zeitra.app/terms')}>
                                 <Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: '600' }]}>Terms of Service</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity accessibilityRole="link" accessibilityLabel="Privacy Policy" onPress={() => Linking.openURL('https://zeitra.app/privacy')}>
+                            </PressableScale>
+                            <PressableScale accessibilityRole="link" accessibilityLabel="Privacy Policy" hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }} onPress={() => Linking.openURL('https://zeitra.app/privacy')}>
                                 <Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: '600' }]}>Privacy Policy</Text>
-                            </TouchableOpacity>
+                            </PressableScale>
                         </View>
                     </View>
                 </ScrollView>
@@ -544,13 +748,42 @@ const styles = StyleSheet.create({
     stateInner: { padding: 24, alignItems: 'center' },
     stateIconCircle: { width: 72, height: 72, borderRadius: 9999, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     stateRetryBtn: { marginTop: 24, minWidth: 160, borderRadius: 14 },
-    heroTextContainer: { paddingHorizontal: spacing['3xl'], paddingTop: spacing.xl, paddingBottom: spacing['3xl'] },
+
+    // Current-plan hero
+    heroWrap: { paddingHorizontal: spacing['2xl'], paddingTop: spacing.xl },
+    heroCard: { width: '100%' },
+    heroInner: { padding: spacing.xl },
+    heroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    statusPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: 5, borderRadius: br.full, borderWidth: 1 },
+    statusDot: { width: 7, height: 7, borderRadius: br.full, marginRight: 6 },
+    priceRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: spacing.xs },
+    heroDivider: { height: StyleSheet.hairlineWidth, marginVertical: spacing.lg },
+    renewRow: { flexDirection: 'row', alignItems: 'center' },
+    heroCta: { marginTop: spacing.lg, borderRadius: br.lg },
+
+    // Section header (overline) row
+    sectionHeaderRow: { paddingHorizontal: spacing['2xl'], marginTop: spacing['3xl'], marginBottom: spacing.lg },
+
+    // Plan carousel cards
     tierCard: { padding: spacing['2xl'], marginRight: spacing.lg, minHeight: 450, display: 'flex' },
     badgeTop: { alignSelf: 'flex-start', paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: br.full, marginBottom: spacing.lg },
     divider: { height: StyleSheet.hairlineWidth, marginVertical: spacing.xl },
     featureRow: { flexDirection: 'row', alignItems: 'center' },
     actionBtn: { width: '100%', paddingVertical: spacing.lg, borderRadius: br.lg, alignItems: 'center', marginTop: spacing['3xl'] },
+
+    // Grouped billing rows
+    groupCard: { width: '100%' },
+    row: { flexDirection: 'row', alignItems: 'center', padding: spacing.lg, minHeight: 64 },
+    rowIcon: { width: 36, height: 36, borderRadius: br.md, alignItems: 'center', justifyContent: 'center', marginRight: spacing.md },
+    rowText: { flex: 1, marginRight: spacing.sm },
+    rowDivider: { height: StyleSheet.hairlineWidth, marginLeft: spacing.lg + 36 + spacing.md },
+
+    // Danger zone
+    dangerRow: { flexDirection: 'row', alignItems: 'center', padding: spacing.lg, minHeight: 64, borderWidth: 1 },
+
+    // Legacy (kept for any external style reference)
     billingItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.xl, borderWidth: 1 },
+    heroTextContainer: { paddingHorizontal: spacing['3xl'], paddingTop: spacing.xl, paddingBottom: spacing['3xl'] },
 });
 
 // Gate the billing screen behind biometric re-auth (S3). Auto-bypasses on

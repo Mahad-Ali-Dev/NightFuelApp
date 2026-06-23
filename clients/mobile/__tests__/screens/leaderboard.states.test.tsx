@@ -235,8 +235,8 @@ describe('LeaderboardScreen — loading / error / empty / loaded states', () => 
     expect(list.props.maxToRenderPerBatch).toBe(12);
     expect(list.props.windowSize).toBe(11);
     // getItemLayout returns the fixed-height layout used for constant-time scroll
-    // math (ROW_HEIGHT = 64).
-    expect(list.props.getItemLayout(null, 3)).toEqual({ length: 64, offset: 192, index: 3 });
+    // math (ROW_HEIGHT = 72).
+    expect(list.props.getItemLayout(null, 3)).toEqual({ length: 72, offset: 216, index: 3 });
 
     // The fixed "My Rank" footer is still rendered (it reads myScore and shows
     // "(You)") — not part of the virtualized list, untouched by this change.

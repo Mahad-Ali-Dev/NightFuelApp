@@ -201,9 +201,13 @@ describe('Connected Devices screen', () => {
         expect(screen.getByText(/requires a native dev build/i)).toBeTruthy();
         expect(mockConnect).toHaveBeenCalledTimes(1);
 
-        // It NEVER claims a connection succeeded.
+        // It NEVER claims a connection succeeded. The regex is anchored to the
+        // START so it matches a standalone "Connected"/"Connected!" success claim
+        // only — NOT the redesign's honest summary copy ("/ 3 connected") or the
+        // "Not connected" status pill, both of which legitimately end in
+        // "connected" and must not be read as a fabricated success.
         expect(screen.queryByText('Connected')).toBeNull();
-        expect(screen.queryByText(/connected!?$/i)).toBeNull();
+        expect(screen.queryByText(/^connected!?$/i)).toBeNull();
     });
 
     it('on Sync now resolving unavailable, drives syncNow() and surfaces the same honest message', async () => {
@@ -295,8 +299,12 @@ describe('Connected Devices screen', () => {
             screen.getByRole('button', { name: 'Sync Bluetooth Device now, currently unavailable' }).props
                 .accessibilityState,
         ).toMatchObject({ disabled: false });
+        // Anchored to the START so it catches only a standalone "Connected"
+        // success claim — not the redesign's honest "/ N connected" summary copy
+        // or the "Not connected" status pill (both legitimately end in
+        // "connected" without claiming a fabricated success).
         expect(screen.queryByText('Connected')).toBeNull();
-        expect(screen.queryByText(/connected!?$/i)).toBeNull();
+        expect(screen.queryByText(/^connected!?$/i)).toBeNull();
     });
 
     // ── Added: sync-feedback state transitions (#7 stale label, #11 silent success) ──

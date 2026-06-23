@@ -234,7 +234,7 @@ describe('GroceryListScreen — weekly grocery list', () => {
     // The summary bar is wrapped in a GlassCard (the coverage gain).
     await waitFor(() => expect(screen.getAllByTestId('glass-card').length).toBeGreaterThanOrEqual(1));
     // Summary count = customItems (0) + planItems (2).
-    expect(screen.getByText('2 items')).toBeTruthy();
+    expect(screen.getByLabelText('2 items left')).toBeTruthy();
     // Each plan item renders by name.
     expect(screen.getByText('Chicken Breast')).toBeTruthy();
     expect(screen.getByText('Brown Rice')).toBeTruthy();
@@ -248,7 +248,7 @@ describe('GroceryListScreen — weekly grocery list', () => {
 
     renderScreen();
 
-    await waitFor(() => expect(screen.getByText('2 items')).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText('2 items left')).toBeTruthy());
 
     // Press the FAB (accessibilityLabel "Add") → setShowAddModal(true).
     fireEvent.press(screen.getByLabelText('Add'));
@@ -274,8 +274,8 @@ describe('GroceryListScreen — weekly grocery list', () => {
     // (accessibilityLabel = item.name) inside its category section.
     const row = await screen.findByLabelText('Almond Milk');
     expect(row).toBeTruthy();
-    // The summary GlassCard is present (1 stored item → "1 items").
-    expect(screen.getByText('1 items')).toBeTruthy();
+    // The summary GlassCard is present (1 stored item → "1 items left").
+    expect(screen.getByLabelText('1 items left')).toBeTruthy();
 
     // Toggle the item → toggleCustomItem → saveItems → AsyncStorage.setItem with
     // the toggled list (the handler is unchanged; we assert it's reachable).

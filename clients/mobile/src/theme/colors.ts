@@ -1,7 +1,14 @@
 // Zeitra Design System — Color Palette
-// "Aurora" — premium dark glass. Deep cool near-black surfaces, coral→pink brand
-// gradient, refined low-contrast glass borders. Keys are stable (screens depend on
-// them); only the values changed from the original GitHub-dark palette.
+// "Aurora" — premium dark glass. Deep cool near-black surfaces over an electric
+// LIME brand accent, refined low-contrast glass borders. Keys are stable (screens
+// depend on them); only the values changed from the original GitHub-dark palette.
+//
+// NAMING NOTE: the legacy keys accent.coral / coralLight / coralDark and
+// gradients.coral / coralCta predate the Aurora→Zeitra rebrand and now resolve to
+// LIME (#A8CC3C / #93B82E), NOT coral — no coral pixel is rendered anywhere. New
+// code should prefer the brand-accurate aliases accent.lime / accent.limeLight /
+// accent.limeDark and gradients.lime / gradients.limeCta (defined below, same
+// hex). The coral* keys are retained only so existing screens keep compiling.
 
 export const colors = {
   // Core backgrounds — deep, cool, premium (was GitHub-gray #0D1117)
@@ -16,15 +23,20 @@ export const colors = {
   border: {
     default: '#222838',    // Subtle borders
     light: '#2F3650',      // Lighter border
-    focus: '#FF6B35',      // Focus ring
+    focus: '#A8CC3C',      // Focus ring
   },
 
   // Accent colors
   accent: {
-    coral: '#FF6B35',      // Primary CTA, brand
-    coralLight: '#FF8A5C',
-    coralDark: '#E55A25',
-    pink: '#FF4D8D',       // Aurora gradient partner / highlights
+    // Brand-accurate LIME aliases — prefer these in new code. Same hex as the
+    // legacy coral* keys below (which despite the name resolve to lime).
+    lime: '#A8CC3C',       // Primary CTA + key indicators (the 10% accent)
+    limeLight: '#C5E06B',
+    limeDark: '#93B82E',
+    coral: '#A8CC3C',      // LEGACY alias of accent.lime — resolves to lime, not coral
+    coralLight: '#C5E06B', // LEGACY alias of accent.limeLight
+    coralDark: '#93B82E',  // LEGACY alias of accent.limeDark
+    pink: '#93B82E',       // Aurora gradient partner / highlights
     cyan: '#00D4AA',       // Success, progress
     cyanLight: '#33DDBB',
     cyanDark: '#00B894',
@@ -46,7 +58,7 @@ export const colors = {
     primary: '#FFFFFF',
     secondary: '#9BA3B4',  // brighter for better contrast on the deeper bg
     tertiary: '#7B8497',  // AA-lifted: 5.2:1 on background.primary (#0A0C12); was #5A6373 (3.23:1, failed AA)
-    accent: '#FF6B35',
+    accent: '#A8CC3C',
     inverse: '#0A0C12',
   },
 
@@ -58,13 +70,18 @@ export const colors = {
 
   // Gradient stops
   gradients: {
-    coral: ['#FF7A45', '#FF4D8D'] as const,   // premium coral→pink (brand hero)
-    // AA-lifted coral→pink CTA fill. Starts at the DARKER coral (coralDark
-    // #E55A25) — NOT the brand hero's light #FF7A45 — so white labels/icons on
-    // the fill clear AA contrast. Shared so the Dashboard "Log Meal" and the
-    // Training Start/active CTAs render a byte-identical fill from one token
-    // (retires the per-screen CTA_GRADIENT copies the two tabs duplicated).
-    coralCta: ['#E55A25', '#FF4D8D'] as const, // = [accent.coralDark, accent.pink]
+    // Zeitra lime brand-hero gradient (lime → deeper lime). `lime`/`limeCta` are
+    // the brand-accurate names; `coral`/`coralCta` are LEGACY aliases of the same
+    // arrays, kept so existing consumers keep compiling.
+    lime: ['#A8CC3C', '#93B82E'] as const,
+    coral: ['#A8CC3C', '#93B82E'] as const,   // LEGACY alias of gradients.lime
+    // The Zeitra lime CTA fill: starts at the bright lime #A8CC3C (= accent.lime)
+    // and deepens to #93B82E (= accent.limeDark). Labels/icons on this fill are
+    // INK (#0A0C12), NEVER white — ink-on-lime is the high-contrast brand recipe.
+    // Shared so the Dashboard "Log Meal" and the Training Start/active CTAs render
+    // a byte-identical fill from one token.
+    limeCta: ['#A8CC3C', '#93B82E'] as const, // = [accent.lime, accent.limeDark]
+    coralCta: ['#A8CC3C', '#93B82E'] as const, // LEGACY alias of gradients.limeCta
     cyan: ['#00D4AA', '#4FC3F7'] as const,
     purple: ['#7C4DFF', '#B47CFF'] as const,
     dark: ['#13161F', '#0A0C12'] as const,
@@ -82,13 +99,13 @@ export const colors = {
     border: {
       default: '#E2E5EA',
       light: '#EDEFF2',
-      focus: '#FF6B35',
+      focus: '#A8CC3C',
     },
     text: {
       primary: '#16181D',
       secondary: '#57606A',
       tertiary: '#8B949E',
-      accent: '#FF6B35',
+      accent: '#A8CC3C',
       inverse: '#FFFFFF',
     },
   },

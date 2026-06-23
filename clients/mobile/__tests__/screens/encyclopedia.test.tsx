@@ -271,7 +271,7 @@ describe('FoodEncyclopediaScreen — food browser', () => {
     // The serving modal body renders the "Add to Plate" sheet heading, the food
     // display name, and the macro summary labels…
     expect(screen.getByText('Add to Plate')).toBeTruthy();
-    expect(screen.getByText('Nutrition Summary')).toBeTruthy();
+    expect(screen.getByText('NUTRITION FOR THIS SERVING')).toBeTruthy();
     expect(screen.getByText('HOW MANY SERVINGS?')).toBeTruthy();
 
     // …and that summary is wrapped in EXACTLY ONE GlassCard (the coverage gain) —

@@ -56,11 +56,12 @@ export const shadows = {
       ios: {
         shadowColor: color,
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.35,
-        shadowRadius: 12,
+        // Softened from 0.35/12 — a subtle premium halo, not a neon glow.
+        shadowOpacity: 0.18,
+        shadowRadius: 9,
       },
       android: {
-        elevation: 6,
+        elevation: 4,
       },
     })!,
 } as const;

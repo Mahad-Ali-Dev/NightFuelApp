@@ -248,8 +248,10 @@ describe('messages/[id] — thread a11y (speaker labels · guarded timestamp · 
     renderScreen();
 
     // The honest empty state from `@/components/ui` (not a fabricated row).
-    expect(screen.getByText('No messages yet')).toBeTruthy();
-    expect(screen.getByText('Say hello — your first message starts the conversation.')).toBeTruthy();
+    // With an accepted peer present, the start-conversation title greets them by
+    // name ("Say hi to <peer>") and the subtitle invites the first message.
+    expect(screen.getByText('Say hi to Coach Ria')).toBeTruthy();
+    expect(screen.getByText('Break the ice — your first message starts the conversation.')).toBeTruthy();
     // No bubble labels exist when the thread is empty.
     expect(screen.queryByLabelText(/^You: /)).toBeNull();
     expect(screen.queryByLabelText(/^Coach Ria: /)).toBeNull();

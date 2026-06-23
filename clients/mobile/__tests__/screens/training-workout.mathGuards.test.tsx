@@ -335,7 +335,7 @@ describe('ActiveWorkoutScreen — volume / avg-reps / timer math guards', () => 
     await renderRestored(RESTORED_NO_COMPLETED);
 
     // Header derived from ex.sets[].completed: 0 of 3 done — and the timer is clean.
-    expect(screen.getByText(/0\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getAllByText(/0\/3 sets/)[0]).toBeTruthy();
     expect(screen.getByText(MMSS)).toBeTruthy();
 
     const params = await finishAndReadSummaryParams();
@@ -412,7 +412,7 @@ describe('ActiveWorkoutScreen — volume / avg-reps / timer math guards', () => 
     await renderRestored(RESTORED_NORMAL);
 
     // Header derived from ex.sets: 2 of 3 done; timer is a clean MM:SS.
-    expect(screen.getByText(/2\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getAllByText(/2\/3 sets/)[0]).toBeTruthy();
     const timerNode = screen.getByText(MMSS);
     expect(timerNode).toBeTruthy();
 

@@ -163,8 +163,9 @@ import HydrationTrackerScreen from '../../app/(performance)/hydration';
 // GlassCard preset tiles. Asserting all three pins "the preset grid mounted"
 // without coupling to the tile internals (icons/units).
 const PRESET_LABELS = ['250', '500', '750'] as const;
-// A stable slice of the hydration tip copy rendered inside the tip GlassCard.
-const TIP_COPY = /Sip water consistently/;
+// A stable slice of the hydration tip copy rendered inside the tip GlassCard
+// (the not-yet-at-goal branch, which the default 1200/3000 fixture lands on).
+const TIP_COPY = /Sip consistently through the day/;
 
 function renderScreen() {
   return render(
@@ -193,7 +194,7 @@ describe('HydrationTrackerScreen — Aurora GlassCard surfaces', () => {
     expect(() => renderScreen()).not.toThrow();
 
     // Header title — a stable domain label confirming the screen mounted.
-    expect(screen.getByText('Hydration Tracker')).toBeTruthy();
+    expect(screen.getByText('Hydration')).toBeTruthy();
 
     // The GlassCard preset tiles — assert every preset amount is present.
     for (const label of PRESET_LABELS) {

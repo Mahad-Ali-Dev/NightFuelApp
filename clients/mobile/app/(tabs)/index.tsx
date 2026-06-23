@@ -1,13 +1,21 @@
 /**
  * Dashboard — Zeitra home screen.
- * Redesigned: shift countdown hero · circadian insight · UP NEXT meal ·
- *             sleep + hydration mini cards · quick actions · 24h timeline.
+ * Redesigned (Aurora / Zeitra premium): greeting + momentum chip · TONIGHT'S
+ * SESSION hero (lime START + ink text, readiness ring) · 3-up stat GRID ·
+ * circadian TRAINING-WINDOW bar · horizontal quick-actions CAROUSEL · then the
+ * full circadian section stack (next shift / transition / light / anchor sleep /
+ * today timeline / sleep+hydration+caffeine) · EXPLORE + MORE grids · heatmap ·
+ * 24h schedule · weekly recap. Reanimated staggered FadeInDown entrance.
+ *
+ * VISUAL redesign only — every data hook, query, navigation call, handler, prop
+ * and testID is preserved from the prior revision.
  */
 import React, { useState, useMemo, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, RefreshControl,
     TouchableOpacity, Dimensions, ImageBackground
 } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme, colors as palette, typography, spacing, borderRadius } from '@/theme';
@@ -31,12 +39,17 @@ import LightPlanCard from '@/components/home/LightPlanCard';
 import AnchorSleepCard from '@/components/home/AnchorSleepCard';
 import TodayCircadianTimeline from '@/components/home/TodayCircadianTimeline';
 import { CaffeineTimerTile } from '@/components/home/CaffeineTimerTile';
+import { ReadinessRing, StatCard, TrainingWindowBar } from '@/components/home/HomeHeroExtras';
 import { TAB_BAR_H } from './_layout';
 
 const { width } = Dimensions.get('window');
 const H_PAD = 20;
 const CARD_GAP = 12;
 const MINI_W = (width - H_PAD * 2 - CARD_GAP) / 2;
+// 3-up stat grid: three equal cards across the content width.
+const STAT_W = (width - H_PAD * 2 - CARD_GAP * 2) / 3;
+// Quick-action carousel cards — wide enough to peek the next card at the edge.
+const QA_CARD_W = 132;
 
 // Bottom inset that clears BOTH the floating tab bar AND the purple Ria FAB
 // (FAB sits at bottom: TAB_BAR_H + 14, height 56 → top edge ≈ TAB_BAR_H + 70).
@@ -49,6 +62,12 @@ const BOTTOM_CLEARANCE = TAB_BAR_H + 72;
 // the single-line hero. Body + caption text elsewhere scales freely.
 const STAT_MAX_SCALE = 1.4;
 const MICRO_MAX_SCALE = 1.3;
+
+// Optimal circadian training window (physiological alertness/strength peak,
+// late afternoon). Purely visual framing for the TrainingWindowBar — mirrors the
+// circadian coaching already surfaced by getInsight().
+const TRAIN_START_H = 15;
+const TRAIN_END_H = 19;
 
 // Bundled Aurora dark-glass art (no external host → works offline, no 404 /
 // rate-limit / privacy leak). '@/*' resolves to ./src, so assets are required
@@ -65,10 +84,10 @@ const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
 const MUSCLE_SHOULDERS_IMG = require('../../assets/images/muscle-shoulders.png');
 const MUSCLE_ARMS_IMG = require('../../assets/images/muscle-arms.png');
 
-// Primary "Log Meal" CTA is the shared <CtaButton> (Aurora coral→pink fill via
-// the `gradients.coralCta` token, coral glow, AA-lifted white label) — the
-// screen-local LinearGradient copy was retired so this tab + Training render the
-// same button from one source. Glass surfaces below use the shared <GlassCard>.
+// Primary "Log Meal" CTA is the shared <CtaButton> (Aurora lime fill via the
+// `gradients.coralCta` token, lime glow, ink label) — the screen-local
+// LinearGradient copy was retired so this tab + Training render the same button
+// from one source. Glass surfaces below use the shared <GlassCard>.
 
 // ─── Static data ─────────────────────────────────────────────────────────────
 
@@ -281,6 +300,30 @@ export default function DashboardScreen() {
         return name.split(' ').map((n: string) => n[0] ?? '').join('').toUpperCase().slice(0, 2);
     }, [displayName]);
 
+    // Current fractional hour for the live NOW marker on the training-window bar.
+    const nowHour = nowMin / 60;
+
+    // ── Visual-only derived figures (no new data calls) ──
+    // First name for a warmer hero greeting; falls back to the full displayName.
+    const firstName = useMemo(() => String(displayName).split(' ')[0] || displayName, [displayName]);
+
+    // Readiness ring (0–100): a composite of today's hydration progress and meal
+    // adherence — both already on `progress`. No new query; purely a visual roll-
+    // up of signals the dashboard already shows.
+    const readiness = useMemo(() => {
+        if (!progress) return 0;
+        const hyd = hydPct; // 0–100
+        const adh = progress.isAdherent ? 100 : Math.min((progress.mealsLogged ?? 0) * 25, 75);
+        return Math.round(hyd * 0.5 + adh * 0.5);
+    }, [progress, hydPct]);
+
+    // 3-up stat grid values from existing `progress` fields.
+    const hydL = progress ? ((progress.hydrationActual || progress.hydrationMl || 0) / 1000).toFixed(1) : '0.0';
+    const kcal = progress ? String(Math.round(progress.caloriesActual || 0)) : '0';
+    const steps = progress
+        ? (progress.stepCount >= 1000 ? (progress.stepCount / 1000).toFixed(1) + 'k' : String(progress.stepCount))
+        : '0';
+
     // NB: we no longer block the whole dashboard on `shiftLoading`. The
     // ShiftTransitionCard owns its own loading + error skeleton, and every
     // other section (UP NEXT meal, hydration mini, etc.) similarly handles its
@@ -310,108 +353,223 @@ export default function DashboardScreen() {
             >
 
                 {/* ══ HEADER ══════════════════════════════════════════════════ */}
-                <View style={s.header}>
-                    <View style={s.headerLeft}>
-                        <TouchableOpacity
-                            onPress={() => router.push('/(tabs)/profile' as any)}
-                            activeOpacity={0.75}
-                            accessibilityRole="button"
-                            accessibilityLabel="Profile"
-                        >
-                            <View style={[s.avatar, shadows.glow(colors.accent.coral), {
-                                backgroundColor: withAlpha(colors.accent.coral, 0.14),
-                                borderColor: withAlpha(colors.accent.coral, 0.35),
-                            }]}>
-                                <Text style={[s.avatarTxt, { color: colors.accent.coral }]}>{initials}</Text>
+                <Animated.View entering={FadeInDown.duration(420)}>
+                    <View style={s.header}>
+                        <View style={s.headerLeft}>
+                            <TouchableOpacity
+                                onPress={() => router.push('/(tabs)/profile' as any)}
+                                activeOpacity={0.75}
+                                accessibilityRole="button"
+                                accessibilityLabel="Profile"
+                            >
+                                <View style={[s.avatar, shadows.glow(colors.accent.coral), {
+                                    backgroundColor: withAlpha(colors.accent.coral, 0.14),
+                                    borderColor: withAlpha(colors.accent.coral, 0.35),
+                                }]}>
+                                    <Text style={[s.avatarTxt, { color: colors.accent.coral }]}>{initials}</Text>
+                                </View>
+                            </TouchableOpacity>
+                            <View style={{ flexShrink: 1 }}>
+                                <Text style={[typography.captionMedium, s.greetTxt, { color: colors.text.secondary }]}>{greeting} 👋</Text>
+                                <Text style={[typography.h1, s.nameTxt, { color: colors.text.primary }]} numberOfLines={1}>{displayName}</Text>
                             </View>
-                        </TouchableOpacity>
-                        <View>
-                            <Text style={[typography.captionMedium, s.greetTxt, { color: colors.text.secondary }]}>{greeting} 👋</Text>
-                            <Text style={[typography.h1, s.nameTxt, { color: colors.text.primary }]} numberOfLines={1}>{displayName}</Text>
+                        </View>
+                        <View style={s.headerRight}>
+                            {shift && (
+                                <View style={[s.shiftBadge, {
+                                    backgroundColor: withAlpha(colors.accent.cyan, 0.10),
+                                    borderColor: withAlpha(colors.accent.cyan, 0.25),
+                                }]}>
+                                    <View style={[s.shiftDot, { backgroundColor: colors.accent.cyan }]} />
+                                    <Text style={[s.shiftTxt, { color: colors.accent.cyan }]}>{shift.type}</Text>
+                                </View>
+                            )}
+                            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Notifications"
+                                activeOpacity={0.75}
+                                style={[s.iconBtn, { backgroundColor: withAlpha(colors.text.primary, 0.06) }]}
+                                onPress={() => router.push('/(settings)/notifications' as any)}
+                            >
+                                <Ionicons name="notifications-outline" size={20} color={colors.text.primary} />
+                            </TouchableOpacity>
                         </View>
                     </View>
-                    <View style={s.headerRight}>
-                        {shift && (
-                            <View style={[s.shiftBadge, {
-                                backgroundColor: withAlpha(colors.accent.cyan, 0.10),
-                                borderColor: withAlpha(colors.accent.cyan, 0.25),
-                            }]}>
-                                <View style={[s.shiftDot, { backgroundColor: colors.accent.cyan }]} />
-                                <Text style={[s.shiftTxt, { color: colors.accent.cyan }]}>{shift.type}</Text>
-                            </View>
-                        )}
-                        <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Notifications"
-                            activeOpacity={0.75}
-                            style={[s.iconBtn, { backgroundColor: withAlpha(colors.text.primary, 0.06) }]}
-                            onPress={() => router.push('/(settings)/notifications' as any)}
-                        >
-                            <Ionicons name="notifications-outline" size={20} color={colors.text.primary} />
-                        </TouchableOpacity>
-                    </View>
-                </View>
-                <Text style={[typography.bodySm, s.dateTxt, { color: colors.text.secondary }]}>{formattedDate}</Text>
 
-                {/* ══ SHIFT COUNTDOWN HERO ════════════════════════════════════ */}
-                <TouchableOpacity
-                    onPress={() => router.push('/(shifts)' as any)}
-                    activeOpacity={0.88}
-                    accessibilityRole="button"
-                    accessibilityLabel={countdown ? `Your shift ends in ${countdown}` : 'No active shift, rest mode'}
-                    style={s.heroPress}
-                >
-                    <GlassCard
-                        intensity={40}
-                        radius={24}
-                        glow={heroColor}
-                        style={{ borderColor: withAlpha(heroColor, 0.25) }}
-                    >
-                        <LinearGradient
-                            colors={countdown ? colors.gradients.coral : [withAlpha(heroColor, 0.18), withAlpha(heroColor, 0.02)]}
-                            style={StyleSheet.absoluteFillObject}
-                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                        />
-                        <View style={s.heroInner}>
-                            <View style={{ flex: 1 }}>
-                                <Text style={[typography.overline, s.heroLbl, { color: countdown ? withAlpha('#FFFFFF', 0.92) : colors.text.secondary }]}>
-                                    {countdown ? 'Your shift ends in' : 'No active shift'}
-                                </Text>
-                                <Text
-                                    style={[
-                                        countdown ? typography.statLarge : typography.h1,
-                                        s.heroVal,
-                                        { color: countdown ? colors.text.primary : heroColor },
-                                        // White-on-coral runs ~2.84:1; a soft dark
-                                        // text shadow lifts legibility on the filled
-                                        // hero. Rest-mode (cyan-on-glass) already
-                                        // passes AA so it skips the shadow.
-                                        countdown ? s.heroValShadow : null,
-                                    ]}
-                                    numberOfLines={1}
-                                    adjustsFontSizeToFit
-                                    maxFontSizeMultiplier={STAT_MAX_SCALE}
-                                >
-                                    {countdown ?? 'Rest Mode'}
-                                </Text>
-                            </View>
-                            <View style={[s.heroIcon, { backgroundColor: countdown ? withAlpha('#FFFFFF', 0.18) : withAlpha(heroColor, 0.12) }]}>
-                                <Ionicons
-                                    name={countdown ? 'time-outline' : 'moon-outline'}
-                                    size={34}
-                                    color={countdown ? colors.text.primary : heroColor}
-                                />
-                            </View>
+                    {/* Date + momentum chip (real adherence signal, not a fabricated streak) */}
+                    <View style={s.subHeaderRow}>
+                        <Text style={[typography.bodySm, s.dateTxt, { color: colors.text.secondary }]}>{formattedDate}</Text>
+                        <View style={[s.momentumChip, {
+                            backgroundColor: withAlpha(colors.accent.coral, 0.12),
+                            borderColor: withAlpha(colors.accent.coral, 0.30),
+                        }]}>
+                            <Ionicons name="flame" size={12} color={colors.accent.coral} />
+                            <Text style={[typography.caption, s.momentumTxt, { color: colors.accent.coral }]} maxFontSizeMultiplier={MICRO_MAX_SCALE}>
+                                {progress?.isAdherent ? 'ON TRACK' : `${progress?.mealsLogged ?? 0} LOGGED`}
+                            </Text>
                         </View>
-                    </GlassCard>
-                </TouchableOpacity>
+                    </View>
+                </Animated.View>
+
+                {/* ══ TONIGHT'S SESSION HERO ══════════════════════════════════ */}
+                <Animated.View entering={FadeInDown.delay(80).duration(460)}>
+                    <TouchableOpacity
+                        onPress={() => router.push('/(shifts)' as any)}
+                        activeOpacity={0.88}
+                        accessibilityRole="button"
+                        accessibilityLabel={countdown ? `Your shift ends in ${countdown}` : 'No active shift, rest mode'}
+                        style={s.heroPress}
+                    >
+                        <GlassCard
+                            intensity={40}
+                            radius={24}
+                            glow={heroColor}
+                            style={{ borderColor: withAlpha(heroColor, 0.25) }}
+                        >
+                            <LinearGradient
+                                colors={[withAlpha(heroColor, 0.16), withAlpha(heroColor, 0.02)]}
+                                style={StyleSheet.absoluteFillObject}
+                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                            />
+                            <View style={s.heroInner}>
+                                {/* Left: label · countdown · START */}
+                                <View style={s.heroLeft}>
+                                    <View style={[s.heroTag, { backgroundColor: withAlpha(heroColor, 0.14) }]}>
+                                        <View style={[s.heroTagDot, { backgroundColor: heroColor }]} />
+                                        <Text style={[typography.overline, { color: heroColor }]}>
+                                            {countdown ? "TONIGHT'S SESSION" : 'REST MODE'}
+                                        </Text>
+                                    </View>
+                                    <Text
+                                        style={[typography.statLarge, s.heroVal, { color: colors.text.primary }]}
+                                        numberOfLines={1}
+                                        adjustsFontSizeToFit
+                                        maxFontSizeMultiplier={STAT_MAX_SCALE}
+                                    >
+                                        {countdown ?? 'Recover'}
+                                    </Text>
+                                    <Text style={[typography.bodySm, s.heroSub, { color: colors.text.secondary }]} numberOfLines={1}>
+                                        {countdown ? 'until your shift ends' : 'No active shift — restore & rebuild'}
+                                    </Text>
+                                    <View style={s.heroCtaRow}>
+                                        <CtaButton
+                                            size="md"
+                                            icon="play"
+                                            label="START"
+                                            onPress={() => router.push('/(tabs)/training' as any)}
+                                            accessibilityLabel="Start training session"
+                                            style={s.heroCta}
+                                        />
+                                    </View>
+                                </View>
+                                {/* Right: readiness ring */}
+                                <View style={s.heroRingWrap}>
+                                    <ReadinessRing percent={readiness} size={94} color={heroColor} label="READY" />
+                                </View>
+                            </View>
+                        </GlassCard>
+                    </TouchableOpacity>
+                </Animated.View>
 
                 {/* ══ CIRCADIAN INSIGHT CHIP ══════════════════════════════════ */}
-                <View style={[s.chipWrap, {
-                    backgroundColor: withAlpha(insight.color, 0.10),
-                    borderColor: withAlpha(insight.color, 0.22),
-                }]}>
-                    <Ionicons name={insight.icon} size={13} color={insight.color} />
-                    <Text style={[typography.captionMedium, s.chipTxt, { color: insight.color }]}>{insight.text}</Text>
-                </View>
+                <Animated.View entering={FadeInDown.delay(130).duration(460)} style={s.chipRow}>
+                    <View style={[s.chipWrap, {
+                        backgroundColor: withAlpha(insight.color, 0.10),
+                        borderColor: withAlpha(insight.color, 0.22),
+                    }]}>
+                        <Ionicons name={insight.icon} size={13} color={insight.color} />
+                        <Text style={[typography.captionMedium, s.chipTxt, { color: insight.color }]}>{insight.text}</Text>
+                    </View>
+                </Animated.View>
+
+                {/* ══ 3-UP STAT GRID ══════════════════════════════════════════ */}
+                <Animated.View entering={FadeInDown.delay(180).duration(460)} style={s.statGrid}>
+                    <StatCard
+                        icon="water"
+                        label="Hydration"
+                        value={hydL}
+                        unit="L"
+                        footer="of 2.5L"
+                        accent={colors.accent.blue}
+                        style={{ width: STAT_W }}
+                        onPress={() => router.push('/(performance)' as any)}
+                        accessibilityLabel={`Hydration, ${hydL} of 2.5 litres`}
+                    />
+                    <StatCard
+                        icon="flame"
+                        label="Calories"
+                        value={kcal}
+                        unit="kcal"
+                        footer={progress?.caloriesTarget ? `of ${Math.round(progress.caloriesTarget)}` : 'today'}
+                        accent={colors.accent.coral}
+                        style={{ width: STAT_W }}
+                        onPress={() => router.push('/(tabs)/nutrition' as any)}
+                        accessibilityLabel={`Calories, ${kcal} kcal today`}
+                    />
+                    <StatCard
+                        icon="footsteps"
+                        label="Steps"
+                        value={steps}
+                        footer="today"
+                        accent={colors.accent.cyan}
+                        style={{ width: STAT_W }}
+                        onPress={() => router.push('/(performance)' as any)}
+                        accessibilityLabel={`Steps, ${steps} today`}
+                    />
+                </Animated.View>
+
+                {/* ══ CIRCADIAN TRAINING-WINDOW BAR ═══════════════════════════ */}
+                <Animated.View entering={FadeInDown.delay(220).duration(460)}>
+                    <TrainingWindowBar
+                        startHour={TRAIN_START_H}
+                        endHour={TRAIN_END_H}
+                        nowHour={nowHour}
+                        accent={colors.accent.coral}
+                    />
+                </Animated.View>
+
+                {/* ══ QUICK ACTIONS (horizontal carousel) ═════════════════════ */}
+                <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>QUICK ACTIONS</Text>
+                <Animated.View entering={FadeInDown.delay(240).duration(460)}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        decelerationRate="fast"
+                        snapToInterval={QA_CARD_W + CARD_GAP}
+                        snapToAlignment="start"
+                        contentContainerStyle={s.qaCarousel}
+                    >
+                        {QUICK_ACTIONS.map(a => (
+                            <TouchableOpacity
+                                key={a.id}
+                                onPress={() => router.push(a.route as any)}
+                                activeOpacity={0.85}
+                                accessibilityRole="button"
+                                accessibilityLabel={a.label}
+                                style={[s.qaCard, { borderColor: withAlpha(colors.text.primary, 0.1) }]}
+                            >
+                                <Image
+                                    source={a.image}
+                                    style={StyleSheet.absoluteFillObject}
+                                    contentFit="cover"
+                                    cachePolicy="memory-disk"
+                                    transition={200}
+                                />
+                                {/* Dark gradient for text readability */}
+                                <LinearGradient
+                                    colors={['transparent', 'rgba(0,0,0,0.82)']}
+                                    style={StyleSheet.absoluteFillObject}
+                                />
+                                {/* Icon pill top-left */}
+                                <View style={[s.qaIcon, { backgroundColor: withAlpha(a.color, 0.18) }]}>
+                                    <Ionicons name={a.icon as any} size={16} color={a.color} />
+                                </View>
+                                {/* Label bottom-left */}
+                                <View style={s.qaLabelWrap}>
+                                    <Text style={s.qaLabel} numberOfLines={1}>{a.label}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </Animated.View>
 
                 {/* ══ UP NEXT MEAL ════════════════════════════════════════════ */}
                 {planError ? (
@@ -607,44 +765,6 @@ export default function DashboardScreen() {
                     </View>
                 </View>
 
-                {/* ══ QUICK ACTIONS ════════════════════════════════════════════ */}
-                <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>QUICK ACTIONS</Text>
-                <View style={s.quickGrid}>
-                    {QUICK_ACTIONS.map(a => (
-                        <TouchableOpacity
-                            key={a.id}
-                            onPress={() => router.push(a.route as any)}
-                            activeOpacity={0.75}
-                            accessibilityRole="button"
-                            accessibilityLabel={a.label}
-                            style={{ width: MINI_W, height: 110, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: withAlpha(colors.text.primary, 0.1) }}
-                        >
-                            <Image
-                                source={a.image}
-                                style={StyleSheet.absoluteFillObject}
-                                contentFit="cover"
-                                cachePolicy="memory-disk"
-                                transition={200}
-                            />
-                            {/* Dark gradient for text readability */}
-                            <LinearGradient
-                                colors={['transparent', 'rgba(0,0,0,0.8)']}
-                                style={StyleSheet.absoluteFillObject}
-                            />
-                            {/* Icon pill top-right */}
-                            <View style={{ position: 'absolute', top: 12, right: 12, backgroundColor: withAlpha(a.color, 0.8), width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
-                                <Ionicons name={a.icon as any} size={16} color="#fff" />
-                            </View>
-                            {/* Label bottom-left */}
-                            <View style={{ position: 'absolute', bottom: 12, left: 12, right: 12 }}>
-                                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 }}>
-                                    {a.label}
-                                </Text>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-
                 {/* ══ EXERCISE CATEGORIES ═════════════════════════════════════ */}
                 <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>EXPLORE</Text>
                 <View style={s.catGrid}>
@@ -670,8 +790,8 @@ export default function DashboardScreen() {
                                 style={StyleSheet.absoluteFillObject}
                             />
                             {/* Count badge top-right */}
-                            <View style={[s.catBadge, { backgroundColor: withAlpha(cat.accent, 0.85) }]}>
-                                <Text style={s.catBadgeTxt}>{cat.count}</Text>
+                            <View style={[s.catBadge, { backgroundColor: withAlpha(cat.accent, 0.18) }]}>
+                                <Text style={[s.catBadgeTxt, { color: cat.accent }]}>{cat.count}</Text>
                             </View>
                             {/* Label bottom-left */}
                             <View style={s.catLabel}>
@@ -834,7 +954,7 @@ const s = StyleSheet.create({
 
     // Header
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flexShrink: 1 },
     headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     avatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
     avatarTxt: { fontSize: 15, fontWeight: '800' },
@@ -844,21 +964,34 @@ const s = StyleSheet.create({
     shiftDot: { width: 6, height: 6, borderRadius: 3 },
     shiftTxt: { fontSize: 12, fontWeight: '700' },
     iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-    dateTxt: { marginBottom: 20, marginTop: 2 },
+
+    // Sub-header (date + momentum chip)
+    subHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2, marginBottom: 20 },
+    dateTxt: { flexShrink: 1 },
+    momentumChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+    momentumTxt: { fontWeight: '800', letterSpacing: 0.6 },
 
     // Hero
     // Press wrapper owns only the outer spacing now; the GlassCard owns the
     // radius/hairline/glow and the heroInner View owns the row layout + padding.
-    heroPress: { marginBottom: 12 },
-    heroInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 24 },
-    heroLbl: { marginBottom: 6 },
-    heroVal: {},
-    heroValShadow: { textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
-    heroIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+    heroPress: { marginBottom: 16 },
+    heroInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 22, gap: 16 },
+    heroLeft: { flex: 1 },
+    heroTag: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, alignSelf: 'flex-start', marginBottom: 12 },
+    heroTagDot: { width: 6, height: 6, borderRadius: 3 },
+    heroVal: { marginBottom: 2 },
+    heroSub: { marginBottom: 16 },
+    heroCtaRow: { flexDirection: 'row' },
+    heroCta: { alignSelf: 'flex-start', paddingHorizontal: 28 },
+    heroRingWrap: { alignItems: 'center', justifyContent: 'center' },
 
     // Insight chip
-    chipWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1, marginBottom: 20, alignSelf: 'flex-start' },
+    chipRow: { marginBottom: 20 },
+    chipWrap: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1, alignSelf: 'flex-start' },
     chipTxt: { flexShrink: 1 },
+
+    // 3-up stat grid
+    statGrid: { flexDirection: 'row', gap: CARD_GAP, marginBottom: 24 },
 
     // UP NEXT card
     // Inner content padding for the GlassCard-wrapped UP NEXT card.
@@ -890,6 +1023,13 @@ const s = StyleSheet.create({
     // Empty / zero-data card (matches glass card rhythm)
     emptyCard: { borderRadius: 24, borderWidth: 1, borderColor: palette.border.default, backgroundColor: withAlpha(palette.background.secondary, 0.5), marginBottom: 28, overflow: 'hidden' },
 
+    // Quick-action carousel
+    qaCarousel: { paddingRight: H_PAD, gap: CARD_GAP },
+    qaCard: { width: QA_CARD_W, height: 118, borderRadius: 20, overflow: 'hidden', borderWidth: 1 },
+    qaIcon: { position: 'absolute', top: 12, left: 12, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    qaLabelWrap: { position: 'absolute', bottom: 12, left: 12, right: 12 },
+    qaLabel: { color: '#fff', fontSize: 13, fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+
     // Exercise category cards (2×2 image grid)
     catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: CARD_GAP, marginBottom: 28 },
     catCard: { width: MINI_W, height: 110, borderRadius: 18, overflow: 'hidden', position: 'relative' },
@@ -898,9 +1038,8 @@ const s = StyleSheet.create({
     catLabel: { position: 'absolute', bottom: 10, left: 10, right: 10 },
     catLabelTxt: { color: '#fff', fontSize: 13, fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
 
-    // Quick actions
+    // Section labels
     sectionLbl: { marginBottom: 14 },
-    quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: CARD_GAP, marginBottom: 28 },
 
     // Section row with link
     sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
@@ -924,10 +1063,8 @@ const s = StyleSheet.create({
     tlDesc: { fontSize: 12, marginTop: 3 },
     nowBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
     // White-on-solid-coral is the worst contrast case (~2.5:1); a strong dark
-    // textShadow lifts the tiny "NOW" pip to a legible AA-equivalent without
-    // losing the punchy white-on-coral identity (matches the count-badge recipe).
+    // Ink "NOW" pip on the solid lime fill — max contrast, no shadow (ink-on-lime).
     nowTxt: {
-        color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.5,
-        textShadowColor: 'rgba(0,0,0,0.55)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2,
+        color: '#0A0C12', fontSize: 10, fontWeight: '900', letterSpacing: 0.5,
     },
 });

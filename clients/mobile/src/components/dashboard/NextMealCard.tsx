@@ -19,7 +19,7 @@ function NextMealCardComponent({ label, description, time, macros, onLog, onEdit
             <View style={styles.header}>
                 <Text style={styles.headerLabel}>UP NEXT • {time}</Text>
                 <View style={styles.iconBg}>
-                    <Ionicons name="restaurant" size={20} color="#FF6B35" />
+                    <Ionicons name="restaurant" size={20} color="#A8CC3C" />
                 </View>
             </View>
             <Text style={styles.title}>{label}</Text>
@@ -55,10 +55,10 @@ function NextMealCardComponent({ label, description, time, macros, onLog, onEdit
 export const NextMealCard = React.memo(NextMealCardComponent);
 
 const styles = StyleSheet.create({
-    card: { backgroundColor: colors.background.secondary, borderColor: '#FF6B3550', borderWidth: 1, borderRadius: 24, padding: 20, marginBottom: 20, borderLeftWidth: 4, borderLeftColor: '#FF6B35' },
+    card: { backgroundColor: colors.background.secondary, borderColor: '#A8CC3C50', borderWidth: 1, borderRadius: 24, padding: 20, marginBottom: 20, borderLeftWidth: 4, borderLeftColor: '#A8CC3C' },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-    headerLabel: { color: '#FF6B35', fontWeight: '800', letterSpacing: 1, fontSize: 12 },
-    iconBg: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#FF6B3520', alignItems: 'center', justifyContent: 'center' },
+    headerLabel: { color: '#A8CC3C', fontWeight: '800', letterSpacing: 1, fontSize: 12 },
+    iconBg: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#A8CC3C20', alignItems: 'center', justifyContent: 'center' },
     title: { color: '#FFFFFF', fontSize: 24, fontWeight: '700', marginTop: -12 },
     description: { color: colors.text.secondary, fontSize: 14, marginTop: 4, marginBottom: 16 },
     macrosRow: { flexDirection: 'row', gap: 12, marginBottom: 20 },
@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
     macroLabel: { color: colors.text.secondary, fontSize: 11 },
     macroValue: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
     actions: { flexDirection: 'row', gap: 12 },
-    logBtn: { flex: 1, backgroundColor: '#FF6B35', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 52, borderRadius: 26 },
+    logBtn: { flex: 1, backgroundColor: '#A8CC3C', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 52, borderRadius: 26 },
     logBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 16, marginLeft: 8 },
     editBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.border.default, alignItems: 'center', justifyContent: 'center' },
 });

@@ -10,6 +10,7 @@
         "db:migrate:deploy": "prisma migrate deploy",
         "db:studio": "prisma studio",
         "db:seed": "npx -y tsx prisma/seed-library.ts",
+        "db:seed:catalog": "npx -y tsx prisma/seed-catalog.ts",
         "db:seed:legacy": "ts-node --project tsconfig.json prisma/seed-library.ts",
         "lint": "eslint .",
         "start": "node dist/index.js",

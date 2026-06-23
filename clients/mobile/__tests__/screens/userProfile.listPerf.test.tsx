@@ -125,10 +125,11 @@ jest.mock('expo-image', () => {
 // expo-status-bar renders nothing in the tree under test.
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
-// date-fns: each post card formats createdAt via formatDistanceToNow — pin it to a
-// constant so the rendered timestamp is deterministic and tz-agnostic.
+// date-fns: each post card formats createdAt via formatDistanceToNow({ addSuffix: true })
+// — pin it to the full suffixed string so the rendered timestamp is deterministic and
+// tz-agnostic (the real formatter appends " ago" via addSuffix).
 jest.mock('date-fns', () => ({
-  formatDistanceToNow: () => '1 hour',
+  formatDistanceToNow: () => '1 hour ago',
 }));
 
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
@@ -200,10 +201,10 @@ describe('UserProfileScreen — posts list performance refactor', () => {
 
     renderScreen();
 
-    // The unlocked "Posts" section is present (the section header is unlocked-only,
-    // so the locked branch never reaches here).
+    // The unlocked activity section is present (the "RECENT ACTIVITY" header is
+    // unlocked-only, so the locked branch never reaches here).
     expect(screen.queryByText('This account is private')).toBeNull();
-    expect(screen.getAllByText('Posts').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('RECENT ACTIVITY')).toBeTruthy();
 
     // Each post body renders as real, readable content (output unchanged by the
     // inline → PostRow extraction).

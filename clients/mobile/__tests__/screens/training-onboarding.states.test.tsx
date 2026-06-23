@@ -153,10 +153,10 @@ describe('TrainingOnboardingScreen — loading / error / loaded states', () => {
 
     // The Freestyle option (always rendered, independent of the routines list)
     // and the Start Workout CTA remain visible while loading.
-    expect(screen.getByText('Freestyle Session')).toBeTruthy();
+    expect(screen.getAllByText('Freestyle Session')[0]).toBeTruthy();
     expect(screen.getByText('Start Workout')).toBeTruthy();
-    // Sanity: the always-present header copy mounted.
-    expect(screen.getByText('Your Routines')).toBeTruthy();
+    // Sanity: the always-present section header copy mounted.
+    expect(screen.getByText('Your Session')).toBeTruthy();
   });
 
   // ── Test B: error → retry refetches the routines query ─────────────────────
@@ -170,7 +170,7 @@ describe('TrainingOnboardingScreen — loading / error / loaded states', () => {
     expect(screen.queryByText('Push Day')).toBeNull();
 
     // The Freestyle option stays usable even when routines fail to load.
-    expect(screen.getByText('Freestyle Session')).toBeTruthy();
+    expect(screen.getAllByText('Freestyle Session')[0]).toBeTruthy();
 
     // The retry action (EmptyState's primary Button, label "Try Again")
     // refetches the routines query — exactly once.
@@ -189,7 +189,7 @@ describe('TrainingOnboardingScreen — loading / error / loaded states', () => {
     // …and the error copy is not present.
     expect(screen.queryByText('Couldn\'t load your routines')).toBeNull();
     // The Freestyle option is still present alongside the loaded routines.
-    expect(screen.getByText('Freestyle Session')).toBeTruthy();
+    expect(screen.getAllByText('Freestyle Session')[0]).toBeTruthy();
   });
 
   // ── Test D: freestyle + start mutation preserved ───────────────────────────

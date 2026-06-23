@@ -239,8 +239,12 @@ export function SetLogger({
                 <View style={styles.inputRow}>
                     <TextInput accessibilityLabel="Reps" style={styles.input} placeholder="Reps" placeholderTextColor={colors.text.tertiary} keyboardType="numeric" value={reps} onChangeText={setReps} />
                     <TextInput accessibilityLabel="Weight in kilograms" style={styles.input} placeholder="Weight (kg)" placeholderTextColor={colors.text.tertiary} keyboardType="decimal-pad" value={weight} onChangeText={setWeight} />
+                    {/* logBtn is a lime fill (accent.coral === #A8CC3C). Anything on a
+                        lime fill uses INK (text.inverse #0A0C12), never white — so the
+                        checkmark glyph is text.inverse, matching the ink-on-lime FINISH
+                        button on the workout screen. */}
                     <Pressable accessibilityRole="button" accessibilityLabel="Log set" hitSlop={8} style={styles.logBtn} onPress={handleLog}>
-                        <Ionicons name="checkmark" size={22} color={colors.text.primary} />
+                        <Ionicons name="checkmark" size={22} color={colors.text.inverse} />
                     </Pressable>
                 </View>
             ) : null}

@@ -135,6 +135,20 @@ jest.mock('expo-linear-gradient', () => {
 // expo-status-bar renders nothing in the tree under test.
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
+// react-native-gifted-charts ships a native dep AND transitively pulls
+// gifted-charts-core (untransformed ESM). The hub now renders a <LineChart>
+// trend sparkline; stub the chart components to host views so the import graph
+// resolves and the surrounding card content still mounts (mirrors
+// analytics.test.tsx / exercise-detail.test.tsx).
+jest.mock('react-native-gifted-charts', () => {
+  const RN = require('react-native');
+  return {
+    BarChart: (props: any) => <RN.View {...props} />,
+    LineChart: (props: any) => <RN.View {...props} />,
+    PieChart: (props: any) => <RN.View {...props} />,
+  };
+});
+
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
 import { render, fireEvent, screen } from '@testing-library/react-native';
@@ -206,15 +220,17 @@ describe('DailyReportScreen — Performance Hub nav grid', () => {
     // Header title — a stable domain label confirming the screen mounted.
     expect(screen.getByText('Performance Hub')).toBeTruthy();
 
-    // The score card (the hero LinearGradient surface): its "Great Job!" heading,
-    // the "PERF SCORE" ring caption, and the DERIVED numeric score (95, from the
-    // fixture's calorie+protein adherence — the response carries no `score` field)
-    // all render — pinning that the loaded ScrollView's first surface mounted (the
-    // CircularProgress ring is stubbed to a passthrough, so the score TEXT is the
-    // stable marker here, not the decorative ring).
-    expect(screen.getByText('Great Job!')).toBeTruthy();
-    expect(screen.getByText('PERF SCORE')).toBeTruthy();
-    expect(screen.getByText('95')).toBeTruthy();
+    // The score card (the hero LinearGradient surface): the "PERFORMANCE SCORE"
+    // overline, the score-banded verdict title ("Peak day" for a derived 95), and
+    // the DERIVED numeric score (95, from the fixture's calorie+protein adherence —
+    // the response carries no `score` field) all render, pinning that the loaded
+    // ScrollView's first surface mounted. The score numeral is now a count-up
+    // <TextInput> (its visible text animates from 0 and is not queryable by
+    // getByText under the reanimated mock), so the derived 95 is asserted via the
+    // CountUpText's stable accessibilityLabel instead.
+    expect(screen.getByText('PERFORMANCE SCORE')).toBeTruthy();
+    expect(screen.getByText('Peak day')).toBeTruthy();
+    expect(screen.getByLabelText('Performance score 95 percent')).toBeTruthy();
 
     // The GlassCard nav tiles — assert every NAV_ITEMS label is present.
     for (const label of NAV_LABELS) {

@@ -18,7 +18,6 @@ export type OnboardingRoutes = {
     '(onboarding)/sleep-schedule': undefined;
     '(onboarding)/metrics-goals': undefined;
     '(onboarding)/dietary-needs': undefined;
-    '(onboarding)/environment': undefined;
     '(onboarding)/ai-optimization': undefined;
     '(onboarding)/profile-summary': undefined;
     '(onboarding)/permissions': undefined;

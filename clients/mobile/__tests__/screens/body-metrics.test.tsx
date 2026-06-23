@@ -246,8 +246,8 @@ describe('BodyMetricsScreen — loading / empty / error / loaded states + a11y',
     renderScreen();
 
     // Both rows' weight • body-fat summary lines render (locale-independent copy).
-    expect(screen.getByText(/82kg • 15% BF/)).toBeTruthy();
-    expect(screen.getByText(/83kg • 16% BF/)).toBeTruthy();
+    expect(screen.getByText(/82 kg • 15% BF/)).toBeTruthy();
+    expect(screen.getByText(/83 kg • 16% BF/)).toBeTruthy();
 
     // The falsy-`&&` → ternary-with-null fix: entry m1 carries waistCm → a single
     // `W:` badge renders; entry m2 omits it → no second badge (and, critically, no

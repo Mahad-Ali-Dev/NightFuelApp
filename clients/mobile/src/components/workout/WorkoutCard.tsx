@@ -31,7 +31,7 @@ function WorkoutCardComponent({ name, muscleGroup, equipment, difficulty, durati
                             transition={200}
                         />
                     ) : (
-                        <Ionicons name="barbell" size={32} color="#FF6B3540" />
+                        <Ionicons name="barbell" size={32} color="#A8CC3C40" />
                     )}
                     {duration && <View style={styles.durationBadge}><Text style={styles.durationText}>{duration}</Text></View>}
                 </View>

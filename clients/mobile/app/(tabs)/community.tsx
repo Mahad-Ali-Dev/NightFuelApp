@@ -1,15 +1,16 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ImageBackground, Share } from 'react-native';
-import { GlassCard, EmptyState, Skeleton, SkeletonCard } from '@/components/ui';
+import { GlassCard, EmptyState, Skeleton, SkeletonCard, CircularProgress } from '@/components/ui';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getFeed, likePost, getChallenges, Post } from '@/api/community';
+import { getFeed, likePost, getChallenges, Post, Challenge } from '@/api/community';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { formatDistanceToNow } from 'date-fns';
@@ -38,6 +39,19 @@ function timeAgo(createdAt?: string): string {
 const safeCount = (n: unknown): number =>
     typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 
+/** Compact thousands formatter for hero numerals — 1240 → "1.2k", 980 → "980".
+ * Keeps the big condensed stats from overflowing their tiles on large counts.
+ * Module-scope (hoisted) so memoized children keep stable callback identity. */
+const compact = (n: number): string => {
+    const v = safeCount(n);
+    if (v >= 1000) {
+        const k = v / 1000;
+        // One decimal under 10k (1.2k); whole-k above (12k) to stay narrow.
+        return `${k >= 10 ? Math.round(k) : k.toFixed(1).replace(/\.0$/, '')}k`;
+    }
+    return String(v);
+};
+
 /**
  * Honest loading scaffold for the feed — a few PostItem-shaped placeholders
  * (avatar circle + name/time lines, body lines, and an image block) instead of
@@ -57,7 +71,7 @@ const FeedSkeleton = React.memo(function FeedSkeleton() {
                     <View style={{ padding: 16 }}>
                         {/* Header: avatar circle + name / time lines */}
                         <View style={styles.postHeader}>
-                            <SkeletonCard height={32} radius={16} style={styles.skeletonAvatar} />
+                            <SkeletonCard height={44} radius={22} style={styles.skeletonAvatar} />
                             <View style={{ marginLeft: 12 }}>
                                 <Skeleton width={120} height={15} radius={borderRadius.sm} />
                                 <Skeleton width={70} height={12} radius={borderRadius.sm} style={{ marginTop: 6 }} />
@@ -175,45 +189,62 @@ export default function CommunityTab() {
         }
     }, [isFeedFetching, refreshing, refetch, queryClient]);
 
+    // ── Derived hub stats (PRESENTATIONAL ONLY) ──────────────────────────────
+    // Aggregated purely from data already fetched by the two queries above — NO
+    // new data hook / network call. Drives the gamified "Your Standing" hero band
+    // (big condensed numerals): active-challenge count, total people you're
+    // training alongside (summed participants), and posts in the live feed. Each
+    // value is safeCount-clamped at the source so a partial payload renders 0,
+    // never NaN. Recomputed only when feed/challenges change.
+    const hubStats = useMemo(() => {
+        const activeChallenges = challenges?.length ?? 0;
+        const athletes = (challenges ?? []).reduce((sum, c) => sum + safeCount(c.participants), 0);
+        const livePosts = feed?.length ?? 0;
+        return { activeChallenges, athletes, livePosts };
+    }, [challenges, feed]);
+
     // Memoized feed rows — rebuilt only when the feed data itself changes, so
     // unrelated re-renders (e.g. pull-to-refresh state) don't recreate every card.
     const feedItems = useMemo(
-        () => feed?.map((post) => (
-            <PostItem
-                key={post.id}
-                post={post}
-                onLike={() => likeMutation.mutate(post.id)}
-                onComment={() => router.push(`/(community)/${post.id}` as any)}
-                onPressProfile={() => router.push(`/(community)/userProfile?userId=${post.author?.id}` as any)}
-            />
+        () => feed?.map((post, i) => (
+            <Animated.View key={post.id} entering={FadeInDown.delay(Math.min(i, 6) * 40).duration(360).springify().damping(20)}>
+                <PostItem
+                    post={post}
+                    onLike={() => likeMutation.mutate(post.id)}
+                    onComment={() => router.push(`/(community)/${post.id}` as any)}
+                    onPressProfile={() => router.push(`/(community)/userProfile?userId=${post.author?.id}` as any)}
+                />
+            </Animated.View>
         )),
         [feed, likeMutation, router]
     );
 
-    // Memoized challenge strip — slice is cheap but this keeps element identity
-    // stable across unrelated re-renders.
+    // Memoized challenge carousel — snapping cards with a gamified progress ring
+    // (from each challenge's `myProgress`). Slice is cheap but this keeps element
+    // identity stable across unrelated re-renders.
     const challengeCards = useMemo(
-        () => challenges?.slice(0, 3).map((chall) => (
-            <TouchableOpacity
+        () => challenges?.slice(0, 5).map((chall) => (
+            <ChallengeCard
                 key={chall.id}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`${chall.title}, ${safeCount(chall.participants)} participating`}
-                style={{ width: 160 }}
+                challenge={chall}
                 onPress={() => router.push('/(community)/challenges' as any)}
-            >
-                <GlassCard intensity={40}>
-                    <View style={{ width: '100%', padding: 16 }}>
-                        <View style={[styles.challIcon, { backgroundColor: withAlpha(colors.accent.emerald, 0.14) }]}>
-                            <Ionicons name="flash" size={20} color={colors.accent.emerald} />
-                        </View>
-                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 12 }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{chall.title}</Text>
-                        <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]} maxFontSizeMultiplier={1.4}>{safeCount(chall.participants)} participating</Text>
-                    </View>
-                </GlassCard>
-            </TouchableOpacity>
+            />
         )),
-        [challenges, borderRadius, colors, typography, router]
+        [challenges, router]
+    );
+
+    // ── Hub entry tiles (2-col grid) ─────────────────────────────────────────
+    // Static gamified shortcuts into the community surfaces. Each route already
+    // exists under app/(community); the Leaderboard + Messages targets preserve
+    // the exact destinations the old header buttons used.
+    const hubTiles = useMemo(
+        () => [
+            { key: 'leaderboard', label: 'Leaderboard', sub: 'Top athletes', icon: 'podium' as const, tint: colors.accent.coral, onPress: () => router.push('/(community)/leaderboard' as any) },
+            { key: 'challenges', label: 'Challenges', sub: `${hubStats.activeChallenges} active`, icon: 'flash' as const, tint: colors.accent.amber, onPress: () => router.push('/(community)/challenges' as any) },
+            { key: 'achievements', label: 'Achievements', sub: 'Your badges', icon: 'trophy' as const, tint: colors.accent.cyan, onPress: () => router.push('/(community)/achievements' as any) },
+            { key: 'requests', label: 'Requests', sub: 'Connect', icon: 'people' as const, tint: colors.accent.purple, onPress: () => router.push('/(community)/requests' as any) },
+        ],
+        [colors, hubStats.activeChallenges, router]
     );
 
     return (
@@ -229,8 +260,11 @@ export default function CommunityTab() {
             />
             <StatusBar style="light" />
             {/* Header */}
-            <View style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
-                <Text style={[typography.h2, { color: colors.text.primary }]} maxFontSizeMultiplier={1.3}>Community</Text>
+            <Animated.View entering={FadeInDown.duration(420)} style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
+                <View>
+                    <Text style={[typography.overline, { color: colors.accent.coral }]} maxFontSizeMultiplier={1.3}>THE PACK</Text>
+                    <Text style={[typography.h1, { color: colors.text.primary, marginTop: 2 }]} maxFontSizeMultiplier={1.3}>Community</Text>
+                </View>
                 <View style={styles.headerActions}>
                     <TouchableOpacity
                         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
@@ -251,46 +285,93 @@ export default function CommunityTab() {
                         <Ionicons name="chatbubbles-outline" size={22} color={colors.text.primary} />
                     </TouchableOpacity>
                 </View>
-            </View>
+            </Animated.View>
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 120 }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.cyan} colors={[colors.accent.cyan]} progressBackgroundColor={colors.background.secondary} />}
             >
-                {/* Active Challenges Strip */}
+                {/* Your Standing — gamified hero band with big condensed numerals.
+                    Purely presentational aggregation of the already-fetched feed +
+                    challenge data (hubStats); no extra network call. */}
+                <Animated.View entering={FadeInDown.delay(60).duration(420).springify().damping(18)} style={styles.standingWrap}>
+                    <GlassCard intensity={45} glow={colors.accent.coral} radius={borderRadius['2xl']}>
+                        <LinearGradient
+                            colors={[withAlpha(colors.accent.coral, 0.14), 'transparent']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.standingInner}
+                        >
+                            <View style={styles.standingHeaderRow}>
+                                <Text style={[typography.overline, { color: colors.text.secondary }]} maxFontSizeMultiplier={1.3}>YOUR STANDING</Text>
+                                <View style={[styles.livePill, { backgroundColor: withAlpha(colors.accent.cyan, 0.14), borderColor: withAlpha(colors.accent.cyan, 0.3) }]}>
+                                    <View style={[styles.liveDot, { backgroundColor: colors.accent.cyan }]} />
+                                    <Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: '700' }]} maxFontSizeMultiplier={1.2}>LIVE</Text>
+                                </View>
+                            </View>
+                            <View style={styles.statRow}>
+                                <StatPillar value={compact(hubStats.athletes)} label="Athletes" tint={colors.accent.coral} />
+                                <View style={[styles.statDivider, { backgroundColor: colors.border.default }]} />
+                                <StatPillar value={compact(hubStats.activeChallenges)} label="Challenges" tint={colors.accent.amber} />
+                                <View style={[styles.statDivider, { backgroundColor: colors.border.default }]} />
+                                <StatPillar value={compact(hubStats.livePosts)} label="New Posts" tint={colors.accent.cyan} />
+                            </View>
+                        </LinearGradient>
+                    </GlassCard>
+                </Animated.View>
+
+                {/* Hub entry grid — 2-col gamified shortcuts into each surface. */}
+                <Animated.View entering={FadeInDown.delay(110).duration(420).springify().damping(18)} style={styles.gridWrap}>
+                    {hubTiles.map(({ key, ...tile }) => (
+                        <HubTile key={key} {...tile} />
+                    ))}
+                </Animated.View>
+
+                {/* Active Challenges Carousel */}
                 {challenges && challenges.length > 0 && (
-                    <View style={styles.challengeSection}>
+                    <Animated.View entering={FadeInDown.delay(150).duration(420).springify().damping(18)} style={styles.challengeSection}>
                         <View style={styles.sectionHeader}>
                             <Text style={[typography.overline, { color: colors.text.secondary }]} maxFontSizeMultiplier={1.4}>ACTIVE CHALLENGES</Text>
                             <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" accessibilityLabel="See all challenges" onPress={() => router.push('/(community)/challenges' as any)}>
-                                <Text style={[typography.overline, { color: colors.accent.cyan }]} maxFontSizeMultiplier={1.4}>SEE ALL</Text>
+                                <Text style={[typography.overline, { color: colors.accent.coral }]} maxFontSizeMultiplier={1.4}>SEE ALL</Text>
                             </TouchableOpacity>
                         </View>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingHorizontal: 20 }}>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            decelerationRate="fast"
+                            snapToInterval={236}
+                            snapToAlignment="start"
+                            contentContainerStyle={{ gap: 12, paddingHorizontal: 20 }}
+                        >
                             {challengeCards}
                         </ScrollView>
-                    </View>
+                    </Animated.View>
                 )}
 
                 {/* Create Post Action */}
-                <TouchableOpacity
-                    activeOpacity={0.85}
-                    accessibilityRole="button"
-                    accessibilityLabel="Create a post"
-                    style={{ marginHorizontal: 20, marginBottom: 24 }}
-                    onPress={() => router.push('/(modals)/create-post' as any)}
-                >
-                    <GlassCard intensity={40}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
-                            <View style={[styles.avatarMini, { backgroundColor: withAlpha(colors.background.tertiary, 0.5) }]}>
-                                <Ionicons name="person" size={16} color={colors.text.tertiary} />
+                <Animated.View entering={FadeInDown.delay(190).duration(420).springify().damping(18)}>
+                    <TouchableOpacity
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel="Create a post"
+                        style={{ marginHorizontal: 20, marginBottom: 24 }}
+                        onPress={() => router.push('/(modals)/create-post' as any)}
+                    >
+                        <GlassCard intensity={40}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
+                                <View style={[styles.avatarMini, { backgroundColor: withAlpha(colors.background.tertiary, 0.5) }]}>
+                                    <Ionicons name="person" size={18} color={colors.text.tertiary} />
+                                </View>
+                                <Text style={[typography.body, { color: colors.text.secondary, marginLeft: 16 }]} maxFontSizeMultiplier={1.4}>Share your progress…</Text>
+                                <View style={[styles.composeCta, { backgroundColor: colors.accent.coral }]}>
+                                    <Ionicons name="add" size={20} color={colors.text.inverse} />
+                                </View>
                             </View>
-                            <Text style={[typography.body, { color: colors.text.secondary, marginLeft: 16 }]} maxFontSizeMultiplier={1.4}>What's on your mind?</Text>
-                            <Ionicons name="image-outline" size={20} color={colors.accent.cyan} style={{ marginLeft: 'auto' }} />
-                        </View>
-                    </GlassCard>
-                </TouchableOpacity>
+                        </GlassCard>
+                    </TouchableOpacity>
+                </Animated.View>
 
                 {/* Transient, NON-destructive like-failure notice — replaces the
                     old destructive Alert.alert. Shown only after a like rolls back;
@@ -321,7 +402,10 @@ export default function CommunityTab() {
                     </View>
                 )}
 
-                {/* Feed Items */}
+                {/* Friend Activity / Feed */}
+                <View style={styles.sectionHeader}>
+                    <Text style={[typography.overline, { color: colors.text.secondary }]} maxFontSizeMultiplier={1.4}>FRIEND ACTIVITY</Text>
+                </View>
                 <View style={{ paddingHorizontal: 20 }}>
                     {isFeedLoading ? (
                         // Honest loading scaffold mirroring the PostItem layout — a
@@ -356,6 +440,91 @@ export default function CommunityTab() {
     );
 }
 
+/**
+ * StatPillar — one big condensed hero numeral + an uppercase label, for the
+ * "Your Standing" band. Presentational only (value is pre-formatted by the
+ * caller). Memoized: all props are primitives.
+ */
+const StatPillar = React.memo(function StatPillar({ value, label, tint }: { value: string; label: string; tint: string }) {
+    const { colors, typography } = useTheme();
+    return (
+        <View style={styles.statPillar}>
+            <Text style={[typography.statMedium, { color: tint }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>{value}</Text>
+            <Text style={[typography.overline, { color: colors.text.tertiary, marginTop: 2 }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{label}</Text>
+        </View>
+    );
+});
+
+/**
+ * HubTile — a 2-col gamified shortcut card (icon tile + label + sub) into a
+ * community surface. Pressed-scale via activeOpacity; >=44pt target via the full
+ * card. Memoized: `label`/`sub`/`icon`/`tint` are primitives and `onPress` is a
+ * stable memoized callback from the parent.
+ */
+const HubTile = React.memo(function HubTile({ label, sub, icon, tint, onPress }: { label: string; sub: string; icon: keyof typeof Ionicons.glyphMap; tint: string; onPress: () => void }) {
+    const { colors, typography } = useTheme();
+    return (
+        <TouchableOpacity
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`${label}, ${sub}`}
+            style={styles.tile}
+            onPress={onPress}
+        >
+            <GlassCard intensity={40} radius={20}>
+                <View style={styles.tileInner}>
+                    <View style={[styles.tileIcon, { backgroundColor: withAlpha(tint, 0.14), borderColor: withAlpha(tint, 0.28) }]}>
+                        <Ionicons name={icon} size={22} color={tint} />
+                    </View>
+                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 14 }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{label}</Text>
+                    <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>{sub}</Text>
+                </View>
+            </GlassCard>
+        </TouchableOpacity>
+    );
+});
+
+/**
+ * ChallengeCard — a snapping carousel card showing a challenge with a gamified
+ * progress RING (from `myProgress`, 0–100) and the participant count as a small
+ * stat. Falls back gracefully when `myProgress` is absent (shows a "JOIN" prompt
+ * ring at 0). Memoized: `challenge` is a stable object from the query cache and
+ * `onPress` is a stable memoized callback.
+ */
+const ChallengeCard = React.memo(function ChallengeCard({ challenge, onPress }: { challenge: Challenge; onPress: () => void }) {
+    const { colors, typography } = useTheme();
+    const participants = safeCount(challenge.participants);
+    const hasProgress = typeof challenge.myProgress === 'number' && Number.isFinite(challenge.myProgress);
+    const progress = hasProgress ? Math.min(100, Math.max(0, challenge.myProgress as number)) : 0;
+    return (
+        <TouchableOpacity
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`${challenge.title}, ${participants} participating${hasProgress ? `, ${Math.round(progress)} percent complete` : ''}`}
+            style={styles.challCardTouch}
+            onPress={onPress}
+        >
+            <GlassCard intensity={42} radius={20}>
+                <View style={styles.challCardInner}>
+                    <View style={styles.challTopRow}>
+                        <View style={[styles.challIcon, { backgroundColor: withAlpha(colors.accent.amber, 0.14), borderColor: withAlpha(colors.accent.amber, 0.28) }]}>
+                            <Ionicons name="flash" size={20} color={colors.accent.amber} />
+                        </View>
+                        <CircularProgress size={52} strokeWidth={5} progress={progress} color={colors.accent.coral} trackColor={colors.border.default}>
+                            <Text style={[typography.statTiny, { color: colors.text.primary }]} maxFontSizeMultiplier={1.2}>{Math.round(progress)}</Text>
+                        </CircularProgress>
+                    </View>
+                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 14 }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{challenge.title}</Text>
+                    <View style={styles.challMetaRow}>
+                        <Ionicons name="people" size={13} color={colors.text.tertiary} />
+                        <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 5 }]} maxFontSizeMultiplier={1.4}>{participants} in</Text>
+                    </View>
+                </View>
+            </GlassCard>
+        </TouchableOpacity>
+    );
+});
+
 const PostItem = React.memo(function PostItem({ post, onLike, onComment, onPressProfile }: { post: Post, onLike: () => void, onComment: () => void, onPressProfile: () => void }) {
     const { colors, typography, borderRadius } = useTheme();
     // The feed Post shape has no per-viewer like flag, so we cannot show a
@@ -375,22 +544,23 @@ const PostItem = React.memo(function PostItem({ post, onLike, onComment, onPress
         <GlassCard intensity={40} style={{ marginBottom: 16 }}>
             <View style={{ padding: 16 }}>
                 <TouchableOpacity activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`View ${post.author?.name || 'User'}'s profile`} style={styles.postHeader} onPress={onPressProfile}>
-                    <View style={[styles.avatarMini, { backgroundColor: colors.background.tertiary }]}>
+                    <View style={[styles.avatarLg, { backgroundColor: colors.background.tertiary, borderColor: withAlpha(colors.accent.coral, 0.35) }]}>
                         {post.author?.avatarUrl ? (
-                            <Image source={{ uri: post.author.avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 16 }} cachePolicy="memory-disk" transition={200} />
+                            <Image source={{ uri: post.author.avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 22 }} cachePolicy="memory-disk" transition={200} />
                         ) : (
-                            <Ionicons name="person" size={16} color={colors.text.tertiary} />
+                            <Ionicons name="person" size={20} color={colors.text.tertiary} />
                         )}
                     </View>
-                    <View style={{ marginLeft: 12 }}>
-                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]} maxFontSizeMultiplier={1.3}>{post.author?.name || 'User'}</Text>
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{post.author?.name || 'User'}</Text>
                         <Text style={[typography.caption, { color: colors.text.secondary }]} maxFontSizeMultiplier={1.4}>
                             {timeAgo(post.createdAt)}
                         </Text>
                     </View>
+                    <Ionicons name="ellipsis-horizontal" size={18} color={colors.text.tertiary} />
                 </TouchableOpacity>
 
-                <Text style={[typography.body, { color: colors.text.secondary, marginVertical: 16, lineHeight: 22 }]} maxFontSizeMultiplier={1.5}>
+                <Text style={[typography.body, { color: colors.text.primary, marginVertical: 16, lineHeight: 22 }]} maxFontSizeMultiplier={1.5}>
                     {post.content}
                 </Text>
 
@@ -412,7 +582,7 @@ const PostItem = React.memo(function PostItem({ post, onLike, onComment, onPress
                         <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]} maxFontSizeMultiplier={1.4}>{commentCount}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Share"
-                        style={styles.actionItem}
+                        style={[styles.actionItem, { marginLeft: 'auto' }]}
                         onPress={async () => {
                             try {
                                 const author = post.author?.name || 'A Zeitra member';
@@ -434,17 +604,45 @@ const PostItem = React.memo(function PostItem({ post, onLike, onComment, onPress
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
     headerActions: { flexDirection: 'row', alignItems: 'center' },
     headerBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-    challengeSection: { marginTop: 24, marginBottom: 32 },
+
+    // ── Your Standing hero band ──
+    standingWrap: { marginHorizontal: 20, marginTop: 20, marginBottom: 8 },
+    standingInner: { padding: 18 },
+    standingHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    livePill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1 },
+    liveDot: { width: 6, height: 6, borderRadius: 3 },
+    statRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14 },
+    statPillar: { flex: 1, alignItems: 'center' },
+    statDivider: { width: 1, height: 36, opacity: 0.8 },
+
+    // ── Hub entry grid ──
+    gridWrap: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', paddingHorizontal: 20, marginTop: 16, marginBottom: 8 },
+    tile: { width: '48.5%', marginBottom: 12 },
+    tileInner: { padding: 16, minHeight: 116 },
+    tileIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+
+    // ── Challenges carousel ──
+    challengeSection: { marginTop: 20, marginBottom: 28 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 },
-    challIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-    avatarMini: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-    // Constrains the avatar SkeletonCard to the 32×32 avatarMini circle (it
-    // defaults to full width + a bottom margin) so the loading scaffold lines up
-    // with the loaded PostItem header.
-    skeletonAvatar: { width: 32, marginBottom: 0 },
+    challCardTouch: { width: 224 },
+    challCardInner: { width: '100%', padding: 16 },
+    challTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    challIcon: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+    challMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+
+    // ── Compose ──
+    avatarMini: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+    composeCta: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' },
+
+    // Avatar in feed rows (upgraded to 44 with a faint lime ring).
+    avatarLg: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+    // Constrains the avatar SkeletonCard to the 44×44 feed avatar (it defaults to
+    // full width + a bottom margin) so the loading scaffold lines up with the
+    // loaded PostItem header.
+    skeletonAvatar: { width: 44, marginBottom: 0 },
     // Inline like-failure notice row (rendered inside a GlassCard — replaces the
     // old destructive Alert). Token-driven; no coral-CTA gradient / inline glass.
     likeNotice: { flexDirection: 'row', alignItems: 'center', padding: 16 },

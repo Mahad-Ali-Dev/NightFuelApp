@@ -262,6 +262,10 @@ export class ExerciseService {
                     videoUrl: ex.videoUrl ?? undefined,
                     category: ex.category ?? undefined,
                     bodyPart: ex.bodyPart ?? undefined,
+                    // Catalog enrichment — omitted (undefined) for legacy rows so
+                    // the payload stays unchanged where the columns are empty.
+                    secondaryMuscles: ex.secondaryMuscles?.length ? ex.secondaryMuscles : undefined,
+                    gender: ex.gender ?? undefined,
                 }));
             }
 
@@ -315,6 +319,8 @@ export class ExerciseService {
                 videoUrl: dbEx.videoUrl ?? undefined,
                 bodyPart: dbEx.bodyPart ?? undefined,
                 category: dbEx.category ?? undefined,
+                secondaryMuscles: dbEx.secondaryMuscles?.length ? dbEx.secondaryMuscles : undefined,
+                gender: dbEx.gender ?? undefined,
             };
         }
 

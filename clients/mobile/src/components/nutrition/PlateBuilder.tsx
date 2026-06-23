@@ -15,7 +15,7 @@ export function PlateBuilder({ items = [], onBuild }: PlateBuilderProps) {
             <View style={styles.plate}>
                 {items.length === 0 ? (
                     <TouchableOpacity style={styles.emptyPlate} onPress={onBuild} activeOpacity={0.85}>
-                        <Ionicons name="add-circle" size={48} color="#FF6B3560" />
+                        <Ionicons name="add-circle" size={48} color="#A8CC3C60" />
                         <Text style={styles.emptyText}>Tap to add foods</Text>
                     </TouchableOpacity>
                 ) : (
@@ -44,6 +44,6 @@ const styles = StyleSheet.create({
     foodItem: { borderLeftWidth: 3, paddingLeft: 12, paddingVertical: 8, marginBottom: 8 },
     foodName: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
     foodPortion: { color: colors.text.secondary, fontSize: 12, marginTop: 2 },
-    buildBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FF6B35', height: 52, borderRadius: 26, gap: 8 },
+    buildBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#A8CC3C', height: 52, borderRadius: 26, gap: 8 },
     buildBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 16 },
 });

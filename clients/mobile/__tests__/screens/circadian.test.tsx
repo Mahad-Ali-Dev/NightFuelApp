@@ -373,12 +373,12 @@ describe('CircadianScreen', () => {
       // the values because two windows can format to the SAME HH:MM string in
       // some timezones (e.g. insulinStart === peakTemp, both anchored at
       // startTime) — a collision must not make the parity assertion throw.
-      expect(screen.getByText('Melatonin Onset')).toBeTruthy();
+      expect(screen.getAllByText('Melatonin Onset')[0]).toBeTruthy();
       expect(screen.getAllByText(w.melatoninStart).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('Caffeine Cutoff')).toBeTruthy();
+      expect(screen.getAllByText('Caffeine Cutoff')[0]).toBeTruthy();
       expect(screen.getAllByText(w.caffeineCutoff).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('Insulin Peak')).toBeTruthy();
-      expect(screen.getByText('Peak Temp')).toBeTruthy();
+      expect(screen.getAllByText('Insulin Peak')[0]).toBeTruthy();
+      expect(screen.getAllByText('Peak Temp')[0]).toBeTruthy();
       // insulinStart and peakTemp are both anchored at startTime → identical
       // string; assert that exact value renders for BOTH tiles.
       expect(w.peakTemp).toBe(w.insulinStart);
@@ -528,7 +528,7 @@ describe('CircadianScreen', () => {
 
       renderScreen();
 
-      expect(screen.getByText('Entrainment Score')).toBeTruthy();
+      expect(screen.getByText('24-Hour Body Clock')).toBeTruthy();
       // 73 resolves off the model (via profileMetrics' model-present branch); a
       // rebind to a non-existent key would render the "--/100" placeholder here.
       expect(screen.getByText('73/100')).toBeTruthy();
@@ -545,7 +545,7 @@ describe('CircadianScreen', () => {
 
       renderScreen();
 
-      expect(screen.getByText('Entrainment Score')).toBeTruthy();
+      expect(screen.getByText('24-Hour Body Clock')).toBeTruthy();
       expect(screen.getByText('0/100')).toBeTruthy();
       expect(screen.queryByText('--/100')).toBeNull();
     });
@@ -561,7 +561,7 @@ describe('CircadianScreen', () => {
 
       renderScreen();
 
-      expect(screen.getByText('Entrainment Score')).toBeTruthy();
+      expect(screen.getByText('24-Hour Body Clock')).toBeTruthy();
       expect(screen.getByText('--/100')).toBeTruthy();
       expect(screen.queryByText('73/100')).toBeNull();
     });

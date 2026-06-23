@@ -1,11 +1,14 @@
 /**
- * CtaButton — the Aurora primary call-to-action.
+ * CtaButton — the Zeitra primary call-to-action.
  *
- * A coral→pink gradient-fill pressable that renders the shared
- * `gradients.coralCta` token (the AA-lifted coralDark→pink fill). It mirrors the
- * inline "Log Meal" recipe from app/(tabs)/index.tsx: white label with a subtle
- * textShadow for AA on the bright fill, a coral glow halo, and a gentle pressed
- * scale. Use it for the primary action on a screen.
+ * A pressable filled with the shared `gradients.coralCta` token — the softened
+ * electric-lime brand gradient (lime → deeper lime; "coral" is the legacy token
+ * name, its value is now Zeitra lime). The label, leading icon and loading
+ * spinner all render in INK (#0A0C12, the theme's text.inverse) — NEVER white:
+ * the Zeitra brand forbids white-on-lime (too low contrast), so ink-on-lime is
+ * the high-contrast, athletic recipe (no textShadow needed). A soft lime glow
+ * halo and a gentle pressed scale complete it. Use it for the primary action on
+ * a screen.
  *
  * Sizes: `size` picks one of three footprints (sm / md / lg). 'md' is the
  * default and is byte-identical to the original single-size button (minHeight
@@ -55,7 +58,7 @@ const SIZES: Record<
 
 export interface CtaButtonProps {
   onPress?: () => void;
-  /** Button text. Rendered white with a subtle shadow for AA on the fill. */
+  /** Button text. Rendered ink (#0A0C12) on the lime fill — never white. */
   label: string;
   /** Optional leading Ionicons glyph name. */
   icon?: keyof typeof Ionicons.glyphMap;
@@ -111,10 +114,10 @@ export function CtaButton({
         style={StyleSheet.absoluteFillObject}
       />
       {loading ? (
-        <ActivityIndicator size={sz.spinner} color="#fff" />
+        <ActivityIndicator size={sz.spinner} color="#0A0C12" />
       ) : (
         <>
-          {icon ? <Ionicons name={icon} size={sz.icon} color="#fff" /> : null}
+          {icon ? <Ionicons name={icon} size={sz.icon} color="#0A0C12" /> : null}
           <Text style={[styles.label, { fontSize: sz.fontSize }]} maxFontSizeMultiplier={1.4}>
             {label}
           </Text>
@@ -133,12 +136,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: 'hidden',
   },
-  // textShadow lifts the white label clear of the bright pink gradient end (AA).
+  // Ink label on the bright Zeitra lime fill — max contrast, athletic (no shadow).
   label: {
-    color: '#fff',
+    color: '#0A0C12',
     fontWeight: '800',
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    letterSpacing: 0.3,
   },
 });

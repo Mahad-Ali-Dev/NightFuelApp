@@ -242,9 +242,10 @@ describe('ActiveWorkoutScreen — loading / error / active-session states', () =
     });
 
     // Full active-workout chrome rendered: the FINISH control and the seeded
-    // exercise card from the session's logs.
+    // exercise card from the session's logs. "Bench Press" renders in BOTH the
+    // focus hero (UP NEXT) and the SetLogger heading, so assert at least one.
     expect(screen.getByText('FINISH')).toBeTruthy();
-    expect(screen.getByText('Bench Press')).toBeTruthy();
+    expect(screen.getAllByText('Bench Press')[0]).toBeTruthy();
 
     // …and neither the pre-init error copy nor its retry is present.
     expect(screen.queryByText('Couldn\'t start your workout')).toBeNull();
@@ -268,7 +269,8 @@ describe('ActiveWorkoutScreen — loading / error / active-session states', () =
     });
 
     // Seeded fresh: 0 of 3 done (header derived from ex.sets, SetLogger agrees).
-    expect(screen.getByText(/0\/3 Sets Done/)).toBeTruthy();
+    // The redesigned card header reads "0/3 sets"; the SetLogger reads "0 / 3 sets".
+    expect(screen.getAllByText(/0\/3 sets/)[0]).toBeTruthy();
     expect(screen.getByText('0 / 3 sets')).toBeTruthy();
 
     // Toggle set 1 ON via the SetLogger's per-set DONE control.
@@ -276,7 +278,7 @@ describe('ActiveWorkoutScreen — loading / error / active-session states', () =
 
     // The header count (from ex.sets[].completed) rises to 1/3 — the toggle
     // reached the PERSISTED sets.
-    expect(screen.getByText(/1\/3 Sets Done/)).toBeTruthy();
+    expect(screen.getAllByText(/1\/3 sets/)[0]).toBeTruthy();
     expect(screen.getByText('1 / 3 sets')).toBeTruthy();
   });
 });

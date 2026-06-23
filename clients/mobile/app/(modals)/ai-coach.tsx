@@ -6,6 +6,7 @@ import {
 import Reanimated, {
     useSharedValue, useDerivedValue, useAnimatedStyle,
     withRepeat, withTiming, interpolate, Easing, runOnJS,
+    FadeInDown,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
@@ -610,42 +611,56 @@ export default function AICoachScreen() {
             <View style={[styles.headerClip, { borderBottomColor: colors.border.light }]}>
                 <GlassCard radius={0} intensity={40} tint="dark" style={styles.glassEdge}>
                     <View style={styles.header}>
-                        <GestureDetector gesture={Gesture.Tap().onEnd(() => { router.back(); })}>
-                            <View
-                                accessibilityRole="button"
-                                accessibilityLabel="Close"
-                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                style={styles.headerIconBtn}
-                            >
-                                <Ionicons name="close" size={28} color={colors.text.primary} />
-                            </View>
-                        </GestureDetector>
+                        <View style={styles.headerLeft}>
+                            <GestureDetector gesture={Gesture.Tap().onEnd(() => { router.back(); })}>
+                                <View
+                                    accessibilityRole="button"
+                                    accessibilityLabel="Close"
+                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                    style={styles.headerIconBtn}
+                                >
+                                    <Ionicons name="chevron-down" size={26} color={colors.text.secondary} />
+                                </View>
+                            </GestureDetector>
 
-                        <View style={styles.headerCenter}>
-                            <LinearGradient
-                                colors={colors.gradients.purple}
-                                style={[styles.riaAvatar, shadows.glow(colors.accent.purple)]}
-                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                            >
-                                <Ionicons name="sparkles" size={18} color={colors.text.primary} />
-                            </LinearGradient>
-                            <View style={{ marginLeft: 10 }}>
-                                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 17, fontWeight: '800' }]}>
+                            {/* Ria identity: glowing AI orb (purple = the AI signal)
+                                + a Barlow-Condensed name that dominates its status
+                                label. A pulsing presence dot rides the thinking state. */}
+                            <View style={styles.riaAvatarWrap}>
+                                <LinearGradient
+                                    colors={colors.gradients.purple}
+                                    style={[styles.riaAvatar, shadows.glow(colors.accent.purple)]}
+                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                >
+                                    <Ionicons name="sparkles" size={18} color={colors.text.primary} />
+                                </LinearGradient>
+                                <View style={[styles.presenceDot, {
+                                    backgroundColor: isTyping ? colors.accent.amber : colors.accent.emerald,
+                                    borderColor: colors.background.primary,
+                                }]} />
+                            </View>
+                            <View style={styles.headerTitleCol}>
+                                <Text
+                                    style={[typography.h3, { color: colors.text.primary, fontSize: 19, lineHeight: 22 }]}
+                                    maxFontSizeMultiplier={1.3}
+                                    numberOfLines={1}
+                                >
                                     Coach Ria
                                 </Text>
                                 <View style={styles.statusBadge}>
-                                    <View style={[styles.statusDot, { backgroundColor: isTyping ? colors.accent.amber : colors.accent.emerald }]} />
                                     <Text
-                                        style={[typography.caption, { color: isTyping ? colors.accent.amber : colors.accent.emerald, fontWeight: 'bold', fontSize: 11 }]}
+                                        style={[typography.caption, { color: isTyping ? colors.accent.amber : colors.accent.emerald, fontWeight: 'bold', fontSize: 11, letterSpacing: 0.3 }]}
                                         maxFontSizeMultiplier={1.3}
+                                        accessibilityLiveRegion="polite"
                                     >
-                                        {isTyping ? 'Thinking...' : 'AI Coach · Online'}
+                                        {isTyping ? 'Thinking…' : 'AI Coach · Online'}
                                     </Text>
                                 </View>
                             </View>
                         </View>
 
-                        {/* Right slot: the "N left today" quota pill, or a spacer. */}
+                        {/* Right slot: the "N left today" quota pill, or a spacer.
+                            Value-dominant — the count reads big, "left today" small. */}
                         {showQuotaHint ? (
                             <View
                                 style={[styles.quotaPill, {
@@ -656,11 +671,18 @@ export default function AICoachScreen() {
                                 accessibilityLabel={`${remaining} AI messages left today`}
                             >
                                 <Text
-                                    style={[typography.caption, { color: remaining > 0 ? colors.accent.purpleLight : colors.accent.amberLight, fontWeight: '800', fontSize: 11 }]}
+                                    style={[typography.statSmall, { color: remaining > 0 ? colors.accent.purpleLight : colors.accent.amberLight, fontSize: 17, lineHeight: 18 }]}
                                     maxFontSizeMultiplier={1.3}
                                     numberOfLines={1}
                                 >
-                                    {remaining} left today
+                                    {remaining}
+                                </Text>
+                                <Text
+                                    style={[typography.caption, { color: remaining > 0 ? withAlpha(colors.accent.purpleLight, 0.85) : colors.accent.amberLight, fontWeight: '700', fontSize: 9, letterSpacing: 0.4 }]}
+                                    maxFontSizeMultiplier={1.3}
+                                    numberOfLines={1}
+                                >
+                                    LEFT
                                 </Text>
                             </View>
                         ) : (
@@ -682,13 +704,34 @@ export default function AICoachScreen() {
                     showsVerticalScrollIndicator={false}
                     keyboardShouldPersistTaps="handled"
                 >
-                    <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginBottom: 24, fontWeight: 'bold' }]}>
-                        {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase()}
-                    </Text>
+                    {/* Date divider — a centered hairline chip, not a bare label. */}
+                    <View style={styles.dateDivider}>
+                        <View style={[styles.dateLine, { backgroundColor: colors.border.default }]} />
+                        <Text
+                            style={[typography.caption, { color: colors.text.tertiary, fontWeight: '700', fontSize: 10, letterSpacing: 1 }]}
+                            maxFontSizeMultiplier={1.3}
+                        >
+                            {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase()}
+                        </Text>
+                        <View style={[styles.dateLine, { backgroundColor: colors.border.default }]} />
+                    </View>
 
                     {historyQuery.isLoading && !hasLoaded ? (
-                        <View style={{ alignItems: 'center', paddingTop: 40 }}>
-                            <ActivityIndicator color={colors.accent.purpleLight} />
+                        <View style={styles.loadingWrap}>
+                            <LinearGradient
+                                colors={colors.gradients.purple}
+                                style={[styles.loadingOrb, shadows.glow(colors.accent.purple)]}
+                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                            >
+                                <Ionicons name="sparkles" size={22} color={colors.text.primary} />
+                            </LinearGradient>
+                            <ActivityIndicator color={colors.accent.purpleLight} style={{ marginTop: 16 }} />
+                            <Text
+                                style={[typography.caption, { color: colors.text.tertiary, marginTop: 10, fontSize: 12 }]}
+                                maxFontSizeMultiplier={1.3}
+                            >
+                                Loading your conversation…
+                            </Text>
                         </View>
                     ) : null}
 
@@ -700,10 +743,13 @@ export default function AICoachScreen() {
                         Ternary-null, never `&&`, so an empty/0 value can't render
                         bare (rendering-no-falsy-and). */}
                     {historyError ? (
-                        <GlassCard radius={20} glow={colors.accent.coral} style={styles.errorCard}>
+                        // Failure/offline state glows DANGER red (not brand lime): a
+                        // failed load must not read as success-adjacent. Lime stays
+                        // reserved for the upgrade/upsell card below, where it's correct.
+                        <GlassCard radius={20} glow={colors.accent.red} style={styles.errorCard}>
                             <View style={styles.errorInner}>
-                                <View style={[styles.errorIcon, { backgroundColor: withAlpha(colors.accent.coral, 0.16) }]}>
-                                    <Ionicons name="cloud-offline-outline" size={22} color={colors.accent.coralLight} />
+                                <View style={[styles.errorIcon, { backgroundColor: withAlpha(colors.accent.red, 0.16) }]}>
+                                    <Ionicons name="cloud-offline-outline" size={22} color={colors.accent.redLight} />
                                 </View>
                                 <Text style={[typography.heading, { color: colors.text.primary, fontSize: 16, fontWeight: '800', marginTop: 12, textAlign: 'center' }]}>
                                     Couldn't load your conversation
@@ -763,19 +809,33 @@ export default function AICoachScreen() {
                         </GlassCard>
                     )}
 
-                    {/* Quick Suggestions — hidden while the history-load error is
-                        showing (no empty-conversation prompts under an error). */}
-                    {messages.length <= 2 && !isTyping && !quota.exhausted && !historyError && (
-                        <View style={{ marginTop: 24 }}>
-                            <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 12, fontWeight: 'bold', letterSpacing: 0.5 }]}>
-                                QUICK QUESTIONS
-                            </Text>
+                    {/* Welcome / empty-conversation prompts — hidden while the
+                        history-load error is showing (no prompts under an error).
+                        Shown when the transcript is just Ria's greeting: a "starter
+                        questions" rail that doubles as the screen's empty-state CTA
+                        so the chat is never a blank wall waiting for the first tap. */}
+                    {messages.length <= 1 && !isTyping && !quota.exhausted && !historyError && (
+                        <Reanimated.View entering={FadeInDown.delay(120).springify().damping(18)} style={styles.suggestBlock}>
+                            <View style={styles.suggestHeader}>
+                                <View style={[styles.suggestSparkle, {
+                                    backgroundColor: withAlpha(colors.accent.purple, 0.16),
+                                    borderColor: withAlpha(colors.accent.purpleLight, 0.4),
+                                }]}>
+                                    <Ionicons name="bulb" size={14} color={colors.accent.purpleLight} />
+                                </View>
+                                <Text
+                                    style={[typography.overline, { color: colors.text.secondary }]}
+                                    maxFontSizeMultiplier={1.3}
+                                >
+                                    Ask me anything
+                                </Text>
+                            </View>
                             <View style={styles.suggestionsContainer}>
-                                {DEFAULT_SUGGESTIONS.map((sug) => (
-                                    <SuggestionChip key={sug} label={sug} colors={colors} typography={typography} onPress={() => sendMessage(sug)} />
+                                {DEFAULT_SUGGESTIONS.map((sug, i) => (
+                                    <SuggestionChip key={sug} label={sug} index={i} colors={colors} typography={typography} onPress={() => sendMessage(sug)} />
                                 ))}
                             </View>
-                        </View>
+                        </Reanimated.View>
                     )}
                 </ScrollView>
 
@@ -854,7 +914,14 @@ export default function AICoachScreen() {
                                         style={[styles.textInput, {
                                             color: colors.text.primary,
                                             backgroundColor: colors.background.tertiary,
-                                            borderColor: input.trim() ? withAlpha(colors.accent.purple, 0.5) : colors.border.default,
+                                            // Lime focus tint when the user has typed
+                                            // (their composing surface); listening uses
+                                            // Ria's purple to mirror the live mic state.
+                                            borderColor: listenState === 'listening'
+                                                ? withAlpha(colors.accent.purple, 0.55)
+                                                : input.trim()
+                                                    ? withAlpha(colors.accent.coral, 0.5)
+                                                    : colors.border.default,
                                         }]}
                                         placeholder={listenState === 'listening' ? 'Listening… speak to Ria' : 'Ask Ria about your shift protocol...'}
                                         placeholderTextColor={colors.text.tertiary}
@@ -928,7 +995,7 @@ function TypingDot({ progress, phase, color }: { progress: ReturnType<typeof use
 // Press feedback via GestureDetector + a shared press state (0/1) derived to a
 // scale (animation-gesture-detector-press). runOnJS bridges the tap to onPress.
 
-function SuggestionChip({ label, colors, typography, onPress }: { label: string; colors: any; typography: any; onPress: () => void }) {
+function SuggestionChip({ label, index = 0, colors, typography, onPress }: { label: string; index?: number; colors: any; typography: any; onPress: () => void }) {
     const pressed = useSharedValue(0);
     const tap = Gesture.Tap()
         .onBegin(() => { pressed.set(withTiming(1, { duration: 90 })); })
@@ -938,17 +1005,21 @@ function SuggestionChip({ label, colors, typography, onPress }: { label: string;
         transform: [{ scale: interpolate(pressed.get(), [0, 1], [1, 0.96]) }],
         opacity: interpolate(pressed.get(), [0, 1], [1, 0.85]),
     }));
+    // Starter prompts read as the USER's intent → a restrained lime (coral) tint
+    // at low opacity (60/30/10: lime is the 10% accent, never a full fill here).
     return (
         <GestureDetector gesture={tap}>
             <Reanimated.View
+                entering={FadeInDown.delay(160 + index * 45).springify().damping(18)}
                 accessibilityRole="button"
                 accessibilityLabel={label}
                 style={[styles.suggestionChip, {
-                    borderColor: withAlpha(colors.accent.purpleLight, 0.55),
-                    backgroundColor: withAlpha(colors.accent.purple, 0.14),
+                    borderColor: withAlpha(colors.accent.coral, 0.4),
+                    backgroundColor: withAlpha(colors.accent.coral, 0.1),
                 }, animStyle]}
             >
-                <Text style={[typography.caption, { color: colors.text.primary, fontWeight: '700' }]} maxFontSizeMultiplier={1.3}>{label}</Text>
+                <Ionicons name="arrow-forward-circle-outline" size={15} color={withAlpha(colors.accent.coralLight, 0.9)} />
+                <Text style={[typography.bodySm, { color: colors.text.primary, fontWeight: '600', flexShrink: 1 }]} maxFontSizeMultiplier={1.3}>{label}</Text>
             </Reanimated.View>
         </GestureDetector>
     );
@@ -966,6 +1037,9 @@ function SendButton({ enabled, busy, colors, onPress }: { enabled: boolean; busy
     const animStyle = useAnimatedStyle(() => ({
         transform: [{ scale: interpolate(pressed.get(), [0, 1], [1, 0.92]) }],
     }));
+    // The ONE full-lime primary action on the screen (60/30/10's 10%). When
+    // enabled it carries the brand lime CTA gradient with an INK glyph (never
+    // white on lime); disabled it falls back to a muted glass disc.
     return (
         <GestureDetector gesture={tap}>
             <Reanimated.View
@@ -976,18 +1050,25 @@ function SendButton({ enabled, busy, colors, onPress }: { enabled: boolean; busy
                 style={[
                     styles.sendBtn,
                     {
-                        backgroundColor: enabled ? colors.accent.purple : colors.background.tertiary,
+                        backgroundColor: enabled ? 'transparent' : colors.background.tertiary,
                         borderWidth: 1,
-                        borderColor: enabled ? withAlpha(colors.accent.purpleLight, 0.6) : colors.border.default,
+                        borderColor: enabled ? withAlpha(colors.accent.coralLight, 0.6) : colors.border.default,
                     },
-                    enabled ? shadows.glow(colors.accent.purple) : null,
+                    enabled ? shadows.glow(colors.accent.coral) : null,
                     animStyle,
                 ]}
             >
+                {enabled ? (
+                    <LinearGradient
+                        colors={colors.gradients.coralCta}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFill}
+                    />
+                ) : null}
                 {busy ? (
-                    <ActivityIndicator size="small" color={colors.text.primary} />
+                    <ActivityIndicator size="small" color={enabled ? colors.text.inverse : colors.text.primary} />
                 ) : (
-                    <Ionicons name="arrow-up" size={20} color={enabled ? colors.text.primary : colors.text.tertiary} />
+                    <Ionicons name="arrow-up" size={20} color={enabled ? colors.text.inverse : colors.text.tertiary} />
                 )}
             </Reanimated.View>
         </GestureDetector>
@@ -1182,15 +1263,31 @@ function renderLinkifiedSpans(spans: LinkifySpan[], linkColor: string): React.Re
 
 const MessageBubble = React.memo(function MessageBubble({ msg, colors, typography }: { msg: Message; colors: any; typography: any }) {
     const isAI = msg.sender === 'ai';
+    // Link colour follows the bubble's own accent: purple inside a Ria bubble,
+    // lime inside a user bubble (so a tapped URL stays on-tone with its sender).
+    const linkColor = isAI ? colors.accent.purpleLight : colors.accent.coralLight;
+    // Compute the spans once so we can both render them and detect tappable links.
+    const spans = linkify(msg.text);
+    const hasLinks = spans.some((s) => s.type === 'link');
+    // a11y: when a bubble contains tappable link spans, we must NOT collapse the
+    // row into ONE screen-reader node (`accessible`) — doing so swallows the
+    // nested link <Text> roles + tap actions, so a VoiceOver/TalkBack user could
+    // never activate a URL Ria sends. In that case we drop the row-level
+    // `accessible`/combined label and let each <Text> (incl. the link spans) be
+    // its own focusable node. With NO links we keep the tidy single-node bubble
+    // with a combined "Ria/You: …" label. The polite live region (for streaming
+    // replies) is applied either way.
+    const rowAccessibilityProps = hasLinks
+        ? {}
+        : { accessible: true, accessibilityRole: 'text' as const, accessibilityLabel: `${isAI ? 'Ria' : 'You'}: ${msg.text}` };
     return (
-        <View
+        <Reanimated.View
+            entering={FadeInDown.springify().damping(20).mass(0.6)}
             style={[
                 styles.messageRow,
                 isAI ? { justifyContent: 'flex-start' } : { justifyContent: 'flex-end' },
             ]}
-            accessible
-            accessibilityRole="text"
-            accessibilityLabel={`${isAI ? 'Ria' : 'You'}: ${msg.text}`}
+            {...rowAccessibilityProps}
             accessibilityLiveRegion={msg.streaming ? 'polite' : 'none'}
         >
             {isAI && (
@@ -1207,29 +1304,40 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
                 isAI
                     ? [styles.aiBubble, {
                         // Higher-contrast Ria bubble: elevated fill + a brighter
-                        // purple glass hairline + a soft purple glow.
+                        // purple glass hairline + a soft purple glow (AI = purple).
                         backgroundColor: colors.background.quaternary,
                         borderWidth: 1,
                         borderColor: withAlpha(colors.accent.purple, 0.38),
                     }, shadows.glow(colors.accent.purple), { shadowOpacity: 0.18 }]
-                    : [styles.userBubble, { backgroundColor: colors.accent.purple }, shadows.glow(colors.accent.purple), { shadowOpacity: 0.22 }],
+                    // User bubble = restrained LIME tint (60/30/10: lime is the
+                    // accent, used here as a low-opacity tinted glass — NOT a full
+                    // lime fill, which is reserved for the one primary Send action).
+                    : [styles.userBubble, {
+                        backgroundColor: withAlpha(colors.accent.coral, 0.16),
+                        borderWidth: 1,
+                        borderColor: withAlpha(colors.accent.coral, 0.45),
+                    }, shadows.glow(colors.accent.coral), { shadowOpacity: 0.14 }],
             ]}>
-                {isAI && (
+                {isAI ? (
                     <View style={styles.aiHeader}>
-                        <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', fontSize: 10, letterSpacing: 0.5 }]} maxFontSizeMultiplier={1.3}>RIA</Text>
+                        <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', fontSize: 10, letterSpacing: 0.6 }]} maxFontSizeMultiplier={1.3}>RIA</Text>
                         {msg.streaming && <StreamingCursorDot color={colors.accent.purpleLight} />}
+                    </View>
+                ) : (
+                    <View style={[styles.aiHeader, { justifyContent: 'flex-end' }]}>
+                        <Text style={[typography.caption, { color: withAlpha(colors.accent.coralLight, 0.95), fontWeight: 'bold', fontSize: 10, letterSpacing: 0.6 }]} maxFontSizeMultiplier={1.3}>YOU</Text>
                     </View>
                 )}
                 <Text style={[typography.body, {
                     color: colors.text.primary,
                     lineHeight: 22,
                 }]}>
-                    {renderLinkifiedSpans(linkify(msg.text), colors.accent.purpleLight)}
+                    {renderLinkifiedSpans(spans, linkColor)}
                     {msg.streaming ? <StreamingCursor color={colors.accent.purpleLight} /> : null}
                 </Text>
                 <Text
                     style={[typography.caption, {
-                        color: isAI ? colors.text.tertiary : withAlpha(colors.text.primary, 0.75),
+                        color: colors.text.tertiary,
                         fontSize: 10,
                         marginTop: 6,
                         textAlign: isAI ? 'left' : 'right',
@@ -1240,7 +1348,7 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </Text>
             </View>
-        </View>
+        </Reanimated.View>
     );
 });
 
@@ -1298,20 +1406,27 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
+        paddingHorizontal: 12,
         paddingVertical: 12,
     },
+    headerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+        minWidth: 0,
+    },
     headerIconBtn: {
-        width: 40,
+        width: 36,
         height: 44,
         alignItems: 'flex-start',
         justifyContent: 'center',
     },
-    headerCenter: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        justifyContent: 'center',
+    headerTitleCol: {
+        marginLeft: 10,
+        flexShrink: 1,
+    },
+    riaAvatarWrap: {
+        marginLeft: 2,
     },
     riaAvatar: {
         width: 38,
@@ -1319,6 +1434,16 @@ const styles = StyleSheet.create({
         borderRadius: 19,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    // Live presence dot riding the avatar's corner (online / thinking).
+    presenceDot: {
+        position: 'absolute',
+        right: -1,
+        bottom: -1,
+        width: 11,
+        height: 11,
+        borderRadius: 6,
+        borderWidth: 2,
     },
     riaAvatarSmall: {
         width: 28,
@@ -1333,20 +1458,42 @@ const styles = StyleSheet.create({
     statusBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 2,
-    },
-    statusDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        marginRight: 5,
+        marginTop: 1,
     },
     quotaPill: {
-        paddingHorizontal: 10,
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: 4,
+        paddingHorizontal: 11,
         paddingVertical: 5,
-        borderRadius: 12,
+        borderRadius: 13,
         borderWidth: 1,
         maxWidth: 96,
+    },
+    // Centered date divider — hairline | LABEL | hairline.
+    dateDivider: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        marginBottom: 22,
+    },
+    dateLine: {
+        height: 1,
+        width: 28,
+        borderRadius: 1,
+    },
+    // First-load affordance: a glowing Ria orb over a spinner + caption.
+    loadingWrap: {
+        alignItems: 'center',
+        paddingTop: 48,
+    },
+    loadingOrb: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     messageRow: {
         flexDirection: 'row',
@@ -1393,18 +1540,36 @@ const styles = StyleSheet.create({
         height: 8,
         borderRadius: 4,
     },
-    suggestionsContainer: {
+    // Welcome / empty-conversation prompt rail.
+    suggestBlock: {
+        marginTop: 20,
+    },
+    suggestHeader: {
         flexDirection: 'row',
-        flexWrap: 'wrap',
+        alignItems: 'center',
         gap: 8,
+        marginBottom: 14,
+    },
+    suggestSparkle: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    suggestionsContainer: {
+        gap: 10,
     },
     suggestionChip: {
-        paddingHorizontal: 14,
-        paddingVertical: 11,
-        borderRadius: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 16,
+        paddingVertical: 13,
+        borderRadius: 16,
         borderWidth: 1,
-        minHeight: 44,
-        justifyContent: 'center',
+        minHeight: 52,
     },
     // Upgrade card shown inline in the scroll when the daily quota is exhausted.
     upgradeCard: {
@@ -1493,6 +1658,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 6,
+        overflow: 'hidden',
     },
     // Voice opt-in bar above the composer: the "Ria speaks replies" toggle (and
     // a "Listening…" hint / "needs dev build" honest fallback).

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable } from 'react-native';
 import { useTheme, spacing, borderRadius } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { Card } from '@/components/ui/Card';
 import { Skeleton, EmptyState, GeneratingSteps, GlassCard, CtaButton } from '@/components/ui';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 // Staged status lines shown while the AI nutrition plan is generated (10–30s).
 const NUTRITION_GEN_STEPS = [
@@ -53,6 +54,37 @@ const formatShiftTime = (iso: string): string => {
     const d = new Date(iso);
     if (!iso || Number.isNaN(d.getTime())) return '--:--';
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
+/**
+ * Short weekday label ("Sat") for the shift-start ISO in LOCAL time, used as the
+ * small overline beside the hero start time. Hoisted (no per-render Intl alloc)
+ * and returns '' on an unparseable value so the slot simply renders nothing
+ * rather than 'Invalid Date'.
+ */
+const formatShiftDay = (iso: string): string => {
+    const d = new Date(iso);
+    if (!iso || Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, { weekday: 'short' });
+};
+
+/**
+ * Whole-hours duration between two shift ISO timestamps, rendered as the hero's
+ * dominant VALUE (e.g. "8h", "8.5h"). Purely DERIVED from the existing
+ * start/end on `currentShift` — NOT a new data hook — so it inherits the same
+ * ground truth as the timeline. Returns '' when either bound is missing or
+ * unparseable, or when end ≤ start (overnight spans that cross midnight are
+ * normalised by adding 24h), so the slot never shows a nonsense value.
+ */
+const formatShiftDuration = (startIso: string, endIso: string): string => {
+    const s = new Date(startIso);
+    const e = new Date(endIso);
+    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return '';
+    let mins = (e.getTime() - s.getTime()) / 60000;
+    if (mins <= 0) mins += 24 * 60; // overnight rotation crossing midnight
+    if (mins <= 0 || mins > 24 * 60) return '';
+    const rounded = Math.round((mins / 60) * 10) / 10;
+    return `${rounded}h`;
 };
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -161,6 +193,13 @@ export default function ShiftCalendarScreen() {
 
     // Hardcoded logic removed. Instead, user routes to the new modal to pick details.
 
+    // Derived hero values (NOT new data) — read straight off the active shift so
+    // the big VALUE (duration) can dominate its small label, per the brief.
+    const shiftDuration = currentShift
+        ? formatShiftDuration(currentShift.startTime, currentShift.endTime)
+        : '';
+    const shiftDay = currentShift ? formatShiftDay(currentShift.startTime) : '';
+
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             <StatusBar style="light" />
@@ -196,23 +235,37 @@ export default function ShiftCalendarScreen() {
                     <Skeleton width="100%" height={56} radius={borderRadius.lg} />
                 </ScrollView>
             ) : isError ? (
-                <EmptyState
-                    icon="cloud-offline-outline"
-                    title="Couldn't load your schedule"
-                    subtitle="Something went wrong fetching your active shift. Check your connection and try again."
-                    actionLabel="Try Again"
-                    onAction={() => refetch()}
-                />
+                // Full-screen error branch — rendered OUTSIDE the ScrollView, so it
+                // gets its own safe-area guard: a flex:1 centering wrapper whose
+                // top pad clears the header block and whose bottom pad clears the
+                // home indicator (insets.bottom), so the centered EmptyState can
+                // never tuck under the header notch on very tall status bars.
+                <View style={[styles.fullScreenState, { paddingTop: insets.top + spacing['5xl'], paddingBottom: insets.bottom + spacing.xl }]}>
+                    <EmptyState
+                        icon="cloud-offline-outline"
+                        title="Couldn't load your schedule"
+                        subtitle="Something went wrong fetching your active shift. Check your connection and try again."
+                        actionLabel="Try Again"
+                        onAction={() => refetch()}
+                    />
+                </View>
             ) : (
-                <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 150 }}>
-                    <Text style={[typography.overline, { color: colors.accent.coral, marginBottom: spacing.sm }]}>CIRCADIAN PLANNER</Text>
-                    <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.md }]}>Your Schedule</Text>
-                    <Text style={[typography.body, { color: colors.text.secondary, marginBottom: spacing['3xl'] }]}>
-                        Manage your active shift block to ensure your circadian rhythm aligns perfectly with your body’s needs.
-                    </Text>
+                <>
+                <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: currentShift ? 150 : insets.bottom + spacing['3xl'] }} showsVerticalScrollIndicator={false}>
+                    <Animated.View entering={FadeInDown.delay(40).springify().damping(18).mass(0.7)}>
+                        <Text style={[typography.overline, { color: colors.text.tertiary, marginBottom: spacing.sm }]}>CIRCADIAN PLANNER</Text>
+                        <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.md }]}>Your Schedule</Text>
+                        <Text style={[typography.body, { color: colors.text.secondary, marginBottom: spacing['2xl'] }]}>
+                            Manage your active shift block to ensure your circadian rhythm aligns perfectly with your body’s needs.
+                        </Text>
+                    </Animated.View>
 
                     {currentShift ? (
                         <>
+                            {/* ── NEXT-SHIFT HERO — the VALUE (duration) dominates its
+                                label; lime is reserved here as the one accent that
+                                marks the active block (60/30/10). ───────────────── */}
+                            <Animated.View entering={FadeInDown.delay(90).springify().damping(18).mass(0.7)}>
                             <Card variant="glass" style={[styles.shiftCard, { borderColor: withAlpha(colors.accent.coral, 0.34) }, shadows.glow(colors.accent.coral)]}>
                                 <LinearGradient
                                     colors={[withAlpha(colors.accent.coral, 0.12), 'transparent']}
@@ -223,7 +276,7 @@ export default function ShiftCalendarScreen() {
                                 />
                                 <View style={styles.cardHeader}>
                                     <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.coral, 0.14), borderColor: withAlpha(colors.accent.coral, 0.3) }]}>
-                                        <Ionicons name="moon" size={24} color={colors.accent.coral} />
+                                        <Ionicons name="moon" size={24} color={colors.text.secondary} />
                                     </View>
                                     <View style={{ flex: 1, marginLeft: spacing.lg }}>
                                         <Text style={[typography.overline, { color: colors.accent.coral, marginBottom: spacing.xxs }]}>Active Shift</Text>
@@ -232,31 +285,57 @@ export default function ShiftCalendarScreen() {
                                             {formatShiftTime(currentShift.startTime)} - {formatShiftTime(currentShift.endTime)}
                                         </Text>
                                     </View>
-                                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Edit" onPress={() => router.push('/(modals)/log-shift' as any)} style={[styles.editBtn, { backgroundColor: withAlpha(colors.text.primary, 0.06), borderColor: colors.border.default, borderWidth: 1 }]}>
+                                    <Pressable hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Edit shift" onPress={() => router.push('/(modals)/log-shift' as any)} style={({ pressed }) => [styles.editBtn, { backgroundColor: withAlpha(colors.text.primary, 0.06), borderColor: colors.border.default, borderWidth: 1 }, pressed && { transform: [{ scale: 0.96 }], opacity: 0.85 }]}>
                                         <Ionicons name="create-outline" size={20} color={colors.text.secondary} />
-                                    </TouchableOpacity>
+                                    </Pressable>
                                 </View>
 
-                                <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.lg }]}>Today's Timeline</Text>
+                                {/* Momentum strip — DERIVED stats only, no new data. The
+                                    big duration is the lone dominant (lime) VALUE; the
+                                    start/end CLOCK times are intentionally NOT repeated
+                                    here (the timeline below already carries them) so the
+                                    duration reads without duplication. The supporting
+                                    cell is the start WEEKDAY, which the timeline does not
+                                    show — so it adds context rather than echoing it. */}
+                                <View style={[styles.statStrip, { borderColor: colors.border.default, backgroundColor: withAlpha(colors.text.primary, 0.03) }]}>
+                                    <View style={styles.statCell}>
+                                        <Text style={[typography.statSmall, { color: colors.accent.coral }]}>{shiftDuration || '--'}</Text>
+                                        <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: spacing.xxs }]}>On shift</Text>
+                                    </View>
+                                    <View style={[styles.statDivider, { backgroundColor: colors.border.default }]} />
+                                    <View style={styles.statCell}>
+                                        <Text style={[typography.statSmall, { color: colors.text.primary }]}>{shiftDay || '--'}</Text>
+                                        <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: spacing.xxs }]}>Starts</Text>
+                                    </View>
+                                </View>
+
+                                <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing['2xl'], marginBottom: spacing.lg }]}>Today's Timeline</Text>
+                                {/* Timeline node icons are deliberately ONE neutral tone
+                                    (text.secondary on a faint neutral fill) rather than
+                                    three separate functional accents — so the card no
+                                    longer reads as amber/cyan/purple at once and lime
+                                    stays the protagonist. The lone surviving accents are
+                                    the two ACTIVE time VALUES (Shift Starts → cyan/success,
+                                    Shift Ends → purple/calm), which mark the live events. */}
                                 <View style={[styles.timelineContainer, { borderLeftColor: colors.border.light }]}>
                                     <View style={styles.timelineLine} />
                                     <View style={styles.timelineNode}>
-                                        <View style={[styles.timelineDot, { backgroundColor: withAlpha(colors.accent.amber, 0.16), borderColor: withAlpha(colors.accent.amber, 0.3), borderWidth: 1 }]}>
-                                            <Ionicons name="sunny" size={14} color={colors.accent.amber} />
+                                        <View style={[styles.timelineDot, { backgroundColor: withAlpha(colors.text.primary, 0.06), borderColor: colors.border.default, borderWidth: 1 }]}>
+                                            <Ionicons name="sunny" size={14} color={colors.text.secondary} />
                                         </View>
                                         <Text style={[typography.bodySm, { color: colors.text.primary, marginLeft: spacing.md }]}>Awake</Text>
                                     </View>
                                     <View style={styles.timelineNode}>
-                                        <View style={[styles.timelineDot, { backgroundColor: withAlpha(colors.accent.cyan, 0.16), borderColor: withAlpha(colors.accent.cyan, 0.3), borderWidth: 1 }]}>
-                                            <Ionicons name="briefcase" size={14} color={colors.accent.cyan} />
+                                        <View style={[styles.timelineDot, { backgroundColor: withAlpha(colors.text.primary, 0.06), borderColor: colors.border.default, borderWidth: 1 }]}>
+                                            <Ionicons name="briefcase" size={14} color={colors.text.secondary} />
                                         </View>
                                         <Text style={[typography.bodySm, { color: colors.text.primary, marginLeft: spacing.md }]}>Shift Starts</Text>
                                         <View style={{ flex: 1 }} />
                                         <Text style={[typography.statTiny, { color: colors.accent.cyan, fontSize: 14 }]}>{formatShiftTime(currentShift.startTime)}</Text>
                                     </View>
                                     <View style={styles.timelineNode}>
-                                        <View style={[styles.timelineDot, { backgroundColor: withAlpha(colors.accent.purple, 0.16), borderColor: withAlpha(colors.accent.purple, 0.3), borderWidth: 1 }]}>
-                                            <Ionicons name="bed" size={14} color={colors.accent.purple} />
+                                        <View style={[styles.timelineDot, { backgroundColor: withAlpha(colors.text.primary, 0.06), borderColor: colors.border.default, borderWidth: 1 }]}>
+                                            <Ionicons name="bed" size={14} color={colors.text.secondary} />
                                         </View>
                                         <Text style={[typography.bodySm, { color: colors.text.primary, marginLeft: spacing.md }]}>Shift Ends</Text>
                                         <View style={{ flex: 1 }} />
@@ -264,23 +343,25 @@ export default function ShiftCalendarScreen() {
                                     </View>
                                 </View>
                             </Card>
+                            </Animated.View>
 
-                            <TouchableOpacity
-                                activeOpacity={0.85}
+                            <Animated.View entering={FadeInDown.delay(140).springify().damping(18).mass(0.7)}>
+                            <Pressable
                                 accessibilityRole="button"
                                 accessibilityLabel="Optimize sleep window"
-                                style={[styles.optimizeBtn, { backgroundColor: withAlpha(colors.accent.purple, 0.1), borderColor: withAlpha(colors.accent.purple, 0.4) }]}
+                                style={({ pressed }) => [styles.optimizeBtn, { backgroundColor: withAlpha(colors.accent.purple, 0.1), borderColor: withAlpha(colors.accent.purple, 0.4) }, pressed && { transform: [{ scale: 0.96 }], opacity: 0.9 }]}
                                 onPress={() => router.push('/(shifts)/sleep-optimizer' as any)}
                             >
                                 <Ionicons name="analytics" size={20} color={colors.accent.purple} style={{ marginRight: spacing.sm }} />
                                 <Text style={[typography.subhead, { color: colors.accent.purple, fontWeight: '700' }]}>Optimize Sleep Window</Text>
-                            </TouchableOpacity>
+                            </Pressable>
+                            </Animated.View>
 
                             {/* ── Mutually-exclusive generate-failure notices ──
                                 Surfaced ONLY when no generation is in flight (the
-                                hero below shows GeneratingSteps while pending) and
-                                placed ABOVE the generate hero so the message sits
-                                next to the action it explains. Each surface is a
+                                thumb-zone CTA shows GeneratingSteps while pending)
+                                and placed in the scroll body so the message sits
+                                with the schedule it explains. Each surface is a
                                 GlassCard (imports-design-system-folder.md — the
                                 sanctioned Aurora surface; NO inline SafeBlurView /
                                 coral-CTA gradient) and the two are guarded with
@@ -320,58 +401,25 @@ export default function ShiftCalendarScreen() {
                                 <GlassCard style={styles.noticeCard}>
                                     <View style={styles.noticeInner} accessibilityRole="alert">
                                         <View style={styles.noticeHeaderRow}>
-                                            <Ionicons name="alert-circle" size={20} color={colors.accent.coral} style={{ marginTop: 1 }} />
+                                            <Ionicons name="alert-circle" size={20} color={colors.accent.red} style={{ marginTop: 1 }} />
                                             <View style={{ flex: 1, marginLeft: spacing.sm }}>
                                                 <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>Generation Failed</Text>
                                                 <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2, lineHeight: 18 }]}>{genError}</Text>
                                             </View>
                                         </View>
                                         <TouchableOpacity
-                                            style={[styles.tryAgainBtn, { borderColor: withAlpha(colors.accent.coral, 0.5) }]}
+                                            style={[styles.tryAgainBtn, { borderColor: withAlpha(colors.accent.red, 0.5) }]}
                                             onPress={runGenerate}
                                             accessibilityRole="button"
                                             accessibilityLabel="Try again"
                                             activeOpacity={0.85}
                                         >
-                                            <Ionicons name="refresh" size={16} color={colors.accent.coral} />
-                                            <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: '700', marginLeft: spacing.xs }]}>Try Again</Text>
+                                            <Ionicons name="refresh" size={16} color={colors.accent.red} />
+                                            <Text style={[typography.caption, { color: colors.accent.red, fontWeight: '700', marginLeft: spacing.xs }]}>Try Again</Text>
                                         </TouchableOpacity>
                                     </View>
                                 </GlassCard>
                             )}
-
-                            <TouchableOpacity
-                                activeOpacity={0.85}
-                                accessibilityRole="button"
-                                accessibilityLabel="Generate AI nutrition plan"
-                                accessibilityState={{ disabled: generateMutation.isPending, busy: generateMutation.isPending }}
-                                disabled={generateMutation.isPending}
-                                style={[styles.heroBtn, shadows.glow(colors.accent.coral)]}
-                                onPress={runGenerate}
-                            >
-                                <View style={styles.heroBtnGradient}>
-                                    <LinearGradient
-                                        colors={colors.gradients.coral}
-                                        start={{ x: 0, y: 0 }}
-                                        end={{ x: 1, y: 0 }}
-                                        style={StyleSheet.absoluteFillObject}
-                                    />
-                                    {generateMutation.isPending ? (
-                                        <GeneratingSteps
-                                            active={generateMutation.isPending}
-                                            steps={NUTRITION_GEN_STEPS}
-                                            color={colors.text.primary}
-                                            textColor={colors.text.primary}
-                                            showDots={false}
-                                        />
-                                    ) : (
-                                        <>
-                                            <Ionicons name="restaurant" size={20} color={colors.text.primary} style={{ marginRight: spacing.sm }} />
-                                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>Generate AI Nutrition Plan</Text>
-                                        </>
-                                    )}
-                                </View>
-                            </TouchableOpacity>
 
                             {/* Training around this shift — READ-ONLY inverse of
                                 the calendar's create/link flow. Honest states
@@ -381,7 +429,10 @@ export default function ShiftCalendarScreen() {
                                 user-gated scheduled_sessions migration returns
                                 []). Create/link lives on (performance)/calendar
                                 — there is intentionally NO add affordance here. */}
-                            <Text style={[typography.h3, { color: colors.text.primary, marginTop: spacing['3xl'], marginBottom: spacing.md }]}>Training around this shift</Text>
+                            <Animated.View entering={FadeInDown.delay(190).springify().damping(18).mass(0.7)}>
+                            <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing['3xl'], marginBottom: spacing.xs }]}>TRAINING</Text>
+                            <Text style={[typography.h3, { color: colors.text.primary, marginBottom: spacing.md }]}>Around this shift</Text>
+                            </Animated.View>
                             {linkedSessionsQuery.isLoading ? (
                                 <View style={{ gap: spacing.md }}>
                                     <Skeleton width="100%" height={76} radius={borderRadius.xl} />
@@ -397,19 +448,19 @@ export default function ShiftCalendarScreen() {
                                 />
                             ) : linkedSessions.length > 0 ? (
                                 <View style={{ gap: spacing.md }}>
-                                    {linkedSessions.map(session => (
-                                        <TouchableOpacity
-                                            key={session.id}
+                                    {linkedSessions.map((session, i) => (
+                                        <Animated.View key={session.id} entering={FadeInDown.delay(230 + i * 45).springify().damping(18).mass(0.7)}>
+                                        <Pressable
                                             accessibilityRole="button"
                                             accessibilityLabel={`Open ${session.title} on your training calendar, ${formatSessionWhen(session.scheduledAt)}`}
-                                            activeOpacity={0.85}
                                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                             onPress={() => router.push('/(performance)/calendar' as any)}
+                                            style={({ pressed }) => pressed && { transform: [{ scale: 0.96 }], opacity: 0.9 }}
                                         >
                                             <Card variant="glass" padding="lg">
                                                 <View style={styles.sessionRow}>
-                                                    <View style={[styles.sessionIcon, { backgroundColor: withAlpha(colors.accent.coral, 0.14), borderColor: withAlpha(colors.accent.coral, 0.28) }]}>
-                                                        <Ionicons name="barbell-outline" size={20} color={colors.accent.coral} />
+                                                    <View style={[styles.sessionIcon, { backgroundColor: withAlpha(colors.accent.cyan, 0.12), borderColor: withAlpha(colors.accent.cyan, 0.26) }]}>
+                                                        <Ionicons name="barbell-outline" size={20} color={colors.accent.cyan} />
                                                     </View>
                                                     <View style={styles.sessionInfo}>
                                                         <Text style={[typography.body, { color: colors.text.primary, fontWeight: '700' }]} numberOfLines={1}>
@@ -427,7 +478,8 @@ export default function ShiftCalendarScreen() {
                                                     <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} style={styles.sessionChevron} />
                                                 </View>
                                             </Card>
-                                        </TouchableOpacity>
+                                        </Pressable>
+                                        </Animated.View>
                                     ))}
                                 </View>
                             ) : (
@@ -449,6 +501,56 @@ export default function ShiftCalendarScreen() {
                         />
                     )}
                 </ScrollView>
+
+                {/* ── THUMB-ZONE primary CTA — pinned to the bottom third over a
+                    fade scrim so the single most-important action (generate the
+                    AI nutrition plan) is always one thumb-tap away regardless of
+                    scroll. Rendered OUTSIDE the ScrollView; it only mounts when a
+                    shift exists (the no-shift path's Add-Shift CTA lives in the
+                    EmptyState above). The pending state keeps the exact same
+                    GeneratingSteps treatment; handler, a11y, disabled + busy
+                    state and gradient fill are preserved verbatim. ───────────── */}
+                {currentShift ? (
+                    <View pointerEvents="box-none" style={[styles.footer, { paddingBottom: insets.bottom + spacing.lg }]}>
+                        <LinearGradient
+                            colors={['transparent', withAlpha(colors.background.primary, 0.92), colors.background.primary]}
+                            style={StyleSheet.absoluteFillObject}
+                            pointerEvents="none"
+                        />
+                        <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Generate AI nutrition plan"
+                            accessibilityState={{ disabled: generateMutation.isPending, busy: generateMutation.isPending }}
+                            disabled={generateMutation.isPending}
+                            style={({ pressed }) => [styles.heroBtn, shadows.glow(colors.accent.coral), pressed && !generateMutation.isPending && { transform: [{ scale: 0.96 }] }]}
+                            onPress={runGenerate}
+                        >
+                            <View style={styles.heroBtnGradient}>
+                                <LinearGradient
+                                    colors={colors.gradients.coral}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={StyleSheet.absoluteFillObject}
+                                />
+                                {generateMutation.isPending ? (
+                                    <GeneratingSteps
+                                        active={generateMutation.isPending}
+                                        steps={NUTRITION_GEN_STEPS}
+                                        color={colors.text.inverse}
+                                        textColor={colors.text.inverse}
+                                        showDots={false}
+                                    />
+                                ) : (
+                                    <>
+                                        <Ionicons name="restaurant" size={20} color={colors.text.inverse} style={{ marginRight: spacing.sm }} />
+                                        <Text style={[typography.subhead, { color: colors.text.inverse, fontWeight: '800' }]}>Generate AI Nutrition Plan</Text>
+                                    </>
+                                )}
+                            </View>
+                        </Pressable>
+                    </View>
+                ) : null}
+                </>
             )}
         </View>
     );
@@ -459,7 +561,7 @@ function ImageBackgroundGradient() {
     return (
         <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
             <LinearGradient
-                colors={[withAlpha(colors.accent.coral, 0.16), withAlpha(colors.accent.pink, 0.06), 'transparent']}
+                colors={[withAlpha(colors.accent.coral, 0.1), withAlpha(colors.accent.pink, 0.04), 'transparent']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{ height: 360, width: '100%' }}
@@ -482,7 +584,7 @@ const styles = StyleSheet.create({
         padding: spacing.xl,
         marginBottom: spacing.lg,
     },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing['2xl'] },
+    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.xl },
     iconBox: {
         width: 52,
         height: 52,
@@ -498,6 +600,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    // Derived momentum strip — three equal cells (duration / start / end) split
+    // by hairline dividers. The duration cell carries the lone lime value so the
+    // strip reads as one dominant stat with two supporting times.
+    statStrip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderRadius: borderRadius.lg,
+        paddingVertical: spacing.md,
+        paddingHorizontal: spacing.sm,
+    },
+    statCell: { flex: 1, alignItems: 'center' },
+    statDivider: { width: 1, alignSelf: 'stretch', marginVertical: spacing.xs },
     timelineContainer: {
         paddingLeft: spacing.sm,
         marginLeft: spacing.lg,
@@ -522,6 +637,15 @@ const styles = StyleSheet.create({
     emptyState: {
         marginTop: spacing['4xl'],
     },
+    // Safe-area guard for the full-screen branches rendered OUTSIDE the ScrollView
+    // (currently the load-error EmptyState). flex:1 centers the state; the screen
+    // supplies insets-aware top/bottom padding inline so the content clears the
+    // header notch and the home indicator on tall status bars.
+    fullScreenState: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     optimizeBtn: {
         flexDirection: 'row',
         height: 56,
@@ -531,10 +655,19 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginTop: spacing.lg,
     },
+    // Pinned thumb-zone CTA bar. The fade scrim behind it lets the schedule
+    // scroll up underneath while the action stays anchored in the bottom third.
+    footer: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        paddingHorizontal: spacing.xl,
+        paddingTop: spacing['4xl'],
+    },
     heroBtn: {
         height: 56,
         borderRadius: borderRadius.lg,
-        marginTop: spacing.md,
         overflow: 'hidden',
     },
     heroBtnGradient: {

@@ -8,13 +8,18 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useQuery } from '@tanstack/react-query';
 import { getPlanByDate } from '@/api/plans';
-import { getMealLogs, getFastingLogs } from '@/api/meals';
+import { getMealLogs, getFastingLogs, getRecipes } from '@/api/meals';
 import { getToday as getTodayProgress } from '@/api/progress';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Skeleton, EmptyState, GlassCard } from '@/components/ui';
+import {
+    MacroTile, MealSlotCard, RecipeCard, RecipeDiscoverCard, HydrationRing,
+    RECIPE_CARD_W, GRID_CARD_W,
+} from '@/components/NutritionCards';
 import { format } from 'date-fns';
 import { withAlpha } from '@/theme/utils';
 import { colors as themeColors } from '@/theme/colors';
@@ -24,6 +29,11 @@ import { TAB_BAR_H } from './_layout';
 // rate-limit). '@/*' resolves to ./src, so assets are required by relative path
 // — same module-scope require pattern as (tabs)/training.tsx.
 const HERO_NUTRITION = require('../../assets/images/hero-nutrition.png');
+// Static recipe-card artwork (constant — hoisted out of render). Rotated by
+// index so a catalog of bundled covers maps across the carousel.
+const RECIPE_FALLBACK = require('../../assets/images/recipe-fallback.png');
+const FOOD_FALLBACK = require('../../assets/images/food-fallback.png');
+const RECIPE_IMGS = [RECIPE_FALLBACK, FOOD_FALLBACK];
 
 // Human-readable label for a MealLog's `mealType` enum. Mirrors the same map in
 // (meals)/log-planned-meal.tsx — kept local here because that lives in a screen
@@ -36,6 +46,16 @@ const MEAL_TYPE_LABEL: Record<string, string> = {
     SNACK: 'Snack',
 };
 const mealTypeLabel = (t?: string) => MEAL_TYPE_LABEL[String(t || '').toUpperCase()] || 'Meal';
+
+// Pick a Zeitra accent + icon for a plan meal-slot grid card by its index, so the
+// grid reads as a rotating, on-brand set (lime-led) rather than a flat list.
+const SLOT_ACCENTS = [
+    themeColors.accent.coral,
+    themeColors.accent.cyan,
+    themeColors.accent.purple,
+    themeColors.accent.amber,
+];
+const SLOT_ICONS = ['sunny-outline', 'restaurant-outline', 'moon-outline', 'cafe-outline'] as const;
 
 // Coerce any value to a finite number, mapping undefined / null / NaN / ±Infinity
 // → 0. The macro reads come from logged meals whose stored totals can be missing
@@ -75,11 +95,20 @@ export default function NutritionHubScreen() {
         queryFn: () => getFastingLogs(1),
     });
 
+    // Recipe ideas for the horizontal carousel (additive read; degrades to a
+    // "Discover Recipes" terminal card when empty / still resolving). Uses the
+    // existing meals/recipes endpoint — no new API surface.
+    const recipesQuery = useQuery({
+        queryKey: ['nutrition-recipes'],
+        queryFn: () => getRecipes(undefined, 8),
+    });
+
     // ── Calculations ────────────────────────────────────────────────────────
     const progress = progressQuery.data;
     const plan = planQuery.data;
     const logs = Array.isArray(logsQuery.data) ? logsQuery.data : [];
     const fasting = fastingQuery.data?.[0];
+    const recipes = Array.isArray(recipesQuery.data) ? recipesQuery.data : [];
 
     // The macro dashboard is this tab's primary content; it's driven by the
     // daily-progress (targets) + meal-logs (consumed) reads. Surface explicit
@@ -127,6 +156,12 @@ export default function NutritionHubScreen() {
         return { target, consumed };
     }, [progress, logs]);
 
+    // Hydration widget reads — straight off the daily-progress payload (no new
+    // query). Tolerates the legacy `hydrationMl` alias and a missing target.
+    const hydrationActual = finiteNum((progress as any)?.hydrationActual ?? (progress as any)?.hydrationMl);
+    const hydrationTarget = finiteNum((progress as any)?.hydrationTargetMl) || 3000;
+    const hydrationPct = hydrationTarget > 0 ? Math.min(100, Math.round((hydrationActual / hydrationTarget) * 100)) : 0;
+
     // Stable navigation handlers so the memoized ToolCards don't re-render on
     // unrelated parent updates.
     const openLibrary = useCallback(() => router.push('/(meals)/encyclopedia' as any), [router]);
@@ -158,9 +193,9 @@ export default function NutritionHubScreen() {
                 contentContainerStyle={{ paddingBottom: TAB_BAR_H + 80 }}
             >
                 {/* Header */}
-                <View style={[styles.header, { paddingTop: insets.top + 20 }]}>
+                <Animated.View entering={FadeInDown.duration(420)} style={[styles.header, { paddingTop: insets.top + 20 }]}>
                     <View style={{ flex: 1 }}>
-                        <Text style={[typography.overline, { color: colors.text.secondary }]}>
+                        <Text style={[typography.overline, { color: colors.accent.coral }]}>
                             {format(new Date(), 'EEEE, MMM d').toUpperCase()}
                         </Text>
                         <Text style={[typography.display, { color: colors.text.primary, fontSize: 34, marginTop: 4 }]}>
@@ -177,7 +212,7 @@ export default function NutritionHubScreen() {
                     >
                         <Ionicons name="receipt-outline" size={22} color={colors.text.primary} />
                     </TouchableOpacity>
-                </View>
+                </Animated.View>
 
                 {/* Macro Dashboard */}
                 {macroLoading ? (
@@ -185,7 +220,7 @@ export default function NutritionHubScreen() {
                         <Skeleton width={180} height={180} radius={borderRadius.full} style={{ marginBottom: 30 }} />
                         <View style={styles.macroGrid}>
                             {[0, 1, 2].map((i) => (
-                                <Skeleton key={i} width="100%" height={28} radius={borderRadius.md} />
+                                <Skeleton key={i} width="100%" height={64} radius={borderRadius.md} />
                             ))}
                         </View>
                     </GlassCard>
@@ -200,12 +235,19 @@ export default function NutritionHubScreen() {
                         />
                     </GlassCard>
                 ) : (
-                <GlassCard radius={borderRadius.xl} style={styles.macroDashboard}>
+                <Animated.View entering={FadeInDown.delay(60).duration(420)}>
+                <GlassCard glow={colors.accent.coral} radius={borderRadius.xl} style={[styles.macroDashboard, { borderColor: withAlpha(colors.accent.coral, 0.25) }]}>
+                    <LinearGradient
+                        colors={[withAlpha(colors.accent.coral, 0.12), 'transparent']}
+                        start={{ x: 0.5, y: 0 }}
+                        end={{ x: 0.5, y: 1 }}
+                        style={StyleSheet.absoluteFillObject}
+                    />
                     {/* SVG has no implicit text → expose the ring to TalkBack /
                         VoiceOver as a single labelled summary. accessible groups
                         the numeral + label so they aren't read as two fragments. */}
                     <View
-                        style={[styles.mainCircle, shadows.glow(colors.accent.emerald)]}
+                        style={[styles.mainCircle, shadows.glow(colors.accent.coral)]}
                         accessible
                         accessibilityRole="image"
                         accessibilityLabel={`${Math.max(0, stats.target.calories - finiteNum(stats.consumed.calories))} kcal left of ${stats.target.calories}`}
@@ -218,19 +260,19 @@ export default function NutritionHubScreen() {
                             // consumed from becoming a NaN fraction.
                             progress={stats.target.calories > 0 ? Math.min(1, Math.max(0, finiteNum(stats.consumed.calories) / stats.target.calories)) : 0}
                             size={180}
-                            strokeWidth={12}
-                            color={colors.accent.emerald}
+                            strokeWidth={14}
+                            color={colors.accent.coral}
                             trackColor={colors.background.tertiary}
                         />
                         <View style={styles.circleText}>
                             <Text
-                                style={[typography.statLarge, { color: colors.text.primary, fontSize: 44, lineHeight: 50 }]}
+                                style={[typography.statLarge, { color: colors.text.primary, fontSize: 46, lineHeight: 52 }]}
                                 maxFontSizeMultiplier={1.3}
                                 allowFontScaling
                             >
                                 {Math.max(0, stats.target.calories - finiteNum(stats.consumed.calories))}
                             </Text>
-                            <Text style={[typography.overline, { color: colors.text.secondary }]}>KCAL LEFT</Text>
+                            <Text style={[typography.overline, { color: colors.accent.coral }]}>KCAL LEFT</Text>
                         </View>
                     </View>
 
@@ -240,11 +282,12 @@ export default function NutritionHubScreen() {
                     </Text>
 
                     <View style={styles.macroGrid}>
-                        <MacroItem label="Protein" current={stats.consumed.protein} target={stats.target.protein} color={colors.accent.emerald} unit="g" />
-                        <MacroItem label="Carbs" current={stats.consumed.carbs} target={stats.target.carbs} color={colors.accent.cyan} unit="g" />
-                        <MacroItem label="Fat" current={stats.consumed.fat} target={stats.target.fat} color={colors.accent.amber} unit="g" />
+                        <MacroTile index={0} label="Protein" current={stats.consumed.protein} target={stats.target.protein} color={colors.accent.coral} unit="g" />
+                        <MacroTile index={1} label="Carbs" current={stats.consumed.carbs} target={stats.target.carbs} color={colors.accent.cyan} unit="g" />
+                        <MacroTile index={2} label="Fat" current={stats.consumed.fat} target={stats.target.fat} color={colors.accent.amber} unit="g" />
                     </View>
                 </GlassCard>
+                </Animated.View>
                 )}
 
                 {/* Today's Meals — the day's REAL logged meals (logsQuery), with
@@ -320,33 +363,95 @@ export default function NutritionHubScreen() {
                     )}
                 </View>
 
-                {/* Quick Tools */}
-                <Text style={[typography.overline, { color: colors.text.secondary, marginHorizontal: 20, marginTop: 28, marginBottom: 12 }]}>
-                    Quick Tools
-                </Text>
-                <View style={styles.toolRow}>
-                    <ToolCard
-                        icon="search"
-                        title="Library"
-                        color={colors.accent.cyan}
-                        onPress={openLibrary}
-                    />
-                    <ToolCard
-                        icon="restaurant"
-                        title="Recipes"
-                        color={colors.accent.purple}
-                        onPress={openRecipes}
-                    />
-                    <ToolCard
-                        icon="cart"
-                        title="Grocery"
-                        color={colors.accent.emerald}
-                        onPress={openGrocery}
-                    />
+                {/* Hydration + Fasting widget cards */}
+                <View style={[styles.section, { marginTop: 4 }]}>
+                    <View style={styles.widgetRow}>
+                        {/* Hydration widget — reads the daily-progress payload (no
+                            new query); bespoke SVG ring (not the shared
+                            CircularProgress, see NutritionCards header). */}
+                        <Animated.View entering={FadeInDown.delay(80).springify().damping(18)} style={{ flex: 1 }}>
+                            <GlassCard radius={borderRadius.xl} style={{ borderColor: withAlpha(colors.accent.blue, 0.28) }}>
+                                <View style={styles.hydrationCard}>
+                                    <LinearGradient colors={[withAlpha(colors.accent.blue, 0.12), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
+                                    <View style={styles.widgetHeadRow}>
+                                        <Ionicons name="water" size={18} color={colors.accent.blue} />
+                                        <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: 'bold', marginLeft: 8 }]}>HYDRATION</Text>
+                                    </View>
+                                    <View style={styles.hydrationBody}>
+                                        <HydrationRing current={hydrationActual} target={hydrationTarget} size={76} />
+                                        <View style={{ marginLeft: 14, flex: 1 }}>
+                                            <Text style={[typography.statSmall, { color: colors.text.primary, fontSize: 20 }]}>{hydrationPct}%</Text>
+                                            <Text style={[typography.caption, { color: colors.text.tertiary }]} numberOfLines={1}>
+                                                of {(hydrationTarget / 1000).toFixed(1)}L goal
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+                            </GlassCard>
+                        </Animated.View>
+
+                        {/* Fasting widget — its own loading / error / idle / active
+                            branches, all strings + the timer route preserved. */}
+                        <Animated.View entering={FadeInDown.delay(140).springify().damping(18)} style={{ flex: 1 }}>
+                            {fastingLoading ? (
+                                <GlassCard radius={borderRadius.xl} style={{ height: '100%' }}>
+                                    <View style={styles.fastCard}>
+                                        <View style={styles.widgetHeadRow}>
+                                            <Skeleton width={110} height={18} radius={borderRadius.md} />
+                                        </View>
+                                        <Skeleton width={90} height={20} radius={borderRadius.md} style={{ marginTop: 16 }} />
+                                        <Skeleton width="100%" height={40} radius={borderRadius.lg} style={{ marginTop: 14 }} />
+                                    </View>
+                                </GlassCard>
+                            ) : fastingError ? (
+                                // Distinct, retryable error — never falls through to
+                                // the idle "START FAST" layout. Retry is SCOPED to
+                                // the fasting query (the only read this card needs).
+                                <GlassCard radius={borderRadius.xl} style={{ height: '100%' }}>
+                                    <EmptyState
+                                        icon="cloud-offline-outline"
+                                        title="Couldn't load your fast"
+                                        subtitle="Check your connection and try again."
+                                        actionLabel="Try Again"
+                                        onAction={fastingRefetch}
+                                    />
+                                </GlassCard>
+                            ) : (
+                                <GlassCard
+                                    glow={colors.accent.cyan}
+                                    radius={borderRadius.xl}
+                                    style={{ borderColor: withAlpha(colors.accent.cyan, 0.4), height: '100%' }}
+                                >
+                                    <View style={styles.fastCard}>
+                                        <LinearGradient colors={[withAlpha(colors.accent.cyan, 0.12), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
+                                        <View style={styles.widgetHeadRow}>
+                                            <Ionicons name="timer" size={18} color={colors.accent.cyan} />
+                                            <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: 'bold', marginLeft: 8 }]} numberOfLines={1}>Fasting Timer</Text>
+                                        </View>
+                                        <View style={[styles.fastBadge, { backgroundColor: withAlpha(colors.accent.cyan, 0.1), marginTop: 12 }]}>
+                                            <Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: 'bold' }]}>{fasting?.status === 'ACTIVE' ? 'IN PROGRESS' : 'IDLE'}</Text>
+                                        </View>
+                                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700', marginTop: 10 }]}>16:8 Windows</Text>
+                                        <TouchableOpacity
+                                            accessibilityRole="button"
+                                            accessibilityLabel={fasting?.status === 'ACTIVE' ? 'View timer' : 'Start fast'}
+                                            style={[styles.fastAction, { backgroundColor: colors.accent.cyan, marginTop: 14 }, shadows.glow(colors.accent.cyan)]}
+                                            onPress={() => router.push('/(meals)/fasting' as any)}
+                                            activeOpacity={0.85}
+                                        >
+                                            <Text style={[typography.caption, { color: themeColors.background.primary, fontWeight: 'bold' }]}>
+                                                {fasting?.status === 'ACTIVE' ? 'VIEW TIMER' : 'START FAST'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </GlassCard>
+                            )}
+                        </Animated.View>
+                    </View>
                 </View>
 
-                {/* Daily Plan Section */}
-                <View style={[styles.section, { marginTop: 32 }]}>
+                {/* Daily Plan — a GRID of meal slots */}
+                <View style={[styles.section, { marginTop: 8 }]}>
                     <View style={styles.sectionHeader}>
                         <Text style={[typography.heading, { color: colors.text.primary }]}>Daily Plan</Text>
                         <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => router.push('/(meals)/planner' as any)}>
@@ -355,9 +460,9 @@ export default function NutritionHubScreen() {
                     </View>
 
                     {planQuery.isLoading ? (
-                        <View style={styles.planList}>
-                            {[0, 1, 2].map((i) => (
-                                <Skeleton key={i} width="100%" height={72} radius={borderRadius.xl} />
+                        <View style={styles.slotGrid}>
+                            {[0, 1, 2, 3].map((i) => (
+                                <Skeleton key={i} width={GRID_CARD_W} height={132} radius={borderRadius.xl} />
                             ))}
                         </View>
                     ) : planQuery.isError ? (
@@ -383,113 +488,98 @@ export default function NutritionHubScreen() {
                                 style={{ borderStyle: 'dashed', borderColor: colors.border.default }}
                             >
                                 <View style={styles.emptyPlan}>
-                                    <View style={[styles.emptyPlanIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.12), borderColor: withAlpha(colors.accent.purple, 0.24) }, shadows.glow(colors.accent.purple)]}>
-                                        <Ionicons name="sparkles" size={26} color={colors.accent.purple} />
+                                    <View style={[styles.emptyPlanIcon, { backgroundColor: withAlpha(colors.accent.coral, 0.12), borderColor: withAlpha(colors.accent.coral, 0.24) }, shadows.glow(colors.accent.coral)]}>
+                                        <Ionicons name="sparkles" size={26} color={colors.accent.coral} />
                                     </View>
                                     <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold', marginTop: 14 }]}>No plan generated for today</Text>
                                     <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginTop: 6, maxWidth: 240, lineHeight: 18 }]}>Tap to let Ria build your protocol-compliant meals.</Text>
-                                    <View style={[styles.emptyPlanCta, { backgroundColor: withAlpha(colors.accent.purple, 0.14) }]}>
-                                        <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', letterSpacing: 0.5 }]}>GENERATE PLAN</Text>
+                                    <View style={[styles.emptyPlanCta, { backgroundColor: withAlpha(colors.accent.coral, 0.14) }]}>
+                                        <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: 'bold', letterSpacing: 0.5 }]}>GENERATE PLAN</Text>
                                     </View>
                                 </View>
                             </GlassCard>
                         </TouchableOpacity>
                     ) : (
-                        <View style={styles.planList}>
+                        <View style={styles.slotGrid}>
                             {(plan.meals || []).filter((m: any) => m && (m.label || m.name)).map((m: any, i: number) => (
-                                <TouchableOpacity
+                                <MealSlotCard
                                     key={i}
-                                    activeOpacity={0.85}
-                                    accessibilityRole="button"
+                                    index={i}
+                                    title={m.label || m.name}
+                                    time={m.time}
+                                    description={m.description}
+                                    accent={SLOT_ACCENTS[i % SLOT_ACCENTS.length]!}
+                                    icon={SLOT_ICONS[i % SLOT_ICONS.length]!}
                                     accessibilityLabel={`Log ${m.label || m.name}${m.time ? `, ${m.time}` : ''}`}
                                     onPress={() => router.push({ pathname: '/(meals)/log-meal', params: { preset: m.label } })}
-                                >
-                                    <GlassCard radius={borderRadius.xl}>
-                                        <View style={styles.mealCard}>
-                                            <View style={[styles.mealTime, { backgroundColor: withAlpha(colors.background.tertiary, 0.4) }]}>
-                                                <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold' }]}>{m.time}</Text>
-                                            </View>
-                                            <View style={{ flex: 1, marginLeft: 16 }}>
-                                                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>{m.label || m.name}</Text>
-                                                <Text style={[typography.caption, { color: colors.text.secondary }]} numberOfLines={1}>{m.description}</Text>
-                                            </View>
-                                            <Ionicons name="add-circle" size={24} color={colors.accent.emerald} />
-                                        </View>
-                                    </GlassCard>
-                                </TouchableOpacity>
+                                />
                             ))}
                         </View>
                     )}
                 </View>
 
-                {/* Fasting Card */}
-                <View style={styles.section}>
-                    {fastingLoading ? (
-                        // Layout-matched placeholder for the timer card (header
-                        // row + protocol/action row) so a fetch-in-flight reads
-                        // as loading, never as a resolved IDLE state.
-                        <GlassCard radius={borderRadius.xl}>
-                            <View style={styles.fastCard}>
-                                <View style={styles.fastHeader}>
-                                    <Skeleton width={150} height={24} radius={borderRadius.md} />
-                                    <Skeleton width={72} height={22} radius={borderRadius.md} />
-                                </View>
-                                <View style={styles.fastBody}>
-                                    <Skeleton width={120} height={40} radius={borderRadius.md} />
-                                    <Skeleton width={110} height={48} radius={borderRadius.lg} />
-                                </View>
-                            </View>
-                        </GlassCard>
-                    ) : fastingError ? (
-                        // Distinct, retryable error — never falls through to the
-                        // idle "START FAST" layout. Retry is SCOPED to the
-                        // fasting query (the only read this card depends on).
-                        <GlassCard radius={borderRadius.xl}>
-                            <EmptyState
-                                icon="cloud-offline-outline"
-                                title="Couldn't load your fast"
-                                subtitle="Check your connection and try again."
-                                actionLabel="Try Again"
-                                onAction={fastingRefetch}
-                            />
-                        </GlassCard>
+                {/* Recipe ideas — horizontal CAROUSEL */}
+                <View style={styles.sectionHeaderRow}>
+                    <Text style={[typography.heading, { color: colors.text.primary }]}>Recipe Ideas</Text>
+                    <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={openRecipes}>
+                        <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: 'bold' }]}>VIEW ALL</Text>
+                    </TouchableOpacity>
+                </View>
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    decelerationRate="fast"
+                    snapToInterval={RECIPE_CARD_W + 14}
+                    snapToAlignment="start"
+                    contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingBottom: 4 }}
+                >
+                    {recipesQuery.isLoading ? (
+                        [0, 1, 2].map((i) => <Skeleton key={i} width={RECIPE_CARD_W} height={168} radius={borderRadius.xl} />)
+                    ) : recipes.length === 0 ? (
+                        <RecipeDiscoverCard onPress={openRecipes} />
                     ) : (
-                    <GlassCard
-                        glow={colors.accent.cyan}
-                        style={{ borderColor: withAlpha(colors.accent.cyan, 0.4) }}
-                    >
-                        <View style={styles.fastCard}>
-                            <LinearGradient colors={[withAlpha(colors.accent.cyan, 0.12), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFillObject} />
-                            <View style={styles.fastHeader}>
-                                <View style={styles.fastTitle}>
-                                    <Ionicons name="timer" size={24} color={colors.accent.cyan} />
-                                    <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18, marginLeft: 12 }]}>Fasting Timer</Text>
-                                </View>
-                                <View style={[styles.fastBadge, { backgroundColor: withAlpha(colors.accent.cyan, 0.1) }]}>
-                                    <Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: 'bold' }]}>{fasting?.status === 'ACTIVE' ? 'IN PROGRESS' : 'IDLE'}</Text>
-                                </View>
-                            </View>
-
-                            <View style={styles.fastBody}>
-                                <View>
-                                    <Text style={[typography.caption, { color: colors.text.secondary }]}>Protocol</Text>
-                                    <Text style={[typography.subhead, { color: colors.text.primary }]}>16:8 Windows</Text>
-                                </View>
-                                <TouchableOpacity
-                                    accessibilityRole="button"
-                                    accessibilityLabel={fasting?.status === 'ACTIVE' ? 'View timer' : 'Start fast'}
-                                    style={[styles.fastAction, { backgroundColor: colors.accent.cyan }, shadows.glow(colors.accent.cyan)]}
-                                    onPress={() => router.push('/(meals)/fasting' as any)}
-                                    activeOpacity={0.85}
-                                >
-                                    <Text style={[typography.caption, { color: themeColors.background.primary, fontWeight: 'bold' }]}>
-                                        {fasting?.status === 'ACTIVE' ? 'VIEW TIMER' : 'START FAST'}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </GlassCard>
+                        <>
+                            {recipes.map((r: any, i: number) => (
+                                <RecipeCard
+                                    key={r?.id ?? i}
+                                    index={i}
+                                    title={r?.title || r?.name || 'Recipe'}
+                                    calories={r?.calories}
+                                    protein={r?.protein}
+                                    minutes={(finiteNum(r?.prepTimeMins) + finiteNum(r?.cookTimeMins)) || undefined}
+                                    img={RECIPE_IMGS[i % RECIPE_IMGS.length]!}
+                                    accent={colors.accent.coral}
+                                    onPress={() => router.push({ pathname: '/(meals)/recipes', params: { id: r?.id } } as any)}
+                                />
+                            ))}
+                            <RecipeDiscoverCard onPress={openRecipes} />
+                        </>
                     )}
+                </ScrollView>
+
+                {/* Quick Tools */}
+                <Text style={[typography.overline, { color: colors.text.secondary, marginHorizontal: 20, marginTop: 28, marginBottom: 12 }]}>
+                    Quick Tools
+                </Text>
+                <View style={styles.toolRow}>
+                    <ToolCard
+                        icon="search"
+                        title="Library"
+                        color={colors.accent.cyan}
+                        onPress={openLibrary}
+                    />
+                    <ToolCard
+                        icon="restaurant"
+                        title="Recipes"
+                        color={colors.accent.purple}
+                        onPress={openRecipes}
+                    />
+                    <ToolCard
+                        icon="cart"
+                        title="Grocery"
+                        color={colors.accent.coral}
+                        onPress={openGrocery}
+                    />
                 </View>
             </ScrollView>
 
@@ -497,43 +587,11 @@ export default function NutritionHubScreen() {
     );
 }
 
-const MacroItem = React.memo(function MacroItem({ label, current, target, color, unit }: any) {
-    const { colors, typography } = useTheme();
-    // Coerce both operands to finite numbers (a NaN macro from a bad log would
-    // otherwise yield a NaN ratio → a NaN bar width). Clamp to 0..1 so an
-    // over-target macro can't overflow the track and a negative can't render a
-    // negative width. Reuse the coerced values for the numeric labels too.
-    const safeCurrent = finiteNum(current);
-    const safeTarget = finiteNum(target);
-    const progress = safeTarget > 0 ? Math.min(1, Math.max(0, safeCurrent / safeTarget)) : 0;
-
-    return (
-        <View style={styles.macroItem}>
-            {/* Group the label + numeric value so screen readers announce one
-                coherent statement ("Protein: 90 of 180 grams") instead of two
-                disjoint fragments. Color is never the sole signal — every bar
-                carries a text label and numeric value. */}
-            <View
-                style={styles.macroLabelRow}
-                accessible
-                accessibilityLabel={`${label}: ${Math.round(safeCurrent)} of ${Math.round(safeTarget)} grams`}
-            >
-                <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: 'bold' }]}>{label.toUpperCase()}</Text>
-                <Text style={[typography.caption, { color: colors.text.primary }]}>{Math.round(safeCurrent)}{unit} / {Math.round(safeTarget)}{unit}</Text>
-            </View>
-            <View style={[styles.barBg, { backgroundColor: colors.background.tertiary, borderRadius: 4 }]}>
-                <View style={[styles.barFill, { width: `${progress * 100}%`, backgroundColor: color, borderRadius: 4 }]} />
-            </View>
-        </View>
-    );
-});
-
-// One row in the Today's Meals list. Memoized (mirrors MacroItem / ToolCard) so
-// re-rendering the parent on unrelated query updates doesn't re-render every
-// logged row. Shows the meal type label + its REAL per-log macros
-// (log.totalCalories / log.totalProtein) — no fabricated numbers. The label +
-// numeric live in one `accessible` View so a screen reader announces a single
-// coherent statement.
+// One row in the Today's Meals list. Memoized (mirrors ToolCard) so re-rendering
+// the parent on unrelated query updates doesn't re-render every logged row. Shows
+// the meal type label + its REAL per-log macros (log.totalCalories /
+// log.totalProtein) — no fabricated numbers. The label + numeric live in one
+// `accessible` View so a screen reader announces a single coherent statement.
 const LoggedMealRow = React.memo(function LoggedMealRow({ label, calories, protein }: any) {
     const { colors, typography } = useTheme();
     return (
@@ -576,32 +634,28 @@ const styles = StyleSheet.create({
     container: { flex: 1 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 20 },
     historyBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-    macroDashboard: { marginHorizontal: 20, padding: 24, alignItems: 'center' },
+    macroDashboard: { marginHorizontal: 20, padding: 24, alignItems: 'center', overflow: 'hidden' },
     mainCircle: { width: 180, height: 180, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
     circleText: { position: 'absolute', alignItems: 'center' },
-    macroGrid: { width: '100%', gap: 16 },
-    macroItem: { width: '100%' },
-    macroLabelRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-    barBg: { height: 6, width: '100%' },
-    barFill: { height: '100%' },
+    macroGrid: { width: '100%', flexDirection: 'row', gap: 10 },
     toolRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 12 },
     toolCard: { flex: 1, padding: 16, alignItems: 'center', justifyContent: 'center' },
     toolIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
     section: { paddingHorizontal: 20, marginBottom: 24 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+    sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 20, marginTop: 8 },
     emptyPlan: { paddingVertical: 36, paddingHorizontal: 24, alignItems: 'center', justifyContent: 'center' },
     emptyPlanIcon: { width: 60, height: 60, borderRadius: 30, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     emptyPlanCta: { marginTop: 16, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
-    planList: { gap: 12 },
+    slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
     loggedList: { padding: 18, gap: 12 },
     loggedRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     loggedTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, marginTop: 2, borderTopWidth: StyleSheet.hairlineWidth },
-    mealCard: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-    mealTime: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-    fastCard: { padding: 20 },
-    fastHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    fastTitle: { flexDirection: 'row', alignItems: 'center' },
-    fastBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-    fastBody: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    fastAction: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+    widgetRow: { flexDirection: 'row', gap: 12, alignItems: 'stretch' },
+    widgetHeadRow: { flexDirection: 'row', alignItems: 'center' },
+    hydrationCard: { padding: 16, overflow: 'hidden', minHeight: 150, justifyContent: 'space-between' },
+    hydrationBody: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
+    fastCard: { padding: 16, overflow: 'hidden', minHeight: 150 },
+    fastBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+    fastAction: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
 });

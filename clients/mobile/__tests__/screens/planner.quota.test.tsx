@@ -335,7 +335,7 @@ describe('MealPlannerScreen — daily-AI-limit upgrade state', () => {
 // are queryable. This is a render-presence assertion — it does NOT touch the
 // quota logic, resolvePlan, the CTA handlers, or any copy.
 describe('MealPlannerScreen — loaded-plan summary GlassCard', () => {
-  it('renders the CALORIES/PROTEIN/HYDRATION stat block inside the plan-summary GlassCard when a plan is loaded', async () => {
+  it('renders the KCAL/PROTEIN/HYDRATION stat block inside the plan-summary GlassCard when a plan is loaded', async () => {
     // A loaded plan (the normalized shape getPlanByDate returns): two meals so the
     // summary reduce() sums real macros, plus a hydration target.
     mockGetPlan.mockResolvedValue({
@@ -355,16 +355,20 @@ describe('MealPlannerScreen — loaded-plan summary GlassCard', () => {
 
     // The summary GlassCard's stat block is present — these three labels live
     // ONLY inside that card, so their presence proves the GlassCard subtree
-    // mounted with its CALORIES/PROTEIN/HYDRATION columns.
-    await waitFor(() => expect(screen.getByText('CALORIES')).toBeTruthy());
+    // mounted with its stat columns. The Aurora redesign renders the calorie
+    // total inside a CircularProgress ring labelled "KCAL" (formerly "CALORIES"),
+    // flanked by the PROTEIN + HYDRATION columns.
+    await waitFor(() => expect(screen.getByText('KCAL')).toBeTruthy());
     expect(screen.getByText('PROTEIN')).toBeTruthy();
     expect(screen.getByText('HYDRATION')).toBeTruthy();
 
     // The reduce() macro math is unchanged by the GlassCard wrap: calories sum
-    // 320 + 600 = 920; protein 30 + 45 = 75; hydration 2500 ml → 2.5 L.
+    // 320 + 600 = 920; protein 30 + 45 = 75; hydration 2500 ml → 2.5 L. The kcal
+    // total is a standalone Text inside the ring; the protein/hydration values are
+    // composed with a nested unit Text (" g" / " L"), so match the value + unit.
     expect(screen.getByText('920')).toBeTruthy();
-    expect(screen.getByText('75')).toBeTruthy();
-    expect(screen.getByText('2.5')).toBeTruthy();
+    expect(screen.getByText(/^75/)).toBeTruthy();
+    expect(screen.getByText(/^2\.5/)).toBeTruthy();
 
     // The empty-state generate CTA is gone (a plan is loaded), and neither failure
     // card is present on the clean loaded path.

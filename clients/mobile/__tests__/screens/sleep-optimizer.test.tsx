@@ -262,20 +262,25 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
 
     expect(() => renderScreen()).not.toThrow();
 
-    // The section header is always rendered in the loaded ScrollView ("Light
-    // Timing" is a stable domain label, kept as a getByText)…
-    expect(screen.getByText('Light Timing')).toBeTruthy();
+    // The section header is always rendered in the loaded ScrollView ("Your
+    // night, in order" is the redesigned timeline section header — a stable
+    // domain label, kept as a getByText)…
+    expect(screen.getByText('Your night, in order')).toBeTruthy();
     // …but while the shift query is in flight neither the populated window rows
     // nor the no-shift EmptyState are in the tree yet (skeleton fallback). We
-    // assert this both via the stable Seek/Avoid domain labels AND via each
+    // assert this both via the stable timeline-row domain labels AND via each
     // branch's structural glyph (sunny / glasses-outline for the rows,
     // sunny-outline for the empty state), so a copy tweak to any of those
-    // strings can't mask a real regression.
-    expect(screen.queryByText('Seek Light')).toBeNull();
-    expect(screen.queryByText('Avoid Light')).toBeNull();
+    // strings can't mask a real regression. (Redesign: the rows are now the
+    // ordered timeline steps "Seek light" / "Dim the lights".)
+    expect(screen.queryByText('Seek light')).toBeNull();
+    expect(screen.queryByText('Dim the lights')).toBeNull();
     expect(screen.queryByText('icon:sunny')).toBeNull();
     expect(screen.queryByText('icon:glasses-outline')).toBeNull();
-    expect(screen.queryByText('icon:sunny-outline')).toBeNull();
+    // The no-shift EmptyState is also absent (its title is the unique marker —
+    // the `sunny-outline` glyph is shared with the always-present "Light
+    // exposure" guidance card below, so it is not a valid negative marker here).
+    expect(screen.queryByText('No shift to plan around')).toBeNull();
   });
 
   // ── Test B: no shift → EmptyState, no windows ─────────────────────────────
@@ -286,19 +291,17 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
     renderScreen();
 
     // Assert the no-shift fallback via its STABLE structural marker — the
-    // EmptyState's `sunny-outline` glyph, surfaced by the icon stub as
-    // `icon:sunny-outline` — rather than its body-copy sentence (which is the
-    // only place that glyph appears, so it uniquely pins "the no-shift
-    // EmptyState rendered"). The "No shift to plan light around" title stays as
-    // a getByText: it's a stable domain label, while the full subtitle sentence
-    // ("Log a shift to see when to seek and avoid light.") was the copy-fragile
-    // assertion and is dropped here.
-    expect(screen.getByText('No shift to plan light around')).toBeTruthy();
-    expect(screen.getByText('icon:sunny-outline')).toBeTruthy();
-    // No light windows render without a shift — the populated rows' glyphs
-    // (sunny / glasses-outline) and their domain labels are both absent.
-    expect(screen.queryByText('Seek Light')).toBeNull();
-    expect(screen.queryByText('Avoid Light')).toBeNull();
+    // EmptyState's title "No shift to plan around" — a stable domain label that
+    // uniquely pins "the no-shift EmptyState rendered". (The `sunny-outline`
+    // glyph is no longer a unique marker: the redesign's always-present
+    // "Light exposure" guidance card also uses it, so the title is the
+    // load-bearing structural assertion here. The full subtitle sentence was
+    // the copy-fragile assertion and is dropped.)
+    expect(screen.getByText('No shift to plan around')).toBeTruthy();
+    // No light windows render without a shift — the populated timeline rows'
+    // glyphs (sunny / glasses-outline) and their domain labels are both absent.
+    expect(screen.queryByText('Seek light')).toBeNull();
+    expect(screen.queryByText('Dim the lights')).toBeNull();
     expect(screen.queryByText('icon:sunny')).toBeNull();
     expect(screen.queryByText('icon:glasses-outline')).toBeNull();
   });
@@ -315,11 +318,12 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
     renderScreen();
 
     // Both window rows are present — anchored on their STABLE markers: the
-    // domain labels ("Seek Light" / "Avoid Light") plus each row's structural
-    // glyph (sunny for seek, glasses-outline for avoid, surfaced by the icon
-    // stub). These pin "both rows rendered" without depending on body copy.
-    expect(screen.getByText('Seek Light')).toBeTruthy();
-    expect(screen.getByText('Avoid Light')).toBeTruthy();
+    // redesigned timeline-row labels ("Seek light" for the seek step, "Dim the
+    // lights" for the avoid step) plus each row's structural glyph (sunny for
+    // seek, glasses-outline for avoid, surfaced by the icon stub). These pin
+    // "both rows rendered" without depending on body copy.
+    expect(screen.getByText('Seek light')).toBeTruthy();
+    expect(screen.getByText('Dim the lights')).toBeTruthy();
     expect(screen.getByText('icon:sunny')).toBeTruthy();
     expect(screen.getByText('icon:glasses-outline')).toBeTruthy();
     // …and each row still prints the window from computeLightPlan's actual
@@ -337,14 +341,17 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
     // explain: SEEK anchors alertness early; AVOID protects rising melatonin
     // before recovery sleep.
     expect(screen.getByText(/anchors alertness/i)).toBeTruthy();
-    expect(screen.getByText(/melatonin/i)).toBeTruthy();
+    // The "Dim the lights" row's rising-melatonin rationale. Matched with
+    // getAllByText because the always-present "Light exposure" guidance card
+    // also mentions melatonin — at least one match is the timeline row's WHY.
+    expect(screen.getAllByText(/melatonin/i).length).toBeGreaterThanOrEqual(1);
     // The timeline framing ("in order") that turns the two rows into a sequenced
     // plan is also present — asserted by its stable "in order" fragment.
     expect(screen.getByText(/in order/i)).toBeTruthy();
     // The no-shift EmptyState must NOT be present for a populated shift — its
-    // structural marker (the sunny-outline glyph) is absent.
-    expect(screen.queryByText('No shift to plan light around')).toBeNull();
-    expect(screen.queryByText('icon:sunny-outline')).toBeNull();
+    // title is absent. (The `sunny-outline` glyph is NOT a valid negative marker
+    // here: the always-present "Light exposure" guidance card uses it too.)
+    expect(screen.queryByText('No shift to plan around')).toBeNull();
   });
 
   // ── Malformed-shift guard: computeLightPlan throws → EmptyState, no crash ──
@@ -367,12 +374,12 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
     expect(() => renderScreen()).not.toThrow();
 
     // …and falls back to the same EmptyState as the no-shift branch (asserted
-    // via its stable `sunny-outline` glyph marker, not its subtitle copy), with
-    // no (NaN) window rows — neither the Seek/Avoid labels nor their glyphs.
-    expect(screen.getByText('No shift to plan light around')).toBeTruthy();
-    expect(screen.getByText('icon:sunny-outline')).toBeTruthy();
-    expect(screen.queryByText('Seek Light')).toBeNull();
-    expect(screen.queryByText('Avoid Light')).toBeNull();
+    // via its stable title, not its subtitle copy), with no (NaN) window rows —
+    // neither the timeline-row labels nor their glyphs. (The `sunny-outline`
+    // glyph is no longer a unique marker — the guidance card also uses it.)
+    expect(screen.getByText('No shift to plan around')).toBeTruthy();
+    expect(screen.queryByText('Seek light')).toBeNull();
+    expect(screen.queryByText('Dim the lights')).toBeNull();
     expect(screen.queryByText('icon:sunny')).toBeNull();
     expect(screen.queryByText('icon:glasses-outline')).toBeNull();
   });
@@ -425,7 +432,7 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
   // (a stray `anchorSleepWindow` in the payload must NOT change it — proving the
   // phantom read is gone), and the row no longer claims to be the "Anchor Sleep"
   // card itself.
-  test('"Recommended Sleep Block" row prints the computeAnchorSleep window from the current shift, independent of any analytics field', () => {
+  test('"Recovery sleep" timeline row prints the computeAnchorSleep window from the current shift, independent of any analytics field', () => {
     mockShiftState.data = ACTIVE_SHIFT;
     mockShiftState.isLoading = false;
     // A DECOY phantom field in the analytics payload: the screen must IGNORE it
@@ -444,8 +451,10 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
 
     renderScreen();
 
-    // The label renders…
-    expect(screen.getByText('Recommended Sleep Block')).toBeTruthy();
+    // The redesign renders the recovery anchor as the final timeline step
+    // ("Recovery sleep"), whose dominant value is the `anchorSleepWindow`. The
+    // label renders…
+    expect(screen.getByText('Recovery sleep')).toBeTruthy();
     // …and the row prints the window from computeAnchorSleep's actual instants.
     // Matched CONTAINS-both-endpoints (windowMatcher) so a separator/whitespace
     // copy tweak can't regress this while a wrong/NaN instant still would.
@@ -459,45 +468,50 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
     expect(screen.queryByText('Anchor Sleep')).toBeNull();
   });
 
-  // ── No shift → "Recommended Sleep Block" degrades to an honest "—" ────────
-  // computeAnchorSleep needs a shift; with none the screen's guard collapses the
-  // window to an honest "—" (it never fabricates a window, and it no longer reads
-  // a phantom analytics field that would also have been "—").
-  test('no shift: "Recommended Sleep Block" shows an honest "—" (no fabricated window)', () => {
+  // ── No shift → recovery anchor degrades to an honest "—" ─────────────────
+  // computeAnchorSleep needs a shift; with none the screen's guard collapses
+  // `anchorSleepWindow` (and the caffeine cut-off) to an honest "—" — it never
+  // fabricates a window, and no longer reads a phantom analytics field that
+  // would also have been "—". In the redesign, with no shift the whole timeline
+  // is replaced by the EmptyState (so the "Recovery sleep" row is absent), and
+  // the honest "—" surfaces in the always-present Caffeine cut-off guidance card.
+  test('no shift: the recovery anchor shows an honest "—" (no fabricated window)', () => {
     mockShiftState.data = null;
     mockShiftState.isLoading = false;
     mockAnalyticsState.data = { qualityScore: 80, summary: 'Looking good.' };
 
     renderScreen();
 
-    // The label is present, and an em-dash placeholder accompanies it (the row
-    // never invents a clock window without a shift). "—" appears for both the
-    // Recommended Sleep Block and Pre-Shift Nap rows, so assert at least one.
-    expect(screen.getByText('Recommended Sleep Block')).toBeTruthy();
+    // No shift → the timeline EmptyState is shown and the "Recovery sleep" row
+    // is NOT rendered (the screen never invents a clock window without a shift).
+    expect(screen.getByText('No shift to plan around')).toBeTruthy();
+    expect(screen.queryByText('Recovery sleep')).toBeNull();
+    // …and the honest em-dash placeholder is present (the Caffeine cut-off
+    // guidance card collapses to "—" with no anchor). "—" never carries a
+    // fabricated window.
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1);
   });
 
-  // ── Pre-Shift Nap: honest "—" (no client/backend source), guidance in copy ─
-  // There is NO source — client or server — for a specific pre-shift nap window
-  // (getAnalytics has no `preShiftNapWindow`; the circadian libs model only the
-  // post-shift recovery anchor / light plan). The row must therefore show an
-  // honest "—" and carry the 90-minute guidance in its body copy, never claiming
-  // a computed window — even when a shift IS present (so it can't be confused with
-  // a derivable window like the Recommended Sleep Block).
-  test('Pre-Shift Nap renders an honest "—" with guidance copy, even with a current shift', () => {
+  // ── Caffeine cut-off: derived locally from the recovery anchor ────────────
+  // The redesigned Guidance section replaces the old "Pre-Shift Nap" row. The
+  // Caffeine cut-off card carries the lead-hours rationale in its body copy and,
+  // with a shift present, surfaces a real cut-off instant derived locally from
+  // the recovery anchor (computeAnchorSleep) — never read from a phantom server
+  // field. This pins that the guidance copy renders alongside a real shift.
+  test('Caffeine cut-off guidance renders with its lead-hours rationale, with a current shift', () => {
     mockShiftState.data = ACTIVE_SHIFT;
     mockShiftState.isLoading = false;
     mockAnalyticsState.data = { qualityScore: 80, summary: 'Looking good.' };
 
     renderScreen();
 
-    // The Pre-Shift Nap label + its guidance copy render (the 90-minute cycle
-    // rationale now lives in the body, not as a fake window value).
-    expect(screen.getByText('Pre-Shift Nap')).toBeTruthy();
-    expect(screen.getByText(/90-minute cycle/i)).toBeTruthy();
-    // With a shift present the Recommended Sleep Block row resolves to a real
-    // computed window (not "—"), so any "—" still in the tree is the Pre-Shift
-    // Nap's honest placeholder — assert it is present.
-    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1);
+    // The Caffeine cut-off guidance card renders, with its hours-before-recovery
+    // rationale in the body (the guidance now lives in copy, not a fake window).
+    expect(screen.getByText('Caffeine cut-off')).toBeTruthy();
+    expect(screen.getByText(/before your recovery sleep/i)).toBeTruthy();
+    // With a shift present the recovery anchor resolves to a real computed
+    // window, so the "Recovery sleep" timeline row is present (not the "—"
+    // fallback) — proving the guidance coexists with the populated timeline.
+    expect(screen.getByText('Recovery sleep')).toBeTruthy();
   });
 });

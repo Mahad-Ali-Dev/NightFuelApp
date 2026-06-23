@@ -37,10 +37,12 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { GlassCard, CtaButton, Skeleton, EmptyState } from '@/components/ui';
+import { MealConfirmHero } from '@/components/MealConfirmHero';
 import { logMeal, searchFoods, FoodItem } from '@/api/meals';
 import { getErrorMessage } from '@/utils/validation';
 import { invalidateMealAndProgress } from '@/utils/invalidateMealAndProgress';
@@ -58,6 +60,13 @@ const MEAL_TYPE_LABEL: Record<MealType, string> = {
     LUNCH: 'Lunch',
     DINNER: 'Dinner',
     SNACK: 'Snack',
+};
+
+const MEAL_ICON: Record<MealType, keyof typeof Ionicons.glyphMap> = {
+    BREAKFAST: 'cafe',
+    LUNCH: 'restaurant',
+    DINNER: 'moon',
+    SNACK: 'nutrition',
 };
 
 const num = (v: unknown): number => {
@@ -225,15 +234,17 @@ export default function LogPlannedMealScreen() {
     }, [decoded.plannedMacros]);
     const canLog = plate.length > 0 || hasMacros;
 
-    const accent = colors.accent.cyan;
+    const accent = colors.accent.coral;
     const searchResults = (searchQ.data as FoodItem[] | undefined) ?? [];
+    const includedCount = plate.length;
+    const suggestedCount = decoded.suggestedFoods.length;
 
     return (
         <View style={[s.container, { backgroundColor: colors.background.primary }]}>
             <StatusBar style="light" />
 
             {/* Header — custom, so safe-area top inset is applied manually. */}
-            <View style={[s.header, { paddingTop: insets.top + 16, borderBottomColor: colors.border.default }]}>
+            <View style={[s.header, { paddingTop: insets.top + 12 }]}>
                 <TouchableOpacity
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     accessibilityRole="button"
@@ -241,120 +252,138 @@ export default function LogPlannedMealScreen() {
                     onPress={() => router.back()}
                     style={[s.iconBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
                 >
-                    <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
+                    <Ionicons name="arrow-back" size={20} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={[typography.h2, { color: colors.text.primary }]}>Confirm Meal</Text>
+                <View style={{ alignItems: 'center' }}>
+                    <Text style={[typography.overline, { color: accent, letterSpacing: 1.5 }]}>FROM YOUR PROTOCOL</Text>
+                    <Text style={[typography.h3, { color: colors.text.primary, marginTop: 1 }]}>Confirm Meal</Text>
+                </View>
                 <View style={{ width: 40 }} />
             </View>
 
             <ScrollView
-                contentContainerStyle={{ padding: 20, paddingBottom: 140 }}
+                contentContainerStyle={{ padding: 20, paddingBottom: 148 }}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
-                {/* Planned-slot summary */}
-                <GlassCard glow={accent} style={[s.summaryCard, { borderColor: withAlpha(accent, 0.28) }]}>
-                    <View style={s.summaryRow}>
-                        <View style={[s.summaryIcon, { backgroundColor: withAlpha(accent, 0.14) }]}>
-                            <Ionicons name="restaurant" size={22} color={accent} />
+                {/* Hero — planned slot identity + live animated rings (count-up kcal,
+                    macro rings) derived from the current plate. */}
+                <Animated.View entering={FadeInDown.duration(420).springify().damping(20)}>
+                    <GlassCard glow={accent} style={[s.heroCard, { borderColor: withAlpha(accent, 0.26) }]}>
+                        <View style={s.heroHead}>
+                            <View style={[s.heroIcon, { backgroundColor: withAlpha(accent, 0.14), borderColor: withAlpha(accent, 0.3) }]}>
+                                <Ionicons name={MEAL_ICON[mealType]} size={20} color={accent} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[typography.overline, { color: colors.text.tertiary, letterSpacing: 1 }]}>
+                                    {MEAL_TYPE_LABEL[mealType]}
+                                </Text>
+                                <Text style={[typography.h3, { color: colors.text.primary, marginTop: 1 }]} numberOfLines={2}>
+                                    {slotTitle}
+                                </Text>
+                            </View>
                         </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={[typography.overline, { color: colors.text.secondary }]}>
-                                {MEAL_TYPE_LABEL[mealType]} • From your protocol
-                            </Text>
-                            <Text style={[typography.h3, { color: colors.text.primary, marginTop: 2 }]} numberOfLines={2}>
-                                {slotTitle}
-                            </Text>
-                            {decoded.macrosText ? (
-                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>
+
+                        {decoded.macrosText ? (
+                            <View style={[s.targetPill, { backgroundColor: withAlpha(accent, 0.1), borderColor: withAlpha(accent, 0.22) }]}>
+                                <Ionicons name="flag-outline" size={12} color={accent} />
+                                <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6 }]} numberOfLines={1}>
                                     Target: {decoded.macrosText}
                                 </Text>
-                            ) : null}
-                        </View>
-                    </View>
-                </GlassCard>
+                            </View>
+                        ) : null}
 
-                {/* Macro totals (live, derived from the current plate) */}
-                <View style={[s.macroRow, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
-                    {[
-                        { l: 'KCAL', v: Math.round(totals.calories), c: colors.accent.coral },
-                        { l: 'PROTEIN', v: Math.round(totals.protein), c: colors.accent.emerald },
-                        { l: 'CARBS', v: Math.round(totals.carbs), c: colors.accent.cyan },
-                        { l: 'FAT', v: Math.round(totals.fat), c: colors.accent.amber },
-                    ].map((mm) => (
-                        <View key={mm.l} style={{ alignItems: 'center', flex: 1 }}>
-                            <Text style={[typography.statSmall, { color: mm.c, fontSize: 20, lineHeight: 26 }]} maxFontSizeMultiplier={1.3}>
-                                {mm.v}
-                            </Text>
-                            <Text style={[typography.overline, { color: colors.text.secondary, fontSize: 9, letterSpacing: 1, marginTop: 2 }]}>
-                                {mm.l}
-                            </Text>
-                        </View>
-                    ))}
-                </View>
+                        <View style={[s.heroDivider, { backgroundColor: colors.border.default }]} />
+
+                        <MealConfirmHero
+                            calories={totals.calories}
+                            protein={totals.protein}
+                            carbs={totals.carbs}
+                            fat={totals.fat}
+                            target={decoded.plannedMacros}
+                            itemCount={includedCount}
+                        />
+                    </GlassCard>
+                </Animated.View>
 
                 {/* Suggested foods (prefilled, editable include/exclude) */}
-                <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 24, marginBottom: 12 }]}>
-                    SUGGESTED FOODS
-                </Text>
-                {decoded.suggestedFoods.length === 0 ? (
-                    <EmptyState
-                        icon="sparkles-outline"
-                        title="No itemized foods"
-                        subtitle={
-                            hasMacros
-                                ? "This slot is a macro target. Log it as-is, or search to add the foods you actually ate."
-                                : "This slot has no macros or foods to log. Search to add what you ate."
-                        }
-                    />
-                ) : (
-                    <View>
-                        {decoded.suggestedFoods.map((f) => (
-                            <SuggestedFoodRow
-                                key={f.name}
-                                name={f.name}
-                                amount={f.amount}
-                                calories={num(f.calories)}
-                                protein={num(f.protein)}
-                                imageUrl={f.imageUrl}
-                                included={isIncluded(f.name)}
-                                accent={accent}
-                                onToggle={toggleSuggested}
-                            />
-                        ))}
+                <Animated.View entering={FadeInDown.delay(80).duration(420).springify().damping(20)}>
+                    <View style={s.sectionHead}>
+                        <Text style={[typography.overline, { color: colors.text.secondary }]}>SUGGESTED FOODS</Text>
+                        {suggestedCount > 0 ? (
+                            <View style={[s.countPill, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                                <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: '700' }]}>
+                                    {includedCount}/{suggestedCount + added.length}
+                                </Text>
+                            </View>
+                        ) : null}
                     </View>
-                )}
+                    {suggestedCount === 0 ? (
+                        <EmptyState
+                            icon="sparkles-outline"
+                            title="No itemized foods"
+                            subtitle={
+                                hasMacros
+                                    ? "This slot is a macro target. Log it as-is, or search to add the foods you actually ate."
+                                    : "This slot has no macros or foods to log. Search to add what you ate."
+                            }
+                        />
+                    ) : (
+                        <View>
+                            {decoded.suggestedFoods.map((f) => (
+                                <SuggestedFoodRow
+                                    key={f.name}
+                                    name={f.name}
+                                    amount={f.amount}
+                                    calories={num(f.calories)}
+                                    protein={num(f.protein)}
+                                    imageUrl={f.imageUrl}
+                                    included={isIncluded(f.name)}
+                                    accent={accent}
+                                    onToggle={toggleSuggested}
+                                />
+                            ))}
+                            <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 2, marginLeft: 2 }]}>
+                                Tap a food to swap it out of this meal.
+                            </Text>
+                        </View>
+                    )}
+                </Animated.View>
 
                 {/* Optional: search to add more foods */}
-                <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 24, marginBottom: 12 }]}>
-                    ADD MORE (OPTIONAL)
-                </Text>
-                <View style={[s.searchBox, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
-                    <Ionicons name="search" size={18} color={colors.text.tertiary} />
-                    <TextInput
-                        style={[s.searchIn, { color: colors.text.primary }]}
-                        placeholder="Search food…"
-                        placeholderTextColor={colors.text.tertiary}
-                        value={sq}
-                        onChangeText={setSq}
-                        autoCorrect={false}
-                    />
-                    {sq.length > 0 ? (
-                        <TouchableOpacity
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                            accessibilityRole="button"
-                            accessibilityLabel="Clear search"
-                            onPress={() => setSq('')}
-                        >
-                            <Ionicons name="close-circle" size={18} color={colors.text.tertiary} />
-                        </TouchableOpacity>
-                    ) : null}
-                </View>
+                <Animated.View entering={FadeInDown.delay(140).duration(420).springify().damping(20)}>
+                    <Text style={[typography.overline, { color: colors.text.secondary, marginTop: 26, marginBottom: 12 }]}>
+                        ADD MORE (OPTIONAL)
+                    </Text>
+                    <View style={[s.searchBox, { backgroundColor: colors.background.secondary, borderColor: sq.length > 0 ? withAlpha(accent, 0.4) : colors.border.default }]}>
+                        <Ionicons name="search" size={18} color={sq.length > 0 ? accent : colors.text.tertiary} />
+                        <TextInput
+                            style={[s.searchIn, { color: colors.text.primary }]}
+                            placeholder="Search food…"
+                            placeholderTextColor={colors.text.tertiary}
+                            value={sq}
+                            onChangeText={setSq}
+                            autoCorrect={false}
+                            returnKeyType="search"
+                            keyboardType="default"
+                        />
+                        {sq.length > 0 ? (
+                            <TouchableOpacity
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                accessibilityRole="button"
+                                accessibilityLabel="Clear search"
+                                onPress={() => setSq('')}
+                            >
+                                <Ionicons name="close-circle" size={18} color={colors.text.tertiary} />
+                            </TouchableOpacity>
+                        ) : null}
+                    </View>
+                </Animated.View>
 
                 {searchQ.isLoading ? (
                     <View style={{ marginTop: 12 }}>
                         {[0, 1, 2].map((i) => (
-                            <Skeleton key={i} width="100%" height={58} radius={12} style={{ marginBottom: 8 }} />
+                            <Skeleton key={i} width="100%" height={64} radius={16} style={{ marginBottom: 10 }} />
                         ))}
                     </View>
                 ) : null}
@@ -378,7 +407,7 @@ export default function LogPlannedMealScreen() {
                 ) : null}
 
                 {searchResults.length > 0 ? (
-                    <View style={{ marginTop: 8 }}>
+                    <View style={{ marginTop: 10 }}>
                         {searchResults.slice(0, 6).map((item) => (
                             <SearchResultRow
                                 key={item.id}
@@ -394,14 +423,17 @@ export default function LogPlannedMealScreen() {
 
                 {/* Added (searched-in) foods, with quick remove */}
                 {added.length > 0 ? (
-                    <View style={{ marginTop: 16 }}>
-                        <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 8 }]}>ADDED</Text>
+                    <View style={{ marginTop: 18 }}>
+                        <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: 10 }]}>ADDED BY YOU</Text>
                         {added.map((a) => (
                             <View
                                 key={a.name}
-                                style={[s.addedRow, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
+                                style={[s.addedRow, { backgroundColor: colors.background.secondary, borderColor: withAlpha(colors.accent.cyan, 0.3) }]}
                             >
-                                <View style={{ flex: 1 }}>
+                                <View style={[s.addedDot, { backgroundColor: withAlpha(colors.accent.cyan, 0.15) }]}>
+                                    <Ionicons name="checkmark" size={16} color={colors.accent.cyan} />
+                                </View>
+                                <View style={{ flex: 1, paddingHorizontal: 12 }}>
                                     <Text style={[typography.subhead, { color: colors.text.primary }]} numberOfLines={1}>
                                         {a.name}
                                     </Text>
@@ -415,7 +447,7 @@ export default function LogPlannedMealScreen() {
                                     accessibilityLabel={`Remove ${a.name}`}
                                     onPress={() => removeAdded(a.name)}
                                 >
-                                    <Ionicons name="trash-outline" size={18} color={colors.accent.coral} />
+                                    <Ionicons name="trash-outline" size={18} color={colors.accent.red} />
                                 </TouchableOpacity>
                             </View>
                         ))}
@@ -424,7 +456,12 @@ export default function LogPlannedMealScreen() {
             </ScrollView>
 
             {/* Footer CTA — CtaButton primitive; bottom safe-area inset applied. */}
-            <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: withAlpha(colors.background.primary, 0.96) }]}>
+            <View style={[s.footer, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: withAlpha(colors.background.primary, 0.96), borderTopColor: colors.border.default }]}>
+                {canLog ? (
+                    <Text style={[typography.caption, { color: colors.text.tertiary, textAlign: 'center', marginBottom: 10 }]}>
+                        Logging {Math.round(totals.calories)} kcal{includedCount > 0 ? ` • ${includedCount} ${includedCount === 1 ? 'item' : 'items'}` : ''}
+                    </Text>
+                ) : null}
                 <CtaButton
                     label={canLog ? 'LOG THIS MEAL' : 'NOTHING TO LOG'}
                     icon="checkmark-circle"
@@ -475,13 +512,14 @@ const SuggestedFoodRow = memo(function SuggestedFoodRow({
             accessibilityRole="checkbox"
             accessibilityState={{ checked: included }}
             accessibilityLabel={`${name}, ${included ? 'included' : 'excluded'}`}
+            accessibilityHint="Toggles whether this food is part of the logged meal"
             onPress={handlePress}
             style={[
                 rowStyles.row,
                 {
                     backgroundColor: colors.background.secondary,
-                    borderColor: included ? withAlpha(accent, 0.4) : colors.border.default,
-                    opacity: included ? 1 : 0.55,
+                    borderColor: included ? withAlpha(accent, 0.45) : colors.border.default,
+                    opacity: included ? 1 : 0.6,
                 },
             ]}
         >
@@ -496,7 +534,7 @@ const SuggestedFoodRow = memo(function SuggestedFoodRow({
                 />
             ) : (
                 <View style={[rowStyles.thumb, rowStyles.thumbFallback, { backgroundColor: withAlpha(accent, 0.12) }]}>
-                    <Ionicons name="nutrition-outline" size={18} color={accent} />
+                    <Ionicons name="nutrition-outline" size={20} color={accent} />
                 </View>
             )}
             <View style={{ flex: 1, paddingHorizontal: 12 }}>
@@ -507,11 +545,20 @@ const SuggestedFoodRow = memo(function SuggestedFoodRow({
                     {sub}
                 </Text>
             </View>
-            <Ionicons
-                name={included ? 'checkmark-circle' : 'ellipse-outline'}
-                size={24}
-                color={included ? accent : colors.text.tertiary}
-            />
+            <View
+                style={[
+                    rowStyles.checkBadge,
+                    included
+                        ? { backgroundColor: withAlpha(accent, 0.16), borderColor: withAlpha(accent, 0.5) }
+                        : { backgroundColor: 'transparent', borderColor: colors.border.light },
+                ]}
+            >
+                <Ionicons
+                    name={included ? 'checkmark' : 'add'}
+                    size={18}
+                    color={included ? accent : colors.text.tertiary}
+                />
+            </View>
         </TouchableOpacity>
     );
 });
@@ -535,13 +582,16 @@ const SearchResultRow = memo(function SearchResultRow({ name, calories, accent, 
             onPress={handleAdd}
             style={[rowStyles.searchRow, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
         >
-            <View style={{ flex: 1 }}>
+            <View style={[rowStyles.searchIconChip, { backgroundColor: withAlpha(accent, 0.12) }]}>
+                <Ionicons name="restaurant-outline" size={18} color={accent} />
+            </View>
+            <View style={{ flex: 1, paddingHorizontal: 12 }}>
                 <Text style={[typography.subhead, { color: colors.text.primary }]} numberOfLines={1}>
                     {name}
                 </Text>
                 <Text style={[typography.caption, { color: colors.text.secondary }]}>{Math.round(calories)} kcal per serving</Text>
             </View>
-            <Ionicons name="add-circle" size={24} color={accent} />
+            <Ionicons name="add-circle" size={26} color={accent} />
         </TouchableOpacity>
     );
 });
@@ -553,24 +603,44 @@ const s = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
+        paddingBottom: 14,
     },
     iconBtn: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-    summaryCard: { overflow: 'hidden', padding: 18 },
-    summaryRow: { flexDirection: 'row', alignItems: 'center' },
-    summaryIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
-    macroRow: { flexDirection: 'row', borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 16 },
-    searchBox: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 48, gap: 8 },
-    searchIn: { flex: 1, fontSize: 15 },
-    addedRow: { flexDirection: 'row', alignItems: 'center', padding: 12, marginBottom: 8, borderRadius: 12, borderWidth: 1 },
-    footer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 12 },
-    ctaWrap: { height: 56, borderRadius: 28 },
+    heroCard: { overflow: 'hidden', padding: 20 },
+    heroHead: { flexDirection: 'row', alignItems: 'center' },
+    heroIcon: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+    targetPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        marginTop: 14,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 9999,
+        borderWidth: 1,
+    },
+    heroDivider: { height: 1, marginTop: 18, marginBottom: 4 },
+    sectionHead: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 26,
+        marginBottom: 12,
+    },
+    countPill: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 9999, borderWidth: 1 },
+    searchBox: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, height: 52, gap: 8 },
+    searchIn: { flex: 1, fontSize: 15, fontFamily: 'Barlow_400Regular' },
+    addedRow: { flexDirection: 'row', alignItems: 'center', padding: 12, marginBottom: 10, borderRadius: 16, borderWidth: 1 },
+    addedDot: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    footer: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 14, borderTopWidth: 1 },
+    ctaWrap: { height: 56, borderRadius: 18 },
 });
 
 const rowStyles = StyleSheet.create({
-    row: { flexDirection: 'row', alignItems: 'center', padding: 12, marginBottom: 8, borderRadius: 12, borderWidth: 1 },
-    thumb: { width: 44, height: 44, borderRadius: 10 },
+    row: { flexDirection: 'row', alignItems: 'center', padding: 12, marginBottom: 10, borderRadius: 16, borderWidth: 1 },
+    thumb: { width: 48, height: 48, borderRadius: 12 },
     thumbFallback: { alignItems: 'center', justifyContent: 'center' },
-    searchRow: { flexDirection: 'row', alignItems: 'center', padding: 14, marginBottom: 8, borderRadius: 12, borderWidth: 1 },
+    checkBadge: { width: 32, height: 32, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+    searchRow: { flexDirection: 'row', alignItems: 'center', padding: 12, marginBottom: 10, borderRadius: 16, borderWidth: 1 },
+    searchIconChip: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });

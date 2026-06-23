@@ -126,6 +126,50 @@ jest.mock('expo-linear-gradient', () => {
 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
+// react-native-reanimated: the success "saved" beat now defers router.back()
+// into a withTiming COMPLETION CALLBACK (runOnJS(router.back) inside the final
+// timing of a withSequence/withDelay chain). The stock reanimated jest mock
+// applies values but never invokes that callback, so the navigation would
+// appear to never fire under test. This lightweight stub mirrors the runtime
+// contract: withTiming invokes its completion callback with finished=true and
+// runOnJS returns a function that calls through — so the success path's
+// router.back() runs exactly as it does on-device. Animation primitives the
+// screen uses (FadeIn*/Layout/useSharedValue/useAnimatedStyle) are passthrough.
+jest.mock('react-native-reanimated', () => {
+  const RN = require('react-native');
+  const View = (props: any) => <RN.View {...props} />;
+  const AnimatedView: any = View;
+  AnimatedView.View = View;
+  AnimatedView.Text = (props: any) => <RN.Text {...props} />;
+  AnimatedView.createAnimatedComponent = (C: any) => C;
+  const entering: any = new Proxy(() => entering, { get: () => () => entering });
+  return {
+    __esModule: true,
+    default: AnimatedView,
+    // Entering/exiting/layout transition builders → chainable no-ops.
+    FadeIn: entering,
+    FadeInDown: entering,
+    FadeInUp: entering,
+    Layout: entering,
+    Easing: { out: () => () => 0, back: () => () => 0, cubic: () => 0, inOut: () => () => 0, linear: () => 0 },
+    useSharedValue: (init: any) => ({ value: init }),
+    useAnimatedStyle: (fn: any) => (typeof fn === 'function' ? fn() : {}),
+    useAnimatedProps: (fn: any) => (typeof fn === 'function' ? fn() : {}),
+    // A timing that fires its completion callback (the seam the success beat
+    // hangs router.back() on), returning the target value.
+    withTiming: (toValue: any, _config?: any, cb?: (finished: boolean) => void) => {
+      if (typeof cb === 'function') cb(true);
+      return toValue;
+    },
+    // Sequence/delay reduce to their final value so the inner withTiming's
+    // callback above fires during construction.
+    withSequence: (...steps: any[]) => steps[steps.length - 1],
+    withDelay: (_ms: number, anim: any) => anim,
+    // runOnJS returns a JS-thread caller — invoking it runs the wrapped fn.
+    runOnJS: (fn: any) => (...args: any[]) => fn(...args),
+  };
+});
+
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
 import { render, fireEvent, screen } from '@testing-library/react-native';
@@ -188,7 +232,7 @@ describe('BuildPlateScreen', () => {
     fireEvent.press(screen.getByRole('button', { name: 'Add Grilled Chicken to plate' }));
 
     // The plate section mounts with the added item.
-    expect(screen.getByText('Current Plate')).toBeTruthy();
+    expect(screen.getByText('On Your Plate')).toBeTruthy();
 
     // The CTA is now enabled — pressing it fires the save mutation.
     fireEvent.press(screen.getByText('Save Meal'));

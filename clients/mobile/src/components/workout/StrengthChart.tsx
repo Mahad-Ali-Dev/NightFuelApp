@@ -63,7 +63,7 @@ export const StrengthChart = React.memo(StrengthChartComponent);
 
 const styles = StyleSheet.create({
     container: { backgroundColor: colors.background.secondary, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: colors.border.default },
-    title: { color: '#FF6B35', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+    title: { color: '#A8CC3C', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
     exercise: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', marginTop: 4, marginBottom: 16 },
     chartArea: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-end', height: 120, marginBottom: 16 },
     barCol: { alignItems: 'center', flex: 1 },

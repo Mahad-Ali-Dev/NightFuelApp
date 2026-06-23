@@ -157,7 +157,7 @@ describe('Active Workout — cross-session "previous set" from analytics', () =>
     renderScreen();
 
     // The exercise card seeded from the active session.
-    expect(screen.getByText('Bench Press')).toBeTruthy();
+    expect(screen.getAllByText('Bench Press')[0]).toBeTruthy();
 
     // Set 1 surfaces the REAL previous weight x reps sourced from analytics.
     expect(screen.getByText('last time: 60x8')).toBeTruthy();
@@ -174,7 +174,7 @@ describe('Active Workout — cross-session "previous set" from analytics', () =>
 
     renderScreen();
 
-    expect(screen.getByText('Bench Press')).toBeTruthy();
+    expect(screen.getAllByText('Bench Press')[0]).toBeTruthy();
 
     // No fabricated previous-set label anywhere on the screen.
     expect(screen.queryByText(/last time:/)).toBeNull();
@@ -216,7 +216,7 @@ describe('Active Workout — in-app exercise demo (real media, no empty player)'
     renderScreen();
 
     // The card seeded from the active session.
-    expect(screen.getByText('Barbell Bench Press')).toBeTruthy();
+    expect(screen.getAllByText('Barbell Bench Press')[0]).toBeTruthy();
 
     // <ExerciseDemo/> mounted: at least one frame <Image> (mocked with this
     // testID) is present. A two-frame animated loop renders two such nodes.
@@ -235,7 +235,7 @@ describe('Active Workout — in-app exercise demo (real media, no empty player)'
 
     renderScreen();
 
-    expect(screen.getByText('Zzz Imaginary Lift 9000')).toBeTruthy();
+    expect(screen.getAllByText('Zzz Imaginary Lift 9000')[0]).toBeTruthy();
 
     // The player still renders (the bundled-fallback still image is present) and
     // is announced as a labelled region — it is NOT an empty/blank box.

@@ -223,15 +223,17 @@ describe('UserProfileScreen — privacy lock', () => {
     // The locked panel copy is ABSENT…
     expect(screen.queryByText('This account is private')).toBeNull();
 
-    // …and the unlocked content renders. "Posts" appears TWICE in this branch —
-    // the stats LABEL and the section HEADER — whereas the locked branch shows it
-    // only once (the label); so >= 2 occurrences proves the section header (an
-    // unlocked-only element) is on screen.
-    expect(screen.getAllByText('Posts').length).toBeGreaterThanOrEqual(2);
+    // …and the unlocked content renders. The "POSTS" stat label shows in both
+    // branches, but the "RECENT ACTIVITY" section header only renders in the
+    // unlocked branch — so its presence proves the gated content list is visible.
+    expect(screen.getByText('POSTS')).toBeTruthy();
+    expect(screen.getByText('RECENT ACTIVITY')).toBeTruthy();
     // The member's post body + bio are unique strings and confirm the gated
     // content is now visible.
     expect(screen.getByText('My first public post')).toBeTruthy();
     expect(screen.getByText('open bio')).toBeTruthy();
-    expect(screen.getByText('Sam Public')).toBeTruthy();
+    // The display name now appears both in the profile header AND as the author
+    // name fronting each post card (avatars-for-people redesign).
+    expect(screen.getAllByText('Sam Public').length).toBeGreaterThanOrEqual(1);
   });
 });

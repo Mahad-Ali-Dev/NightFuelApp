@@ -172,7 +172,7 @@ describe('FoodEncyclopediaScreen — food-detail micronutrients', () => {
 
     // The modal opened with the macro summary…
     expect(screen.getByText('Add to Plate')).toBeTruthy();
-    expect(screen.getByText('Nutrition Summary')).toBeTruthy();
+    expect(screen.getByText('NUTRITION FOR THIS SERVING')).toBeTruthy();
 
     // …and the new Micronutrients sub-section with each PRESENT micro, labeled
     // with the unit derived from the field name (Mg→mg, Mcg→mcg).
@@ -228,7 +228,7 @@ describe('FoodEncyclopediaScreen — food-detail micronutrients', () => {
 
     // The modal opened (macro summary present) but there is NO micros section.
     expect(screen.getByText('Add to Plate')).toBeTruthy();
-    expect(screen.getByText('Nutrition Summary')).toBeTruthy();
+    expect(screen.getByText('NUTRITION FOR THIS SERVING')).toBeTruthy();
     expect(screen.queryByTestId('micronutrients-card')).toBeNull();
     expect(screen.queryByText('Micronutrients')).toBeNull();
     // No fiber/sugar either.

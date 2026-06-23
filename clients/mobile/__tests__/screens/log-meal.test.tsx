@@ -206,11 +206,11 @@ describe('LogMealScreen', () => {
     expect(screen.getByText('Your Plate')).toBeTruthy();
     expect(screen.getByText('Grilled Chicken')).toBeTruthy();
 
-    // The macro GlassCard mounted with the four live-total stat columns.
-    expect(screen.getByText('KCAL')).toBeTruthy();
-    expect(screen.getByText('PROTEIN')).toBeTruthy();
-    expect(screen.getByText('CARBS')).toBeTruthy();
-    expect(screen.getByText('FAT')).toBeTruthy();
+    // The macro summary mounted with the kcal hero + the three macro rings.
+    expect(screen.getAllByText('kcal').length).toBeGreaterThan(0);
+    expect(screen.getByText('Protein')).toBeTruthy();
+    expect(screen.getByText('Carbs')).toBeTruthy();
+    expect(screen.getByText('Fat')).toBeTruthy();
 
     // The empty state is gone once there's a plate item.
     expect(screen.queryByText('Build your plate')).toBeNull();
@@ -226,7 +226,7 @@ describe('LogMealScreen', () => {
 
     // Typing into the search box updates the controlled value (sq) — use a >2
     // char term so the result list renders.
-    const input = screen.getByPlaceholderText('Search food...');
+    const input = screen.getByPlaceholderText('Search foods to add...');
     fireEvent.changeText(input, 'rice');
 
     // The result row renders with its add-affordance accessibility label.

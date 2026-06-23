@@ -448,7 +448,7 @@ describe('CommunityTab — feed loading / error / empty / loaded states', () => 
 
     // Loaded branch → the composer is the sole "Create a post" handle (its body
     // copy renders too), and the empty-state action that shares the label is absent.
-    expect(screen.getByText("What's on your mind?")).toBeTruthy();
+    expect(screen.getByText('Share your progress…')).toBeTruthy();
     expect(screen.queryByText('No posts yet')).toBeNull();
 
     fireEvent.press(screen.getByLabelText('Create a post'));

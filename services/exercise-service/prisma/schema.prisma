@@ -68,6 +68,12 @@ model LibraryExercise {
   difficulty       String?  @default("intermediate")
   bodyPart         String?  @map("body_part")
   category         String?  // "gym" | "home" | "cardio" | "kegel"
+  // Catalog enrichment (self-hosted exercise catalogs). secondaryMuscles backs
+  // the detail screen's "Secondary muscles" chips; gender lets the library split
+  // Male/Female demos. Both additive — String[] defaults to [] and gender is
+  // nullable, so legacy wger-seeded rows stay valid with no backfill.
+  secondaryMuscles String[] @map("secondary_muscles")
+  gender           String?  // "Male" | "Female"; null = unisex / unspecified
   createdAt        DateTime @default(now()) @map("created_at")
 
   @@map("library_exercises")

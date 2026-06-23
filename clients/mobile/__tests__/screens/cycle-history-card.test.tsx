@@ -82,9 +82,10 @@ describe('CycleHistoryCard (F28) — averages, variability range, rows', () => {
     // Regularity chip.
     expect(screen.getByText('Regular')).toBeTruthy();
 
-    // Per-cycle rows (start dates present).
-    expect(screen.getByText('2026-05-04')).toBeTruthy();
-    expect(screen.getByText('2026-04-01')).toBeTruthy();
+    // Per-cycle rows (start dates present, rendered as soft human "Mon 4 May"
+    // labels rather than a raw-ISO CSV column).
+    expect(screen.getByText('Mon 4 May')).toBeTruthy();
+    expect(screen.getByText('Wed 1 Apr')).toBeTruthy();
   });
 
   test('with no averages it shows the honest "log a couple of cycles" hint', () => {

@@ -241,8 +241,11 @@ describe('ShiftCalendarScreen — linked-session tap-through', () => {
 
     expect(() => renderScreen()).not.toThrow();
 
-    // The section heading still renders above the skeleton placeholders…
-    expect(screen.getByText('Training around this shift')).toBeTruthy();
+    // The section heading still renders above the skeleton placeholders. The
+    // redesign splits the single heading into a "TRAINING" overline + an
+    // "Around this shift" h3 — assert both parts.
+    expect(screen.getByText('TRAINING')).toBeTruthy();
+    expect(screen.getByText('Around this shift')).toBeTruthy();
     // …but no row text / row button while loading.
     expect(screen.queryByText('Lower Body')).toBeNull();
     expect(screen.queryByRole('button', { name: /Lower Body/ })).toBeNull();

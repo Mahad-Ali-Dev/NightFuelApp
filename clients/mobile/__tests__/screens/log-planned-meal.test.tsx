@@ -156,9 +156,11 @@ describe('LogPlannedMealScreen', () => {
 
     expect(() => renderScreen()).not.toThrow();
 
-    // Slot title + meal-type context line.
+    // Slot title + meal-type context line (now the standalone meal-type label
+    // "Dinner" plus the "FROM YOUR PROTOCOL" header overline).
     expect(screen.getByText('Mid-Shift Fuel')).toBeTruthy();
-    expect(screen.getByText(/Dinner • From your protocol/)).toBeTruthy();
+    expect(screen.getByText('Dinner')).toBeTruthy();
+    expect(screen.getByText('FROM YOUR PROTOCOL')).toBeTruthy();
 
     // Both suggested foods render (prefilled, included by default).
     expect(screen.getByText('Grilled Salmon')).toBeTruthy();

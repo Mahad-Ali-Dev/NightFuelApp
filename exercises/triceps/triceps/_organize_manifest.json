@@ -1,0 +1,846 @@
+[
+  {
+    "file": "00181201-Assisted-Standing-Triceps-Extension-(with-towel)_U.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "00191201-Assisted-Triceps-Dip-(kneeling)_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "00301201-Barbell-Close-Grip-Bench-Press_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "00521201-Barbell-JM-Bench-Press_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "00551201-Barbell-Lying-Close-grip-Press_Upper-Arms (1).mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "00551201-Barbell-Lying-Close-grip-Press_Upper-Arms (2).mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "00551201-Barbell-Lying-Close-grip-Press_Upper-Arms.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "00571201-Barbell-Lying-extension_Upper-arms (1).mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "00571201-Barbell-Lying-extension_Upper-arms (2).mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "00571201-Barbell-Lying-extension_Upper-arms.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "00601201-Barbell-Lying-Triceps-Extension-Skull-Crusher_Upper-Arms.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "00651201-Barbell-One-Arm-Floor-Press_Upper-Arms_.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "00921201-Barbell-Seated-Overhead-Triceps-Extension_Upper-Arms (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "00921201-Barbell-Seated-Overhead-Triceps-Extension_Upper-Arms (2).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "00921201-Barbell-Seated-Overhead-Triceps-Extension_Upper-Arms (3).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "00921201-Barbell-Seated-Overhead-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "01091201-Barbell-Standing-Overhead-Triceps-Extension_Upper- (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "01091201-Barbell-Standing-Overhead-Triceps-Extension_Upper-.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "01291201-Bench-Dip-(knees-bent)_Upper-Arms_ (1).mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "01291201-Bench-Dip-(knees-bent)_Upper-Arms_.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "01491201-Cable-Alternate-Triceps-Extension_Upper-Arms_ (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "01491201-Cable-Alternate-Triceps-Extension_Upper-Arms_ (2).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "01491201-Cable-Alternate-Triceps-Extension_Upper-Arms_.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "01731201-Cable-Incline-Triceps-Extension_Upper-Arms_ (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "01731201-Cable-Incline-Triceps-Extension_Upper-Arms_.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "01761201-Cable-Kneeling-Triceps-Extension_Upper-Arms (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "01761201-Cable-Kneeling-Triceps-Extension_Upper-Arms (2).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "01761201-Cable-Kneeling-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "01871201-Cable-Lying-Triceps-Extension_Upper-Arms_ (1).mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "01871201-Cable-Lying-Triceps-Extension_Upper-Arms_.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "01941201-Cable-Overhead-Triceps-Extension-(rope-attachment)_Upper-Arms (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "01941201-Cable-Overhead-Triceps-Extension-(rope-attachment)_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "02001201-Cable-Pushdown-(with-rope-attachment)_Upper-Arms.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "02011201-Cable-Pushdown_Upper-Arms.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "02041201-Cable-Rear-Drive_Upper-Arms_.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "02071201-Cable-Reverse-grip-Pushdown_Upper-Arms_.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "02311201-Cable-Standing-One-Arm-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "02411201-Cable-Triceps-Pushdown-(V-bar-attachment)_Upper-Arms (1).mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "02411201-Cable-Triceps-Pushdown-(V-bar-attachment)_Upper-Arms (2).mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "02411201-Cable-Triceps-Pushdown-(V-bar-attachment)_Upper-Arms.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "02591201-Close-Grip-Push-up_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "02831201-Diamond-Push-up_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "02961201-Dumbbell-Close-grip-Press_Upper-Arms (1).mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "02961201-Dumbbell-Close-grip-Press_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "03061201-Dumbbell-Decline-Triceps-Extension_Upper-Arms (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "03061201-Dumbbell-Decline-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "03301201-Dumbbell-Incline-Triceps-Extension_Upper-Arms (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "03301201-Dumbbell-Incline-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "03331201-Dumbbell-Kickback_Upper-Arms (1).mp4",
+    "folder": "Male/Kickbacks"
+  },
+  {
+    "file": "03331201-Dumbbell-Kickback_Upper-Arms.mp4",
+    "folder": "Male/Kickbacks"
+  },
+  {
+    "file": "03341201-Dumbbell-Lateral-Raise_shoulder-FIX_.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "03441201-Dumbbell-Lying-One-Arm-Pronated-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "03511201-Dumbbell-Lying-Triceps-Extension_Upper-Arms (1).mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "03511201-Dumbbell-Lying-Triceps-Extension_Upper-Arms (2).mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "03511201-Dumbbell-Lying-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "03541201-Dumbbell-One-Arm-Kickback_Upper-Arms_ (1).mp4",
+    "folder": "Male/Kickbacks"
+  },
+  {
+    "file": "03541201-Dumbbell-One-Arm-Kickback_Upper-Arms_.mp4",
+    "folder": "Male/Kickbacks"
+  },
+  {
+    "file": "03621201-Dumbbell-One-Arm-Triceps-Extension-(on-bench)_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "03731201-Dumbbell-Pronate-grip-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "03891201-Dumbbell-Seated-Bench-Extension_Upper-Arms_ (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "03891201-Dumbbell-Seated-Bench-Extension_Upper-Arms_ (2).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "03891201-Dumbbell-Seated-Bench-Extension_Upper-Arms_.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "03941201-Dumbbell-Seated-Kickback_Upper-Arms.mp4",
+    "folder": "Male/Kickbacks"
+  },
+  {
+    "file": "04201201-Dumbbell-Standing-Kickback_Upper-Arms (1).mp4",
+    "folder": "Male/Kickbacks"
+  },
+  {
+    "file": "04201201-Dumbbell-Standing-Kickback_Upper-Arms.mp4",
+    "folder": "Male/Kickbacks"
+  },
+  {
+    "file": "04231201-Dumbbell-Standing-One-Arm-Extension_Upper-Arms_ (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "04231201-Dumbbell-Standing-One-Arm-Extension_Upper-Arms_.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "04301201-Dumbbell-Standing-Triceps-Extension_Upper-Arms (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "04301201-Dumbbell-Standing-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "04491201-EZ-Barbell-Incline-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "04501201-EZ-Barbell-JM-Bench-Press_Upper-Arms_.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "04531201-EZ-Barbell-Seated-Triceps-Extension_Upper-Arms_ (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "04531201-EZ-Barbell-Seated-Triceps-Extension_Upper-Arms_.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "06071201-Lever-Triceps-Extension_Upper-Arms (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "06071201-Lever-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "06371201-Olympic-Barbell-Triceps-Extension_Upper-Arms-FIX_.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "06771201-Ring-Dip_Upper-Arms_.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "07511201-Smith-Close-Grip-Bench-Press_Upper-Arms_ (1).mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "07511201-Smith-Close-Grip-Bench-Press_Upper-Arms_.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "08121201-Triceps-Dip-(bench-leg)_Upper-Arms_.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "08141201-Triceps-Dip_Upper-Arms-FIX_ (1).mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "08141201-Triceps-Dip_Upper-Arms-FIX_.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "08151201-Triceps-Dips-Floor_Upper-Arms (1).mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "08151201-Triceps-Dips-Floor_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "08161201-Triceps-Press_Upper-Arms_ (1).mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "08161201-Triceps-Press_Upper-Arms_ (2).mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "08161201-Triceps-Press_Upper-Arms_.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "08601201-Cable-kickback_Upper-arms_ (1).mp4",
+    "folder": "Male/Kickbacks"
+  },
+  {
+    "file": "08601201-Cable-kickback_Upper-arms_.mp4",
+    "folder": "Male/Kickbacks"
+  },
+  {
+    "file": "09141201-Band-overhead-triceps-extension-(female)_Upper-Arms.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "09161201-Band-pushdown-(female)_Upper-Arms.mp4",
+    "folder": "Female/Pushdowns"
+  },
+  {
+    "file": "102811201-Burpee-Single-Leg-Jump-(male)_Plyometrics_.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "10331201-Lever-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "10681201-Cable-kickback-II_Upper-Arms.mp4",
+    "folder": "Male/Kickbacks"
+  },
+  {
+    "file": "11491201-Suspender-Triceps-Extension-Push-Up-(female)_Upper.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "11501201-Suspender-Triceps-Kickback-(female)_Upper-arms_.mp4",
+    "folder": "Female/Kickbacks"
+  },
+  {
+    "file": "11741201-Diamond-Push-up-(on-knees)_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "11911201-Triceps-Press-(Head-Below-Bench)_Upper-Arms.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "12271201-Cable-Standing-One-Arm-Tricep-Pushdown-(Overhand-G.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "13991201-Bench-dip-on-floor_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "14511201-Lever-Seated-Dip_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "14671201-Push-up-on-Forearms_Upper-Arms.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "15021201-Band-Pushdown-(Male)_Upper-Arms.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "16051201-Cable-Triceps-Pushdown-(SZ-bar)_Upper-arms.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "16061201-Cable-Reverse-Grip-Triceps-Pushdown-(SZ-bar)_Upper-arms.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "16091201-Cable-One-Arm-Side-Triceps-Pushdown_Upper-arms.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "17221201-Cable-High-Pulley-Overhead-Tricep-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "17231201-Cable-One-Arm-Tricep-Pushdown_Upper-Arms_.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "17241201-Cable-Rope-High-Pulley-Overhead-Tricep-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "17311201-Dumbbell-Close-Grip-Press_Upper-Arms (1).mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "17311201-Dumbbell-Close-Grip-Press_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "17331201-Dumbbell-Incline-Two-Arm-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "17351201-Dumbbell-Lying-Single-Extension_Upper-Arms.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "17491201-EZ-Bar-Standing-French-Press_Upper-Arms.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "17521201-Smith-Machine-Incline-Tricep-Extension_Upper-Arms_.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "17541201-Weighted-Three-Bench-Dips_Upper-Arms_.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "17551201-Weighted-Tricep-Dips_Upper-Arms_.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "17711201-Bodyweight-Kneeling-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "18161201-Extension-Of-Arms-In-Vertical-Stretch_Upper-Arms_.mp4",
+    "folder": "Male/Stretch & Mobility"
+  },
+  {
+    "file": "18211201-Elbow-Extension-And-Supination---Pronation-Forearm.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "18591201-Cable-Kneeling-Triceps-Extension-(VERSION-2)_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "18711201-Lever-Triceps-Dip-(plate-loaded)_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "21861201-EZ-Barbell-Decline-Triceps-Extension_Upper-Arms (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "21861201-EZ-Barbell-Decline-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "21881201-Dumbbell-Seated-Triceps-Extension_Upper-Arms (1).mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "21881201-Dumbbell-Seated-Triceps-Extension_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "21891201-Dumbbells-Seated-Triceps-Extension_Upper-Arms_.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "21981201-Lever-Triceps-Extension-(VERSION-2)_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "22491201-Cable-Triceps-Pushdown-(V-bar)-(female)_Upper-Arms.mp4",
+    "folder": "Female/Pushdowns"
+  },
+  {
+    "file": "22501201-Lever-Seated-Dip-(female)_Upper-Arms (1).mp4",
+    "folder": "Female/Press & Dips"
+  },
+  {
+    "file": "22501201-Lever-Seated-Dip-(female)_Upper-Arms (2).mp4",
+    "folder": "Female/Press & Dips"
+  },
+  {
+    "file": "22501201-Lever-Seated-Dip-(female)_Upper-Arms.mp4",
+    "folder": "Female/Press & Dips"
+  },
+  {
+    "file": "22511201-Dumbbell-Lying-Triceps-Extension-(female)_Upper-Arms_.mp4",
+    "folder": "Female/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "23731201-Dumbbell-One-Arm-Kickback-(female)_Upper-Arms_.mp4",
+    "folder": "Female/Kickbacks"
+  },
+  {
+    "file": "23761201-Bench-Dip-(knees-bent)-(female)_Upper-arms.mp4",
+    "folder": "Female/Press & Dips"
+  },
+  {
+    "file": "23831201-Handstand-Push-Up-(female)_Upper-Arms.mp4",
+    "folder": "Female/Pushdowns"
+  },
+  {
+    "file": "23901201-Dumbbell-Standing-Triceps-Extension-(female)_Upper-Arms.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "23911201-Barbell-Close-Grip-Bench-Press-(female)_Upper-Arms.mp4",
+    "folder": "Female/Press & Dips"
+  },
+  {
+    "file": "23981201-Close-grip-Push-up-(on-knees)_Upper-Arms_.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "24321201-EZ-bar-Close-Grip-Bench-Press_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "24331201-EZ-bar-Close-Grip-Bench-Press-(female)_Upper-Arms.mp4",
+    "folder": "Female/Press & Dips"
+  },
+  {
+    "file": "24371201-Dumbbell-Kickback-(female)_Upper-arms (1).mp4",
+    "folder": "Female/Kickbacks"
+  },
+  {
+    "file": "24371201-Dumbbell-Kickback-(female)_Upper-arms.mp4",
+    "folder": "Female/Kickbacks"
+  },
+  {
+    "file": "24381201-Cable-Pushdown-(with-rope-attachment)-(female)_Upper-Arms.mp4",
+    "folder": "Female/Pushdowns"
+  },
+  {
+    "file": "24881201-Dumbbell-Seated-Triceps-Extension-(female)_Upper-Arms.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "25071201-Dumbbell-Incline-Triceps-Extension-(female)_Upper-Arms.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "25201201-Cable-Reverse-grip-Pushdown-(female)_Upper-Arms_.mp4",
+    "folder": "Female/Pushdowns"
+  },
+  {
+    "file": "25461201-Bench-dip-on-floor-(female)_Upper-Arms.mp4",
+    "folder": "Female/Press & Dips"
+  },
+  {
+    "file": "25751201-Assisted-Triceps-Dip-(kneeling)-(female)_Upper-Arms.mp4",
+    "folder": "Female/Press & Dips"
+  },
+  {
+    "file": "25861201-Dumbbell-Lying-Extension-(across-face)-(female)_Up.mp4",
+    "folder": "Female/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "25871201-Dumbbell-Lying-One-Arm-Supinated-Triceps-Extension.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "25981201-Dumbbell-Standing-Kickback-(female)_Upper-Arms.mp4",
+    "folder": "Female/Kickbacks"
+  },
+  {
+    "file": "26011201-Dumbbell-One-Arm-Triceps-Extension-(on-bench)-(female)_Upper-Arms (1).mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "26011201-Dumbbell-One-Arm-Triceps-Extension-(on-bench)-(female)_Upper-Arms.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "26051201-Barbell-Standing-Overhead-Triceps-Extension-(femal.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "26061201-Barbell-Seated-Overhead-Triceps-Extension-(female)_Upper-Arms.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "26131201-Close-grip-Push-up-(on-knees)-(female)_Upper-Arms.mp4",
+    "folder": "Female/Press & Dips"
+  },
+  {
+    "file": "26151201-Close-Grip-Push-up-(female)_Upper-Arms.mp4",
+    "folder": "Female/Press & Dips"
+  },
+  {
+    "file": "26451201-Dumbbell-Close-Grip-Press-(female)_Upper-Arms.mp4",
+    "folder": "Female/Press & Dips"
+  },
+  {
+    "file": "26921201-Barbell-Lying-Triceps-Extension-(female)_Upper-Arms_.mp4",
+    "folder": "Female/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "26961201-Cable-Standing-One-Arm-Triceps-Extension-(female)_Upper-Arms.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "27381201-Dumbbell-Lying-Triceps-Extension-on-Floor-(female).mp4",
+    "folder": "Female/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "28201201-Lever-Triceps-Extension-(VERSION-2)-(female)_Upper-Arms.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "30361201-Bodyweight-Kneeling-Triceps-Extension-(female)_Upper-Arms.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "30431201-Cable-Concentration-Extension-(on-knee)-(female)_U.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "30471201-Cable-High-Pulley-Overhead-Tricep-Extension-(female)_Upper-Arms.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "30781201-Dumbbell-Incline-Two-Arm-Extension-(female)_Upper-.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "31151201-Triceps-Dip-(female)_Upper-Arms.mp4",
+    "folder": "Female/Press & Dips"
+  },
+  {
+    "file": "33021201-Handstand_Upper-arms_.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "33871201-Dips-between-Chairs_Chest_1.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "34431201-Dip-on-Floor-with-Chair_Chest_.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "36141201-Lever-Triceps-Extension-(female)_Upper-Arms.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "36461201-EZ-Barbell-Lying-Triceps-Extension-(female)_Upper-Arms.mp4",
+    "folder": "Female/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "37191201-Cable-Standing-High-Cross-Triceps-Extension_Upper-.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "37511201-Reverse-Push-up_Upper-Arms.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "37841201-Cross-Arms-Push-up_Upper-Arms_.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "39201201-Cable-Triceps-Pushdown-on-Floor_Upper-Arms_.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "39391201-Band-overhead-triceps-extension-(male)_Upper-Arms.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "39401201-Dumbbell-Lying-Alternate-Extension-(female)_Upper-Arms.mp4",
+    "folder": "Female/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "39411201-Dumbbell-Pronate-grip-Triceps-Extension-(female)_Upper-Arms.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "39851201-Push-up-Hand-by-Hand_Chest_.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "40151201-Dumbbell-Incline-Close-grip-Press-Variation_Upper-.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "41151201-Cable-Overhead-Tricep-Extension-Straight-Bar-(male)_Upper-Arms_.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "41401201-Band-Overhead-Single-Arm-Triceps-Extension_Upper-A.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "41411201-Band-Overhead-Single-Arm-Triceps-Extension-(VERSIO.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "41431201-Band-Triceps-Kickback_Upper-Arms.mp4",
+    "folder": "Male/Kickbacks"
+  },
+  {
+    "file": "41511201-Dumbbell-Lying-Floor-Skullcrusher_Upper-Arms.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "43021207-Reverse-Dip-(female)_Upper-Arms.mp4",
+    "folder": "Female/Press & Dips"
+  },
+  {
+    "file": "43431201-Dumbbell-One-Arm-Triceps-Extension-(female)_Upper-.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "43441201-Barbell-Incline-Triceps-Extension-Skull-Crusher_Up (1).mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "43441201-Barbell-Incline-Triceps-Extension-Skull-Crusher_Up.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "43531201-Cable-Lying-Triceps-Extension-(with-Rope)_Upper-Arms_.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "43641201-Single-Leg-Dip-on-floor_Upper-Arms.mp4",
+    "folder": "Male/Press & Dips"
+  },
+  {
+    "file": "46671201-Bodyweight-Overhead-Triceps-Extension-(female)_Upper-Arms.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "46881201-Resistance-Band-Triceps-Pushdown_Upper-Arms_.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "49601201-Cable-High-Triceps-Extension_Upper-Arms_.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "49611201-Dumbbell-Prone-Triceps-Kickback_Upper-Arms_.mp4",
+    "folder": "Male/Kickbacks"
+  },
+  {
+    "file": "50331201-Cable-Single-Arm-Triceps-Pushdown-(rope-attachment.mp4",
+    "folder": "Male/Pushdowns"
+  },
+  {
+    "file": "52431201-Cable-Lying-Triceps-Extension-(Low)_Upper-Arms_.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "52681201-Resistance-Band-Triceps-Pushdown-(female)_Upper-Ar.mp4",
+    "folder": "Female/Pushdowns"
+  },
+  {
+    "file": "59161201-Cable-Seated-High-Pulley-Overhead-Tricep-Extension_Upper-Arms_.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "60671201-Bottle-Weighted-Overhead-Triceps-Extension-(female.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "61481201-Dumbbell-Seated-Alternate-Overhead-Triceps-Extensi.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "61581201-Dumbbell-Seated-Single-Arm-Overhead-Triceps-Extens.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "61591201-Dumbbell-Seated-Single-Arm-Overhead-Triceps-Extens.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "64231201-Bodyweight-Triceps-Extension-from-Plank-Position-(.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "68621201-Band-Incline-Triceps-Extension_Upper-Arms_.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "69211201-Side-Lying-Single-Arm-Triceps-Push-up-(male)_Upper.mp4",
+    "folder": "Male/Lying Extensions (Skullcrusher)"
+  },
+  {
+    "file": "72881201-Band-Overhead-Triceps-Extension-(VERSION-2)-(femal.mp4",
+    "folder": "Female/Overhead Extensions"
+  },
+  {
+    "file": "79231201-Cable-Seated-High-Triceps-Extension_Upper-Arms_.mp4",
+    "folder": "Male/Overhead Extensions"
+  },
+  {
+    "file": "79301201-Lever-Assisted-Triceps-Pushdown-(female)_Upper-Arm.mp4",
+    "folder": "Female/Pushdowns"
+  }
+]

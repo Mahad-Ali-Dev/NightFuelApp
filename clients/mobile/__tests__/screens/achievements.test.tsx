@@ -15,7 +15,7 @@
  *
  *   - Test A (loading): while a gating query is `isLoading`, the screen mounts its
  *     skeleton scaffold ONLY — the XP-card copy ("CURRENT LEVEL"), the catalog
- *     heading ("📚 All Badges") and the error/empty copy are NOT in the tree yet.
+ *     heading ("All Badges") and the error/empty copy are NOT in the tree yet.
  *   - Test B (error): when a gating query is `isError`, the screen shows the
  *     "Couldn't load achievements" EmptyState whose "Try Again" action refetches
  *     ALL THREE queries (the badges + catalog + score refetch spies each fire
@@ -168,7 +168,7 @@ describe('AchievementsScreen (community badges)', () => {
     // The loading branch renders the skeleton scaffold ONLY — none of the
     // populated copy, and none of the empty/error copy, is in the tree yet.
     expect(screen.queryByText('CURRENT LEVEL')).toBeNull();
-    expect(screen.queryByText('📚 All Badges')).toBeNull();
+    expect(screen.queryByText('All Badges')).toBeNull();
     expect(screen.queryByText('Couldn\'t load achievements')).toBeNull();
     expect(screen.queryByText('No badges yet')).toBeNull();
     expect(screen.queryByText('Try Again')).toBeNull();
@@ -209,7 +209,7 @@ describe('AchievementsScreen (community badges)', () => {
     expect(screen.getByText('No badges yet')).toBeTruthy();
     // …and the screen does NOT fall through to a blank 'All Badges' grid, nor the
     // error copy.
-    expect(screen.queryByText('📚 All Badges')).toBeNull();
+    expect(screen.queryByText('All Badges')).toBeNull();
     expect(screen.queryByText("Couldn't load achievements")).toBeNull();
   });
 
@@ -222,7 +222,7 @@ describe('AchievementsScreen (community badges)', () => {
     renderScreen();
 
     // Populated content (not an edge state).
-    expect(screen.getByText('📚 All Badges')).toBeTruthy();
+    expect(screen.getByText('All Badges')).toBeTruthy();
     expect(screen.queryByText('No badges yet')).toBeNull();
 
     // The earned tile (First Workout, in both the earned rail and the catalog as

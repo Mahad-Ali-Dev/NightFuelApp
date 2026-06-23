@@ -196,6 +196,9 @@ describe('EditProfileScreen — displayName bounds mirror (2..64) + accessible v
     renderWithTheme(<EditProfileScreen />);
 
     fireEvent.changeText(nameField(), value);
+    // Inline validation reveals on blur (not on every keystroke); blur the field
+    // so the touched-gated message surfaces.
+    fireEvent(nameField(), 'blur');
 
     // BOTH Save controls announce the disabled state…
     const { headerSave, bottomSave } = getProfileSaveControls();

@@ -5,6 +5,7 @@ import { TAB_BAR_H } from './_layout';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getRoutines, getActiveSession, Routine } from '@/api/exercises';
 import { Skeleton, EmptyState, GlassCard, CtaButton } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatCard, CategoryCard, RoutineCard, CAROUSEL_CARD_W } from '@/components/TrainingCards';
 const { width } = Dimensions.get('window');
 // Bundled Aurora dark-glass art (no external host → offline-safe, no 404 /
 // rate-limit). '@/*' resolves to ./src, so assets are required by relative path
@@ -28,7 +30,7 @@ const MUSCLE_BACK_IMG = require('../../assets/images/muscle-back.png');
 // Category accents map to canonical Aurora theme tokens (module scope can't read
 // the hook, so we use the exact accent hex values from '@/theme/colors').
 const CATS = [
-    { id:'gym', title:'Gym', img:CAT_GYM_IMG, route:'/(exercises)?category=gym', color:'#FF6B35' },
+    { id:'gym', title:'Gym', img:CAT_GYM_IMG, route:'/(exercises)?category=gym', color:'#A8CC3C' },
     { id:'home', title:'Home', img:CAT_HOME_IMG, route:'/(exercises)?category=home', color:'#00D4AA' },
     { id:'cardio', title:'Cardio', img:CAT_CARDIO_IMG, route:'/(exercises)?category=cardio', color:'#10B981' },
     { id:'recover', title:'Recovery', img:CAT_RECOVERY_IMG, route:'/(exercises)?category=kegel', color:'#7C4DFF' },
@@ -42,7 +44,7 @@ const ROUTINE_IMGS = [
     CAT_GYM_IMG,
 ];
 // CTA fills use the shared `gradients.coralCta` token (read off useTheme() as
-// `colors.gradients.coralCta`): coralDark #E55A25 → pink #FF4D8D. It starts
+// `colors.gradients.coralCta`): coralDark #93B82E → pink #93B82E. It starts
 // darker than the brand `gradients.coral` so white text/icons clear AA on the
 // fill, and is shared so Dashboard + Training render a byte-identical CTA.
 type TTab = 'train'|'plan';
@@ -59,62 +61,83 @@ export default function TrainingHubScreen() {
     // Refetch session every time this tab gains focus
     useFocusEffect(useCallback(() => { sessionQ.refetch(); }, []));
     const activePlan = routines[0] ?? null;
+    // Weekly-volume stat row — derived purely from the routines already in
+    // scope (no new query/data call): routine count, total planned exercises,
+    // and total weekly sets across every routine.
+    const routineCount = routines.length;
+    const totalExercises = routines.reduce((sum, r) => sum + (r.exercises?.length ?? 0), 0);
+    const totalSets = routines.reduce(
+        (sum, r) => sum + (r.exercises ?? []).reduce((s, ex: any) => s + (Number(ex?.sets) || 0), 0),
+        0,
+    );
     return (
         <ImageBackground blurRadius={4} source={HERO_TRAINING} style={[s.container,{backgroundColor:colors.background.primary}]} imageStyle={{opacity:0.35}}>
             <LinearGradient colors={['rgba(10,10,13,0.8)',colors.background.primary]} style={StyleSheet.absoluteFillObject} />
             <StatusBar style="light" />
-            <View style={[s.hdr,{paddingTop:insets.top+20}]}>
+            <Animated.View entering={FadeInDown.duration(420)} style={[s.hdr,{paddingTop:insets.top+20}]}>
                 <View><Text style={[typography.display,{color:colors.text.primary,fontSize:34}]}>Training</Text><Text style={[typography.body,{color:colors.text.secondary,marginTop:2}]}>Level up your strength today.</Text></View>
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="History" style={[s.iconBtn,{backgroundColor:colors.background.secondary,borderWidth:1,borderColor:colors.border.default}]} onPress={()=>router.push('/(exercises)/history' as any)}><Ionicons name="time-outline" size={22} color={colors.text.primary} /></TouchableOpacity>
-            </View>
-            <View style={[s.switcher,{backgroundColor:colors.background.secondary,borderWidth:1,borderColor:colors.border.default,marginHorizontal:20,marginBottom:20}]}>
+            </Animated.View>
+            <Animated.View entering={FadeInDown.delay(60).duration(420)} style={[s.switcher,{backgroundColor:colors.background.secondary,borderWidth:1,borderColor:colors.border.default,marginHorizontal:20,marginBottom:20}]}>
                 {(['train','plan'] as TTab[]).map((t)=>(
                     <TouchableOpacity key={t} activeOpacity={0.85} accessibilityRole="tab" accessibilityState={{ selected: tab===t }} style={[s.swBtn,tab===t&&{backgroundColor:colors.accent.coralDark,...shadows.glow(colors.accent.coral)}]} onPress={()=>setTab(t)}>
                         <Text maxFontSizeMultiplier={1.3} style={[typography.overline,{color:tab===t?colors.text.primary:colors.text.secondary},tab===t&&s.txtShadow]}>{t==='train'?'TRAINING':'MY PLAN'}</Text>
                     </TouchableOpacity>
                 ))}
-            </View>
+            </Animated.View>
             {tab==='train'?(
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:TAB_BAR_H+80}}>
                     {activeSession ? (
+                        <Animated.View entering={FadeInDown.delay(80).springify().damping(18)}>
                         <TouchableOpacity activeOpacity={0.9} accessibilityRole="button" accessibilityLabel="Session in progress, touch to resume" style={[s.activeWrap,{marginHorizontal:20,marginBottom:24},shadows.glow(colors.accent.pink)]} onPress={()=>router.push('/training/workout' as any)}>
                             <View style={s.activeCard}>
                                 <LinearGradient colors={colors.gradients.coralCta} start={{x:0,y:0}} end={{x:1,y:1}} style={StyleSheet.absoluteFillObject} />
-                                <View style={s.activeRow}><View style={s.activeIcon}><Ionicons name="play" size={24} color={colors.accent.coral} /></View><View style={{flex:1,marginLeft:16}}><Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'900'},s.txtShadow]}>SESSION IN PROGRESS</Text><Text style={[typography.caption,{color:colors.text.primary},s.txtShadow]}>Touch to resume</Text></View><Ionicons name="chevron-forward" size={24} color={colors.text.primary} /></View>
+                                <View style={s.activeRow}><View style={s.activeIcon}><Ionicons name="play" size={24} color={colors.text.inverse} /></View><View style={{flex:1,marginLeft:16}}><Text style={[typography.subhead,{color:colors.text.inverse,fontWeight:'900'}]}>SESSION IN PROGRESS</Text><Text style={[typography.caption,{color:withAlpha(colors.text.inverse,0.75)}]}>Touch to resume</Text></View><Ionicons name="chevron-forward" size={24} color={colors.text.inverse} /></View>
                             </View>
                         </TouchableOpacity>
+                        </Animated.View>
                     ) : (
+                        <Animated.View entering={FadeInDown.delay(80).springify().damping(18)}>
                         <TouchableOpacity activeOpacity={0.9} accessibilityRole="button" accessibilityLabel="Start new session" style={{marginHorizontal:20,marginBottom:24}} onPress={()=>router.push('/training/onboarding' as any)}>
-                            <GlassCard style={{borderColor:colors.border.default}}>
+                            <GlassCard glow={colors.accent.coral} style={{borderColor:colors.border.light}}>
                                 <View style={s.startCard}>
                                     <LinearGradient colors={[withAlpha(colors.accent.coral,0.22),withAlpha(colors.accent.pink,0.10),'transparent']} start={{x:0,y:0}} end={{x:1,y:1}} style={StyleSheet.absoluteFillObject} />
                                     <LinearGradient colors={['rgba(255,255,255,0.06)','rgba(255,255,255,0)']} start={{x:0,y:0}} end={{x:0,y:1}} style={s.startSheen} pointerEvents="none" />
-                                    <View style={{zIndex:1}}><Text style={[typography.h2,{color:colors.text.primary}]}>Start New Session</Text><Text style={[typography.body,{color:colors.text.secondary,marginTop:4}]}>Pick a routine or go freestyle.</Text>
-                                        <View style={[s.beginBadge,shadows.glow(colors.accent.pink)]}>
+                                    <View style={{zIndex:1}}><Text style={[typography.overline,{color:colors.accent.coral,marginBottom:6}]}>READY WHEN YOU ARE</Text><Text style={[typography.h2,{color:colors.text.primary}]}>Start New Session</Text><Text style={[typography.body,{color:colors.text.secondary,marginTop:4}]}>Pick a routine or go freestyle.</Text>
+                                        <View style={[s.beginBadge,shadows.glow(colors.accent.coral)]}>
                                             <LinearGradient colors={colors.gradients.coralCta} start={{x:0,y:0}} end={{x:1,y:0}} style={StyleSheet.absoluteFillObject} />
-                                            <Ionicons name="add" size={16} color={colors.text.primary} /><Text maxFontSizeMultiplier={1.3} style={[s.badgeTxt,{color:colors.text.primary},s.txtShadow]}>BEGIN</Text>
+                                            <Ionicons name="flash" size={15} color={colors.text.inverse} /><Text maxFontSizeMultiplier={1.3} style={[s.badgeTxt,{color:colors.text.inverse}]}>BEGIN</Text>
                                         </View>
                                     </View>
-                                    <Ionicons name="flash" size={80} color={withAlpha(colors.accent.coral,0.12)} style={s.bgIco} />
+                                    <Ionicons name="barbell" size={86} color={withAlpha(colors.accent.coral,0.12)} style={s.bgIco} />
                                 </View>
                             </GlassCard>
                         </TouchableOpacity>
+                        </Animated.View>
                     )}
+                    <Animated.View entering={FadeInDown.delay(120).duration(420)} style={s.statRow}>
+                        <StatCard index={0} label="Routines" value={routineCount} icon="albums-outline" accent={colors.accent.coral} />
+                        <StatCard index={1} label="Exercises" value={totalExercises} icon="barbell-outline" accent={colors.accent.cyan} />
+                        <StatCard index={2} label="Weekly Sets" value={totalSets} icon="flame-outline" accent={colors.accent.purple} />
+                    </Animated.View>
                     <View style={s.secHd}><Text style={[typography.overline,{color:colors.text.secondary}]}>Explore Workouts</Text></View>
                     <View style={s.catGrid}>
-                        {CATS.map((cat)=>(
-                            <TouchableOpacity key={cat.id} accessibilityRole="button" accessibilityLabel={`${cat.title} workouts`} style={[s.catCard,{borderRadius:borderRadius.xl}]} activeOpacity={0.85} onPress={()=>router.push(cat.route as any)}>
-                                <Image source={cat.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
-                                <LinearGradient colors={['rgba(0,0,0,0.05)','rgba(0,0,0,0.78)']} style={[StyleSheet.absoluteFillObject,{borderRadius:borderRadius.xl}]} />
-                                <View style={[s.catBadge,{backgroundColor:withAlpha(cat.color,0.25),borderColor:cat.color}]}><Text style={[typography.caption,{color:cat.color,fontWeight:'bold',fontSize:9}]}>{cat.title.toUpperCase()}</Text></View>
-                                <Text style={[typography.heading,{color:'#FFF',fontSize:17,fontWeight:'900',zIndex:1}]}>{cat.title}</Text>
-                            </TouchableOpacity>
+                        {CATS.map((cat,idx)=>(
+                            <CategoryCard
+                                key={cat.id}
+                                index={idx}
+                                title={cat.title}
+                                img={cat.img}
+                                accent={cat.color}
+                                accessibilityLabel={`${cat.title} workouts`}
+                                onPress={()=>router.push(cat.route as any)}
+                            />
                         ))}
                     </View>
                     <View style={s.secHd}><Text style={[typography.overline,{color:colors.text.secondary}]}>Your Routines</Text><TouchableOpacity activeOpacity={0.85} accessibilityRole="button" hitSlop={{top:8,bottom:8,left:8,right:8}} onPress={()=>router.push('/(exercises)/routines' as any)}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold'}]}>VIEW ALL</Text></TouchableOpacity></View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal:20,gap:16,paddingBottom:8}}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={CAROUSEL_CARD_W+16} snapToAlignment="start" contentContainerStyle={{paddingHorizontal:20,gap:16,paddingBottom:8}}>
                         {routinesQ.isLoading?
-                        [0,1,2].map((i)=><Skeleton key={i} width={180} height={150} radius={borderRadius.xl} />):
+                        [0,1,2].map((i)=><Skeleton key={i} width={CAROUSEL_CARD_W} height={168} radius={borderRadius.xl} />):
                         routinesQ.isError?
                         <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Couldn't load routines, touch to retry" onPress={()=>routinesQ.refetch()} style={[s.emptyR,{backgroundColor:colors.background.secondary,borderWidth:1,borderColor:colors.border.default,borderRadius:borderRadius.xl}]}>
                             <View style={[s.emptyRIcon,{backgroundColor:withAlpha(colors.accent.coral,0.12),borderColor:withAlpha(colors.accent.coral,0.24)}]}><Ionicons name="cloud-offline-outline" size={24} color={colors.accent.coral} /></View>
@@ -131,15 +154,16 @@ export default function TrainingHubScreen() {
                             const imgs=ROUTINE_IMGS[idx%4]!;
                             const ac=[colors.accent.coral,colors.accent.cyan,colors.accent.emerald,colors.accent.purple][idx%4]!;
                             return (
-                                <TouchableOpacity key={r.id||idx} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={r.name||r.title} style={[s.routCard,{borderRadius:borderRadius.xl}]} onPress={()=>router.push({pathname:'/training/onboarding',params:{routineId:r.id}})}>
-                                    <Image source={imgs} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
-                                    <LinearGradient colors={['rgba(0,0,0,0.1)','rgba(0,0,0,0.85)']} style={StyleSheet.absoluteFillObject} />
-                                    <View style={[s.routContent,{zIndex:1}]}>
-                                        <View style={[s.routTag,{backgroundColor:ac}]}><Text style={s.tagTxt}>{r.splitType||'STRENGTH'}</Text></View>
-                                        <Text style={[typography.heading,{color:'#FFF',fontSize:17}]} numberOfLines={2}>{r.name||r.title}</Text>
-                                        <Text style={[typography.caption,{color:'rgba(255,255,255,0.6)',marginTop:4}]}>{r.exercises?.length||0} exercises</Text>
-                                    </View>
-                                </TouchableOpacity>
+                                <RoutineCard
+                                    key={r.id||idx}
+                                    index={idx}
+                                    title={r.name||r.title}
+                                    tag={r.splitType||'STRENGTH'}
+                                    exerciseCount={r.exercises?.length||0}
+                                    img={imgs}
+                                    accent={ac}
+                                    onPress={()=>router.push({pathname:'/training/onboarding',params:{routineId:r.id}})}
+                                />
                             );
                         })}
                     </ScrollView>
@@ -163,8 +187,8 @@ export default function TrainingHubScreen() {
                         />
                     ):(
                         activePlan ? (
-                            <View>
-                                <View style={[s.planCard,{marginBottom:24}]}>
+                            <Animated.View entering={FadeIn.duration(360)}>
+                                <Animated.View entering={FadeInDown.delay(60).springify().damping(18)} style={[s.planCard,{marginBottom:24}]}>
                                     <Image source={HERO_TRAINING} style={s.planImg} contentFit="cover" cachePolicy="memory-disk" transition={200} />
                                     <LinearGradient colors={['transparent','rgba(0,0,0,0.92)']} style={StyleSheet.absoluteFillObject} />
                                     <View style={s.planOvr}>
@@ -175,16 +199,16 @@ export default function TrainingHubScreen() {
                                             <Text style={[typography.overline,{color:'rgba(255,255,255,0.6)',marginLeft:8}]}>Exercises</Text>
                                         </View>
                                     </View>
-                                </View>
+                                </Animated.View>
                                 <Text style={[typography.overline,{color:colors.text.secondary,marginBottom:14}]}>Exercises</Text>
                                 {(activePlan.exercises??[]).slice(0,6).map((ex,i)=>{
                                     const ac=[colors.accent.coral,colors.accent.cyan,colors.accent.emerald,colors.accent.purple,colors.accent.amber,colors.accent.cyan][i%6]!;
                                     return (
-                                        <View key={i} style={[s.exRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
+                                        <Animated.View key={i} entering={FadeInDown.delay(120+i*40).springify().damping(20)} style={[s.exRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
                                             <View style={[s.exDot,{backgroundColor:ac}]} />
                                             <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold',flex:1,marginLeft:12}]}>{ex.name}</Text>
                                             <Text style={[typography.caption,{color:colors.text.secondary}]}>{ex.sets}×{ex.reps}</Text>
-                                        </View>
+                                        </Animated.View>
                                     );
                                 })}
                                 {(activePlan.exercises?.length??0)>6&&<Text style={[typography.caption,{color:colors.text.secondary,textAlign:'center',marginTop:8}]}>+{(activePlan.exercises?.length??0)-6} more exercises</Text>}
@@ -196,7 +220,7 @@ export default function TrainingHubScreen() {
                                     style={{marginTop:20,height:56,borderRadius:28}}
                                     onPress={()=>router.push({pathname:'/training/onboarding',params:{routineId:activePlan.id}} as any)}
                                 />
-                            </View>
+                            </Animated.View>
                         ) : (
                             <EmptyState
                                 icon="calendar-outline"
@@ -219,17 +243,14 @@ const s = StyleSheet.create({
     switcher:{flexDirection:'row',borderRadius:14,padding:4}, swBtn:{flex:1,paddingVertical:10,borderRadius:10,alignItems:'center'},
     activeWrap:{borderRadius:24,overflow:'hidden'}, activeCard:{padding:20}, activeRow:{flexDirection:'row',alignItems:'center'},
     activeIcon:{width:40,height:40,borderRadius:20,backgroundColor:'#FFF',alignItems:'center',justifyContent:'center'},
-    startCard:{padding:28,height:160,justifyContent:'center',overflow:'hidden'},
+    startCard:{padding:28,height:178,justifyContent:'center',overflow:'hidden'},
     startSheen:{position:'absolute',top:0,left:0,right:0,height:64},
-    beginBadge:{alignSelf:'flex-start',flexDirection:'row',alignItems:'center',paddingHorizontal:14,paddingVertical:7,borderRadius:9999,marginTop:18,overflow:'hidden'},
-    badgeTxt:{color:'#FFF',fontSize:10,fontWeight:'900',marginLeft:4,letterSpacing:0.5}, bgIco:{position:'absolute',right:-10,bottom:-10},
+    beginBadge:{alignSelf:'flex-start',flexDirection:'row',alignItems:'center',paddingHorizontal:16,paddingVertical:8,borderRadius:9999,marginTop:18,overflow:'hidden'},
+    badgeTxt:{fontSize:11,fontWeight:'900',marginLeft:5,letterSpacing:0.5}, bgIco:{position:'absolute',right:-12,bottom:-12},
     secHd:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:20,marginBottom:16,marginTop:8},
+    statRow:{flexDirection:'row',gap:10,paddingHorizontal:20,marginBottom:24},
     catGrid:{flexDirection:'row',flexWrap:'wrap',paddingHorizontal:20,gap:12,marginBottom:24},
-    catCard:{width:(width-52)/2,height:130,overflow:'hidden',justifyContent:'flex-end',padding:12},
-    catBadge:{alignSelf:'flex-start',paddingHorizontal:7,paddingVertical:3,borderRadius:6,borderWidth:1,marginBottom:6},
-    routCard:{width:180,height:150,overflow:'hidden'}, routContent:{padding:14,justifyContent:'flex-end',flex:1},
-    routTag:{alignSelf:'flex-start',paddingHorizontal:6,paddingVertical:2,borderRadius:4,marginBottom:6},
-    tagTxt:{color:'#FFF',fontSize:8,fontWeight:'bold'}, emptyR:{width:180,height:150,alignItems:'center',justifyContent:'center',padding:16},
+    emptyR:{width:CAROUSEL_CARD_W,height:168,alignItems:'center',justifyContent:'center',padding:16},
     emptyRIcon:{width:48,height:48,borderRadius:24,borderWidth:1,alignItems:'center',justifyContent:'center'},
     planCard:{height:220,borderRadius:20,overflow:'hidden'}, planImg:{width:'100%',height:220,position:'absolute'},
     planOvr:{position:'absolute',bottom:0,left:0,right:0,padding:20},

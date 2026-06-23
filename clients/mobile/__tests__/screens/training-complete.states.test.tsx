@@ -119,16 +119,18 @@ describe('WorkoutCompleteScreen — honest empty / 0-safe summary states', () =>
     expect(() => renderScreen()).not.toThrow();
 
     // The three stat labels + their formatted values are present.
-    expect(screen.getByText('Volume')).toBeTruthy();
-    expect(screen.getByText('Time')).toBeTruthy();
-    expect(screen.getByText('Burn')).toBeTruthy();
+    expect(screen.getByText('VOLUME')).toBeTruthy();
+    expect(screen.getByText('TIME')).toBeTruthy();
+    expect(screen.getByText('BURN')).toBeTruthy();
     expect(screen.getByText('2m 5s')).toBeTruthy();
-    // Volume / Burn numbers live in a composite Text (value + a nested unit
-    // <Text>), so they are matched as a substring; the unit suffix sits in its
-    // own single-child <Text> and is matched exactly.
-    expect(screen.getByText(/^500/)).toBeTruthy();
+    // Volume / Burn numbers now render in an animated CountUpText (a TextInput
+    // whose value tweens on the UI thread), so the numeral is NOT in a <Text>
+    // node the query engine can read. Assert the formatted value through each
+    // tile's accessibilityLabel instead; the unit suffix ("kg"/"kcal") still
+    // sits in its own single-child <Text> and is matched exactly.
+    expect(screen.getAllByLabelText('Volume 500 kilograms')[0]).toBeTruthy();
     expect(screen.getByText('kg')).toBeTruthy();
-    expect(screen.getByText(/^320/)).toBeTruthy();
+    expect(screen.getAllByLabelText('Burn 320 kilocalories')[0]).toBeTruthy();
     expect(screen.getByText('kcal')).toBeTruthy();
 
     // The honest empty-state branch is NOT taken on the valid path.
@@ -154,15 +156,15 @@ describe('WorkoutCompleteScreen — honest empty / 0-safe summary states', () =>
     expect(screen.queryByText(/undefined/)).toBeNull();
 
     // The stat cards are NOT rendered (the empty branch is taken instead).
-    expect(screen.queryByText('Volume')).toBeNull();
-    expect(screen.queryByText('Time')).toBeNull();
-    expect(screen.queryByText('Burn')).toBeNull();
+    expect(screen.queryByText('VOLUME')).toBeNull();
+    expect(screen.queryByText('TIME')).toBeNull();
+    expect(screen.queryByText('BURN')).toBeNull();
 
     // The honest empty state is present (the real EmptyState copy).
     expect(screen.getByText('No session data')).toBeTruthy();
 
     // The screen still mounts its primary chrome — the Return CTA is present.
-    expect(screen.getByText('Return to Dashboard')).toBeTruthy();
+    expect(screen.getByText('Done')).toBeTruthy();
   });
 
   // ── Test C: all params absent → honest EmptyState renders ───────────────────
@@ -174,12 +176,12 @@ describe('WorkoutCompleteScreen — honest empty / 0-safe summary states', () =>
     expect(() => renderScreen()).not.toThrow();
 
     expect(screen.getByText('No session data')).toBeTruthy();
-    expect(screen.queryByText('Volume')).toBeNull();
+    expect(screen.queryByText('VOLUME')).toBeNull();
     expect(screen.queryByText(/NaN/)).toBeNull();
     expect(screen.queryByText(/undefined/)).toBeNull();
 
     // Primary chrome still mounts.
-    expect(screen.getByText('Return to Dashboard')).toBeTruthy();
+    expect(screen.getByText('Done')).toBeTruthy();
   });
 
   // ── Test D: the Return-to-Dashboard CTA routes correctly ────────────────────
@@ -193,7 +195,7 @@ describe('WorkoutCompleteScreen — honest empty / 0-safe summary states', () =>
 
     renderScreen();
 
-    fireEvent.press(screen.getByText('Return to Dashboard'));
+    fireEvent.press(screen.getByText('Done'));
 
     expect(mockReplace).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)');
@@ -208,7 +210,7 @@ describe('WorkoutCompleteScreen — honest empty / 0-safe summary states', () =>
 
     renderScreen();
 
-    fireEvent.press(screen.getByText('Return to Dashboard'));
+    fireEvent.press(screen.getByText('Done'));
 
     expect(mockReplace).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith('/(tabs)');

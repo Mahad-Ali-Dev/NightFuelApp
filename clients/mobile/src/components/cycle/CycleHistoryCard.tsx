@@ -25,6 +25,21 @@ export interface CycleHistoryCardProps {
     history?: CycleHistoryResponse;
 }
 
+/**
+ * Format a 'YYYY-MM-DD' as a soft, human "Mon 14 Jul" (UTC, locale-light).
+ * Mirrors CyclePhaseHero.formatPredicted so the history reads as human dates,
+ * not a raw-ISO CSV column. Falls back to the raw value if it can't parse.
+ */
+function formatHistoryDate(iso: string): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return iso;
+    const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+    if (Number.isNaN(d.getTime())) return iso;
+    const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()];
+    const mo = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()];
+    return `${wd} ${d.getUTCDate()} ${mo}`;
+}
+
 /** Compute an observed cycle-length range "min-max days" from the cycles list. */
 function cycleLengthRange(cycles: CycleHistoryEntry[]): string | null {
     const lengths = cycles
@@ -70,50 +85,66 @@ export function CycleHistoryCard({ history }: CycleHistoryCardProps) {
 
                 {hasAverages ? (
                     <>
+                        {/* The only hard stats on this screen — VALUE dominates its
+                            small muted overline label (big Barlow-Condensed numeral
+                            over a tiny uppercase caption), per the Zeitra brief. */}
                         <View style={styles.statsRow}>
                             <View style={styles.stat}>
-                                <Text style={[typography.h2, { color: colors.text.primary }]}>
+                                <Text style={[typography.statMedium, { color: colors.text.primary }]}>
                                     {averages!.avgCycleLengthDays}
                                 </Text>
-                                <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                                <Text style={[typography.overline, { color: colors.text.tertiary }]}>
                                     avg cycle (days)
                                 </Text>
                                 {range ? (
-                                    <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 2 }]}>
+                                    <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 4 }]}>
                                         Range {range}
                                     </Text>
                                 ) : null}
                             </View>
                             <View style={styles.stat}>
-                                <Text style={[typography.h2, { color: colors.text.primary }]}>
+                                <Text style={[typography.statMedium, { color: colors.text.primary }]}>
                                     {averages!.avgPeriodLengthDays ?? '—'}
                                 </Text>
-                                <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                                <Text style={[typography.overline, { color: colors.text.tertiary }]}>
                                     avg period (days)
                                 </Text>
                             </View>
                         </View>
 
-                        {/* Past cycles list */}
+                        {/* Past cycles as a visual mini-timeline (not a raw-ISO CSV
+                            column): each row pairs a phase-tinted period dot with a
+                            human "Mon 14 Jul" start label. The most-recent cycle
+                            (cycleLengthDays == null) is the live one — its dot reads
+                            brighter so the column has a clear "now" anchor. */}
                         <View style={styles.list}>
-                            {cycles.map((c) => (
-                                <View
-                                    key={c.startDate}
-                                    style={[styles.listRow, { borderTopColor: colors.border.default }]}
-                                    accessible
-                                    accessibilityLabel={`Cycle starting ${c.startDate}${
-                                        c.cycleLengthDays != null ? `, ${c.cycleLengthDays} day cycle` : ''
-                                    }${c.periodLengthDays != null ? `, ${c.periodLengthDays} day period` : ''}`}
-                                >
-                                    <Text style={[typography.body, { color: colors.text.primary }]}>
-                                        {c.startDate}
-                                    </Text>
-                                    <Text style={[typography.caption, { color: colors.text.secondary }]}>
-                                        {c.cycleLengthDays != null ? `${c.cycleLengthDays}d cycle` : 'current'}
-                                        {c.periodLengthDays != null ? ` · ${c.periodLengthDays}d period` : ''}
-                                    </Text>
-                                </View>
-                            ))}
+                            {cycles.map((c) => {
+                                const isCurrent = c.cycleLengthDays == null;
+                                const dotColor = isCurrent
+                                    ? colors.accent.red
+                                    : withAlpha(colors.accent.red, 0.45);
+                                return (
+                                    <View
+                                        key={c.startDate}
+                                        style={[styles.listRow, { borderTopColor: colors.border.default }]}
+                                        accessible
+                                        accessibilityLabel={`Cycle starting ${formatHistoryDate(c.startDate)}${
+                                            c.cycleLengthDays != null ? `, ${c.cycleLengthDays} day cycle` : ', current cycle'
+                                        }${c.periodLengthDays != null ? `, ${c.periodLengthDays} day period` : ''}`}
+                                    >
+                                        <View style={styles.rowLeft}>
+                                            <View style={[styles.timelineDot, { backgroundColor: dotColor }]} />
+                                            <Text style={[typography.body, { color: colors.text.primary }]}>
+                                                {formatHistoryDate(c.startDate)}
+                                            </Text>
+                                        </View>
+                                        <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                                            {c.cycleLengthDays != null ? `${c.cycleLengthDays}d cycle` : 'current'}
+                                            {c.periodLengthDays != null ? ` · ${c.periodLengthDays}d period` : ''}
+                                        </Text>
+                                    </View>
+                                );
+                            })}
                         </View>
                     </>
                 ) : (
@@ -143,6 +174,9 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
         borderTopWidth: 1,
     },
+    rowLeft: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
+    // Tiny phase-tinted marker that turns the list into a visual mini-timeline.
+    timelineDot: { width: 8, height: 8, borderRadius: 4, marginRight: 10 },
 });
 
 export default CycleHistoryCard;

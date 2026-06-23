@@ -17,7 +17,7 @@ interface PlanBuilderProps {
 }
 
 const DEFAULT_SECTIONS: PlanSection[] = [
-    { title: 'Nutrition', items: ['Pre-shift meal at 6 PM', 'Light meal at midnight', 'Post-shift smoothie'], color: '#FF6B35', icon: 'restaurant' },
+    { title: 'Nutrition', items: ['Pre-shift meal at 6 PM', 'Light meal at midnight', 'Post-shift smoothie'], color: '#A8CC3C', icon: 'restaurant' },
     { title: 'Sleep', items: ['Blackout curtains protocol', 'Melatonin at 7 AM', '7-hour sleep target'], color: '#A78BFA', icon: 'moon' },
     { title: 'Training', items: ['3x/week strength', 'Pre-shift mobility (15 min)'], color: '#00D4AA', icon: 'barbell' },
 ];

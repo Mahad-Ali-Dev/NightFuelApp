@@ -172,8 +172,10 @@ describe('Shift Detail — "Training around this shift" (read-only inverse link)
 
     renderScreen();
 
-    // Section heading present.
-    expect(screen.getByText('Training around this shift')).toBeTruthy();
+    // Section heading present. The redesign splits the single heading into a
+    // "TRAINING" overline + an "Around this shift" h3 — assert both parts.
+    expect(screen.getByText('TRAINING')).toBeTruthy();
+    expect(screen.getByText('Around this shift')).toBeTruthy();
 
     // Both rows render their titles.
     expect(screen.getByText('Push Day')).toBeTruthy();
@@ -199,8 +201,10 @@ describe('Shift Detail — "Training around this shift" (read-only inverse link)
     // Rendering the empty branch must not throw (no redbox on []).
     expect(() => renderScreen()).not.toThrow();
 
-    // The heading still renders above the honest empty state.
-    expect(screen.getByText('Training around this shift')).toBeTruthy();
+    // The heading still renders above the honest empty state (split overline +
+    // h3 after the redesign).
+    expect(screen.getByText('TRAINING')).toBeTruthy();
+    expect(screen.getByText('Around this shift')).toBeTruthy();
     expect(screen.getByText('No sessions linked to this shift yet')).toBeTruthy();
 
     // Not the error state, and no Retry button for the (non-error) empty case.
@@ -214,7 +218,8 @@ describe('Shift Detail — "Training around this shift" (read-only inverse link)
     // Rendering the error branch must not throw (no redbox on error).
     expect(() => renderScreen()).not.toThrow();
 
-    expect(screen.getByText('Training around this shift')).toBeTruthy();
+    expect(screen.getByText('TRAINING')).toBeTruthy();
+    expect(screen.getByText('Around this shift')).toBeTruthy();
     expect(screen.getByText("Couldn't load sessions")).toBeTruthy();
 
     // Retry is wired to the linked-sessions query's refetch — and only that.
@@ -231,7 +236,8 @@ describe('Shift Detail — "Training around this shift" (read-only inverse link)
     expect(() => renderScreen()).not.toThrow();
 
     // Heading renders; neither the empty nor error copy shows while loading.
-    expect(screen.getByText('Training around this shift')).toBeTruthy();
+    expect(screen.getByText('TRAINING')).toBeTruthy();
+    expect(screen.getByText('Around this shift')).toBeTruthy();
     expect(screen.queryByText('No sessions linked to this shift yet')).toBeNull();
     expect(screen.queryByText("Couldn't load sessions")).toBeNull();
   });

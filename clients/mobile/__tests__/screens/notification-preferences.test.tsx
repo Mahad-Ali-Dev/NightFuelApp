@@ -258,7 +258,11 @@ describe('NotificationPreferencesScreen', () => {
         expect(workoutSwitch).toBeTruthy();
         expect(workoutSwitch.props.accessibilityState).toMatchObject({ checked: true });
 
-        // Save starts DISABLED — nothing has changed yet.
+        // Save starts DISABLED — nothing has changed yet. The redesign keeps the
+        // persistent header Save (neutral, always mounted, carrying the
+        // disabled/busy accessibilityState) AND adds a thumb-zone "Save Changes"
+        // CtaButton that only mounts when there are unsaved edits. With no
+        // changes the header Save is the sole control with this label.
         const save = screen.getByLabelText('Save notification preferences');
         expect(save.props.accessibilityState).toMatchObject({ disabled: true });
 
@@ -268,8 +272,11 @@ describe('NotificationPreferencesScreen', () => {
         expect(screen.getByLabelText('Workout Reminders').props.accessibilityState).toMatchObject({
             checked: false,
         });
+        // After the edit the thumb-zone CtaButton also mounts, so two controls
+        // share the label. Assert the persistent header Save (first in the tree)
+        // is now enabled — its accessibilityState is the one tracking hasChanges.
         expect(
-            screen.getByLabelText('Save notification preferences').props.accessibilityState,
+            screen.getAllByLabelText('Save notification preferences')[0].props.accessibilityState,
         ).toMatchObject({ disabled: false });
     });
 
@@ -284,9 +291,11 @@ describe('NotificationPreferencesScreen', () => {
         expect(screen.queryByTestId('save-status-success')).toBeNull();
         expect(screen.queryByRole('alert')).toBeNull();
 
-        // Make an edit so Save is enabled, then save.
+        // Make an edit so Save is enabled, then save. (After the edit both the
+        // header Save and the thumb-zone CtaButton share this label; press the
+        // persistent header Save — index 0 — which fires the same handleSave.)
         fireEvent(screen.getByLabelText('Workout Reminders'), 'valueChange', false);
-        fireEvent.press(screen.getByLabelText('Save notification preferences'));
+        fireEvent.press(screen.getAllByLabelText('Save notification preferences')[0]);
 
         // The mutation ran the real mutationFn (saveNotificationPreferences) and
         // the screen's onSuccess flipped saveStatus → 'success'.
@@ -312,9 +321,11 @@ describe('NotificationPreferencesScreen', () => {
 
         renderScreen();
 
-        // Edit so Save is enabled, then trigger the failing save.
+        // Edit so Save is enabled, then trigger the failing save. (Both the
+        // header Save and the thumb-zone CtaButton now share this label; press
+        // the persistent header Save — index 0 — which fires the same handleSave.)
         fireEvent(screen.getByLabelText('Workout Reminders'), 'valueChange', false);
-        fireEvent.press(screen.getByLabelText('Save notification preferences'));
+        fireEvent.press(screen.getAllByLabelText('Save notification preferences')[0]);
 
         expect(mockMutate).toHaveBeenCalledTimes(1);
 

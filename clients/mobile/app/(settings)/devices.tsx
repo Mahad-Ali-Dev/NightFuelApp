@@ -1,13 +1,15 @@
-import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTheme } from '@/theme';
 import { spacing, borderRadius as br } from '@/theme/spacing';
 import { withAlpha } from '@/theme/utils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { GlassCard, CtaButton } from '@/components/ui';
+import { PressableScale } from '@/components/ui/PressableScale';
 import { getHealthSyncAdapter, SUPPORTED_HEALTH_SOURCES } from '@/lib/healthSync';
 import { HEALTH_SOURCE_LABELS, type HealthSource } from '@/lib/healthSync.types';
 
@@ -18,8 +20,9 @@ import { HEALTH_SOURCE_LABELS, type HealthSource } from '@/lib/healthSync.types'
  * old static "coming soon" empty state onto the {@link getHealthSyncAdapter}
  * health-sync seam (`@/lib/healthSync`): it lists the three supported sources —
  * Apple Health, Google Fit / Health Connect, and a generic Bluetooth (BLE)
- * device — each as a GlassCard row with a Connect CtaButton and a Sync-now
- * affordance.
+ * device — each as a GlassCard row with a subordinate lime-tint Connect control
+ * and a Sync-now affordance, with a SINGLE full-lime primary CTA pinned in the
+ * thumb zone below.
  *
  * HONEST GATE: the default adapter shipped in Expo Go is a NO-OP. `connect()`
  * and `syncNow()` resolve (they never throw) to a `{ status: 'unavailable',
@@ -28,10 +31,15 @@ import { HEALTH_SOURCE_LABELS, type HealthSource } from '@/lib/healthSync.types'
  * HealthKit / Health-Connect / BLE adapters slot in behind the same interface
  * in a later dev build with no change to this screen.
  *
+ * The connection STATUS pill and the summary header are DERIVED live from the
+ * adapter's `getStatus()` / `lastSyncedAt()` ground truth on each render — never
+ * stored — so they can't drift. When no source is connected the screen leads
+ * with an honest empty-state band guiding the user to connect a first device.
+ *
  * ── Applied react-native-skills ────────────────────────────────────────────
- *   - rules/imports-design-system-folder.md: the glass card + coral CTA come
+ *   - rules/imports-design-system-folder.md: the glass card + lime CTA come
  *     from the `@/components/ui` design-system folder (GlassCard / CtaButton),
- *     never an inline SafeBlurView card or a hand-rolled coral LinearGradient.
+ *     never an inline SafeBlurView card or a hand-rolled lime LinearGradient.
  *   - rules/react-state-minimize.md + rules/state-ground-truth.md: the adapter
  *     is the ground truth. The ONLY state we keep is `messages` — the transient
  *     per-source `reason` from the user's last connect/sync attempt (user-action
@@ -40,12 +48,13 @@ import { HEALTH_SOURCE_LABELS, type HealthSource } from '@/lib/healthSync.types'
  *   - rules/rendering-no-falsy-and.md: the honest reason renders via an explicit
  *     ternary-null (`{message ? … : null}`) so an empty/undefined message yields
  *     `null` and can never leak a falsy ("" / 0) value into the JSX tree.
- *   - rules/ui-pressable.md: the back button + Sync-now affordance are the
- *     surrounding screen's existing TouchableOpacity idiom; the primary Connect
- *     action is the design-system CtaButton (a Pressable under the hood). Both
- *     touch targets meet the 44pt minimum (Connect forwards minHeight:44, Sync
- *     has minHeight:44 + hitSlop), and both carry honest a11y labels/state that
- *     reflect the adapter result rather than implying a connection.
+ *   - rules/ui-pressable.md: the back button, the per-row subordinate Connect
+ *     and the Sync-now affordance all use the design-system `PressableScale`
+ *     (transform-only 0.96 pressed-scale); the screen's ONE primary action is the
+ *     pinned thumb-zone `CtaButton`. Every touch target meets the 44pt minimum
+ *     (Connect/Sync minHeight:44 + hitSlop; back has hitSlop), and each carries
+ *     honest a11y labels/state that reflect the adapter result rather than
+ *     implying a connection.
  *   - rules/list-performance-callbacks.md: the row press handlers
  *     (`handleConnect` / `handleSync`) are single hoisted `useCallback`
  *     instances that each row invokes with its own source id — no new callback
@@ -61,25 +70,28 @@ import { HEALTH_SOURCE_LABELS, type HealthSource } from '@/lib/healthSync.types'
 
 /** Per-source presentation metadata. The display NAME is sourced from
  * {@link HEALTH_SOURCE_LABELS} (the single source of truth in the types module);
- * here we only add the glyph + a platform-clarifying subtitle. */
+ * here we only add the glyph + a platform-clarifying subtitle.
+ *
+ * COLOR RESTRAINT: source rows no longer carry a per-source BRAND tint. The
+ * three icon badges render in one NEUTRAL treatment (text.secondary on glass)
+ * so brand colour stays concentrated on STATE, not decoration — only the live
+ * status pill carries functional colour, and a status-cyan ("connected") hue
+ * can no longer be mistaken for a connection on an unavailable source. */
 const SOURCE_META: Record<
     HealthSource,
-    { icon: keyof typeof Ionicons.glyphMap; subtitle: string; tint: 'coral' | 'cyan' | 'blue' }
+    { icon: keyof typeof Ionicons.glyphMap; subtitle: string }
 > = {
     apple_health: {
         icon: 'logo-apple',
         subtitle: 'iOS · HealthKit',
-        tint: 'coral',
     },
     google_fit: {
         icon: 'logo-google',
         subtitle: 'Android · Health Connect',
-        tint: 'cyan',
     },
     generic_ble: {
         icon: 'bluetooth-outline',
         subtitle: 'Cross-platform · BLE wearable',
-        tint: 'blue',
     },
 };
 
@@ -95,6 +107,8 @@ type NoticeKind = 'unavailable' | 'info';
 
 interface SourceRowProps {
     source: HealthSource;
+    /** Staggered entrance index — drives the FadeInDown delay for this card. */
+    index: number;
     /** Transient reason from this source's last connect/sync attempt, if any. */
     message?: string;
     /** Whether `message` is an honest error or a benign success confirmation. */
@@ -110,13 +124,32 @@ interface SourceRowProps {
     onSync: (source: HealthSource) => void;
 }
 
+/** A derived, presentation-ready view of a source's live connection status. The
+ * STATUS comes from the adapter's `getStatus()` ground truth, mapped to a label,
+ * a functional tint role and a glyph for the pill. */
+function statusView(
+    status: 'connected' | 'unavailable' | 'disconnected',
+    colors: ReturnType<typeof useTheme>['colors'],
+): { label: string; color: string; icon: keyof typeof Ionicons.glyphMap } {
+    switch (status) {
+        case 'connected':
+            return { label: 'Connected', color: colors.accent.cyan, icon: 'checkmark-circle' };
+        case 'unavailable':
+            return { label: 'Unavailable', color: colors.warning, icon: 'alert-circle' };
+        default:
+            return { label: 'Not connected', color: colors.text.tertiary, icon: 'ellipse-outline' };
+    }
+}
+
 /**
  * One health source as a GlassCard row. Memoised so a message update on a
  * sibling row doesn't re-render the rows that didn't change. It derives its
- * last-synced label live from the adapter (ground truth) rather than storing it.
+ * status + last-synced label live from the adapter (ground truth) rather than
+ * storing them.
  */
 const SourceRow = React.memo(function SourceRow({
     source,
+    index,
     message,
     noticeKind,
     syncTick,
@@ -126,7 +159,10 @@ const SourceRow = React.memo(function SourceRow({
     const { colors, typography } = useTheme();
     const meta = SOURCE_META[source];
     const name = HEALTH_SOURCE_LABELS[source];
-    const tintColor = colors.accent[meta.tint];
+    // Benign success-with-reason confirmations (e.g. "No new health data to
+    // sync.") read in the functional SUCCESS role (cyan), not a decorative
+    // brand tint — the user genuinely synced, so a real state colour fits.
+    const infoColor = colors.accent.cyan;
 
     // Read `syncTick` so a plain success (which advances the adapter's
     // last-synced timestamp but changes no other prop for this row) still
@@ -134,7 +170,10 @@ const SourceRow = React.memo(function SourceRow({
     void syncTick;
 
     // Ground truth — derived from the adapter on each render, never duplicated
-    // into state. `lastSyncedAt()` is an ISO string or null (→ "Never synced").
+    // into state. `getStatus()` drives the live connection pill; `lastSyncedAt()`
+    // is an ISO string or null (→ "Never synced").
+    const status = getHealthSyncAdapter().getStatus();
+    const sv = statusView(status, colors);
     const lastSynced = getHealthSyncAdapter().lastSyncedAt();
     const lastSyncedLabel = lastSynced ? formatLastSynced(lastSynced) : 'Never synced';
 
@@ -150,116 +189,152 @@ const SourceRow = React.memo(function SourceRow({
     const isInfo = noticeKind === 'info';
 
     return (
-        <GlassCard radius={br.xl} style={styles.row}>
-            <View style={styles.rowHeader}>
-                <View
-                    style={[
-                        styles.iconBadge,
-                        {
-                            backgroundColor: withAlpha(tintColor, 0.12),
-                            borderColor: withAlpha(tintColor, 0.28),
-                        },
-                    ]}
-                >
-                    <Ionicons name={meta.icon} size={22} color={tintColor} />
+        <Animated.View entering={FadeInDown.delay(120 + index * 60).springify().damping(18)}>
+            <GlassCard radius={br.xl} style={styles.row}>
+                <View style={styles.rowHeader}>
+                    {/* Neutral icon badge (text.secondary on glass) — no brand
+                        tint, so colour stays reserved for the status pill. */}
+                    <View
+                        style={[
+                            styles.iconBadge,
+                            {
+                                backgroundColor: colors.background.tertiary,
+                                borderColor: colors.border.default,
+                            },
+                        ]}
+                    >
+                        <Ionicons name={meta.icon} size={24} color={colors.text.secondary} />
+                    </View>
+                    <View style={styles.rowTitleBlock}>
+                        <Text
+                            style={[typography.h3, styles.rowTitle, { color: colors.text.primary }]}
+                            numberOfLines={1}
+                        >
+                            {name}
+                        </Text>
+                        <Text style={[typography.caption, { color: colors.text.tertiary }]} numberOfLines={1}>
+                            {meta.subtitle}
+                        </Text>
+                    </View>
+                    {/* Live connection status pill — derived from getStatus(). The
+                        glyph backs the colour so status is never colour-only. */}
+                    <View
+                        style={[
+                            styles.statusPill,
+                            { backgroundColor: withAlpha(sv.color, 0.12), borderColor: withAlpha(sv.color, 0.3) },
+                        ]}
+                        accessible
+                        accessibilityRole="text"
+                        accessibilityLabel={`Status: ${sv.label}`}
+                    >
+                        <Ionicons name={sv.icon} size={12} color={sv.color} />
+                        <Text style={[typography.overline, styles.statusText, { color: sv.color }]} numberOfLines={1}>
+                            {sv.label}
+                        </Text>
+                    </View>
                 </View>
-                <View style={styles.rowTitleBlock}>
-                    <Text style={[typography.body, styles.rowTitle, { color: colors.text.primary }]} numberOfLines={1}>
-                        {name}
-                    </Text>
-                    <Text style={[typography.caption, { color: colors.text.tertiary }]} numberOfLines={1}>
-                        {meta.subtitle}
-                    </Text>
-                </View>
-            </View>
 
-            <View style={[styles.metaRow, { borderTopColor: colors.border.default }]}>
-                <Ionicons name="sync-outline" size={14} color={colors.text.tertiary} />
-                <Text style={[typography.caption, styles.metaText, { color: colors.text.secondary }]}>
-                    {lastSyncedLabel}
-                </Text>
-            </View>
-
-            {/* Honest unavailable reason (or any non-connected result). Rendered
-                with an explicit ternary-null per rules/rendering-no-falsy-and.md:
-                `message` is a string, so an empty/undefined value yields `null`
-                (never a falsy 0/"" leaked into the JSX tree). */}
-            {message ? (
-                <View
-                    style={[
-                        styles.noticeBox,
-                        // Benign 'info' confirmation (success-with-reason, #11) uses
-                        // the source tint; an honest 'unavailable' reason keeps the
-                        // warning styling. Default to warning for safety.
-                        isInfo
-                            ? { backgroundColor: withAlpha(tintColor, 0.1), borderColor: withAlpha(tintColor, 0.25) }
-                            : { backgroundColor: withAlpha(colors.warning, 0.1), borderColor: withAlpha(colors.warning, 0.25) },
-                    ]}
-                    // Group the icon + reason into ONE accessible unit so a screen
-                    // reader announces the reason as a single live region. An
-                    // unavailable reason is an 'alert'; a benign confirmation is a
-                    // non-urgent 'status'. The label mirrors the visible reason so
-                    // the announcement is verbatim.
-                    accessible
-                    accessibilityRole={isInfo ? 'text' : 'alert'}
-                    accessibilityLiveRegion="polite"
-                    accessibilityLabel={message}
-                    testID={`notice-${source}`}
-                >
-                    <Ionicons
-                        name={isInfo ? 'checkmark-circle-outline' : 'information-circle-outline'}
-                        size={16}
-                        color={isInfo ? tintColor : colors.warning}
-                    />
-                    <Text style={[typography.caption, styles.noticeText, { color: colors.text.secondary }]}>
-                        {message}
+                <View style={[styles.metaRow, { borderTopColor: colors.border.default }]}>
+                    <Ionicons name="time-outline" size={14} color={colors.text.tertiary} />
+                    <Text style={[typography.caption, styles.metaText, { color: colors.text.secondary }]}>
+                        {lastSyncedLabel}
                     </Text>
                 </View>
-            ) : null}
 
-            <View style={styles.actions}>
-                <CtaButton
-                    label="Connect"
-                    icon="link-outline"
-                    size="sm"
-                    onPress={() => onConnect(source)}
-                    // Honest label: once an attempt has surfaced a reason, the
-                    // label announces the source is unavailable rather than
-                    // implying a connection. The CtaButton primitive owns its own
-                    // accessibilityRole="button" + accessibilityState.disabled (it
-                    // takes only a label), so we reflect the adapter result through
-                    // the label. We do NOT pass disabled — the control stays
-                    // pressable so a tap re-surfaces the honest reason.
-                    accessibilityLabel={isUnavailable ? `Connect ${name}, currently unavailable` : `Connect ${name}`}
-                    // sm's intrinsic minHeight is 40; connectBtn forwards
-                    // minHeight:44 (merged last in CtaButton, so it wins) to meet
-                    // the 44pt touch-target minimum alongside the Sync control.
-                    style={styles.connectBtn}
-                    testID={`connect-${source}`}
-                />
-                <TouchableOpacity
-                    activeOpacity={0.85}
-                    onPress={() => onSync(source)}
-                    accessibilityRole="button"
-                    // Honest label + state reflecting the adapter result: when the
-                    // last attempt was non-connected the label announces it, and
-                    // the hint explains what a press does. `disabled` stays false
-                    // on purpose — the control is pressable so a tap re-surfaces
-                    // the honest reason; we never fake a disabled/connected state.
-                    accessibilityLabel={isUnavailable ? `Sync ${name} now, currently unavailable` : `Sync ${name} now`}
-                    accessibilityHint={`Attempts to sync ${name} and shows the result`}
-                    accessibilityState={{ disabled: false }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={[styles.syncBtn, { borderColor: colors.border.light }]}
-                    testID={`sync-${source}`}
-                >
-                    <Ionicons name="refresh-outline" size={16} color={colors.text.secondary} />
-                    <Text style={[typography.caption, styles.syncLabel, { color: colors.text.secondary }]}>
-                        Sync now
-                    </Text>
-                </TouchableOpacity>
-            </View>
-        </GlassCard>
+                {/* Honest unavailable reason (or any non-connected result). Rendered
+                    with an explicit ternary-null per rules/rendering-no-falsy-and.md:
+                    `message` is a string, so an empty/undefined value yields `null`
+                    (never a falsy 0/"" leaked into the JSX tree). */}
+                {message ? (
+                    <View
+                        style={[
+                            styles.noticeBox,
+                            // Benign 'info' confirmation (success-with-reason, #11) uses
+                            // the functional SUCCESS role (cyan); an honest 'unavailable'
+                            // reason keeps the warning styling. Default to warning.
+                            isInfo
+                                ? { backgroundColor: withAlpha(infoColor, 0.1), borderColor: withAlpha(infoColor, 0.25) }
+                                : { backgroundColor: withAlpha(colors.warning, 0.1), borderColor: withAlpha(colors.warning, 0.25) },
+                        ]}
+                        // Group the icon + reason into ONE accessible unit so a screen
+                        // reader announces the reason as a single live region. An
+                        // unavailable reason is an 'alert'; a benign confirmation is a
+                        // non-urgent 'status'. The label mirrors the visible reason so
+                        // the announcement is verbatim.
+                        accessible
+                        accessibilityRole={isInfo ? 'text' : 'alert'}
+                        accessibilityLiveRegion="polite"
+                        accessibilityLabel={message}
+                        testID={`notice-${source}`}
+                    >
+                        <Ionicons
+                            name={isInfo ? 'checkmark-circle-outline' : 'information-circle-outline'}
+                            size={16}
+                            color={isInfo ? infoColor : colors.warning}
+                        />
+                        <Text style={[typography.caption, styles.noticeText, { color: colors.text.secondary }]}>
+                            {message}
+                        </Text>
+                    </View>
+                ) : null}
+
+                <View style={styles.actions}>
+                    {/* SUBORDINATE 'Connect' — demoted from a full-lime CtaButton to
+                        a lime-TINT outline control (≈10% fill + lime hairline +
+                        lime icon/label), matching the retry / disable-all subordinate
+                        recipe used across the settings screens. Full lime is the 10%
+                        accent reserved for the ONE thumb-zone primary below; the three
+                        per-row Connects must not each paint a solid-lime fill + glow.
+                        PressableScale gives the house transform-only pressed-scale
+                        (0.96). We keep the control pressable (never fake `disabled`)
+                        so a tap on an unavailable source re-surfaces the honest reason;
+                        the a11y label announces unavailability. */}
+                    <PressableScale
+                        onPress={() => onConnect(source)}
+                        accessibilityRole="button"
+                        accessibilityLabel={isUnavailable ? `Connect ${name}, currently unavailable` : `Connect ${name}`}
+                        accessibilityState={{ disabled: false }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={[
+                            styles.connectBtn,
+                            {
+                                backgroundColor: withAlpha(colors.accent.coral, 0.1),
+                                borderColor: withAlpha(colors.accent.coral, 0.35),
+                            },
+                        ]}
+                        testID={`connect-${source}`}
+                    >
+                        <Ionicons name="link-outline" size={16} color={colors.accent.coral} />
+                        <Text style={[typography.caption, styles.connectLabel, { color: colors.accent.coral }]}>
+                            Connect
+                        </Text>
+                    </PressableScale>
+                    {/* PressableScale gives the Sync control the same transform-only
+                        pressed-scale (0.96) as the rest of the system, replacing the
+                        old activeOpacity fade (MOTION: transform/opacity only). */}
+                    <PressableScale
+                        onPress={() => onSync(source)}
+                        accessibilityRole="button"
+                        // Honest label + state reflecting the adapter result: when the
+                        // last attempt was non-connected the label announces it, and
+                        // the hint explains what a press does. `disabled` stays false
+                        // on purpose — the control is pressable so a tap re-surfaces
+                        // the honest reason; we never fake a disabled/connected state.
+                        accessibilityLabel={isUnavailable ? `Sync ${name} now, currently unavailable` : `Sync ${name} now`}
+                        accessibilityHint={`Attempts to sync ${name} and shows the result`}
+                        accessibilityState={{ disabled: false }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        style={[styles.syncBtn, { borderColor: colors.border.light }]}
+                        testID={`sync-${source}`}
+                    >
+                        <Ionicons name="refresh-outline" size={16} color={colors.text.secondary} />
+                        <Text style={[typography.caption, styles.syncLabel, { color: colors.text.secondary }]}>
+                            Sync now
+                        </Text>
+                    </PressableScale>
+                </View>
+            </GlassCard>
+        </Animated.View>
     );
 });
 
@@ -359,38 +434,159 @@ export default function ConnectedDevicesScreen() {
     const handleConnect = useCallback((source: HealthSource) => { void runAttempt(source, 'connect'); }, [runAttempt]);
     const handleSync = useCallback((source: HealthSource) => { void runAttempt(source, 'syncNow'); }, [runAttempt]);
 
+    // The SINGLE thumb-zone primary action. The screen used to have THREE solid
+    // lime per-row Connect buttons and no reachable primary; those rows are now
+    // subordinate lime-tint controls, and this one pinned CtaButton is the lone
+    // full-lime accent — the 10% brand colour spent on exactly one action. It
+    // drives the same honest connect flow (reusing the per-row handler) on the
+    // first supported source, so the no-op adapter still surfaces its real
+    // "needs a dev build" reason on that row rather than faking a connection.
+    // (Indexed access is `HealthSource | undefined` under strict config; the
+    // list is statically the fixed three, so the footer simply no-ops if empty.)
+    const primarySource = SUPPORTED_HEALTH_SOURCES[0];
+    const handlePrimaryConnect = useCallback(() => {
+        if (primarySource) handleConnect(primarySource);
+    }, [handleConnect, primarySource]);
+
+    // Derived summary (#state-ground-truth): the live connection status is read
+    // from the adapter, never stored. `syncTick` is read so this recomputes
+    // right after a successful attempt advances the adapter. With the no-op
+    // adapter every source is 'unavailable' → connectedCount 0 → the empty-state
+    // band leads the screen, honestly inviting the user to connect a first
+    // device in a dev build.
+    const connectedCount = useMemo(() => {
+        void syncTick;
+        return SUPPORTED_HEALTH_SOURCES.reduce(
+            (n, source) => (getHealthSyncAdapter().getStatus() === 'connected' ? n + 1 : n),
+            0,
+        );
+    }, [syncTick]);
+    const total = SUPPORTED_HEALTH_SOURCES.length;
+    const noneConnected = connectedCount === 0;
+
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
             <StatusBar style="light" />
             <View style={[styles.header, { paddingTop: insets.top + 16, borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity
-                    activeOpacity={0.85}
+                {/* PressableScale gives the back control the house transform-only
+                    pressed-scale (0.96), replacing the old activeOpacity fade so it
+                    shares the same tactile feedback as the rest of the system. */}
+                <PressableScale
                     accessibilityRole="button"
                     accessibilityLabel="Go back"
                     onPress={() => router.back()}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                     <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-                </TouchableOpacity>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Connected Devices</Text>
+                </PressableScale>
+                <Text style={[typography.heading, { color: colors.text.primary }]}>Connected Devices</Text>
                 <View style={{ width: 24 }} />
             </View>
 
             <ScrollView
-                contentContainerStyle={{ padding: spacing['2xl'], paddingBottom: insets.bottom + spacing['3xl'] }}
+                contentContainerStyle={{
+                    paddingHorizontal: spacing['2xl'],
+                    paddingTop: spacing['2xl'],
+                    // Extra bottom room so the last card clears the pinned
+                    // thumb-zone CTA bar (footer height + its safe-area inset).
+                    paddingBottom: spacing['5xl'],
+                }}
                 showsVerticalScrollIndicator={false}
             >
-                <Text style={[typography.body, styles.intro, { color: colors.text.secondary }]}>
-                    Sync sleep, heart rate, and activity from a wearable or health app to sharpen your chrono-nutrition
-                    plan. Connect a source below.
-                </Text>
+                {/* Summary hero — the VALUE (connected count) dominates its label.
+                    Derived live from the adapter; never stored. */}
+                <Animated.View entering={FadeInDown.delay(40).springify().damping(18)}>
+                    <GlassCard radius={br.xl} style={styles.summaryCard}>
+                        <View style={styles.summaryTextBlock}>
+                            <Text style={[typography.overline, { color: colors.text.tertiary }]}>HEALTH SOURCES</Text>
+                            <View style={styles.summaryCountRow}>
+                                <Text style={[typography.statMedium, { color: colors.text.primary }]}>
+                                    {connectedCount}
+                                </Text>
+                                <Text style={[typography.subtitle, styles.summaryOf, { color: colors.text.tertiary }]}>
+                                    / {total} connected
+                                </Text>
+                            </View>
+                            <Text style={[typography.caption, styles.summaryHint, { color: colors.text.secondary }]}>
+                                {noneConnected
+                                    ? 'Sleep, heart rate & activity power your plan.'
+                                    : 'Keeping your chrono-nutrition plan in sync.'}
+                            </Text>
+                        </View>
+                        {/* Hero glyph in the CALM/info role (blue), not lime — lime
+                            stays reserved for the single primary action. */}
+                        <View
+                            style={[
+                                styles.summaryGlyph,
+                                {
+                                    backgroundColor: withAlpha(colors.accent.blue, 0.12),
+                                    borderColor: withAlpha(colors.accent.blue, 0.28),
+                                },
+                            ]}
+                        >
+                            <Ionicons name="pulse" size={26} color={colors.accent.blue} />
+                        </View>
+                    </GlassCard>
+                </Animated.View>
+
+                {/* Empty state — the source list is a fixed three and never empty,
+                    but when NOTHING is connected we lead with an honest invitation
+                    to connect a first device (icon + one-line guidance), then still
+                    show the three source cards below so the CTA target is right
+                    there. Never a blank screen. */}
+                {noneConnected ? (
+                    <Animated.View entering={FadeInDown.delay(80).springify().damping(18)}>
+                        {/* Empty-state band in the CALM role (purple = "AI + calm"),
+                            not lime — an informational guidance band shouldn't compete
+                            with the single primary CTA for the lime accent. */}
+                        <View
+                            style={[
+                                styles.emptyBand,
+                                {
+                                    backgroundColor: withAlpha(colors.accent.purple, 0.08),
+                                    borderColor: withAlpha(colors.accent.purple, 0.22),
+                                },
+                            ]}
+                            accessible
+                            accessibilityRole="text"
+                            accessibilityLabel="No devices connected yet. Connect a source below to sync sleep, heart rate, and activity."
+                        >
+                            <View
+                                style={[
+                                    styles.emptyIcon,
+                                    {
+                                        backgroundColor: withAlpha(colors.accent.purple, 0.12),
+                                        borderColor: withAlpha(colors.accent.purple, 0.26),
+                                    },
+                                ]}
+                            >
+                                <Ionicons name="watch-outline" size={26} color={colors.accent.purple} />
+                            </View>
+                            <Text style={[typography.subtitle, styles.emptyTitle, { color: colors.text.primary }]}>
+                                No devices connected yet
+                            </Text>
+                            <Text style={[typography.body, styles.emptyBody, { color: colors.text.secondary }]}>
+                                Connect a source below to sync sleep, heart rate, and activity — and sharpen your
+                                chrono-nutrition plan.
+                            </Text>
+                        </View>
+                    </Animated.View>
+                ) : null}
+
+                {/* Grouped section: the available sources, under an overline. */}
+                <Animated.View entering={FadeInDown.delay(100).springify().damping(18)}>
+                    <Text style={[typography.overline, styles.sectionHeader, { color: colors.text.tertiary }]}>
+                        AVAILABLE SOURCES
+                    </Text>
+                </Animated.View>
 
                 {/* Static map of the three supported sources (see header note on
                     why this is not a FlatList). */}
-                {SUPPORTED_HEALTH_SOURCES.map((source) => (
+                {SUPPORTED_HEALTH_SOURCES.map((source, index) => (
                     <SourceRow
                         key={source}
                         source={source}
+                        index={index}
                         message={messages[source]}
                         noticeKind={noticeKinds[source]}
                         syncTick={syncTick}
@@ -398,7 +594,44 @@ export default function ConnectedDevicesScreen() {
                         onSync={handleSync}
                     />
                 ))}
+
+                {/* Honest privacy footnote — calms the "what happens to my data"
+                    question, framed in the calm/info purple-blue role. */}
+                <Animated.View entering={FadeInDown.delay(320).springify().damping(18)}>
+                    <View style={styles.privacyRow}>
+                        <Ionicons name="lock-closed-outline" size={14} color={colors.text.tertiary} />
+                        <Text style={[typography.caption, styles.privacyText, { color: colors.text.tertiary }]}>
+                            Health data stays on your device until you choose to sync it.
+                        </Text>
+                    </View>
+                </Animated.View>
             </ScrollView>
+
+            {/* Pinned thumb-zone primary — the screen's ONE full-lime action,
+                anchored in the bottom third and above the safe-area inset so it's
+                reachable one-handed. Context-aware label: invites a first
+                connection when nothing is linked, else nudges keeping data fresh.
+                This is the only solid-lime fill on the screen; the per-row
+                Connects are subordinate lime-tint controls. */}
+            <Animated.View
+                entering={FadeInDown.delay(200).springify().damping(18)}
+                style={[
+                    styles.footer,
+                    {
+                        paddingBottom: insets.bottom + spacing.lg,
+                        borderTopColor: colors.border.default,
+                        backgroundColor: colors.background.primary,
+                    },
+                ]}
+            >
+                <CtaButton
+                    label={noneConnected ? 'Connect a device' : 'Connect another device'}
+                    icon="add-circle-outline"
+                    onPress={handlePrimaryConnect}
+                    accessibilityLabel={noneConnected ? 'Connect a device' : 'Connect another device'}
+                    testID="connect-primary"
+                />
+            </Animated.View>
         </View>
     );
 }
@@ -413,19 +646,72 @@ const styles = StyleSheet.create({
         paddingBottom: spacing.lg,
         borderBottomWidth: 1,
     },
-    intro: { lineHeight: 21, marginBottom: spacing.xl },
+
+    // Summary hero
+    summaryCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: spacing.xl,
+        marginBottom: spacing.xl,
+    },
+    summaryTextBlock: { flex: 1 },
+    summaryCountRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: spacing.xs },
+    summaryOf: { marginLeft: spacing.sm },
+    summaryHint: { marginTop: spacing.xs, lineHeight: 17 },
+    summaryGlyph: {
+        width: 52,
+        height: 52,
+        borderRadius: br.lg,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginLeft: spacing.lg,
+    },
+
+    // Empty-state band
+    emptyBand: {
+        alignItems: 'center',
+        padding: spacing.xl,
+        borderRadius: br.xl,
+        borderWidth: 1,
+        marginBottom: spacing.xl,
+    },
+    emptyIcon: {
+        width: 56,
+        height: 56,
+        borderRadius: br.full,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: spacing.md,
+    },
+    emptyTitle: { textAlign: 'center' },
+    emptyBody: { textAlign: 'center', marginTop: spacing.xs, lineHeight: 21, maxWidth: 300 },
+
+    sectionHeader: { marginBottom: spacing.md },
+
     row: { padding: spacing.xl, marginBottom: spacing.lg },
     rowHeader: { flexDirection: 'row', alignItems: 'center' },
     iconBadge: {
-        width: 44,
-        height: 44,
+        width: 48,
+        height: 48,
         borderRadius: br.lg,
         borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    rowTitleBlock: { flex: 1, marginLeft: spacing.md },
-    rowTitle: { fontWeight: '700', marginBottom: 2 },
+    rowTitleBlock: { flex: 1, marginLeft: spacing.md, marginRight: spacing.sm },
+    rowTitle: { marginBottom: 1 },
+    statusPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.xxs,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.xxs,
+        borderRadius: br.full,
+        borderWidth: 1,
+    },
+    statusText: { letterSpacing: 0.6 },
     metaRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -445,10 +731,21 @@ const styles = StyleSheet.create({
     },
     noticeText: { flex: 1, lineHeight: 18 },
     actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.lg },
-    // flex:1 to share the row; minHeight:44 lifts the sm CtaButton's intrinsic
-    // 40 to the 44pt touch-target minimum (forwarded style merges last in
-    // CtaButton, so it wins). Matches the Sync control's 44.
-    connectBtn: { flex: 1, minHeight: 44 },
+    // Subordinate lime-tint Connect control: flex:1 to lead the row, with the
+    // same 44pt touch-target + outline footprint as the Sync control. The lime
+    // tint fill / hairline / label colour are applied inline from theme tokens.
+    connectBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.xs,
+        minHeight: 44,
+        paddingHorizontal: spacing.lg,
+        borderRadius: br.lg,
+        borderWidth: 1,
+    },
+    connectLabel: { fontWeight: '700' },
     syncBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -459,4 +756,21 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     syncLabel: { fontWeight: '600' },
+
+    // Pinned thumb-zone primary CTA bar (single full-lime action).
+    footer: {
+        paddingHorizontal: spacing['2xl'],
+        paddingTop: spacing.lg,
+        borderTopWidth: StyleSheet.hairlineWidth,
+    },
+
+    privacyRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: spacing.xs,
+        marginTop: spacing.md,
+        paddingHorizontal: spacing.lg,
+    },
+    privacyText: { textAlign: 'center', lineHeight: 17 },
 });

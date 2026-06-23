@@ -35,7 +35,7 @@ const FoodResultRow = React.memo(function FoodResultRow({
                 <Text style={styles.foodName}>{item.name}</Text>
                 <Text style={styles.foodMeta}>{item.calories} kcal • P{item.protein}g C{item.carbs}g F{item.fat}g</Text>
             </View>
-            <Ionicons name="add-circle" size={24} color="#FF6B35" />
+            <Ionicons name="add-circle" size={24} color="#A8CC3C" />
         </TouchableOpacity>
     );
 });
@@ -73,7 +73,7 @@ export function FoodSearchSheet({ onSearch, onSelect }: FoodSearchSheetProps) {
                     </TouchableOpacity>
                 )}
             </View>
-            {loading && <ActivityIndicator color="#FF6B35" style={{ marginTop: 20 }} />}
+            {loading && <ActivityIndicator color="#A8CC3C" style={{ marginTop: 20 }} />}
             <FlatList
                 data={results}
                 keyExtractor={keyExtractor}

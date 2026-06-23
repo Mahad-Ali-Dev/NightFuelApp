@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Pressable, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -8,16 +8,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { logMeal, searchFoods, getFoodById, getRecipe, FoodItem } from '@/api/meals';
+import { getToday as getTodayProgress } from '@/api/progress';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { borderRadius } from '@/theme/spacing';
 import { GlassCard, Skeleton, EmptyState, CtaButton } from '@/components/ui';
+import { MealMacroSummary } from '@/components/MealMacroSummary';
 import { getErrorMessage } from '@/utils/validation';
 import { invalidateMealAndProgress } from '@/utils/invalidateMealAndProgress';
+// Meal-type catalog is static (id/label/image); the accent COLOR is resolved from
+// useTheme() tokens inside the component (mealColor) so nothing here bypasses the
+// theme with raw hex — each meal maps onto the Zeitra functional palette.
 const MT = [
-    { id:'BREAKFAST', label:'Breakfast', img:require('../../assets/images/meal-breakfast.png'), color:'#F59E0B' },
-    { id:'LUNCH', label:'Lunch', img:require('../../assets/images/meal-lunch.png'), color:'#2ECC71' },
-    { id:'DINNER', label:'Dinner', img:require('../../assets/images/meal-dinner.png'), color:'#A855F7' },
-    { id:'SNACK', label:'Snack', img:require('../../assets/images/meal-snack.png'), color:'#00D4FF' },
+    { id:'BREAKFAST', label:'Breakfast', img:require('../../assets/images/meal-breakfast.png') },
+    { id:'LUNCH', label:'Lunch', img:require('../../assets/images/meal-lunch.png') },
+    { id:'DINNER', label:'Dinner', img:require('../../assets/images/meal-dinner.png') },
+    { id:'SNACK', label:'Snack', img:require('../../assets/images/meal-snack.png') },
 ];
 type PlateItem = {name:string;calories:number;protein:number;carbs:number;fat:number;qty:number};
 // Plate quantity is button-driven (+/- 0.5, floored at 0.5) but a barcode
@@ -58,7 +64,30 @@ export default function LogMealScreen() {
     const [plate, setPlate] = useState<PlateItem[]>([]);
     const foodQ = useQuery({ queryKey:['log-food',params.foodId], queryFn:()=>getFoodById(params.foodId!), enabled:!!params.foodId });
     const recipeQ = useQuery({ queryKey:['log-recipe',params.recipeId], queryFn:()=>getRecipe(params.recipeId!), enabled:!!params.recipeId });
-    const searchQ = useQuery({ queryKey:['meal-search',sq], queryFn:()=>searchFoods({q:sq,limit:20}), enabled:sq.length>2 });
+    // Only fetch what the UI actually renders (.slice(0,6) below) — was limit:20,
+    // an over-fetch of 14 unused rows per keystroke-debounced search.
+    const searchQ = useQuery({ queryKey:['meal-search',sq], queryFn:()=>searchFoods({q:sq,limit:8}), enabled:sq.length>2 });
+    // Daily macro/calorie targets (same source + query key as the Nutrition tab &
+    // Dashboard) so the running-total RINGS actually sweep and the calorie "X of Y"
+    // bar appears — instead of rendering three hollow grey circles. Falls back to the
+    // app-wide defaults when the profile carries no explicit goal.
+    const progressQ = useQuery({ queryKey:['today-progress'], queryFn:getTodayProgress, retry:1 });
+    const dailyTargets = useMemo(()=>({
+        calories: progressQ.data?.caloriesTarget || 2400,
+        protein:  progressQ.data?.proteinTarget  || 180,
+        carbs:    progressQ.data?.carbsTarget    || 200,
+        fat:      progressQ.data?.fatTarget      || 70,
+    }),[progressQ.data]);
+    // Per-meal accent, resolved from the Zeitra functional palette via tokens:
+    // Breakfast=amber (morning warmth), Lunch=emerald, Dinner=purple (AI/evening),
+    // Snack=cyan (progress). No raw hex; off-palette literals (#00D4FF etc.) retired.
+    const mealColor = (id:string):string => (
+        id==='BREAKFAST' ? colors.accent.amber :
+        id==='LUNCH'     ? colors.accent.emerald :
+        id==='DINNER'    ? colors.accent.purple :
+        id==='SNACK'     ? colors.accent.cyan :
+        colors.accent.coral
+    );
     const logM = useMutation({
         mutationFn:(payload:any)=>logMeal(payload),
         // Route success invalidation through the shared helper so BOTH calorie
@@ -120,26 +149,36 @@ export default function LogMealScreen() {
                 <Text style={[typography.h2,{color:colors.text.primary}]}>Log Meal</Text>
                 <View style={{width:40}} />
             </View>
-            <ScrollView contentContainerStyle={{paddingBottom:120}} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                <Text style={[typography.overline,{color:colors.text.secondary,paddingHorizontal:20,marginTop:24,marginBottom:12}]}>SELECT MEAL TYPE</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal:20,gap:12,marginBottom:24}}>
-                    {MT.map((mt)=>(
-                        <TouchableOpacity key={mt.id} accessibilityRole="button" accessibilityState={{ selected: mealType===mt.id }} accessibilityLabel={mt.label} style={[s.mealCard,mealType===mt.id&&{borderColor:mt.color,borderWidth:2}]} activeOpacity={0.85} onPress={()=>setMealType(mt.id)}>
-                            <Image source={mt.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
-                            <LinearGradient colors={['rgba(0,0,0,0.05)','rgba(0,0,0,0.75)']} style={StyleSheet.absoluteFillObject} />
-                            {mealType===mt.id&&<View style={[s.mealChk,{backgroundColor:mt.color}]}><Ionicons name="checkmark" size={12} color="#FFF" /></View>}
-                            <Text style={[typography.caption,{color:'#FFF',fontWeight:'bold',fontSize:11,zIndex:1}]}>{mt.label.toUpperCase()}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-                <Text style={[typography.overline,{color:colors.text.secondary,paddingHorizontal:20,marginBottom:12}]}>ADD FOOD</Text>
-                <GlassCard radius={14} style={{ marginHorizontal:20, marginBottom:12 }}>
-                    <View style={s.searchBox}>
-                        <Ionicons name="search" size={18} color={colors.text.tertiary} />
-                        <TextInput style={[s.searchIn,{color:colors.text.primary}]} placeholder="Search food..." placeholderTextColor={colors.text.tertiary} value={sq} onChangeText={setSq} />
-                        {sq.length>0?<TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Clear" onPress={()=>setSq('')}><Ionicons name="close-circle" size={18} color={colors.text.tertiary} /></TouchableOpacity>:null}
-                    </View>
-                </GlassCard>
+            <ScrollView contentContainerStyle={{paddingBottom:140}} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <Animated.View entering={FadeInDown.duration(360).springify()}>
+                    <Text style={[typography.overline,{color:colors.text.secondary,paddingHorizontal:20,marginTop:24,marginBottom:12}]}>SELECT MEAL TYPE</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal:20,gap:12,marginBottom:24}}>
+                        {MT.map((mt)=>{
+                            const selected = mealType===mt.id;
+                            const mtColor = mealColor(mt.id);
+                            return (
+                            <Pressable key={mt.id} accessibilityRole="button" accessibilityState={{ selected }} accessibilityLabel={mt.label} style={({pressed})=>[s.mealCard,{borderColor:colors.border.default},selected&&{borderColor:mtColor,borderWidth:2},pressed&&{transform:[{scale:0.96}]}]} onPress={()=>setMealType(mt.id)}>
+                                <Image source={mt.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                                <LinearGradient colors={['rgba(10,12,18,0.05)','rgba(10,12,18,0.82)']} style={StyleSheet.absoluteFillObject} />
+                                {selected&&<View style={[s.mealChk,{backgroundColor:mtColor}]}><Ionicons name="checkmark" size={13} color={colors.text.inverse} /></View>}
+                                <Text style={[typography.overline,{color:selected?mtColor:colors.text.primary,fontSize:11,letterSpacing:1,zIndex:1}]}>{mt.label.toUpperCase()}</Text>
+                            </Pressable>
+                            );
+                        })}
+                    </ScrollView>
+                </Animated.View>
+                <Animated.View entering={FadeInDown.delay(60).duration(360).springify()}>
+                    <Text style={[typography.overline,{color:colors.text.secondary,paddingHorizontal:20,marginBottom:12}]}>ADD FOOD</Text>
+                    <GlassCard radius={16} style={{ marginHorizontal:20, marginBottom:12 }}>
+                        <View style={s.searchBox}>
+                            <View style={[s.searchIconChip,{backgroundColor:colors.background.tertiary}]}>
+                                <Ionicons name="search" size={16} color={colors.accent.coral} />
+                            </View>
+                            <TextInput style={[s.searchIn,{color:colors.text.primary,fontFamily:typography.body.fontFamily}]} placeholder="Search foods to add..." placeholderTextColor={colors.text.tertiary} value={sq} onChangeText={setSq} returnKeyType="search" autoCorrect={false} />
+                            {sq.length>0?<TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Clear" onPress={()=>setSq('')}><Ionicons name="close-circle" size={20} color={colors.text.tertiary} /></TouchableOpacity>:null}
+                        </View>
+                    </GlassCard>
+                </Animated.View>
                 {searchQ.isLoading?(
                     <View style={{marginHorizontal:20,marginBottom:16}}>
                         {[0,1,2].map((i)=>(
@@ -160,49 +199,57 @@ export default function LogMealScreen() {
                 ):null}
                 {sq.length>2&&(searchQ.data as FoodItem[]||[]).length>0?(
                     <View style={{marginHorizontal:20,marginBottom:16}}>
-                        {(searchQ.data as FoodItem[]).slice(0,6).map((item)=>(
-                            <TouchableOpacity key={item.id} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={`Add ${item.name}`} style={[s.searchResult,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]} onPress={()=>addToPlate(item)}>
-                                <View style={{flex:1}}>
-                                    <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold'}]}>{item.name}</Text>
-                                    <Text style={[typography.caption,{color:colors.text.secondary}]}>{Math.round(item.calories)} kcal per serving</Text>
-                                </View>
-                                <Ionicons name="add-circle" size={24} color={colors.accent.coral} />
-                            </TouchableOpacity>
+                        {(searchQ.data as FoodItem[]).slice(0,6).map((item,ri)=>(
+                            <Animated.View key={item.id} entering={FadeInDown.delay(ri*40).duration(280)}>
+                                <Pressable accessibilityRole="button" accessibilityLabel={`Add ${item.name}`} style={({pressed})=>[s.searchResult,{backgroundColor:colors.background.secondary,borderColor:colors.border.default},pressed&&{transform:[{scale:0.96}]}]} onPress={()=>addToPlate(item)}>
+                                    <View style={{flex:1,paddingRight:12}}>
+                                        <Text style={[typography.subhead,{color:colors.text.primary}]} numberOfLines={1}>{item.name}</Text>
+                                        <Text style={[typography.caption,{color:colors.text.secondary,marginTop:2}]}>{Math.round(item.calories)} kcal per serving</Text>
+                                    </View>
+                                    <View style={[s.addChip,{backgroundColor:colors.accent.coral}]}>
+                                        <Ionicons name="add" size={20} color={colors.text.inverse} />
+                                    </View>
+                                </Pressable>
+                            </Animated.View>
                         ))}
                     </View>
                 ):null}
                 {plate.length>0?(
-                    <View style={{paddingHorizontal:20}}>
+                    <Animated.View entering={FadeIn.duration(280)} style={{paddingHorizontal:20}}>
                         <View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
                             <Text style={[typography.h3,{color:colors.text.primary}]}>Your Plate</Text>
-                            <Text style={[typography.caption,{color:colors.text.secondary}]}>{plate.length} item{plate.length>1?'s':''}</Text>
+                            <View style={[s.countPill,{backgroundColor:colors.background.tertiary,borderColor:colors.border.default}]}>
+                                <Text style={[typography.captionMedium,{color:colors.text.secondary}]}>{plate.length} item{plate.length>1?'s':''}</Text>
+                            </View>
                         </View>
                         {plate.map((item,idx)=>(
-                            <View key={idx} style={[s.plateRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
-                                <View style={[s.plateAccent,{backgroundColor:mc?.color||colors.accent.coral}]} />
-                                <View style={{flex:1,paddingLeft:12}}>
-                                    <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'bold'}]} numberOfLines={1}>{item.name}</Text>
-                                    <Text style={[typography.caption,{color:colors.text.secondary}]}>{Math.round(safeNum(item.calories)*qtyForMath(item.qty))} kcal • P:{Math.round(safeNum(item.protein)*qtyForMath(item.qty))}g</Text>
-                                </View>
-                                <View style={s.qtyRow}>
-                                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Decrease" onPress={()=>setPlate(plate.map((p,i)=>i===idx?{...p,qty:Math.max(QTY_FLOOR,safeQty(p.qty)-0.5)}:p))}><Ionicons name="remove-circle-outline" size={20} color={colors.text.tertiary} /></TouchableOpacity>
-                                    <Text style={[typography.caption,{color:colors.text.primary,fontWeight:'bold',marginHorizontal:6}]}>{safeQty(item.qty)}x</Text>
-                                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Increase" onPress={()=>setPlate(plate.map((p,i)=>i===idx?{...p,qty:safeQty(p.qty)+0.5}:p))}><Ionicons name="add-circle-outline" size={20} color={colors.accent.coral} /></TouchableOpacity>
-                                </View>
-                                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Delete" style={{paddingLeft:8}} onPress={()=>setPlate(plate.filter((_,i)=>i!==idx))}><Ionicons name="trash-outline" size={18} color={colors.accent.coral} /></TouchableOpacity>
-                            </View>
-                        ))}
-                        <GlassCard radius={14} style={{ marginTop:10, marginBottom:24 }}>
-                            <View style={s.macroRow}>
-                                {[{l:'KCAL',v:Math.round(totals.calories),c:colors.accent.coral},{l:'PROTEIN',v:Math.round(totals.protein),c:colors.accent.emerald},{l:'CARBS',v:Math.round(totals.carbs),c:colors.accent.cyan},{l:'FAT',v:Math.round(totals.fat),c:colors.accent.amber}].map((m)=>(
-                                    <View key={m.l} style={{alignItems:'center',flex:1}}>
-                                        <Text style={[typography.statSmall,{color:m.c,fontSize:20,lineHeight:26}]}>{m.v}</Text>
-                                        <Text style={[typography.overline,{color:colors.text.secondary,fontSize:9,letterSpacing:1,marginTop:2}]}>{m.l}</Text>
+                            <Animated.View key={idx} entering={FadeInDown.delay(idx*40).duration(300).springify()}>
+                                <View style={[s.plateRow,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
+                                    <View style={[s.plateAccent,{backgroundColor:mealColor(mealType)}]} />
+                                    <View style={{flex:1,paddingLeft:14}}>
+                                        <Text style={[typography.subhead,{color:colors.text.primary}]} numberOfLines={1}>{item.name}</Text>
+                                        {/* Per-item kcal is the row's primary datum: bump the NUMBER to statTiny in the
+                                            meal accent (tabular feel) and keep the unit + protein as quiet caption. */}
+                                        <Text style={[typography.caption,{color:colors.text.secondary,marginTop:2}]} numberOfLines={1}>
+                                            <Text style={[typography.statTiny,{color:mealColor(mealType)}]}>{Math.round(safeNum(item.calories)*qtyForMath(item.qty))}</Text>
+                                            <Text style={[typography.captionMedium,{color:colors.text.secondary}]}> kcal</Text>
+                                            {'  •  P:'}{Math.round(safeNum(item.protein)*qtyForMath(item.qty))}g
+                                        </Text>
                                     </View>
-                                ))}
-                            </View>
+                                    <View style={[s.qtyRow,{backgroundColor:colors.background.tertiary,borderColor:colors.border.default}]}>
+                                        <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Decrease" onPress={()=>setPlate(plate.map((p,i)=>i===idx?{...p,qty:Math.max(QTY_FLOOR,safeQty(p.qty)-0.5)}:p))}><Ionicons name="remove" size={18} color={colors.text.secondary} /></TouchableOpacity>
+                                        <Text style={[typography.statTiny,{color:colors.text.primary,marginHorizontal:10,minWidth:30,textAlign:'center'}]}>{safeQty(item.qty)}x</Text>
+                                        <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Increase" onPress={()=>setPlate(plate.map((p,i)=>i===idx?{...p,qty:safeQty(p.qty)+0.5}:p))}><Ionicons name="add" size={18} color={colors.accent.coral} /></TouchableOpacity>
+                                    </View>
+                                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Delete" style={{paddingLeft:10}} onPress={()=>setPlate(plate.filter((_,i)=>i!==idx))}><Ionicons name="trash-outline" size={18} color={colors.text.tertiary} /></TouchableOpacity>
+                                </View>
+                            </Animated.View>
+                        ))}
+                        <GlassCard radius={20} style={{ marginTop:14, marginBottom:24, padding:18 }}>
+                            <Text style={[typography.overline,{color:colors.text.tertiary,marginBottom:10}]}>RUNNING TOTAL</Text>
+                            <MealMacroSummary totals={totals} targets={dailyTargets} />
                         </GlassCard>
-                    </View>
+                    </Animated.View>
                 ):null}
                 {plate.length===0&&sq.length===0?(
                     <EmptyState
@@ -212,7 +259,7 @@ export default function LogMealScreen() {
                     />
                 ):null}
             </ScrollView>
-            <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,20)}]}>
+            <LinearGradient colors={['rgba(10,12,18,0)','rgba(10,12,18,0.96)']} style={[s.footer,{paddingBottom:Math.max(insets.bottom,20)}]} pointerEvents="box-none">
                 <CtaButton
                     label="LOG MEAL"
                     icon="checkmark-circle"
@@ -223,22 +270,24 @@ export default function LogMealScreen() {
                     onPress={handleLog}
                     style={s.logBtnWrap}
                 />
-            </View>
+            </LinearGradient>
         </View>
     );
 }
 const s = StyleSheet.create({
     container:{flex:1}, header:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:20,paddingBottom:16,borderBottomWidth:1},
     iconBtn:{width:40,height:40,borderRadius:12,borderWidth:1,alignItems:'center',justifyContent:'center'},
-    mealCard:{width:88,height:96,borderRadius:14,overflow:'hidden',justifyContent:'flex-end',padding:10,borderWidth:1,borderColor:'transparent'},
-    mealChk:{position:'absolute',top:6,right:6,width:20,height:20,borderRadius:10,alignItems:'center',justifyContent:'center'},
-    searchBox:{flexDirection:'row',alignItems:'center',paddingHorizontal:14,height:48,gap:8},
+    mealCard:{width:88,height:96,borderRadius:16,overflow:'hidden',justifyContent:'flex-end',padding:10,borderWidth:1,borderColor:'transparent'},
+    mealChk:{position:'absolute',top:6,right:6,width:22,height:22,borderRadius:11,alignItems:'center',justifyContent:'center'},
+    searchBox:{flexDirection:'row',alignItems:'center',paddingLeft:10,paddingRight:14,height:54,gap:10},
+    searchIconChip:{width:34,height:34,borderRadius:10,alignItems:'center',justifyContent:'center'},
     searchIn:{flex:1,fontSize:15},
-    searchResult:{flexDirection:'row',alignItems:'center',padding:14,marginBottom:8,borderRadius:12,borderWidth:1},
-    plateRow:{flexDirection:'row',alignItems:'center',padding:12,marginBottom:10,borderRadius:14,borderWidth:1,overflow:'hidden'},
+    searchResult:{flexDirection:'row',alignItems:'center',padding:14,marginBottom:8,borderRadius:14,borderWidth:1},
+    addChip:{width:34,height:34,borderRadius:17,alignItems:'center',justifyContent:'center'},
+    countPill:{paddingHorizontal:10,paddingVertical:4,borderRadius:10,borderWidth:1},
+    plateRow:{flexDirection:'row',alignItems:'center',padding:12,marginBottom:10,borderRadius:16,borderWidth:1,overflow:'hidden'},
     plateAccent:{width:4,alignSelf:'stretch',borderRadius:2},
-    qtyRow:{flexDirection:'row',alignItems:'center'},
-    macroRow:{flexDirection:'row',padding:14},
-    footer:{position:'absolute',bottom:0,left:0,right:0,paddingHorizontal:20},
+    qtyRow:{flexDirection:'row',alignItems:'center',paddingHorizontal:8,paddingVertical:6,borderRadius:12,borderWidth:1},
+    footer:{position:'absolute',bottom:0,left:0,right:0,paddingHorizontal:20,paddingTop:28},
     logBtnWrap:{height:60,borderRadius:30},
 });

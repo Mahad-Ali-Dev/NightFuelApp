@@ -166,17 +166,22 @@ describe('ProfileScreen — honest secondary-query state (F4 + F7)', () => {
     renderScreen();
 
     // The misleading healthy-zeroed values must NOT appear when the fetch FAILED.
-    expect(screen.queryByText('0%')).toBeNull();
+    // (The stat value + '%' unit render as split <Text> nodes; a healthy zero
+    // would surface a literal '0' value — assert it's absent from the pills.)
+    expect(screen.queryByLabelText('FATIGUE 0%')).toBeNull();
+    expect(screen.queryByLabelText('ADHERENCE 0%')).toBeNull();
     expect(screen.queryByText('0d')).toBeNull();
-    expect(screen.queryByText('Member · Level 1')).toBeNull();
+    expect(screen.queryByLabelText('Level 1')).toBeNull();
 
     // Instead each affected pill surfaces the honest '—' + "Unavailable" + Retry.
     expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2); // FATIGUE + ADHERENCE + STREAK pills
     expect(screen.getAllByText('Unavailable').length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText('Retry').length).toBeGreaterThanOrEqual(2);
 
-    // The Level line reads honestly as "Level —", not "Level 1".
-    expect(screen.getByText('Member · Level —')).toBeTruthy();
+    // The level badge reads honestly as "LVL —" (a11y "Level unavailable"),
+    // not "LVL 1".
+    expect(screen.getByText('LVL —')).toBeTruthy();
+    expect(screen.getByLabelText('Level unavailable')).toBeTruthy();
   });
 
   test('pressing a stat pill Retry calls that query\'s refetch (and only that one)', () => {
@@ -200,10 +205,14 @@ describe('ProfileScreen — honest secondary-query state (F4 + F7)', () => {
 
     renderScreen();
 
-    // Honest zeroed state — distinct from the error state above.
-    expect(screen.getAllByText('0%').length).toBe(2); // FATIGUE + ADHERENCE
+    // Honest zeroed state — distinct from the error state above. The FATIGUE +
+    // ADHERENCE pills render value '0' + '%' as split nodes; assert via their
+    // combined accessible labels.
+    expect(screen.getByLabelText('FATIGUE 0%')).toBeTruthy();
+    expect(screen.getByLabelText('ADHERENCE 0%')).toBeTruthy();
     expect(screen.getByText('0d')).toBeTruthy();
-    expect(screen.getByText('Member · Level 1')).toBeTruthy();
+    expect(screen.getByText('LVL 1')).toBeTruthy();
+    expect(screen.getByLabelText('Level 1')).toBeTruthy();
     // …and the error affordances are absent.
     expect(screen.queryByText('Unavailable')).toBeNull();
     expect(screen.queryByText('Retry')).toBeNull();

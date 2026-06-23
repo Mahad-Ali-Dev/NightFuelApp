@@ -191,10 +191,10 @@ describe('LogMealScreen — numeric guard + honest empty/error states', () => {
     expect(screen.queryByText(/NaN/)).toBeNull();
 
     // The four macro stat columns are present and each is a finite number (0),
-    // not NaN. (The macro GlassCard renders KCAL/PROTEIN/CARBS/FAT labels with a
-    // numeric value above each.)
-    expect(screen.getByText('KCAL')).toBeTruthy();
-    expect(screen.getByText('PROTEIN')).toBeTruthy();
+    // not NaN. (The MealMacroSummary renders a kcal hero + Protein/Carbs/Fat
+    // macro rings with a numeric value each.)
+    expect(screen.getAllByText('kcal').length).toBeGreaterThan(0);
+    expect(screen.getByText('Protein')).toBeTruthy();
 
     // Logging the (coerced) item forwards a payload whose macros are finite — the
     // guard turned every NaN into 0, so logMeal never sees a fabricated number.
@@ -315,7 +315,7 @@ describe('LogMealScreen — numeric guard + honest empty/error states', () => {
     renderScreen();
 
     // Drive sq.length > 2 so the search branch is active.
-    const input = screen.getByPlaceholderText('Search food...');
+    const input = screen.getByPlaceholderText('Search foods to add...');
     fireEvent.changeText(input, 'rice');
 
     // Honest, retryable error copy — NOT a spinner, NOT fabricated rows.

@@ -1,10 +1,12 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable, Dimensions } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Skeleton, EmptyState, GeneratingSteps, CtaButton } from '@/components/ui';
+import { CircadianRing } from '@/components/CircadianRing';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,6 +36,11 @@ const PROTOCOL_GEN_STEPS = [
     'Scheduling your activation window…',
     'Finalizing your plan…',
 ];
+
+// Width of a "Window Playbook" carousel card. Roughly 72% of the viewport so the
+// next card peeks (signalling swipeability) and snapToInterval lands cleanly.
+// Module scope = computed once, no per-render Dimensions read.
+const CAROUSEL_CARD_W = Math.round(Math.min(Dimensions.get('window').width * 0.72, 280));
 
 // Human-readable "resets" line for the daily-limit upgrade block. Renders a
 // short local clock time ("Resets at 6:00 AM") when `resetsAt` is a parseable
@@ -342,11 +349,25 @@ export default function CircadianScreen() {
         profileMetrics?.entrainmentScore ?? circadianModel?.entrainmentScore ?? null;
 
     // ── Metric tiles config (keeps bindings identical, removes repetition) ──
+    // `hint` is purely descriptive copy for the new window-detail carousel; it
+    // adds no data dependency — the value bindings below are byte-identical to
+    // the originals (melatoninStart / caffeineCutoff / insulinStart / peakTemp).
     const metricTiles = [
-        { key: 'melatonin', accent: colors.accent.blue, icon: 'moon' as const, label: 'Melatonin Onset', value: profileMetrics?.melatoninStart || '--:--' },
-        { key: 'caffeine', accent: colors.accent.amber, icon: 'cafe' as const, label: 'Caffeine Cutoff', value: profileMetrics?.caffeineCutoff || '--:--' },
-        { key: 'insulin', accent: colors.accent.cyan, icon: 'restaurant' as const, label: 'Insulin Peak', value: profileMetrics?.insulinStart || '--:--' },
-        { key: 'temp', accent: colors.accent.coral, icon: 'thermometer' as const, label: 'Peak Temp', value: profileMetrics?.peakTemp || '--:--' },
+        { key: 'melatonin', accent: colors.accent.blue, icon: 'moon' as const, label: 'Melatonin Onset', value: profileMetrics?.melatoninStart || '--:--', hint: 'Wind-down begins — dim lights, ease off screens.' },
+        { key: 'caffeine', accent: colors.accent.amber, icon: 'cafe' as const, label: 'Caffeine Cutoff', value: profileMetrics?.caffeineCutoff || '--:--', hint: 'Last call for caffeine to protect deep sleep.' },
+        { key: 'insulin', accent: colors.accent.cyan, icon: 'restaurant' as const, label: 'Insulin Peak', value: profileMetrics?.insulinStart || '--:--', hint: 'Best window to fuel — carbs are tolerated well.' },
+        { key: 'temp', accent: colors.accent.coral, icon: 'thermometer' as const, label: 'Peak Temp', value: profileMetrics?.peakTemp || '--:--', hint: 'Core temperature peaks — your strength window.' },
+    ];
+
+    // Ring markers + the lime "optimal feeding / activation" arc are DERIVED from
+    // the same profileMetrics strings the grid already shows (no new data hook):
+    // the optimal window runs from the insulin-friendly feeding time to the
+    // caffeine cutoff — the daily "go" band the brand highlights in lime.
+    const ringMarkers = [
+        { key: 'melatonin', time: profileMetrics?.melatoninStart, color: colors.accent.blue },
+        { key: 'caffeine', time: profileMetrics?.caffeineCutoff, color: colors.accent.amber },
+        { key: 'insulin', time: profileMetrics?.insulinStart, color: colors.accent.cyan },
+        { key: 'temp', time: profileMetrics?.peakTemp, color: colors.accent.coral },
     ];
 
     // shiftLabel / shiftIcon derive from the SINGLE resolved `shiftType` above
@@ -396,13 +417,13 @@ export default function CircadianScreen() {
                     <Skeleton width={88} height={18} radius={borderRadius.sm} />
                 </View>
                 <View style={{ padding: spacing.lg }}>
+                    <Skeleton width="100%" height={300} radius={borderRadius['2xl']} style={{ marginBottom: spacing['2xl'] }} />
                     <Skeleton width={150} height={12} radius={borderRadius.sm} style={{ marginBottom: spacing.lg }} />
                     <View style={styles.grid}>
                         {[0, 1, 2, 3].map((i) => (
                             <Skeleton key={i} width="48%" height={132} radius={borderRadius['2xl']} />
                         ))}
                     </View>
-                    <Skeleton width="100%" height={180} radius={borderRadius['2xl']} style={{ marginTop: spacing['2xl'] }} />
                 </View>
             </View>
         );
@@ -412,7 +433,7 @@ export default function CircadianScreen() {
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             <StatusBar style="light" />
             {/* ══ HERO ════════════════════════════════════════════════════ */}
-            <View style={[styles.header, { paddingHorizontal: spacing['2xl'], marginTop: spacing.lg }]}>
+            <Animated.View entering={FadeInDown.duration(420)} style={[styles.header, { paddingHorizontal: spacing['2xl'], marginTop: spacing.lg }]}>
                 <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.sm }]}>
                     Chronobiology
                 </Text>
@@ -478,10 +499,10 @@ export default function CircadianScreen() {
                         </View>
                     </View>
                 </GlassCard>
-            </View>
+            </Animated.View>
 
             {/* ══ TAB SELECTOR ════════════════════════════════════════════ */}
-            <View style={[styles.tabSelector, { paddingHorizontal: spacing['2xl'], borderBottomColor: withAlpha(colors.text.primary, 0.06) }]}>
+            <Animated.View entering={FadeInDown.delay(60).duration(420)} style={[styles.tabSelector, { paddingHorizontal: spacing['2xl'], borderBottomColor: withAlpha(colors.text.primary, 0.06) }]}>
                 <TouchableOpacity
                     activeOpacity={0.85}
                     accessibilityRole="tab"
@@ -504,7 +525,7 @@ export default function CircadianScreen() {
                         AI Protocol
                     </Text>
                 </TouchableOpacity>
-            </View>
+            </Animated.View>
 
             <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: TAB_BAR_H + 80 }} showsVerticalScrollIndicator={false}>
                 {selectedTab === 'profile' && (
@@ -516,7 +537,7 @@ export default function CircadianScreen() {
                                     title="No shift to sync to"
                                     subtitle="Log your current shift and we'll map your melatonin, caffeine and insulin windows to keep your body clock aligned."
                                 />
-                                {/* Reserved PRIMARY coralCta fill (#E55A25→#FF4D8D) — the EmptyState
+                                {/* Reserved PRIMARY coralCta fill (#93B82E→#93B82E) — the EmptyState
                                     CTA rendered as a CtaButton so the brand fill matches spec. */}
                                 <View style={styles.emptyCta}>
                                     <CtaButton
@@ -528,71 +549,169 @@ export default function CircadianScreen() {
                             </>
                         ) : (
                             <>
-                                <Text style={[typography.overline, { color: colors.text.secondary, marginBottom: spacing.lg }]}>
-                                    Biological Windows
-                                </Text>
-                                <View style={styles.grid}>
+                                {/* ══ CIRCADIAN CLOCK — the USP centrepiece ════════════
+                                    A 24h SVG dial: the lime arc is the optimal feeding /
+                                    activation window (insulin-peak → caffeine-cutoff),
+                                    the dots are the biological-window markers, and the
+                                    centre carries the SAME resolvedEntrainmentScore +
+                                    entrainmentAdvice copy the old score card showed (no
+                                    data change — only the presentation). */}
+                                <Animated.View entering={FadeInDown.delay(120).duration(460)}>
+                                    <GlassCard
+                                        glow={colors.accent.coral}
+                                        style={[styles.clockCard, { borderColor: withAlpha(colors.accent.coral, 0.26) }]}
+                                    >
+                                        <LinearGradient
+                                            colors={[withAlpha(colors.accent.coral, 0.12), 'transparent']}
+                                            start={{ x: 0.5, y: 0 }}
+                                            end={{ x: 0.5, y: 1 }}
+                                            style={StyleSheet.absoluteFillObject}
+                                            pointerEvents="none"
+                                        />
+                                        <Text style={[typography.overline, { color: colors.text.secondary, textAlign: 'center', marginBottom: spacing.lg }]}>
+                                            24-Hour Body Clock
+                                        </Text>
+                                        <CircadianRing
+                                            size={244}
+                                            score={resolvedEntrainmentScore}
+                                            optimalStart={profileMetrics?.insulinStart}
+                                            optimalEnd={profileMetrics?.caffeineCutoff}
+                                            markers={ringMarkers}
+                                            trackColor={colors.border.light}
+                                            optimalColor={colors.accent.coral}
+                                            scoreColor={colors.text.primary}
+                                            labelColor={colors.text.secondary}
+                                            centerLabel="Entrainment"
+                                            scoreFontFamily={typography.statLarge.fontFamily}
+                                        />
+                                        {/* Legend: optimal window + the marker key. */}
+                                        <View style={styles.legendRow}>
+                                            <View style={styles.legendItem}>
+                                                <View style={[styles.legendBar, { backgroundColor: colors.accent.coral }]} />
+                                                <Text style={[typography.caption, { color: colors.text.secondary }]}>Optimal window</Text>
+                                            </View>
+                                        </View>
+                                        {/* Advice copy from the shared helper — ENTRAINMENT_ADVICE is the
+                                            single source of truth (no inline ternary). entrainmentAdvice
+                                            always returns a non-empty string, so this Text child can't leak a
+                                            falsy number outside <Text> (rendering-no-falsy-and.md). */}
+                                        <Text style={[typography.bodySm, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing.md, paddingHorizontal: spacing.lg }]}>
+                                            {entrainmentAdvice(resolvedEntrainmentScore)}
+                                        </Text>
+                                    </GlassCard>
+                                </Animated.View>
+
+                                {/* ══ SHIFT-AWARE STATUS CARD ══════════════════════════
+                                    A glance at what the clock is synced to. shiftLabel /
+                                    shiftIcon derive from the SAME single resolved shiftType. */}
+                                <Animated.View entering={FadeInDown.delay(180).duration(460)}>
+                                    <GlassCard style={[styles.shiftCard, { borderColor: withAlpha(colors.accent.coral, 0.2) }]}>
+                                        <View style={[styles.shiftIconWrap, { backgroundColor: withAlpha(colors.accent.coral, 0.14), borderColor: withAlpha(colors.accent.coral, 0.3) }]}>
+                                            <Ionicons name={shiftIcon} size={22} color={colors.accent.coral} />
+                                        </View>
+                                        <View style={{ flex: 1, marginLeft: spacing.md }}>
+                                            <Text style={[typography.overline, { color: colors.text.tertiary }]}>Synced to</Text>
+                                            <Text style={[typography.subhead, { color: colors.text.primary, marginTop: 2 }]}>{shiftLabel}</Text>
+                                        </View>
+                                        <Pressable
+                                            accessibilityRole="button"
+                                            accessibilityLabel="Open schedule"
+                                            hitSlop={8}
+                                            onPress={() => router.push('/(tabs)/schedule' as any)}
+                                            style={({ pressed }) => [
+                                                styles.shiftEditBtn,
+                                                { borderColor: withAlpha(colors.accent.coral, 0.4) },
+                                                pressed ? { transform: [{ scale: 0.96 }], backgroundColor: withAlpha(colors.accent.coral, 0.08) } : null,
+                                            ]}
+                                        >
+                                            <Ionicons name="calendar-outline" size={14} color={colors.accent.coral} />
+                                        </Pressable>
+                                    </GlassCard>
+                                </Animated.View>
+
+                                {/* ══ BIOLOGICAL WINDOWS — 2-col stat grid ════════════ */}
+                                <Animated.View entering={FadeInDown.delay(240).duration(460)}>
+                                    <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing['2xl'], marginBottom: spacing.lg }]}>
+                                        Biological Windows
+                                    </Text>
+                                    <View style={styles.grid}>
+                                        {metricTiles.map((tile) => (
+                                            <GlassCard
+                                                key={tile.key}
+                                                style={[styles.metricCard, { borderColor: withAlpha(tile.accent, 0.25) }]}
+                                            >
+                                                <View style={[styles.metricIcon, { backgroundColor: withAlpha(tile.accent, 0.14) }]}>
+                                                    <Ionicons name={tile.icon} size={22} color={tile.accent} />
+                                                </View>
+                                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.md + 2 }]}>
+                                                    {tile.label}
+                                                </Text>
+                                                <Text
+                                                    style={[typography.statSmall, { color: colors.text.primary, marginTop: spacing.xs }]}
+                                                    maxFontSizeMultiplier={1.3}
+                                                >
+                                                    {tile.value}
+                                                </Text>
+                                            </GlassCard>
+                                        ))}
+                                    </View>
+                                </Animated.View>
+
+                                {/* ══ WINDOW PLAYBOOK — horizontal snapping carousel ══
+                                    Same metricTiles bindings, surfaced as swipeable
+                                    coaching cards (value + what to do in that window). */}
+                                <Animated.View entering={FadeInDown.delay(300).duration(460)}>
+                                    <Text style={[typography.overline, { color: colors.text.secondary, marginTop: spacing['2xl'], marginBottom: spacing.lg }]}>
+                                        Window Playbook
+                                    </Text>
+                                </Animated.View>
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    decelerationRate="fast"
+                                    snapToInterval={CAROUSEL_CARD_W + 12}
+                                    snapToAlignment="start"
+                                    contentContainerStyle={styles.carouselContent}
+                                >
                                     {metricTiles.map((tile) => (
                                         <GlassCard
                                             key={tile.key}
-                                            style={[styles.metricCard, { borderColor: withAlpha(tile.accent, 0.25) }]}
+                                            style={[styles.playbookCard, { width: CAROUSEL_CARD_W, borderColor: withAlpha(tile.accent, 0.28) }]}
                                         >
-                                            <View style={[styles.metricIcon, { backgroundColor: withAlpha(tile.accent, 0.14) }]}>
-                                                <Ionicons name={tile.icon} size={22} color={tile.accent} />
+                                            <LinearGradient
+                                                colors={[withAlpha(tile.accent, 0.12), 'transparent']}
+                                                start={{ x: 0, y: 0 }}
+                                                end={{ x: 1, y: 1 }}
+                                                style={StyleSheet.absoluteFillObject}
+                                                pointerEvents="none"
+                                            />
+                                            <View style={styles.playbookTop}>
+                                                <View style={[styles.metricIcon, { backgroundColor: withAlpha(tile.accent, 0.16) }]}>
+                                                    <Ionicons name={tile.icon} size={20} color={tile.accent} />
+                                                </View>
+                                                <Text
+                                                    style={[typography.statSmall, { color: tile.accent }]}
+                                                    maxFontSizeMultiplier={1.3}
+                                                >
+                                                    {tile.value}
+                                                </Text>
                                             </View>
-                                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.md + 2 }]}>
+                                            <Text style={[typography.subhead, { color: colors.text.primary, marginTop: spacing.md }]}>
                                                 {tile.label}
                                             </Text>
-                                            <Text
-                                                style={[typography.statSmall, { color: colors.text.primary, marginTop: spacing.xs }]}
-                                                maxFontSizeMultiplier={1.3}
-                                            >
-                                                {tile.value}
+                                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: spacing.xs, lineHeight: 18 }]}>
+                                                {tile.hint}
                                             </Text>
                                         </GlassCard>
                                     ))}
-                                </View>
-
-                                {/* Entrainment Score */}
-                                <GlassCard
-                                    glow={colors.accent.cyan}
-                                    style={[
-                                        styles.scoreCard,
-                                        { borderColor: withAlpha(colors.accent.cyan, 0.3), borderRadius: borderRadius['2xl'], marginTop: spacing['2xl'] },
-                                    ]}
-                                >
-                                    <LinearGradient
-                                        colors={[withAlpha(colors.accent.cyan, 0.1), 'transparent']}
-                                        start={{ x: 0, y: 0 }}
-                                        end={{ x: 0, y: 1 }}
-                                        style={StyleSheet.absoluteFillObject}
-                                        pointerEvents="none"
-                                    />
-                                    <Text style={[typography.overline, { color: colors.text.secondary, textAlign: 'center' }]}>
-                                        Entrainment Score
-                                    </Text>
-                                    <Text
-                                        style={[typography.statLarge, { color: colors.accent.cyan, textAlign: 'center', marginVertical: spacing.sm }]}
-                                        maxFontSizeMultiplier={1.3}
-                                    >
-                                        {resolvedEntrainmentScore ?? '--'}
-                                        <Text style={[typography.statSmall, { color: colors.text.secondary }]}>/100</Text>
-                                    </Text>
-                                    {/* Advice copy from the shared helper — ENTRAINMENT_ADVICE is the
-                                        single source of truth (no inline ternary). entrainmentAdvice
-                                        always returns a non-empty string, so this Text child can't leak a
-                                        falsy number outside <Text> (rendering-no-falsy-and.md). */}
-                                    <Text style={[typography.bodySm, { color: colors.text.secondary, textAlign: 'center', paddingHorizontal: spacing.lg }]}>
-                                        {entrainmentAdvice(resolvedEntrainmentScore)}
-                                    </Text>
-                                </GlassCard>
+                                </ScrollView>
                             </>
                         )}
                     </View>
                 )}
 
                 {selectedTab === 'plan' && (
-                    <View>
+                    <Animated.View entering={FadeInDown.delay(120).duration(460)}>
                         <View style={[styles.planHeader, { marginBottom: spacing.xl }]}>
                             <Text style={[typography.overline, { color: colors.text.secondary }]}>Today's Protocol</Text>
                             <Pressable
@@ -780,7 +899,7 @@ export default function CircadianScreen() {
                                 })}
                             </View>
                         )}
-                    </View>
+                    </Animated.View>
                 )}
             </ScrollView>
         </View>
@@ -837,10 +956,65 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    scoreCard: {
-        padding: 28,
+    // Circadian clock centrepiece (Profile tab hero).
+    clockCard: {
+        padding: 24,
         alignItems: 'center',
         overflow: 'hidden',
+    },
+    legendRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 18,
+    },
+    legendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    legendBar: {
+        width: 18,
+        height: 5,
+        borderRadius: 3,
+        marginRight: 8,
+    },
+    // Shift-aware status card.
+    shiftCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+        marginTop: 16,
+    },
+    shiftIconWrap: {
+        width: 44,
+        height: 44,
+        borderRadius: 14,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    shiftEditBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    // Window Playbook horizontal carousel.
+    carouselContent: {
+        gap: 12,
+        paddingRight: 4,
+        paddingBottom: 4,
+    },
+    playbookCard: {
+        padding: 18,
+        overflow: 'hidden',
+    },
+    playbookTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
     },
     planHeader: {
         flexDirection: 'row',

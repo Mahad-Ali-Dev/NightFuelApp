@@ -240,17 +240,21 @@ describe('FastingScreen — honest loading / error / empty / active three-state 
     mockFastingState.data = []; // resolved, no logs
     renderScreen();
 
-    // Honest placeholders sourced from static state, not invented values.
+    // Honest placeholders sourced from static state, not invented values. The
+    // ready hero shows the TARGET overline + a static ":00:00" suffix (the hour
+    // numeral counts up via CountUpText), and Ends At reads the "--:--" placeholder.
     expect(screen.getByText('READY TO START')).toBeTruthy();
-    expect(screen.getByText('00:00:00')).toBeTruthy();
+    expect(screen.getByText('TARGET')).toBeTruthy();
+    expect(screen.getByText(':00:00')).toBeTruthy();
+    expect(screen.getByLabelText('Ready to start a 16 hour fast')).toBeTruthy();
     expect(screen.getByText('--:--')).toBeTruthy();
     // The protocol picker + START FASTING CTA are the no-active-fast affordances.
     expect(screen.getByText('SELECT PROTOCOL')).toBeTruthy();
     expect(screen.getByText('START FASTING')).toBeTruthy();
-    // NOTHING fabricated: no elapsed-time overline and no "% COMPLETE" progress
+    // NOTHING fabricated: no elapsed-time overline and no "% complete" progress
     // node (those render ONLY for an active fast).
-    expect(screen.queryByText('ELAPSED TIME')).toBeNull();
-    expect(screen.queryByText(/% COMPLETE/)).toBeNull();
+    expect(screen.queryByText('ELAPSED')).toBeNull();
+    expect(screen.queryByText(/% complete/)).toBeNull();
   });
 
   test('NON-ACTIVE log (a COMPLETED log present): still the honest READY state, no fabricated elapsed', () => {
@@ -263,10 +267,11 @@ describe('FastingScreen — honest loading / error / empty / active three-state 
     renderScreen();
 
     expect(screen.getByText('READY TO START')).toBeTruthy();
-    expect(screen.getByText('00:00:00')).toBeTruthy();
+    expect(screen.getByText('TARGET')).toBeTruthy();
+    expect(screen.getByText(':00:00')).toBeTruthy();
     expect(screen.getByText('--:--')).toBeTruthy();
-    expect(screen.queryByText('ELAPSED TIME')).toBeNull();
-    expect(screen.queryByText(/% COMPLETE/)).toBeNull();
+    expect(screen.queryByText('ELAPSED')).toBeNull();
+    expect(screen.queryByText(/% complete/)).toBeNull();
   });
 
   // ── (d) ACTIVE FAST → REAL DERIVED VALUES ───────────────────────────────────
@@ -289,7 +294,7 @@ describe('FastingScreen — honest loading / error / empty / active three-state 
       renderScreen();
 
       // The active branch shows the elapsed-time overline (NOT "READY TO START").
-      expect(screen.getByText('ELAPSED TIME')).toBeTruthy();
+      expect(screen.getByText('ELAPSED')).toBeTruthy();
       expect(screen.queryByText('READY TO START')).toBeNull();
 
       // Drive the 1s interval once so `elapsed` is computed from `startedAt`.
@@ -302,9 +307,10 @@ describe('FastingScreen — honest loading / error / empty / active three-state 
       expect(screen.getByText('01:01:05')).toBeTruthy();
       expect(screen.queryByText('00:00:00')).toBeNull();
 
-      // REAL target sourced from the data (targetHours: 16), and the computed
-      // Ends At = startedAt + 16h = 00:00 local-of-the-formatter — never "--:--".
-      expect(screen.getByText('16h')).toBeTruthy();
+      // REAL target sourced from the data (targetHours: 16) — surfaced via the
+      // Target StatPill's CountUpText a11y label — and the computed Ends At =
+      // startedAt + 16h, never the "--:--" placeholder.
+      expect(screen.getByLabelText('16h')).toBeTruthy();
       expect(screen.queryByText('--:--')).toBeNull();
 
       // The no-active-fast affordances are gone while a fast is in progress.

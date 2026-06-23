@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     rowActive: { backgroundColor: '#1C212820' },
     indicator: { width: 4, height: 32, borderRadius: 2, marginRight: 14 },
     completed: { backgroundColor: '#00D4AA' },
-    active: { backgroundColor: '#FF6B35' },
+    active: { backgroundColor: '#A8CC3C' },
     pending: { backgroundColor: colors.border.light },
     info: { flex: 1 },
     name: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },

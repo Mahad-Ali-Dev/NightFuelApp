@@ -48,6 +48,8 @@ export function Button({
           color={
             variant === 'outline' || variant === 'ghost'
               ? colors.accent.coral
+              : variant === 'primary'
+              ? '#0A0C12'
               : colors.text.primary
           }
           size="small"
@@ -63,10 +65,8 @@ export function Button({
           variant === 'outline' && { color: colors.accent.coral },
           variant === 'ghost' && { color: colors.text.secondary },
           variant === 'danger' && { color: colors.text.primary },
-          (variant === 'primary' || variant === 'secondary') && { color: colors.text.primary },
-          // Primary fills with the bright coral→pink gradient; lift the white
-          // label clear of it with the same textShadow CtaButton uses (AA).
-          variant === 'primary' && styles.primaryTextShadow,
+          variant === 'primary' && { color: '#0A0C12' },
+          variant === 'secondary' && { color: colors.text.primary },
           isDisabled && { opacity: 0.5 },
         ]}
       >
@@ -165,13 +165,6 @@ const styles = StyleSheet.create({
   text: {
     fontWeight: '600',
     letterSpacing: 0.2,
-  },
-  // Subtle dark shadow that lifts the white primary label clear of the bright
-  // coral→pink fill for AA legibility (mirrors CtaButton's label shadow).
-  primaryTextShadow: {
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
   },
   fullWidth: {
     width: '100%',

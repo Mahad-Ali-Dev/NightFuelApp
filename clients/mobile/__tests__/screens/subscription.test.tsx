@@ -222,8 +222,10 @@ describe('SubscriptionScreenContent', () => {
 
     renderScreen();
 
-    // The loaded grid (not the loading/error branch) is shown…
-    expect(screen.getByText('Choose Your Plan')).toBeTruthy();
+    // The loaded grid (not the loading/error branch) is shown. The plans
+    // section header is tier-aware: a PAID tier (PRO here) shows "Change Plan"
+    // (a free user would see "Choose Your Plan"), so assert the paid-tier copy.
+    expect(screen.getByText('Change Plan')).toBeTruthy();
     // …the error surface is absent…
     expect(screen.queryByText("Couldn't load your subscription")).toBeNull();
     // …and the active tier (PRO) surfaces its "CURRENT PLAN" badge. Because the
