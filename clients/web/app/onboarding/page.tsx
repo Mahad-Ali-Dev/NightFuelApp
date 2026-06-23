@@ -184,7 +184,7 @@ export default function OnboardingPage() {
                             key={idx}
                             className={cn(
                                 "h-1.5 flex-1 rounded-full transition-all duration-300",
-                                idx <= currentStep ? "bg-brand-500 shadow-[0_0_10px_rgba(251,146,60,0.5)]" : "bg-white/10"
+                                idx <= currentStep ? "bg-brand-500 shadow-[0_0_10px_rgba(168, 204, 60,0.5)]" : "bg-white/10"
                             )}
                         />
                     ))}
@@ -272,7 +272,7 @@ export default function OnboardingPage() {
                                             onClick={() => setValue('primaryGoal', goal.id as any)}
                                             className={cn(
                                                 "flex items-center gap-4 p-4 rounded-2xl border transition-all text-left group",
-                                                primaryGoal === goal.id ? "bg-brand-500/10 border-brand-500 shadow-[0_0_20px_rgba(251,146,60,0.15)]" : "bg-white/5 border-white/10 hover:border-white/20"
+                                                primaryGoal === goal.id ? "bg-brand-500/10 border-brand-500 shadow-[0_0_20px_rgba(168, 204, 60,0.15)]" : "bg-white/5 border-white/10 hover:border-white/20"
                                             )}
                                         >
                                             <div className={cn(
@@ -460,7 +460,7 @@ export default function OnboardingPage() {
                             type="button"
                             onClick={nextStep}
                             disabled={isLoading}
-                            className="flex-[2] py-6 rounded-2xl bg-brand-500 hover:bg-brand-600 text-background shadow-[0_0_30px_rgba(251,146,60,0.3)] transition-all"
+                            className="flex-[2] py-6 rounded-2xl bg-brand-500 hover:bg-brand-600 text-background shadow-[0_0_30px_rgba(168, 204, 60,0.3)] transition-all"
                         >
                             {isLoading ? 'Saving...' : currentStep === STEPS.length - 1 ? 'Finish & Sync' : 'Continue'}
                             {!isLoading && <ArrowRight className="ml-2" size={18} />}

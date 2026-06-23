@@ -55,7 +55,7 @@ function formatDate(iso: string): string {
 /* ------------------------------------------------------------------ */
 
 const CONFETTI_COLORS = [
-  '#f97316', '#fb923c', '#fdba74', '#a855f7', '#c084fc',
+  '#a8cc3c', '#b6d752', '#c5e06b', '#a855f7', '#c084fc',
   '#e879f9', '#22d3ee', '#34d399', '#fbbf24', '#f472b6',
   '#818cf8', '#38bdf8', '#4ade80', '#facc15', '#fb7185',
 ];

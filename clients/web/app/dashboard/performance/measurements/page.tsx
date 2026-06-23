@@ -217,8 +217,8 @@ export default function BodyMeasurementsPage() {
                                                     <AreaChart data={chartData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
                                                         <defs>
                                                             <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
-                                                                <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                                                                <stop offset="5%" stopColor="#a8cc3c" stopOpacity={0.3} />
+                                                                <stop offset="95%" stopColor="#a8cc3c" stopOpacity={0} />
                                                             </linearGradient>
                                                             <linearGradient id="colorWaist" x1="0" y1="0" x2="0" y2="1">
                                                                 <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
@@ -232,7 +232,7 @@ export default function BodyMeasurementsPage() {
                                                             contentStyle={{ backgroundColor: '#171717', borderColor: '#ffffff10', borderRadius: '12px' }}
                                                             itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
                                                         />
-                                                        <Area yAxisId="left" type="monotone" dataKey="weight" name="Weight (kg)" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#colorWeight)" />
+                                                        <Area yAxisId="left" type="monotone" dataKey="weight" name="Weight (kg)" stroke="#a8cc3c" strokeWidth={3} fillOpacity={1} fill="url(#colorWeight)" />
                                                         <Area yAxisId="right" type="monotone" dataKey="waist" name="Waist (cm)" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorWaist)" />
                                                     </AreaChart>
                                                 </ResponsiveContainer>

@@ -341,7 +341,7 @@ function TrendsSection({ data }: { data: any }) {
                                     contentStyle={{ backgroundColor: '#171717', border: '1px solid #333', borderRadius: '12px', fontSize: '10px' }}
                                     cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                                 />
-                                <Bar dataKey="caloriesActual" name="Actual" fill="#fb923c" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="caloriesActual" name="Actual" fill="#b6d752" radius={[4, 4, 0, 0]} />
                                 <Bar dataKey="caloriesTarget" name="Target" fill="#3b82f6" radius={[4, 4, 0, 0]} opacity={0.3} />
                             </BarChart>
                         </ResponsiveContainer>
@@ -407,7 +407,7 @@ function TrendsSection({ data }: { data: any }) {
                             <Tooltip
                                 contentStyle={{ backgroundColor: '#171717', border: '1px solid #333', borderRadius: '12px', fontSize: '10px' }}
                             />
-                            <Bar yAxisId="left" dataKey="caloriesActual" name="kcal" fill="#fb923c" opacity={0.15} radius={[2, 2, 0, 0]} />
+                            <Bar yAxisId="left" dataKey="caloriesActual" name="kcal" fill="#b6d752" opacity={0.15} radius={[2, 2, 0, 0]} />
                             <Line
                                 yAxisId="right"
                                 type="stepAfter"

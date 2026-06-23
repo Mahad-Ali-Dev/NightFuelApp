@@ -496,7 +496,7 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ id: s
                                                             contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '12px' }}
                                                             itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
                                                         />
-                                                        <Line type="monotone" dataKey="maxWeight" name="Weight (kg)" stroke="#f97316" strokeWidth={3} dot={{ r: 4, fill: '#f97316' }} />
+                                                        <Line type="monotone" dataKey="maxWeight" name="Weight (kg)" stroke="#a8cc3c" strokeWidth={3} dot={{ r: 4, fill: '#a8cc3c' }} />
                                                     </LineChart>
                                                 </ResponsiveContainer>
                                             </div>

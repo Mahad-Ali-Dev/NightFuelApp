@@ -297,7 +297,7 @@ function ToggleRow({ icon: Icon, iconColor, iconBg, label, description, active, 
                 className={cn(
                     "relative h-6 w-11 rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-black shrink-0 disabled:opacity-50 ml-4",
                     active
-                        ? "bg-brand-500 shadow-[0_0_16px_rgba(249,115,22,0.35)]"
+                        ? "bg-brand-500 shadow-[0_0_16px_rgba(168, 204, 60,0.35)]"
                         : "bg-neutral-700 group-hover:bg-neutral-600"
                 )}
             >

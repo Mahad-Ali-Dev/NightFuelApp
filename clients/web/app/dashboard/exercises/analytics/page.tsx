@@ -316,17 +316,17 @@ export default function ExerciseProgressPage() {
                                                                 <YAxis stroke="#ffffff20" tick={{ fill: '#737373', fontSize: 10 }} domain={['dataMin - 10', 'dataMax + 10']} />
                                                                 <Tooltip
                                                                     contentStyle={{ backgroundColor: '#171717', borderColor: '#ffffff10', borderRadius: '12px' }}
-                                                                    itemStyle={{ color: '#f97316', fontSize: '14px', fontWeight: 'bold' }}
+                                                                    itemStyle={{ color: '#a8cc3c', fontSize: '14px', fontWeight: 'bold' }}
                                                                     labelStyle={{ color: '#737373', fontSize: '12px', marginBottom: '4px' }}
                                                                 />
                                                                 <Line
                                                                     type="monotone"
                                                                     dataKey="maxWeight"
                                                                     name="Max Weight (kg)"
-                                                                    stroke="#f97316"
+                                                                    stroke="#a8cc3c"
                                                                     strokeWidth={4}
-                                                                    dot={{ fill: '#171717', stroke: '#f97316', strokeWidth: 2, r: 4 }}
-                                                                    activeDot={{ r: 6, fill: '#f97316', stroke: '#fff' }}
+                                                                    dot={{ fill: '#171717', stroke: '#a8cc3c', strokeWidth: 2, r: 4 }}
+                                                                    activeDot={{ r: 6, fill: '#a8cc3c', stroke: '#fff' }}
                                                                 />
                                                             </LineChart>
                                                         ) : (
