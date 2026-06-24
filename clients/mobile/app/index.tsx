@@ -39,7 +39,16 @@ import { spacing } from '@/theme/spacing';
  *    to scroll and no SafeAreaView/contentInset to add.
  */
 export default function RootIndex() {
-  const { isAuthenticated, isLoading, user } = useAuthStore();
+  // Per-field scoped selectors. An unscoped `useAuthStore()` destructure
+  // re-renders this gate on EVERY auth-store change; because this component
+  // re-runs the redirect logic below on each render, that extra churn was
+  // bouncing the user back to /login while they were still typing their
+  // credentials (the store mutates — e.g. isLoading — as the form submits).
+  // Subscribing to just the three fields the redirect actually depends on
+  // stops the spurious re-renders.
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const user = useAuthStore((s) => s.user);
 
   if (isLoading) {
     return (

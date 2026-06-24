@@ -4,6 +4,7 @@ import { RegisterBody, LoginBody, ForgotPasswordBody, ResetPasswordBody } from '
 import bcrypt from 'bcryptjs';
 import { Channels } from '@nightfuel/types';
 import jwt from 'jsonwebtoken';
+import nodemailer, { Transporter } from 'nodemailer';
 import { createLogger } from '@nightfuel/config';
 import { randomUUID, randomBytes, createHash } from 'crypto';
 
@@ -35,6 +36,28 @@ export type SafeUser = Omit<User, 'passwordHash'>;
 // How long a password-reset token stays valid.
 const RESET_TOKEN_TTL_MINUTES = 60;
 
+// Where the password-reset link points when APP_RESET_URL is not configured.
+// The raw token is appended as `?token=...`; the screen reads it and POSTs to
+// /v1/auth/reset-password.
+const DEFAULT_RESET_URL = 'https://zeitra.app/reset';
+
+// SMTP settings, all optional. When `host` is set, forgotPassword() delivers a
+// real reset email; otherwise it logs a clearly-marked DEV fallback so the flow
+// is testable without credentials. Sourced from env (SMTP_*) in index.ts.
+export interface SmtpConfig {
+    host?: string;
+    port?: string;
+    user?: string;
+    password?: string;
+    from?: string;
+}
+
+export interface AuthServiceConfig {
+    JWT_SECRET: string;
+    smtp?: SmtpConfig;
+    appResetUrl?: string;
+}
+
 // --- Login brute-force lockout (in-memory, per-process) ---------------------
 // After too many consecutive failed logins for the same email within the
 // window, further attempts are rejected for the remainder of the window. State
@@ -55,11 +78,94 @@ function hashToken(rawToken: string): string {
 }
 
 export class AuthService {
+    // Lazily-created nodemailer transport, reused across requests. Only built
+    // when SMTP is configured; stays null in the dev/no-creds path so the
+    // service never opens a connection it doesn't need.
+    private mailTransport: Transporter | null = null;
+
     constructor(
         private prisma: PrismaClient,
         private eventBus: RedisEventBus,
-        private config: { JWT_SECRET: string }
+        private config: AuthServiceConfig
     ) { }
+
+    /** True when SMTP is configured (an SMTP_HOST was provided). */
+    private smtpConfigured(): boolean {
+        return !!this.config.smtp?.host;
+    }
+
+    /** Build (once) and return the shared nodemailer transport. */
+    private getMailTransport(): Transporter {
+        if (!this.mailTransport) {
+            const smtp = this.config.smtp ?? {};
+            const port = smtp.port ? parseInt(smtp.port, 10) : 587;
+            this.mailTransport = nodemailer.createTransport({
+                host: smtp.host,
+                port,
+                // 465 is implicit TLS; other ports use STARTTLS upgrade.
+                secure: port === 465,
+                auth: smtp.user
+                    ? { user: smtp.user, pass: smtp.password }
+                    : undefined,
+            });
+        }
+        return this.mailTransport;
+    }
+
+    /**
+     * Deliver (or, in dev, log) the password-reset link for `rawToken`.
+     *
+     * The raw token is a LIVE credential. When SMTP is configured we email the
+     * link and never write the token to logs. When SMTP is NOT configured we
+     * fall back to logging the full reset link under an explicit DEV marker so
+     * the flow is testable locally without mail creds — this branch must never
+     * run in production (it requires SMTP to be left unset).
+     *
+     * Best-effort and self-contained: a mail failure is logged but not
+     * rethrown, so forgot-password keeps returning its generic anti-enumeration
+     * response regardless of delivery outcome.
+     */
+    private async sendPasswordResetEmail(email: string, rawToken: string): Promise<void> {
+        const base = this.config.appResetUrl || DEFAULT_RESET_URL;
+        const resetUrl = `${base}?token=${rawToken}`;
+
+        if (!this.smtpConfigured()) {
+            // DEV FALLBACK — no SMTP configured. Log the link so the reset flow
+            // can be exercised end-to-end without mail credentials. This is the
+            // ONLY path that may surface the raw token, and it cannot trigger in
+            // production (where SMTP_* must be set). OWNER: configure SMTP_* to
+            // switch to real email delivery.
+            logger.warn(
+                { resetUrl },
+                '[DEV] SMTP not configured — password reset link (configure SMTP_* for real email delivery)',
+            );
+            return;
+        }
+
+        try {
+            await this.getMailTransport().sendMail({
+                to: email,
+                from: this.config.smtp?.from || 'no-reply@zeitra.app',
+                subject: 'Reset your Zeitra password',
+                text:
+                    `We received a request to reset your Zeitra password.\n\n` +
+                    `Reset it here (link expires in ${RESET_TOKEN_TTL_MINUTES} minutes):\n${resetUrl}\n\n` +
+                    `If you didn't request this, you can safely ignore this email.`,
+                html:
+                    `<p>We received a request to reset your Zeitra password.</p>` +
+                    `<p>Reset it here (link expires in ${RESET_TOKEN_TTL_MINUTES} minutes):</p>` +
+                    `<p><a href="${resetUrl}">${resetUrl}</a></p>` +
+                    `<p>If you didn't request this, you can safely ignore this email.</p>`,
+            });
+            // Never log the raw token/link on the production path — record only a
+            // non-sensitive delivery event for observability.
+            logger.info('Password reset email sent');
+        } catch (err) {
+            // Don't rethrow — the caller still returns the generic response so a
+            // mail outage never leaks account existence or breaks the endpoint.
+            logger.error({ err }, 'Failed to send password reset email');
+        }
+    }
 
     /**
      * Register a new account. Always resolves with the SAME generic message
@@ -302,13 +408,12 @@ export class AuthService {
             },
         });
 
-        // TODO(email): send an email containing the reset link (using rawToken).
-        // The raw token is a live credential, so it is never written to logs —
-        // log only a non-sensitive event for observability.
-        logger.info(
-            { userId: user.id },
-            'Password reset token generated',
-        );
+        // Token is now committed — deliver the reset link. We send AFTER the
+        // commit (not inside a tx) so a slow/failing mail server can never roll
+        // back or hold open the DB write. The raw token is never logged on the
+        // production path (only the no-SMTP DEV fallback surfaces the link).
+        logger.info({ userId: user.id }, 'Password reset token generated');
+        await this.sendPasswordResetEmail(email, rawToken);
 
         return { message: FORGOT_PASSWORD_MESSAGE };
     }

@@ -102,6 +102,25 @@ export async function forgotPassword(
 }
 
 /**
+ * Complete a password reset using the token from the emailed reset link.
+ *
+ * The backend validates the token (existence / not used / not expired), sets
+ * the new password, and revokes all of the user's refresh tokens (so any old
+ * sessions are forced to re-login). An invalid/expired token returns 400 — the
+ * caller surfaces the expired state and routes the user back to forgot-password.
+ */
+export async function resetPassword(
+  token: string,
+  newPassword: string,
+): Promise<{ message: string }> {
+  const { data } = await apiClient.post<{ message: string }>(
+    '/v1/auth/reset-password',
+    { token, newPassword },
+  );
+  return data;
+}
+
+/**
  * Get the currently authenticated user's profile.
  */
 export async function getMe() {

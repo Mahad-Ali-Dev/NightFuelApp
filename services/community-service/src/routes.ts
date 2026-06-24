@@ -3,6 +3,20 @@ import { z } from 'zod';
 import { CommunityService, SelfFollowError } from './community.service';
 import jwt from 'jsonwebtoken';
 import { sendUnauthorized, makeInternalAuthGuard } from '@nightfuel/config';
+import { handleUpload, handleServeUpload } from './uploads';
+
+// BUG #3: a post's imageUrl MUST be an https URL. The author's local file:// (or
+// any http/data) URI is rejected on every device by the on-device trust gate, so
+// accepting it server-side would store a value that renders blank for everyone but
+// the author. The client now uploads the picked file to POST /v1/community/upload
+// first and posts with the returned https URL; this validator enforces the
+// contract end-to-end. `.url()` already requires an absolute URL; we additionally
+// pin the scheme to https.
+const httpsImageUrl = z
+    .string()
+    .url()
+    .max(2048)
+    .refine((u) => /^https:\/\//i.test(u), { message: 'imageUrl must be an https URL' });
 
 // ── Input upper bounds ──────────────────────────────────────────────────────
 // Generous caps so every currently-valid app payload still passes; only
@@ -45,7 +59,7 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
     });
 
     fastify.post('/v1/community/post', {
-        schema: { body: z.object({ content: z.string().min(1).max(5000), imageUrl: z.string().url().max(2048).optional() }) },
+        schema: { body: z.object({ content: z.string().min(1).max(5000), imageUrl: httpsImageUrl.optional() }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         try {
@@ -57,6 +71,24 @@ export default async function (fastify: FastifyInstance, opts: { communityServic
             return reply.code(500).send({ error: 'An unexpected error occurred' });
         }
     });
+
+    // ── Image upload (BUG #3) ─────────────────────────────────────────────────
+    // POST /v1/community/upload — authenticated multipart/form-data; persists the
+    // first image file part and returns its absolute https URL. The multipart body
+    // is collected as a Buffer by the content-type parser registered in index.ts,
+    // so this route declares no Zod body schema (the body is raw bytes, parsed in
+    // handleUpload). The returned URL rides the existing nginx /v1/community proxy.
+    fastify.post('/v1/community/upload', {
+        preHandler: [(fastify as any).authenticate]
+    }, handleUpload);
+
+    // GET /v1/community/uploads/:file — serve a stored image. Intentionally PUBLIC
+    // (no auth): the mobile <Image> component cannot attach the JWT, and the
+    // filenames are unguessable random tokens, mirroring how avatar/image URLs are
+    // fetched elsewhere. handleServeUpload is hardened against path traversal.
+    fastify.get('/v1/community/uploads/:file', {
+        schema: { params: z.object({ file: z.string().min(1).max(256) }) },
+    }, handleServeUpload);
 
     fastify.post('/v1/community/post/:id/like', {
         schema: { params: z.object({ id: z.string().uuid() }) },

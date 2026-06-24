@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, getAccessToken, resolveApiUrl } from './client';
 // Message-request endpoints + their wire shapes are owned by src/api/chat.ts (the
 // chat work-item); we delegate to those below so there is exactly ONE place that
 // knows the /v1/chat/requests shape, and re-export the row type for the inbox UI.
@@ -49,8 +49,63 @@ export const getFeed = async (limit = 20, cursor?: string): Promise<Post[]> => {
   return data;
 };
 
+/**
+ * Upload a locally-picked image (a `file://` / `content://` / `ph://` ImagePicker
+ * URI) to the community-service and return its absolute https URL.
+ *
+ * BUG #3: posting the raw local URI stored a value that every OTHER device rejects
+ * (the on-device trust gate only allows https), so a post's image was blank for
+ * everyone but the author. We now POST the file as multipart/form-data and the
+ * server persists it + returns a public https URL we attach to the post.
+ *
+ * Uses RN's native `fetch` (not axios) on purpose: when a `FormData` body is
+ * passed and NO `Content-Type` header is set, React Native's XHR layer fills in
+ * `multipart/form-data; boundary=…` itself. Setting the header by hand (as axios's
+ * `application/json` default would force) drops the boundary and breaks server-side
+ * parsing — so we deliberately omit it here. Auth + base-URL/`/v1`-strip reuse the
+ * exact same helpers as the axios client so behaviour never drifts.
+ */
+export const uploadImage = async (localUri: string): Promise<string> => {
+  // Derive a filename + mime from the URI extension (RN FormData file part shape).
+  const extMatch = /\.(\w+)(?:\?.*)?$/.exec(localUri);
+  const ext = (extMatch?.[1] || 'jpg').toLowerCase();
+  const mime =
+    ext === 'png' ? 'image/png'
+      : ext === 'webp' ? 'image/webp'
+        : ext === 'gif' ? 'image/gif'
+          : ext === 'heic' ? 'image/heic'
+            : ext === 'heif' ? 'image/heif'
+              : 'image/jpeg';
+
+  const form = new FormData();
+  // RN's FormData accepts this { uri, name, type } shape for a file part.
+  form.append('image', { uri: localUri, name: `upload.${ext}`, type: mime } as any);
+
+  const token = await getAccessToken();
+  const res = await fetch(resolveApiUrl('/v1/community/upload'), {
+    method: 'POST',
+    // NOTE: intentionally no 'Content-Type' — RN sets it (with the boundary) for us.
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: form as any,
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Image upload failed (${res.status})${detail ? `: ${detail}` : ''}`);
+  }
+  const json = (await res.json()) as { url?: string };
+  if (!json?.url) throw new Error('Image upload returned no URL');
+  return json.url;
+};
+
 export const createPost = async (content: string, imageUrl?: string): Promise<Post> => {
-  const { data } = await apiClient.post('/v1/community/post', { content, imageUrl });
+  // BUG #3: if the image is a local (non-https) URI, upload it first and post with
+  // the returned https URL. An already-https URL passes straight through. The
+  // server additionally rejects a non-https imageUrl, so this keeps posting valid.
+  let resolvedImageUrl = imageUrl;
+  if (imageUrl && !/^https:\/\//i.test(imageUrl)) {
+    resolvedImageUrl = await uploadImage(imageUrl);
+  }
+  const { data } = await apiClient.post('/v1/community/post', { content, imageUrl: resolvedImageUrl });
   return data;
 };
 

@@ -20,6 +20,7 @@ import {
     emitTyping,
     type ChatMessage,
     type RequestState,
+    type NotificationNewPayload,
 } from '@/api/chat';
 import type { Socket } from 'socket.io-client';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -88,6 +89,35 @@ const dayKey = (iso: string): string => {
     if (!iso || Number.isNaN(d.getTime())) return '';
     return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 };
+
+/**
+ * BUG #2: resolve a HUMAN sender name for a message — never the raw senderId.
+ * Preference order:
+ *   1. own row                         → 'You'
+ *   2. backend-resolved m.senderName   → use it verbatim
+ *   3. sender is the known peer (by id), or no senderId at all → the peer's name
+ *   4. last resort                     → 'Coach Ria' (the default coach thread)
+ * Resilient by construction: an absent senderName degrades to the peer name, and
+ * an unknown sender never leaks its id into the UI. Hoisted to module scope (no
+ * per-render allocation) and pure, so renderMessage can depend on primitives only.
+ */
+function resolveSenderName(
+    m: { senderId?: string; senderName?: string },
+    isMe: boolean,
+    peerUserId?: string,
+    peerName?: string,
+): string {
+    if (isMe) return 'You';
+    if (m.senderName && m.senderName.trim().length > 0) return m.senderName;
+    // The sender is the conversation peer (matched by id, or there's no id to
+    // distinguish in a 1:1) → use the peer's resolved display name.
+    if (!m.senderId || !peerUserId || m.senderId === peerUserId) {
+        return peerName ?? 'Coach Ria';
+    }
+    // A different, unresolved sender (e.g. a future group thread): fall back to the
+    // peer/coach name rather than ever showing the opaque senderId.
+    return peerName ?? 'Coach Ria';
+}
 
 export default function UnifiedChatScreen() {
     const { colors, typography, shadows } = useTheme();
@@ -257,6 +287,31 @@ export default function UnifiedChatScreen() {
                         if (msg.senderId === myUserId) return; // own ack handled by doSend
                         upsertMessage({ ...msg, isOwn: false, optimistic: false });
                         requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: true }));
+                        // BUG #2: an incoming direct message must surface as an Unread
+                        // signal app-wide. socket.io-client (notification-service's
+                        // transport) is stubbed in this app, so the chat WS frame is the
+                        // concrete "incoming DM" event — refresh the persisted
+                        // notifications (drives the unread badge) and the inbox
+                        // conversations (per-thread unread dot). Best-effort; non-fatal.
+                        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+                        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                    });
+
+                    // BUG #2: also listen on the notification:new channel directly, in
+                    // case the backend forwards notification-service frames over this
+                    // socket. We only react to chat-message notifications (or those
+                    // targeting THIS conversation) and just refresh the Unread state —
+                    // resilient to a missing/partial payload.
+                    s.on('notification:new', (n: NotificationNewPayload) => {
+                        const convId = n?.data?.conversationId;
+                        if (convId && convId !== conversationId) {
+                            // A notification for a DIFFERENT conversation still bumps the
+                            // global unread badge, but not this thread's inbox row focus.
+                            queryClient.invalidateQueries({ queryKey: ['notifications'] });
+                            return;
+                        }
+                        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+                        queryClient.invalidateQueries({ queryKey: ['conversations'] });
                     });
 
                     s.on('typing_start', (payload: { conversationId?: string; senderId?: string }) => {
@@ -286,7 +341,7 @@ export default function UnifiedChatScreen() {
             if (activeSocket) activeSocket.disconnect();
             if (peerTypingTimerRef.current) { clearTimeout(peerTypingTimerRef.current); peerTypingTimerRef.current = null; }
         };
-    }, [conversationId, myUserId, upsertMessage, applyReadReceipt]);
+    }, [conversationId, myUserId, upsertMessage, applyReadReceipt, queryClient]);
 
     // ── Mark read on open / when new peer messages land ───────────────────────
     // Best-effort: tells the backend (and, via broadcast, the peer) we've read up
@@ -486,16 +541,30 @@ export default function UnifiedChatScreen() {
             const m = item.message;
             const isMe = item.isMe;
             const timeStamp = formatBubbleTime(m.createdAt);
+            // BUG #2: resolve a human sender name — NEVER a raw senderId. Order of
+            // preference: 'You' for own rows → the backend-resolved m.senderName →
+            // the conversation peer's name (when the sender is the known peer or the
+            // sender id is absent) → a neutral 'Coach Ria' fallback. This keeps the
+            // label correct for a real peer (not always 'Coach Ria') and never leaks
+            // an opaque id even if senderName is missing.
+            const resolvedSenderName = resolveSenderName(m, isMe, peerUserId, peerName);
             // Speaker-qualified label so a screen reader can tell 'You' from the
-            // peer (Coach Ria) — passed as a single primitive so the memoized
-            // bubble's stable-ref contract holds (list-performance-inline-objects).
-            const speaker = isMe ? 'You' : (peerName ?? 'Coach Ria');
+            // peer — passed as a single primitive so the memoized bubble's stable-ref
+            // contract holds (list-performance-inline-objects).
+            const speaker = isMe ? 'You' : resolvedSenderName;
+            // Show a per-bubble sender name on PEER rows only when the message carries
+            // its own resolved name that differs from the conversation peer header
+            // (e.g. a future group/multi-sender thread) — in a 1:1 the header already
+            // names the peer, so we don't repeat it on every bubble.
+            const bubbleSenderName =
+                !isMe && m.senderName && m.senderName !== peerName ? m.senderName : undefined;
             const bubble = (
                 <ChatBubble
                     id={m.id}
                     text={m.text}
                     isOwn={isMe}
                     timestamp={timeStamp}
+                    senderName={bubbleSenderName}
                     status={isMe ? m.status : undefined}
                     onRetry={handleRetry}
                     accessibilityLabel={`${speaker}: ${m.text}`}
@@ -518,7 +587,7 @@ export default function UnifiedChatScreen() {
                 </View>
             );
         },
-        [peerName, peerAvatarUrl, handleRetry],
+        [peerName, peerUserId, peerAvatarUrl, handleRetry],
     );
 
     const keyExtractor = useCallback((item: Row) => item.id, []);

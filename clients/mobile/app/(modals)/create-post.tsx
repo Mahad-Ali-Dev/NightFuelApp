@@ -257,14 +257,24 @@ export default function CreatePostModal() {
                     <Animated.View entering={FadeInDown.duration(300)} style={[styles.imagePreview, { borderColor: withAlpha(colors.text.primary, 0.1) }]}>
                         <Image source={{ uri: image }} style={[styles.previewImg, { borderRadius: borderRadius.xl }]} />
                         <PressableScale hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Remove photo"
-                            style={[styles.removeImg, { backgroundColor: withAlpha(colors.background.primary, 0.78), borderColor: colors.border.default }]}
+                            disabled={postMutation.isPending}
+                            style={[styles.removeImg, { backgroundColor: withAlpha(colors.background.primary, 0.78), borderColor: colors.border.default, opacity: postMutation.isPending ? 0.5 : 1 }]}
                             onPress={() => setImage(null)}
                         >
                             <Ionicons name="close" size={18} color={colors.text.primary} />
                         </PressableScale>
                         <View style={[styles.imageBadge, { backgroundColor: withAlpha(colors.background.primary, 0.6) }]}>
-                            <Ionicons name="image" size={12} color={colors.text.secondary} />
-                            <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 4 }]}>Photo attached</Text>
+                            {postMutation.isPending ? (
+                                <>
+                                    <ActivityIndicator size="small" color={colors.text.secondary} />
+                                    <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6 }]}>Uploading…</Text>
+                                </>
+                            ) : (
+                                <>
+                                    <Ionicons name="image" size={12} color={colors.text.secondary} />
+                                    <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 4 }]}>Photo attached</Text>
+                                </>
+                            )}
                         </View>
                     </Animated.View>
                 )}
@@ -335,9 +345,11 @@ export default function CreatePostModal() {
                     </PressableScale>
                 </View>
 
-                {/* Primary lime CTA — the one full-lime action, ink label */}
+                {/* Primary lime CTA — the one full-lime action, ink label. When an
+                    image is attached the pending span includes the upload, so the
+                    label reads "Uploading…" to set the right expectation (BUG #3). */}
                 <CtaButton
-                    label={postMutation.isPending ? 'Posting…' : 'Post'}
+                    label={postMutation.isPending ? (image ? 'Uploading…' : 'Posting…') : 'Post'}
                     icon="paper-plane"
                     onPress={() => postMutation.mutate()}
                     loading={postMutation.isPending}

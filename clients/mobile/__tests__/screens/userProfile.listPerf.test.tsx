@@ -83,6 +83,9 @@ jest.mock('@tanstack/react-query', () => ({
     return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
   },
   useMutation: () => ({ mutate: mockFollowMutate, isPending: false, isError: false, reset: jest.fn() }),
+  // BUG #4: the screen now invalidates ['user-social'] in the follow onSuccess via
+  // the query client — inert stub so the perf render mounts without a real client.
+  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 
 // API modules the screen statically imports — stub to plain jest.fns so axios

@@ -28,6 +28,20 @@ const envSchema = z.object({
     // Defaulted so boot doesn't break in dev/test; when empty the guard fails
     // closed (every /internal request 404s). Mirrors user-service / plan-service.
     INTERNAL_SERVICE_TOKEN: z.string().default(''),
+    // ── SMTP (password-reset email delivery) ────────────────────────────────
+    // All OPTIONAL so the service still boots without mail creds (dev/test).
+    // When SMTP_HOST is set, forgotPassword() sends a real reset email via
+    // nodemailer; when it is unset the service logs a clearly-marked DEV
+    // fallback containing the reset link instead, so the flow stays testable
+    // without creds. OWNER: set these in production for real email delivery.
+    SMTP_HOST: z.string().optional(),
+    SMTP_PORT: z.string().optional(),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASSWORD: z.string().optional(),
+    SMTP_FROM: z.string().optional(),
+    // Base URL the password-reset link points at (the mobile/web reset screen).
+    // Falls back to the production marketing reset page when unset.
+    APP_RESET_URL: z.string().optional(),
 });
 
 const config = loadConfig(envSchema);
@@ -35,7 +49,17 @@ const logger = createLogger('auth-service');
 
 const prisma = new PrismaClient();
 const eventBus = new RedisEventBus(config.REDIS_URL);
-const authService = new AuthService(prisma, eventBus, { JWT_SECRET: config.JWT_SECRET });
+const authService = new AuthService(prisma, eventBus, {
+    JWT_SECRET: config.JWT_SECRET,
+    smtp: {
+        host: config.SMTP_HOST,
+        port: config.SMTP_PORT,
+        user: config.SMTP_USER,
+        password: config.SMTP_PASSWORD,
+        from: config.SMTP_FROM,
+    },
+    appResetUrl: config.APP_RESET_URL,
+});
 
 // trustProxy: behind nginx / the platform reverse proxy, so request.ip reflects
 // the real client IP from X-Forwarded-For rather than the proxy's address. The

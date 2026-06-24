@@ -180,7 +180,15 @@ export default function AICoachScreen() {
     // (false in Expo Go / the jest gate; true behind an EAS dev build with the
     // native packages). When unavailable the mic shows an honest disabled
     // "needs dev build" state and the text chat is completely unchanged.
-    const voice = useRef(getVoiceAdapter()).current;
+    // Stable adapter instance for the lifetime of the screen. getVoiceAdapter()
+    // is memoised (one probe per session), but holding it in a ref means `voice`
+    // is the SAME object on every render: the mic handlers below close over it,
+    // and a fresh/rebuilt instance per render risked calling a method on a stale
+    // adapter. `voice` is always a full VoiceAdapter, so every method the mic
+    // path calls (requestPermission / startListening / stop / stopSpeaking /
+    // speak / abort) is guaranteed to exist — no "undefined is not a function".
+    const voiceRef = useRef(getVoiceAdapter());
+    const voice = voiceRef.current;
     const sttAvailable = voice.isSTTAvailable();
     const ttsAvailable = voice.isTTSAvailable();
     // STT listening state machine (drives the mic button appearance).
@@ -190,11 +198,16 @@ export default function AICoachScreen() {
     // "Ria speaks replies" toggle — OFF by default; only meaningful if TTS exists.
     const [speakReplies, setSpeakReplies] = useState(false);
     // Stable ref to sendMessage so the async voice handlers (defined before
-    // sendMessage) can invoke the latest closure without a dependency cycle.
-    const sendMessageRef = useRef<(text: string) => void>(() => undefined);
+    // sendMessage) can invoke the latest closure without a dependency cycle. The
+    // initial value is a correctly-typed (text: string) => void no-op so the ref
+    // is callable even if the mic fires a final transcript before the first
+    // render commits sendMessage into it — calling it is a safe no-op, never a
+    // crash.
+    const sendMessageRef = useRef<(text: string) => void>((_text) => {});
     // Stable ref to speakReply so the mutation onSuccess (defined before
-    // speakReply) can speak the completed non-streamed reply.
-    const speakRef = useRef<(text: string) => void>(() => undefined);
+    // speakReply) can speak the completed non-streamed reply. Same callable
+    // no-op default for the same reason.
+    const speakRef = useRef<(text: string) => void>((_text) => {});
 
     // ── Load persistent history from DB ────────────────────────────────────
     const historyQuery = useQuery({
@@ -459,7 +472,7 @@ export default function AICoachScreen() {
         streamStopRef.current = stop;
     }, [messages, user, buildContext, queryClient, runFallback]);
 
-    const sendMessage = (text: string) => {
+    const sendMessage = useCallback((text: string) => {
         const trimmed = text.trim();
         // Block while the daily quota is exhausted, or either path is busy.
         if (!trimmed || mutation.isPending || isStreaming || quota.exhausted) return;
@@ -501,9 +514,12 @@ export default function AICoachScreen() {
 
         // Primary: token-by-token stream. Falls back to sendRiaMessage on error.
         startStream(safe.text);
-    };
+    }, [mutation.isPending, isStreaming, quota.exhausted, voice, rateLimit, recordSend, startStream]);
     // Keep the ref pointed at the latest sendMessage so async voice handlers
-    // (started before this closure) invoke the current implementation.
+    // (started before this closure, e.g. the mic's onFinal) invoke the current
+    // implementation. The mic reads sendMessageRef.current INSIDE its onFinal
+    // callback, so it always calls the freshest closure even though the listening
+    // session was started on an earlier render.
     sendMessageRef.current = sendMessage;
 
     // ── Voice control handlers ───────────────────────────────────────────────

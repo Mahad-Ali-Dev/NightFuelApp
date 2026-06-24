@@ -462,6 +462,31 @@ fastify.withTypeProvider<ZodTypeProvider>().post('/v1/exercises/routines/generat
         // aiGenerated:true — this is the AI generator path, so the row counts
         // toward the daily AI quota above. Manual creates pass the default false.
         const created = await exerciseSvc.createRoutine(userId, routineData, true);
+
+        // BUG #6: announce the generated routine so notification-service can fire a
+        // PLAN_READY ("Your workout plan is ready") notification + push. Non-blocking:
+        // a Redis hiccup must never fail the 201 the client is waiting on (mirrors the
+        // plan-service plan.generated publish pattern). Raw string channel — no
+        // @nightfuel/types Channels constant exists for it (that package is owned
+        // elsewhere); the literal is kept in sync with notification-service's
+        // WORKOUT_GENERATED_CHANNEL subscriber.
+        try {
+            await eventBus.publish('nightfuel:exercise:routine-generated', {
+                eventId: crypto.randomUUID(),
+                eventType: 'exercise.routine-generated',
+                producedAt: new Date().toISOString(),
+                producerService: 'exercise-service',
+                correlationId: crypto.randomUUID(),
+                userId,
+                payload: {
+                    routineId: (created as any)?.id,
+                    title: (created as any)?.title ?? routineData.title,
+                },
+            });
+        } catch (pubErr: any) {
+            logger.warn({ err: pubErr?.message }, 'Failed to publish exercise.routine-generated event (non-fatal)');
+        }
+
         return reply.code(201).send(created);
     } catch (err: any) {
         logger.error({ err }, 'AI routine persistence failed');

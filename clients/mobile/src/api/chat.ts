@@ -4,6 +4,13 @@ export interface ChatMessage {
   id: string;
   conversationId: string;
   senderId: string;
+  /**
+   * BUG #2: the sender's resolved display name, when the backend can resolve it.
+   * Present on message responses + 'new_message' socket frames. The UI prefers
+   * this over senderId so a bubble never renders a raw id; when it is absent the
+   * UI falls back to the conversation peer's name (resolved by senderId).
+   */
+  senderName?: string;
   text: string;
   createdAt: string;
   /** Present on GET /messages — true when the row was sent by the current user. */
@@ -68,6 +75,19 @@ export async function sendMessage(conversationId: string, text: string) {
 
 /** Alias type for hooks */
 export type Message = ChatMessage;
+
+/**
+ * BUG #2: shape of a `notification:new` realtime frame (notification-service's
+ * persisted Notification row). Only the fields the chat screen reacts to are
+ * typed; everything is optional so a partial/forwarded frame never throws.
+ */
+export interface NotificationNewPayload {
+  id?: string;
+  type?: string;
+  title?: string;
+  body?: string;
+  data?: { conversationId?: string; deepLink?: string; [k: string]: unknown };
+}
 
 /** Start a new conversation */
 export async function startConversation(targetId: string) {
@@ -164,6 +184,15 @@ export async function createSocketConnection() {
       // new_message: the server ack/broadcast of a persisted message.
       if (data.type === 'new_message' && handlers['newMessage']) {
         handlers['newMessage'].forEach(cb => cb(data.data));
+      }
+      // BUG #2: notification:new — an incoming notification (e.g. a direct message
+      // the recipient just received). notification-service emits this over its own
+      // Socket.IO transport, but socket.io-client is stubbed out in this app
+      // (metro.config.js → socket-io-stub), so we ALSO recognise the frame here in
+      // case it is forwarded over the chat WebSocket. Subscribers use it to refresh
+      // their Unread state. Forwarding the payload verbatim; the screen filters.
+      else if (data.type === 'notification:new' && handlers['notification:new']) {
+        handlers['notification:new'].forEach(cb => cb(data.data ?? data));
       }
       // Presence: peer started/stopped typing. The frame carries the
       // conversationId (and senderId) so a multi-conversation socket can route

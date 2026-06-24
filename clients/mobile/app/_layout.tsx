@@ -81,7 +81,13 @@ function RootLayout() {
     shadows,
   }), [scheme, nightRead, themeColors]);
 
-  const { loadSession, user } = useAuthStore();
+  // Per-field scoped selectors: an unscoped `useAuthStore()` destructure
+  // subscribes the root to EVERY auth-store change, so any field mutation
+  // (e.g. isLoading flipping during loadSession, or a profile refetch) would
+  // re-render the whole root — and on the auth path that churn bounced users
+  // mid-type. Scope to exactly the two fields this layout reads.
+  const loadSession = useAuthStore((s) => s.loadSession);
+  const user = useAuthStore((s) => s.user);
   const router = useRouter();
   const [disclaimerVisible, setDisclaimerVisible] = React.useState(false);
 

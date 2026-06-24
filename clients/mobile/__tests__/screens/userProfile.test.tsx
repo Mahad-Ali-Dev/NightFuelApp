@@ -84,6 +84,10 @@ jest.mock('@tanstack/react-query', () => ({
     return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
   },
   useMutation: () => ({ mutate: mockFollowMutate, isPending: false, isError: false, reset: jest.fn() }),
+  // The screen now grabs the query client to invalidate ['user-social'] in the
+  // follow mutation's onSuccess (BUG #4). Inert cache stub — the lock tests don't
+  // press follow, so invalidateQueries is never asserted, only safely callable.
+  useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 
 // API modules the screen statically imports — stub to plain jest.fns so axios

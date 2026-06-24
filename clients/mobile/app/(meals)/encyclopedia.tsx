@@ -184,10 +184,12 @@ export default function FoodEncyclopediaScreen() {
                             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom:insets.bottom+24}}>
                                 <Text style={[typography.h1,{color:colors.text.primary,marginBottom:4}]}>{servingModal.name}</Text>
                                 <Text style={[typography.body,{color:colors.text.secondary,marginBottom:20}]}>{servingModal.foodGroup||'General'} • {servingModal.servingSize} per serving</Text>
-                                {/* Food image + REQUIRED CC-BY-SA attribution. The enriched
-                                    food photos are CC-BY-SA, whose license requires showing the
-                                    credit wherever the image renders — so we only show the image
-                                    when both a URL is present (legacy FooDB rows have neither). */}
+                                {/* Food image + REQUIRED CC-BY-SA attribution. Image-bearing rows
+                                    come from Open Food Facts (seed:off populates imageUrl); the
+                                    photos are CC-BY-SA, whose license requires showing the credit
+                                    wherever the image renders. FooDB rows (nutrition-only) carry no
+                                    imageUrl — rather than a confusing blank, we show a clearly
+                                    branded "no photo" placeholder so the layout reads intentionally. */}
                                 {servingModal.imageUrl ? (
                                     <View style={s.foodImgWrap} accessible accessibilityRole="image" accessibilityLabel={`Photo of ${servingModal.name}`}>
                                         <Image
@@ -203,7 +205,18 @@ export default function FoodEncyclopediaScreen() {
                                             </Text>
                                         ) : null}
                                     </View>
-                                ) : null}
+                                ) : (
+                                    <View
+                                        style={[s.foodImgWrap,s.foodImgPlaceholder,{backgroundColor:colors.background.secondary,borderColor:withAlpha(colors.accent.coral,0.18)}]}
+                                        accessible
+                                        accessibilityLabel={`No photo available for ${servingModal.name}`}
+                                    >
+                                        <View style={[s.foodPlaceholderIcon,{backgroundColor:withAlpha(colors.accent.coral,0.12),borderColor:withAlpha(colors.accent.coral,0.32)}]}>
+                                            <Ionicons name="nutrition-outline" size={26} color={colors.accent.coral} />
+                                        </View>
+                                        <Text style={[typography.caption,{color:colors.text.tertiary,marginTop:8}]}>No photo for this food</Text>
+                                    </View>
+                                )}
                                 {/* HERO nutrition card: big condensed count-up calories for the
                                     chosen serving qty, plus three macro rings (protein=lime,
                                     carbs=cyan, fat=amber) with count-up gram centers. Recomputes
@@ -315,6 +328,8 @@ const s = StyleSheet.create({
     microCard:{marginTop:16}, sumInner:{padding:20},
     foodImgWrap:{marginBottom:20},
     foodImg:{width:'100%',height:180,borderRadius:16},
+    foodImgPlaceholder:{height:180,borderRadius:16,borderWidth:1,alignItems:'center',justifyContent:'center'},
+    foodPlaceholderIcon:{width:56,height:56,borderRadius:16,borderWidth:1,alignItems:'center',justifyContent:'center'},
     microRow:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingVertical:10},
     logBtnWrap:{height:60,borderRadius:30},
 });

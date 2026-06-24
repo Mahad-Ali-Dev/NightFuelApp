@@ -143,7 +143,17 @@ function PhaseFoodCard({ food, focusNutrient }: { food: FoodItem; focusNutrient:
             accessible
             accessibilityLabel={focusText ? `${food.name}, ${focusText}` : food.name}
         >
-            <View style={[styles.foodImgWrap, { backgroundColor: colors.background.tertiary }]}>
+            {/* Image-bearing rows come from Open Food Facts (imageUrl populated);
+                FooDB rows are nutrition-only with no imageUrl. Rather than a bare
+                blank, show a clearly branded coral "no photo" placeholder so the
+                tile reads intentionally. */}
+            <View
+                style={[
+                    styles.foodImgWrap,
+                    { backgroundColor: colors.background.tertiary },
+                    !food.imageUrl && { borderWidth: 1, borderColor: withAlpha(colors.accent.coral, 0.18) },
+                ]}
+            >
                 {food.imageUrl ? (
                     <Image
                         source={{ uri: food.imageUrl }}
@@ -153,7 +163,12 @@ function PhaseFoodCard({ food, focusNutrient }: { food: FoodItem; focusNutrient:
                         transition={200}
                     />
                 ) : (
-                    <Ionicons name="nutrition-outline" size={28} color={colors.text.tertiary} />
+                    <>
+                        <Ionicons name="nutrition-outline" size={26} color={colors.accent.coral} />
+                        <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 4, fontSize: 10 }]}>
+                            No photo
+                        </Text>
+                    </>
                 )}
             </View>
             <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold' }]} numberOfLines={2}>

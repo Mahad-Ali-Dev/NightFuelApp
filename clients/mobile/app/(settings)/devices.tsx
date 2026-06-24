@@ -383,6 +383,13 @@ export default function ConnectedDevicesScreen() {
     // surfaced as DATA (the honest reason), never a fake success.
     const runAttempt = useCallback(
         async (source: HealthSource, op: 'connect' | 'syncNow') => {
+          // Defense-in-depth: the adapter contract is "never throw — failure is
+          // a resolved { status:'unavailable', reason }". But a REAL native
+          // adapter (HealthKit / Health Connect) could still throw or hang, and
+          // an uncaught throw here would surface as a blank frozen screen the
+          // user has to force-close. Wrapping the whole attempt guarantees every
+          // outcome becomes an honest in-UI notice and the user can always leave.
+          try {
             const adapter = getHealthSyncAdapter();
             const result = op === 'connect' ? await adapter.connect() : await adapter.syncNow();
             if (result.status === 'connected') {
@@ -427,6 +434,17 @@ export default function ConnectedDevicesScreen() {
                 [source]: result.reason ?? 'This source is unavailable on the current build.',
             }));
             setNoticeKinds((prev) => ({ ...prev, [source]: 'unavailable' }));
+          } catch {
+            // The adapter threw (contract violation) or a native call blew up.
+            // Convert it to the SAME honest "unavailable" notice the resolved-
+            // failure path produces — never an uncaught throw, never a freeze.
+            // The control stays pressable so the user can retry or just leave.
+            setMessages((prev) => ({
+                ...prev,
+                [source]: 'This source is unavailable right now. Please try again.',
+            }));
+            setNoticeKinds((prev) => ({ ...prev, [source]: 'unavailable' }));
+          }
         },
         [bumpSync],
     );

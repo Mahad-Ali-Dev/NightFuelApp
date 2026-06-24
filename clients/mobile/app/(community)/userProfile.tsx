@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getPublicProfile } from '@/api/users';
 import { getUserPosts, getUserSocial, followUser, unfollowUser, getUserBadges, Post, UserSocial, Badge } from '@/api/community';
 import { useTheme } from '@/theme';
@@ -226,6 +226,7 @@ export default function UserProfileScreen() {
     const { colors, typography, borderRadius } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
+    const queryClient = useQueryClient();
 
     const { data: profileResp, isLoading: profileLoading, isError: profileError, refetch: refetchProfile } = useQuery({
         queryKey: ['public-profile', userId],
@@ -259,8 +260,20 @@ export default function UserProfileScreen() {
 
     const followMutation = useMutation({
         mutationFn: (next: boolean) => (next ? followUser(userId || '') : unfollowUser(userId || '')),
-        onError: () => {
-            // Roll back to the server truth (drop the optimistic override).
+        onSuccess: () => {
+            // Instagram-style persistence: re-fetch the authoritative follow-graph so
+            // the FOLLOWING state + follower/following counts reflect the server and
+            // survive a refresh. Dropping the optimistic override lets the refetched
+            // `social` become the single source of truth (the override was user-intent
+            // only); the displayed state stays continuous because the optimistic value
+            // already matches what the server now returns.
+            setOverride(undefined);
+            queryClient.invalidateQueries({ queryKey: ['user-social', userId] });
+        },
+        onError: (err) => {
+            // Surface the failure (previously swallowed) and roll back to server truth
+            // by dropping the optimistic override so the UI snaps back to reality.
+            console.error('[userProfile] follow toggle failed', err);
             setOverride(undefined);
         },
     });

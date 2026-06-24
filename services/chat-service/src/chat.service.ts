@@ -244,10 +244,36 @@ export class ChatService {
             orderBy: { createdAt: 'asc' },
         });
 
+        // BUG #2(a): the client was only ever shown the raw senderId (so a DM
+        // rendered the opaque user id instead of a name). Resolve the human name
+        // for every DISTINCT non-own / non-Ria sender via the existing cached
+        // peer-resolver (user-service internal profile path). It degrades to a
+        // generic member fallback and never throws, so name resolution can't
+        // break or stall message loading. Ria/own messages don't need a lookup.
+        const senderIdsToResolve = [
+            ...new Set(
+                messages
+                    .map((m) => m.senderId)
+                    .filter((id) => id && id !== userId && id !== RIA_AI_USER_ID),
+            ),
+        ];
+        const senderPeers = await this.resolvePeers(senderIdsToResolve);
+
+        const nameFor = (senderId: string): string | undefined => {
+            if (senderId === RIA_AI_USER_ID) return 'Coach Ria';
+            if (senderId === userId) return undefined; // own message — client labels as "you"
+            return senderPeers.get(senderId)?.displayName;
+        };
+
         return messages.map((msg) => ({
             id: msg.id,
             text: msg.text,
             content: msg.text,
+            // BUG #2(a): always carry the raw senderId so the mobile client can
+            // attribute/resolve the author; senderName is included when we could
+            // resolve it cheaply (per the mobile contract).
+            senderId: msg.senderId,
+            senderName: nameFor(msg.senderId),
             isOwn: msg.senderId === userId,
             sender: msg.senderId === RIA_AI_USER_ID ? 'ai' : (msg.senderId === userId ? 'user' : 'other'),
             createdAt: msg.createdAt.toISOString(),

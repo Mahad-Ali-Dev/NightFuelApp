@@ -183,11 +183,10 @@ describe('notification-service — chat:message-sent subscriber', () => {
         expect(notificationService.createNotificationIfEnabled).toHaveBeenCalledTimes(1);
     });
 
-    it('additive pushService param leaves existing subscribers intact (PLAN_READY still flows)', async () => {
-        // A representative existing subscriber must be unaffected by the widened
-        // signature — register is proven by the handler existing and firing.
-        // (Existing subscribers use the prefixed @nightfuel/types Channels
-        // constant — unlike the bare 'chat:message-sent' string.)
+    it('PLAN_READY flows to the in-app notification AND now a real push (BUG #10 wiring)', async () => {
+        // PLAN_READY uses the prefixed @nightfuel/types Channels constant (unlike
+        // the bare 'chat:message-sent' string). Per BUG #10, every major
+        // notification type now also delivers a real push, not just an in-app row.
         expect(bus.handlers.has(Channels.Plan.PlanGenerated)).toBe(true);
         await bus.emit(Channels.Plan.PlanGenerated, {
             eventId: 'evt-plan',
@@ -201,7 +200,10 @@ describe('notification-service — chat:message-sent subscriber', () => {
         expect(notificationService.createNotificationIfEnabled).toHaveBeenCalledWith(
             expect.objectContaining({ userId: RECIPIENT, type: 'PLAN_READY' }),
         );
-        // Existing subscribers never call the push transport.
-        expect(pushService.sendToUser).not.toHaveBeenCalled();
+        // BUG #10: PLAN_READY now ALSO delivers a real push to the user.
+        expect(pushService.sendToUser).toHaveBeenCalledWith(
+            RECIPIENT,
+            expect.objectContaining({ title: expect.any(String) }),
+        );
     });
 });

@@ -62,6 +62,41 @@ const ISO = (d: Date) => d.toISOString();
 const lookbackStart = (): Date =>
   new Date(Date.now() - SYNC_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
 
+/**
+ * Hard ceiling on a single sync step (read OR ingest). Without this a native
+ * read that never resolves — or an ingest POST that stalls on a dead socket —
+ * would leave syncNow() pending forever, which on the Connected Devices screen
+ * reads as the UI freezing on a blank "syncing…" state (the user had to force-
+ * close). A bounded race converts any hang into an honest, recoverable failure
+ * result instead. 20s is generous for a one-week sample read + a single POST.
+ */
+const SYNC_STEP_TIMEOUT_MS = 20_000;
+
+/**
+ * Race a promise against a finite timeout. On timeout the returned promise
+ * REJECTS with a labelled error; the caller's try/catch turns that into an
+ * honest non-connected result (never an uncaught throw / hang). The pending
+ * work is abandoned — we can't cancel a native read or an axios POST here, but
+ * we stop AWAITING it so the user is never stuck.
+ */
+function withTimeout<T>(work: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`health-sync ${label} timed out after ${ms}ms`));
+    }, ms);
+    work.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
 /** ISO timestamp of the last successful sync; the synchronous ground truth for lastSyncedAt(). */
 let lastSynced: string | null = null;
 /** Whether the user has connected (granted permissions) this session. */
@@ -357,17 +392,38 @@ function makeAdapter(
           const c = await connect();
           if (c.status !== 'connected') return c;
         }
-        const samples = sanitize(await readSamples());
+        // Bound the on-device read: a native query that never resolves must not
+        // hang the sync forever (it would freeze the Connected Devices screen).
+        const samples = sanitize(
+          await withTimeout(readSamples(), SYNC_STEP_TIMEOUT_MS, 'read'),
+        );
         if (samples.length === 0) {
           // Honest: connected, but nothing new to send.
           lastSynced = ISO(new Date());
           return { status: 'connected', reason: 'No new health data to sync.' };
         }
-        await ingestHealthSamples(samples);
+        // Bound the network POST too. ingestHealthSamples uses the shared
+        // apiClient (axios) and can stall on a dead socket; the timeout race
+        // guarantees syncNow() always settles so the UI can leave the spinner
+        // state. The inner try makes the ingest failure explicit and isolated
+        // from the read above, so the reason we surface is accurate.
+        try {
+          await withTimeout(
+            ingestHealthSamples(samples),
+            SYNC_STEP_TIMEOUT_MS,
+            'ingest',
+          );
+        } catch {
+          // Read succeeded but the upload failed/stalled — honest, recoverable.
+          return {
+            status: 'disconnected',
+            reason: 'Couldn’t upload your health data — check your connection and try again.',
+          };
+        }
         lastSynced = ISO(new Date());
         return { status: 'connected' };
       } catch {
-        // Never throw: a read/transport failure degrades to an honest reason.
+        // Never throw: a read/transport/timeout failure degrades to an honest reason.
         return { status: 'disconnected', reason: 'Sync failed — check your connection and try again.' };
       }
     },

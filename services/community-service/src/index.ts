@@ -7,6 +7,7 @@ import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
 import { CommunityService } from './community.service';
 import { AuthorResolver } from './author-resolver';
+import { registerMultipartCollector } from './uploads';
 import routes from './routes';
 
 const envSchema = z.object({
@@ -35,6 +36,11 @@ registerFastifyErrorHandler(fastify, logger);
 fastify.setValidatorCompiler(validatorCompiler);
 fastify.setSerializerCompiler(serializerCompiler);
 fastify.withTypeProvider<ZodTypeProvider>();
+
+// BUG #3: collect multipart/form-data bodies as a Buffer so POST
+// /v1/community/upload can read the raw image bytes (no @fastify/multipart dep).
+// Registered before routes so the parser is in place when the upload route runs.
+registerMultipartCollector(fastify);
 
 fastify.register(fastifyHelmet);
 // Explicit allowlist from CORS_ORIGIN (comma-separated). When unset the list is

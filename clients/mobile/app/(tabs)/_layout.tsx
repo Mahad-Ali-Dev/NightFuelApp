@@ -371,7 +371,13 @@ const fab = StyleSheet.create({
 export default function TabLayout() {
     const { colors } = useTheme();
     const router = useRouter();
-    const { isAuthenticated, isLoading } = useAuthStore();
+    // Per-field scoped selectors (same fix as app/index.tsx). This layout runs
+    // an auth gate that can Redirect to /login, so an unscoped useAuthStore()
+    // destructure — which re-renders on every auth-store change — would re-run
+    // that gate on unrelated store churn. Subscribe to only the two fields the
+    // gate reads so a profile/loading mutation can't trigger a spurious bounce.
+    const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+    const isLoading = useAuthStore((s) => s.isLoading);
 
     // Quick-Log chooser visibility. The centre control opens this sheet; each row
     // routes to its existing log destination.
