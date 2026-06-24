@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TextInput,
-    KeyboardAvoidingView, Platform, ActivityIndicator, Linking,
+    Platform, ActivityIndicator, Linking, Keyboard,
 } from 'react-native';
 import Reanimated, {
     useSharedValue, useDerivedValue, useAnimatedStyle,
@@ -16,7 +16,7 @@ import { shadows } from '@/theme/shadows';
 import { typography as themeTypography } from '@/theme/typography';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GlassCard, CtaButton } from '@/components/ui';
+import { GlassCard, CtaButton, KeyboardAvoidingWrapper } from '@/components/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRiaMessages, sendRiaMessage, type RiaMessage } from '@/api/chat';
 import { streamChat } from '@/api/ai';
@@ -254,6 +254,18 @@ export default function AICoachScreen() {
             clearInterval(typingIntervalRef.current);
             typingIntervalRef.current = null;
         }
+    }, []);
+
+    // Keep the latest message visible when the keyboard opens. The transcript
+    // resizes above the keyboard (KeyboardAvoidingWrapper) but its content size
+    // doesn't change, so onContentSizeChange won't fire — scroll to the tail
+    // explicitly so the newest bubble + the composer sit just above the keys.
+    useEffect(() => {
+        const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const sub = Keyboard.addListener(showEvt, () => {
+            setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 50);
+        });
+        return () => sub.remove();
     }, []);
 
     // ── User status for AI context ──────────────────────────────────────────
@@ -708,11 +720,7 @@ export default function AICoachScreen() {
                 </GlassCard>
             </View>
 
-            <KeyboardAvoidingView
-                style={{ flex: 1 }}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={0}
-            >
+            <KeyboardAvoidingWrapper style={{ flex: 1 }}>
                 <ScrollView
                     ref={scrollViewRef}
                     contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
@@ -961,7 +969,7 @@ export default function AICoachScreen() {
                         )}
                     </GlassCard>
                 </View>
-            </KeyboardAvoidingView>
+            </KeyboardAvoidingWrapper>
         </View>
     );
 }

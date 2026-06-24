@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Alert, View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { Alert, View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Platform, ActivityIndicator, Keyboard } from 'react-native';
 import Animated, { useSharedValue, useDerivedValue, useAnimatedStyle, withRepeat, withTiming, interpolate, Easing, FadeInDown, FadeIn } from 'react-native-reanimated';
 
 import { useTheme } from '@/theme';
@@ -25,7 +25,7 @@ import {
 import type { Socket } from 'socket.io-client';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { Skeleton, EmptyState, GlassCard, CtaButton, Avatar } from '@/components/ui';
+import { Skeleton, EmptyState, GlassCard, CtaButton, Avatar, KeyboardAvoidingWrapper } from '@/components/ui';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { ChatBubble, type ChatBubbleStatus } from '@/components/chat/ChatBubble';
 import { useAuth } from '@/hooks/useAuth';
@@ -390,6 +390,19 @@ export default function UnifiedChatScreen() {
     // Clear timers on unmount.
     useEffect(() => () => { if (typingIdleRef.current) clearTimeout(typingIdleRef.current); }, []);
 
+    // Keep the newest bubble visible when the keyboard opens. The transcript
+    // resizes above the keyboard (KeyboardAvoidingWrapper), but that does NOT
+    // change the list's content size, so onContentSizeChange won't fire — pin the
+    // tail to the keyboard frame explicitly so the latest message + the composer
+    // sit just above the keys instead of scrolling out of view.
+    useEffect(() => {
+        const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const sub = Keyboard.addListener(showEvt, () => {
+            requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: true }));
+        });
+        return () => sub.remove();
+    }, []);
+
     // ── Send (optimistic) ─────────────────────────────────────────────────────
     const doSend = useCallback(
         (text: string) => {
@@ -599,7 +612,7 @@ export default function UnifiedChatScreen() {
     const typingSpeaker = peerName ?? 'Coach Ria';
 
     return (
-        <KeyboardAvoidingView style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingWrapper style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             <StatusBar style="light" />
             {/* Header — tappable peer (avatar + name) → userProfile */}
             <Animated.View entering={FadeInDown.duration(360)} style={[styles.header, { borderBottomColor: colors.border.default, backgroundColor: colors.background.primary }]}>
@@ -797,7 +810,7 @@ export default function UnifiedChatScreen() {
                     );
                 })()
             )}
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingWrapper>
     );
 }
 

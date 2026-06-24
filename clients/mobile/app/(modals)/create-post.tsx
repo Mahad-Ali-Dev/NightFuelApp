@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-    ActivityIndicator, Alert, KeyboardAvoidingView, Platform
+    ActivityIndicator, Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -14,7 +14,7 @@ import { withAlpha } from '@/theme/utils';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
-import { GlassCard, CtaButton } from '@/components/ui';
+import { GlassCard, CtaButton, KeyboardAvoidingWrapper } from '@/components/ui';
 import { PressableScale } from '@/components/ui/PressableScale';
 
 // Soft character budget — drives the live character-feedback ring/count only.
@@ -82,8 +82,7 @@ export default function CreatePostModal() {
     const remaining = MAX_CHARS - charCount;
 
     return (
-        <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        <KeyboardAvoidingWrapper
             style={[styles.container, { backgroundColor: colors.background.primary }]}
         >
             <StatusBar style="light" />
@@ -358,7 +357,7 @@ export default function CreatePostModal() {
                     style={styles.cta}
                 />
             </View>
-        </KeyboardAvoidingView>
+        </KeyboardAvoidingWrapper>
     );
 }
 
