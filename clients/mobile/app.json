@@ -99,7 +99,7 @@
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
-          "color": "#FF6B35"
+          "color": "#A8CC3C"
         }
       ],
       [
@@ -120,7 +120,8 @@
           "background": false
         }
       ],
-      "react-native-health-connect"
+      "react-native-health-connect",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true
