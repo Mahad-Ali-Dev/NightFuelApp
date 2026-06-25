@@ -168,6 +168,10 @@ function planMealToRow(meal: any) {
         note: meal?.description,
         macros: macrosToText(meal?.macros),
         plannedMacros: meal?.macros ?? undefined,
+        // Forward the meal's itemized foods (normalizePlan maps the AI shape's
+        // `items[]` → `suggestedFoods`) so the "Log this" → Confirm-Meal flow
+        // prefills the real foods. normalizePlannedMeal reads this next.
+        suggestedFoods: Array.isArray(meal?.suggestedFoods) ? meal.suggestedFoods : undefined,
     };
 }
 

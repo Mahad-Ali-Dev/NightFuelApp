@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, Platform, LayoutChangeEvent } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, Platform, LayoutChangeEvent, Image, type ImageSourcePropType } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import Animated, {
@@ -438,11 +438,13 @@ function MetricField({
 function SexCard({
     label,
     icon,
+    image,
     selected,
     onPress,
 }: {
     label: string;
     icon: keyof typeof Ionicons.glyphMap;
+    image?: ImageSourcePropType;
     selected: boolean;
     onPress: () => void;
 }) {
@@ -495,11 +497,15 @@ function SexCard({
                             selected ? shadows.glow(colors.accent.coral) : null,
                         ]}
                     >
-                        <Ionicons
-                            name={icon}
-                            size={22}
-                            color={selected ? colors.text.inverse : colors.accent.coral}
-                        />
+                        {image ? (
+                            <Image source={image} style={styles.sexMedallionImage} resizeMode="contain" />
+                        ) : (
+                            <Ionicons
+                                name={icon}
+                                size={22}
+                                color={selected ? colors.text.inverse : colors.accent.coral}
+                            />
+                        )}
                     </View>
                     <Text
                         style={[
@@ -581,6 +587,12 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    // Roughly fills the 48pt medallion slot (with a little inset) so the premium
+    // tile reads at the same visual weight the Ionicon glyph (size 22) did.
+    sexMedallionImage: {
+        width: 32,
+        height: 32,
     },
     sexCheck: {
         position: 'absolute',

@@ -12,7 +12,7 @@
  * value) gives the tactile Aurora press feedback.
  */
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ViewStyle, StyleProp } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ViewStyle, StyleProp, Image, type ImageSourcePropType } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -27,6 +27,13 @@ export interface GoalGridCardProps {
   label: string;
   description: string;
   icon: keyof typeof Ionicons.glyphMap;
+  /**
+   * Optional premium PNG tile rendered inside the icon medallion instead of the
+   * Ionicon glyph. When provided it wins over `icon` (which stays required so
+   * the tile keeps a guaranteed glyph fallback); `resizeMode="contain"` keeps
+   * the transparent tile crisp within the medallion.
+   */
+  image?: ImageSourcePropType;
   selected: boolean;
   onPress: () => void;
   /** Outer wrapper style — the screen uses this to set the grid column width. */
@@ -39,6 +46,7 @@ export function GoalGridCard({
   label,
   description,
   icon,
+  image,
   selected,
   onPress,
   style,
@@ -100,11 +108,15 @@ export function GoalGridCard({
                   selected ? shadows.glow(colors.accent.coral) : null,
                 ]}
               >
-                <Ionicons
-                  name={icon}
-                  size={26}
-                  color={selected ? colors.text.inverse : colors.accent.coral}
-                />
+                {image ? (
+                  <Image source={image} style={styles.iconImage} resizeMode="contain" />
+                ) : (
+                  <Ionicons
+                    name={icon}
+                    size={26}
+                    color={selected ? colors.text.inverse : colors.accent.coral}
+                  />
+                )}
               </View>
 
               {selected && (
@@ -164,6 +176,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Roughly fills the 52pt medallion slot (with a little inset) so the premium
+  // tile reads at the same visual weight the Ionicon glyph (size 26) did.
+  iconImage: {
+    width: 36,
+    height: 36,
   },
   checkBadge: {
     width: 26,

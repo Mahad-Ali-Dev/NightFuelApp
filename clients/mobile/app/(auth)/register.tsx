@@ -31,7 +31,7 @@ import {
 
 // Brand mark — the Zeitra lime logo asset (same source login.tsx uses) so the
 // primary signup screen carries the real mark, not a generic glyph.
-const ZEITRA_LOGO = require('../../assets/images/zeitra-logo.png');
+const ZEITRA_LOGO = require('../../assets/images/logo_app.png');
 
 // Staggered entrance: FadeInDown with SPRING physics (not duration/linear) so
 // each block settles with a little overshoot. Keeps the original 60ms stagger

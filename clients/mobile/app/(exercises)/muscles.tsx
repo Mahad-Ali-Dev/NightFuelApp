@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { searchLibrary, Exercise } from '@/api/exercises';
+import { getMyProfile } from '@/api/profile';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
@@ -22,6 +23,24 @@ const MUSCLE_SHOULDERS_IMG = require('../../assets/images/muscle-shoulders.png')
 const MUSCLE_ARMS_IMG = require('../../assets/images/muscle-arms.png');
 const MUSCLE_LEGS_IMG = require('../../assets/images/muscle-legs.png');
 const MUSCLE_CORE_IMG = require('../../assets/images/muscle-core.png');
+// Gender-aware muscle tiles. The biological sex collected at onboarding picks
+// female vs male art (male is the default for MALE / OTHER / PREFER_NOT_TO_SAY
+// / unknown). Same module-scope require() pattern as the ungendered tiles above.
+const MUSCLE_GENDERED = {
+    chest:     { male: require('../../assets/images/muscle-chest-male.png'),     female: require('../../assets/images/muscle-chest-female.png') },
+    back:      { male: require('../../assets/images/muscle-back-male.png'),      female: require('../../assets/images/muscle-back-female.png') },
+    shoulders: { male: require('../../assets/images/muscle-shoulders-male.png'), female: require('../../assets/images/muscle-shoulders-female.png') },
+    arms:      { male: require('../../assets/images/muscle-arms-male.png'),      female: require('../../assets/images/muscle-arms-female.png') },
+    core:      { male: require('../../assets/images/muscle-core-male.png'),      female: require('../../assets/images/muscle-core-female.png') },
+    legs:      { male: require('../../assets/images/muscle-legs-male.png'),      female: require('../../assets/images/muscle-legs-female.png') },
+} as const;
+// Maps a tile id → one of the 6 gendered groups (chest/back/shoulders/arms/
+// core/legs). Glutes rides the legs art (as it did ungendered). Tiles without
+// an entry (cardio, stretching) keep their existing ungendered image.
+const GROUP_FOR_TILE: Record<string, keyof typeof MUSCLE_GENDERED> = {
+    chest: 'chest', back: 'back', shoulders: 'shoulders', arms: 'arms',
+    core: 'core', legs: 'legs', glutes: 'legs',
+};
 const CAT_CARDIO_IMG = require('../../assets/images/cat-cardio.png');
 const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
 const EXERCISE_FALLBACK_IMG = require('../../assets/images/exercise-detail-fallback.png');
@@ -127,6 +146,17 @@ export default function MuscleMapScreen() {
     const [selectedId, setSelectedId] = useState<string|null>(null);
     const items = tab==='muscles' ? MUSCLE_GROUPS : STRETCHING;
     const sel = items.find(m=>m.id===selectedId);
+    // Gender-aware tile art. Same accessor as (performance)/cycle.tsx: the
+    // 'my-profile' query is shared cache (no extra fetch), and biologicalSex is
+    // read defensively (it isn't on the UserProfile TS type). FEMALE → female
+    // art; everything else (MALE / OTHER / PREFER_NOT_TO_SAY / not-yet-loaded)
+    // → male, which is the default. ONLY swaps the image for the 6 mapped groups.
+    const { data: profile } = useQuery({ queryKey: ['my-profile'], queryFn: getMyProfile });
+    const isFemale = ((profile as any)?.biologicalSex ?? '').toString().toUpperCase() === 'FEMALE';
+    const imageFor = useCallback((m: { id: string; image: number }) => {
+        const group = GROUP_FOR_TILE[m.id];
+        return group ? MUSCLE_GENDERED[group][isFemale ? 'female' : 'male'] : m.image;
+    }, [isFemale]);
     // Resolve a group's accent KEY to a live theme token (never a raw hex).
     const accentOf = useCallback((key: AccentKey) => colors.accent[key] ?? colors.accent.coral, [colors]);
     // Use bodyPart filter on the backend so we get every exercise tagged with
@@ -160,7 +190,7 @@ export default function MuscleMapScreen() {
                     return (
                         <MuscleTile
                             key={m.id}
-                            item={m}
+                            item={{ ...m, image: imageFor(m) }}
                             index={i}
                             isSel={isSel}
                             accent={accentOf(m.accent)}

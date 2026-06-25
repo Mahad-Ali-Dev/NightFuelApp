@@ -1,13 +1,34 @@
 {
   "name": "zeitra-landing",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "Zeitra marketing landing + legal pages (static site)",
+  "description": "Zeitra marketing landing — Next.js (static export)",
   "scripts": {
-    "build": "node build.mjs"
+    "dev": "next dev --port 4400",
+    "build": "next build",
+    "start": "next start",
+    "legacy:build": "node build.mjs"
   },
   "dependencies": {
-    "marked": "^12.0.2"
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.34.3",
+    "gsap": "^3.15.0",
+    "lucide-react": "^0.575.0",
+    "marked": "^12.0.2",
+    "next": "16.1.5",
+    "radix-ui": "^1.6.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwind-merge": "^3.5.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.2.0",
+    "@types/node": "^22.15.3",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^4.2.0",
+    "typescript": "5.9.2"
   }
 }

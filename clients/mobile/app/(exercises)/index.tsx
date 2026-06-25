@@ -71,7 +71,9 @@ export default function ExerciseLibraryScreen() {
             query: searchQuery || null,
             category: activeCategory,
             muscleGroup: activeMuscle,
-            limit: 200,
+            // Fetch the full catalog (~2,232 entries) — the backend caps at 5000.
+            // A 200 limit previously truncated category/muscle results.
+            limit: 1000,
         }),
         enabled: !!searchQuery || !!activeCategory || !!activeMuscle,
         staleTime: 5 * 60 * 1000,

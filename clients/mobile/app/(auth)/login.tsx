@@ -24,7 +24,7 @@ import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
 import { isValidEmail, sanitizeInput } from '@/utils/validation';
 
-const ZEITRA_LOGO = require('../../assets/images/zeitra-logo.png');
+const ZEITRA_LOGO = require('../../assets/images/logo_app.png');
 
 // Per-item entrance: a staggered FadeInDown spring. Each block enters ~45ms
 // after the previous so the hero, form, CTA and footer cascade in (premium,

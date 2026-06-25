@@ -14,7 +14,7 @@
  * comfortably above the 44pt minimum touch target.
  */
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ViewStyle, StyleProp } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ViewStyle, StyleProp, Image, type ImageSourcePropType } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -29,6 +29,13 @@ export interface DietModeCardProps {
   label: string;
   description: string;
   icon: keyof typeof Ionicons.glyphMap;
+  /**
+   * Optional premium PNG tile rendered inside the icon medallion instead of the
+   * Ionicon glyph. When provided it wins over `icon` (which stays required so
+   * the row keeps a guaranteed glyph fallback); `resizeMode="contain"` keeps the
+   * transparent tile crisp within the medallion.
+   */
+  image?: ImageSourcePropType;
   selected: boolean;
   onPress: () => void;
   /** Outer wrapper style — the screen uses this for row spacing. */
@@ -41,6 +48,7 @@ export function DietModeCard({
   label,
   description,
   icon,
+  image,
   selected,
   onPress,
   style,
@@ -95,11 +103,15 @@ export function DietModeCard({
                 selected ? shadows.glow(colors.accent.coral) : null,
               ]}
             >
-              <Ionicons
-                name={icon}
-                size={22}
-                color={selected ? colors.text.inverse : colors.accent.coral}
-              />
+              {image ? (
+                <Image source={image} style={styles.iconImage} resizeMode="contain" />
+              ) : (
+                <Ionicons
+                  name={icon}
+                  size={22}
+                  color={selected ? colors.text.inverse : colors.accent.coral}
+                />
+              )}
             </View>
 
             <View style={[styles.textBlock, { marginLeft: spacing.lg }]}>
@@ -152,6 +164,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Roughly fills the 44pt medallion slot (with a little inset) so the premium
+  // tile reads at the same visual weight the Ionicon glyph (size 22) did.
+  iconImage: {
+    width: 30,
+    height: 30,
   },
   textBlock: {
     flex: 1,

@@ -7,6 +7,7 @@ export const ShiftType = {
     ROTATING: 'ROTATING',
     SPLIT: 'SPLIT',
     IRREGULAR: 'IRREGULAR',
+    TWELVE_HOUR: 'TWELVE_HOUR',
 } as const;
 export type ShiftType = typeof ShiftType[keyof typeof ShiftType];
 

@@ -69,6 +69,31 @@ export function resolveNotificationTarget(
 // Expo Go sets appOwnership to 'expo'; development/standalone builds set it to null.
 const IS_EXPO_GO = Constants.appOwnership === 'expo';
 
+/**
+ * The EAS project id, required by `getExpoPushTokenAsync` in a standalone build
+ * (it cannot infer it the way Expo Go can). We resolve it from the embedded
+ * config first (`extra.eas.projectId`), then fall back to parsing the UUID out
+ * of the updates URL (`https://u.expo.dev/<id>`), and finally to the known
+ * literal id so a token fetch never fails for a missing/renamed config key.
+ */
+const EAS_PROJECT_ID_FALLBACK = '7a5e14b1-cbca-4b66-938b-dac339705833';
+
+function resolveProjectId(): string {
+    const fromExtra = Constants.expoConfig?.extra?.eas?.projectId;
+    if (typeof fromExtra === 'string' && fromExtra) return fromExtra;
+
+    // Parse the id segment out of the updates URL (u.expo.dev/<id>).
+    const updatesUrl =
+        Constants.expoConfig?.updates?.url ??
+        (Constants as any).manifest2?.extra?.expoClient?.updates?.url;
+    if (typeof updatesUrl === 'string') {
+        const m = updatesUrl.match(/u\.expo\.dev\/([0-9a-f-]+)/i);
+        if (m?.[1]) return m[1];
+    }
+
+    return EAS_PROJECT_ID_FALLBACK;
+}
+
 if (!IS_EXPO_GO) {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const Notifications = require('expo-notifications');
@@ -84,7 +109,14 @@ if (!IS_EXPO_GO) {
 }
 
 async function registerForPushNotificationsAsync(): Promise<string | null> {
-    if (IS_EXPO_GO || !Constants.isDevice) {
+    // Remote push is unsupported in Expo Go (SDK 53+); a standalone/dev build is
+    // required. NOTE: we deliberately do NOT gate on `Constants.isDevice` — that
+    // property was removed from expo-constants in SDK 54 (it is now `undefined`),
+    // so the old `!Constants.isDevice` check always early-returned and the token
+    // never registered. expo-device is not a dependency, so the IS_EXPO_GO guard
+    // is the device gate we keep; getExpoPushTokenAsync itself errors on a
+    // simulator, which the surrounding try/catch already swallows.
+    if (IS_EXPO_GO) {
         if (__DEV__) console.warn('[Notifications] Push notifications require a development build on a physical device.');
         return null;
     }
@@ -113,7 +145,9 @@ async function registerForPushNotificationsAsync(): Promise<string | null> {
         });
     }
 
-    const tokenData = await Notifications.getExpoPushTokenAsync();
+    // An explicit projectId is required in a standalone build (Expo Go can infer
+    // it, a release build cannot) — without it the fetch throws "No projectId".
+    const tokenData = await Notifications.getExpoPushTokenAsync({ projectId: resolveProjectId() });
     return tokenData.data;
 }
 

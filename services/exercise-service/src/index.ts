@@ -116,10 +116,13 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/library', {
             // (e.g. "upper arms", "waist", "upper legs", "hips")
             bodyPart: z.string().trim().max(120).optional(),
             category: z.string().trim().max(120).optional(),
-            // Bumped max from 100 → 500. The seeded LibraryExercise table
-            // can have many entries per muscle group; capping at 100 was
-            // why the mobile app appeared to "miss" exercises.
-            limit: z.coerce.number().int().min(1).max(500).default(50),
+            // Bumped max 100 → 500 → 5000. The seeded LibraryExercise table now
+            // holds ~2,232 entries; a 500 cap meant the mobile library could
+            // only ever fetch the first 500 (the app appeared to "miss"
+            // thousands of exercises). 5000 comfortably covers the full catalog
+            // with headroom, so an unfiltered fetch returns everything. The
+            // .min(1)/.int() bounds and default(50) are unchanged.
+            limit: z.coerce.number().int().min(1).max(5000).default(50),
         })
     },
 }, async (request, reply) => {

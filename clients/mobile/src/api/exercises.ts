@@ -122,7 +122,7 @@ export interface SearchLibraryFilters {
   bodyPart?: string | null;
   /** Equipment filter (e.g. "barbell", "body weight") */
   equipment?: string | null;
-  /** Page size — backend supports up to 200 */
+  /** Page size — backend caps this at 5000 (see exercise-service library route); default 1000 covers the full ~2,232-entry catalog. */
   limit?: number;
 }
 
@@ -135,7 +135,7 @@ export interface SearchLibraryFilters {
  *
  * New filter-object form (preferred):
  *   searchLibrary({ muscleGroup: "Chest" })
- *   searchLibrary({ bodyPart: "upper arms", limit: 200 })
+ *   searchLibrary({ bodyPart: "upper arms", limit: 1000 })
  */
 export const searchLibrary = async (
   queryOrFilters?: string | SearchLibraryFilters | null,
@@ -147,7 +147,9 @@ export const searchLibrary = async (
       ? queryOrFilters
       : { query: queryOrFilters as string | null | undefined, category };
 
-  const params: Record<string, string | number> = { limit: filters.limit ?? 200 };
+  // Default to 1000 so the full ~2,232-entry library is fetchable (the backend
+  // caps at 5000). A 200 default previously truncated the list to ~200 rows.
+  const params: Record<string, string | number> = { limit: filters.limit ?? 1000 };
   if (filters.query) params.query = filters.query;
   if (filters.category) params.category = filters.category;
   if (filters.muscleGroup) params.muscleGroup = filters.muscleGroup;

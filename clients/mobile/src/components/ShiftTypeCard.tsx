@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, StyleSheet, Pressable, View } from 'react-native';
+import { Text, StyleSheet, Pressable, View, Image, type ImageSourcePropType } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
 import { typography as themeTypography } from '@/theme/typography';
@@ -25,6 +25,13 @@ import { shadows } from '@/theme/shadows';
 export interface ShiftTypeCardProps {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
+  /**
+   * Optional premium PNG tile rendered inside the icon chip instead of the
+   * Ionicon glyph. When provided it wins over `icon` (which is still required
+   * so the card keeps a guaranteed glyph fallback); `resizeMode="contain"`
+   * keeps the transparent tile crisp within the chip.
+   */
+  imageSource?: ImageSourcePropType;
   /** Functional accent hex for this shift type (e.g. colors.accent.cyan). */
   tint: string;
   selected: boolean;
@@ -37,6 +44,7 @@ export interface ShiftTypeCardProps {
 export function ShiftTypeCard({
   label,
   icon,
+  imageSource,
   tint,
   selected,
   onPress,
@@ -69,7 +77,7 @@ export function ShiftTypeCard({
         </View>
       ) : null}
 
-      {/* Icon chip */}
+      {/* Icon chip — premium PNG tile when supplied, else the Ionicon glyph. */}
       <View
         style={[
           styles.iconChip,
@@ -78,11 +86,19 @@ export function ShiftTypeCard({
           },
         ]}
       >
-        <Ionicons
-          name={icon}
-          size={20}
-          color={selected ? colors.text.inverse : tint}
-        />
+        {imageSource ? (
+          <Image
+            source={imageSource}
+            style={styles.iconImage}
+            resizeMode="contain"
+          />
+        ) : (
+          <Ionicons
+            name={icon}
+            size={20}
+            color={selected ? colors.text.inverse : tint}
+          />
+        )}
       </View>
 
       {/* Label — the value dominates its hint */}
@@ -126,6 +142,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
+  },
+  iconImage: {
+    width: 28,
+    height: 28,
   },
   label: {
     fontSize: 15,

@@ -23,9 +23,10 @@ import {
 } from '@/lib/logFormSchemas';
 
 // Shift types — `value`/`label` are unchanged from the original contract. Each
-// type now also carries a glanceable `icon`, a one-word `hint`, and a functional
-// accent `tintKey` (resolved off the theme at render) so the picker reads as a
-// set of distinct, type-tinted cards. Lime stays reserved for the primary CTA.
+// type carries a one-word `hint` and a functional accent `tintKey` (resolved off
+// the theme at render) so the picker reads as a set of distinct, type-tinted
+// cards. The `icon` is the card's vector glyph. Lime stays reserved for the
+// primary CTA.
 const SHIFT_TYPES = [
     { value: 'FIXED_NIGHT', label: 'Fixed Night', icon: 'moon', hint: 'Overnight', tintKey: 'purple' as const },
     { value: 'ROTATING', label: 'Rotating', icon: 'sync', hint: 'Shifts vary', tintKey: 'cyan' as const },

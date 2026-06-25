@@ -26,6 +26,8 @@ import {
   Dimensions,
   FlatList,
   ListRenderItemInfo,
+  Image,
+  type ImageSourcePropType,
 } from 'react-native';
 import Animated, {
   FadeInDown,
@@ -43,6 +45,13 @@ export interface GoalRailItem {
   label: string;
   description: string;
   icon: keyof typeof Ionicons.glyphMap;
+  /**
+   * Optional premium PNG tile rendered inside the icon medallion instead of the
+   * Ionicon glyph. When provided it wins over `icon` (which stays required so
+   * the card keeps a guaranteed glyph fallback); `resizeMode="contain"` keeps
+   * the transparent tile crisp within the medallion.
+   */
+  image?: ImageSourcePropType;
 }
 
 export interface GoalRecommendationRailProps {
@@ -126,11 +135,15 @@ function RailCard({
                   selected ? shadows.glow(colors.accent.coral) : null,
                 ]}
               >
-                <Ionicons
-                  name={item.icon}
-                  size={22}
-                  color={selected ? colors.text.inverse : colors.accent.coral}
-                />
+                {item.image ? (
+                  <Image source={item.image} style={styles.iconImage} resizeMode="contain" />
+                ) : (
+                  <Ionicons
+                    name={item.icon}
+                    size={22}
+                    color={selected ? colors.text.inverse : colors.accent.coral}
+                  />
+                )}
               </View>
               {selected && (
                 <View
@@ -234,6 +247,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Roughly fills the 44pt medallion slot (with a little inset) so the premium
+  // tile reads at the same visual weight the Ionicon glyph (size 22) did.
+  iconImage: {
+    width: 30,
+    height: 30,
   },
   checkBadge: {
     width: 24,

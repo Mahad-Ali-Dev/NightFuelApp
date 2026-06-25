@@ -14,7 +14,7 @@
  * value) gives the tactile Aurora press feedback; the touch target is >= 44pt.
  */
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ViewStyle, StyleProp } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ViewStyle, StyleProp, Image, type ImageSourcePropType } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -28,6 +28,13 @@ import { withAlpha } from '@/theme/utils';
 export interface DietPrefChipProps {
   label: string;
   icon: keyof typeof Ionicons.glyphMap;
+  /**
+   * Optional premium PNG tile rendered inside the icon medallion instead of the
+   * Ionicon glyph. When provided it wins over `icon` (which stays required so
+   * the chip keeps a guaranteed glyph fallback); `resizeMode="contain"` keeps
+   * the transparent tile crisp within the medallion.
+   */
+  image?: ImageSourcePropType;
   selected: boolean;
   onPress: () => void;
   /** Outer wrapper style — the screen uses this to set the grid column width. */
@@ -39,6 +46,7 @@ export interface DietPrefChipProps {
 export function DietPrefChip({
   label,
   icon,
+  image,
   selected,
   onPress,
   style,
@@ -100,11 +108,15 @@ export function DietPrefChip({
                   selected ? shadows.glow(colors.accent.coral) : null,
                 ]}
               >
-                <Ionicons
-                  name={icon}
-                  size={22}
-                  color={selected ? colors.text.inverse : colors.accent.coral}
-                />
+                {image ? (
+                  <Image source={image} style={styles.iconImage} resizeMode="contain" />
+                ) : (
+                  <Ionicons
+                    name={icon}
+                    size={22}
+                    color={selected ? colors.text.inverse : colors.accent.coral}
+                  />
+                )}
               </View>
 
               {selected && (
@@ -159,6 +171,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Roughly fills the 44pt medallion slot (with a little inset) so the premium
+  // tile reads at the same visual weight the Ionicon glyph (size 22) did.
+  iconImage: {
+    width: 30,
+    height: 30,
   },
   checkBadge: {
     width: 24,

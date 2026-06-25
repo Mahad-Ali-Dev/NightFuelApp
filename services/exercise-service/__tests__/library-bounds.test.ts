@@ -7,15 +7,15 @@
  *   muscleGroup  z.string().trim().max(120).optional()
  *   bodyPart     z.string().trim().max(120).optional()
  *   category     z.string().trim().max(120).optional()
- *   limit        z.coerce.number().int().min(1).max(500).default(50)   ← UNCHANGED
+ *   limit        z.coerce.number().int().min(1).max(5000).default(50)  ← cap raised 500→5000
  *
  * Each free-text filter previously was an UNBOUNDED z.string().optional(); a
  * multi-MB value flowed straight into a Prisma `contains` (LIKE) where-clause —
  * a cheap DoS / log-bloat vector. The bound adds a 120-char cap (consistent with
  * the other text caps in this service) plus an additive, behaviour-preserving
- * `.trim()`. The pre-existing `limit` cap (max 500, default 50) is deliberately
- * left exactly as-is and is re-asserted here so a future edit can't silently
- * lower or raise it.
+ * `.trim()`. The `limit` cap was raised 500 → 5000 (default 50 unchanged) so the
+ * mobile library can fetch the full ~2,232-entry catalog in one request; the new
+ * cap is re-asserted here so a future edit can't silently lower or change it.
  *
  * Why this suite copies the querystring schema + route shape VERBATIM instead of
  * importing src/:
@@ -88,7 +88,7 @@ const libraryQuerystringSchema = z.object({
     muscleGroup: z.string().trim().max(120).optional(),
     bodyPart: z.string().trim().max(120).optional(),
     category: z.string().trim().max(120).optional(),
-    limit: z.coerce.number().int().min(1).max(500).default(50),
+    limit: z.coerce.number().int().min(1).max(5000).default(50),
 });
 
 async function buildApp(svc: MockService): Promise<FastifyInstance> {
@@ -282,12 +282,12 @@ describe('exercise-service library querystring bounds (valid token, schema-lock)
         });
     });
 
-    // ── limit cap is UNCHANGED (re-locked alongside the new text bounds) ──────
-    describe('limit cap unchanged (int, 1..500, default 50)', () => {
-        it('limit=501 (above max) -> 400 and searchLibrary NOT called', async () => {
+    // ── limit cap raised 500 → 5000 (re-locked alongside the text bounds) ─────
+    describe('limit cap (int, 1..5000, default 50)', () => {
+        it('limit=5001 (above max) -> 400 and searchLibrary NOT called', async () => {
             const res = await app.inject({
                 method: 'GET',
-                url: '/v1/exercises/library?limit=501',
+                url: '/v1/exercises/library?limit=5001',
                 headers: AUTH,
             });
 
@@ -295,16 +295,28 @@ describe('exercise-service library querystring bounds (valid token, schema-lock)
             expect(svc.searchLibrary).not.toHaveBeenCalled();
         });
 
-        it('limit=500 (at the boundary) -> not 400 (reaches the service with 500)', async () => {
+        it('limit=5000 (at the boundary) -> not 400 (reaches the service with 5000)', async () => {
             const res = await app.inject({
                 method: 'GET',
-                url: '/v1/exercises/library?limit=500',
+                url: '/v1/exercises/library?limit=5000',
                 headers: AUTH,
             });
 
             expect(res.statusCode).not.toBe(400);
             expect(svc.searchLibrary).toHaveBeenCalledTimes(1);
-            expect(svc.searchLibrary).toHaveBeenCalledWith(expect.any(Object), 500);
+            expect(svc.searchLibrary).toHaveBeenCalledWith(expect.any(Object), 5000);
+        });
+
+        it('limit=1000 (the new mobile default) -> not 400 (reaches the service with 1000)', async () => {
+            const res = await app.inject({
+                method: 'GET',
+                url: '/v1/exercises/library?limit=1000',
+                headers: AUTH,
+            });
+
+            expect(res.statusCode).not.toBe(400);
+            expect(svc.searchLibrary).toHaveBeenCalledTimes(1);
+            expect(svc.searchLibrary).toHaveBeenCalledWith(expect.any(Object), 1000);
         });
 
         it('limit=0 (below min) -> 400 and searchLibrary NOT called', async () => {

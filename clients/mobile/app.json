@@ -8,7 +8,7 @@
     "scheme": "zeitra",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/images/zeitra-logo.png",
+      "image": "./assets/images/logo_app.png",
       "resizeMode": "contain",
       "backgroundColor": "#0A0C10"
     },

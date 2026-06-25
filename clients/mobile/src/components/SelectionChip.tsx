@@ -21,6 +21,7 @@
  */
 import React from 'react';
 import { Text, StyleSheet, Pressable } from 'react-native';
+import { Image } from 'expo-image';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -38,6 +39,13 @@ export interface SelectionChipProps {
   accent?: string;
   /** 'solid' = ink-on-accent fill; 'soft' = translucent fill + accent text. */
   tone?: 'solid' | 'soft';
+  /**
+   * Optional leading tile artwork (a `require(...)` asset module). When set, a
+   * small contain-fitted image renders in the chip's leading slot in place of
+   * the resting state — replacing a vector glyph with the option's premium
+   * tile. Purely additive: chips without it keep the original text-only look.
+   */
+  image?: number;
   accessibilityLabel?: string;
   testID?: string;
 }
@@ -48,6 +56,7 @@ export function SelectionChip({
   onPress,
   accent,
   tone = 'solid',
+  image,
   accessibilityLabel,
   testID,
 }: SelectionChipProps) {
@@ -102,6 +111,14 @@ export function SelectionChip({
           animatedStyle,
         ]}
       >
+        {image != null ? (
+          <Image
+            source={image}
+            style={styles.image}
+            contentFit="contain"
+            accessible={false}
+          />
+        ) : null}
         {selected ? (
           <Ionicons
             name="checkmark-circle"
@@ -131,6 +148,11 @@ const styles = StyleSheet.create({
   },
   check: {
     marginRight: 6,
+  },
+  image: {
+    width: 28,
+    height: 28,
+    marginRight: 8,
   },
   label: {
     fontSize: 13,

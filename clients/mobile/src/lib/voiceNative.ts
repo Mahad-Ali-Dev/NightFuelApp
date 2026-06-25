@@ -13,9 +13,12 @@
  *   - During the GATE, this file is never module-evaluated by the screen tests
  *     (they mock `@/lib/voice`), and `getVoiceAdapter()`'s require throws if a
  *     test ever does reach it (no native module under jest) → no-op fallback.
- *   - For `tsc --noEmit`, the `import`s below resolve against the ambient shims
- *     in `src/types/voice-native.d.ts` (declared because the packages aren't
- *     installed for the gate). Delete those shims once the deps are installed.
+ *   - For `tsc --noEmit`, the `import`s below resolve against the REAL bundled
+ *     types of expo-speech / expo-speech-recognition (both are installed at the
+ *     monorepo root `node_modules`, resolvable from this workspace). The old
+ *     ambient shims in `src/types/voice-native.d.ts` were removed — keeping a
+ *     `declare module` for an installed package SHADOWS its real types, which is
+ *     exactly what hid the wrong `addSpeechRecognitionListener` API before.
  *
  * Honest-fallback discipline (mirrors the health-sync adapter): nothing here
  * throws into the caller. Engine/permission failures are reported through the
@@ -24,10 +27,18 @@
 
 import {
   ExpoSpeechRecognitionModule,
-  addSpeechRecognitionListener,
-  type EventSubscription,
+  type ExpoSpeechRecognitionErrorEvent,
+  type ExpoSpeechRecognitionResultEvent,
 } from 'expo-speech-recognition';
 import * as Speech from 'expo-speech';
+
+/**
+ * The subscription object every `ExpoSpeechRecognitionModule.addListener(...)`
+ * call returns (it's an Expo `EventEmitter`/`NativeModule`). Derived from the
+ * module's own `addListener` return type so we stay pinned to the real API
+ * surface without importing `EventSubscription` from a separate entrypoint.
+ */
+type SpeechSubscription = ReturnType<typeof ExpoSpeechRecognitionModule.addListener>;
 
 import type {
   VoiceAdapter,
@@ -37,15 +48,19 @@ import type {
 } from './voice.types';
 
 /**
- * Map a native expo-speech-recognition error string to our normalised
- * {@link VoiceErrorCode}. The Web-Speech-style codes jamsch emits include
- * 'no-speech', 'not-allowed', 'network', 'aborted', 'audio-capture',
- * 'service-not-allowed', 'language-not-supported', etc. We collapse them to the
- * small set the UI knows how to fall back from.
+ * Map a native expo-speech-recognition error code to our normalised
+ * {@link VoiceErrorCode}. The real {@link ExpoSpeechRecognitionErrorEvent}'s
+ * `error` is a Web-Speech-style union: 'aborted', 'audio-capture',
+ * 'interrupted', 'bad-grammar', 'language-not-supported', 'network',
+ * 'no-speech', 'not-allowed', 'service-not-allowed', 'busy', 'client',
+ * 'speech-timeout', 'unknown'. We collapse them to the small set the UI knows
+ * how to fall back from.
  */
 function normaliseErrorCode(raw: string | undefined): VoiceErrorCode {
   switch (raw) {
     case 'no-speech':
+    case 'speech-timeout':
+      // No usable speech was captured — same honest "didn't catch that" UX.
       return 'no-speech';
     case 'not-allowed':
     case 'service-not-allowed':
@@ -55,6 +70,10 @@ function normaliseErrorCode(raw: string | undefined): VoiceErrorCode {
       return 'network';
     case 'busy':
       return 'busy';
+    case 'aborted':
+      // User-initiated cancel (abort()) — surfaced as a benign unknown; the UI
+      // path that calls abort() tears down without showing this anyway.
+      return 'unknown';
     default:
       return 'unknown';
   }
@@ -89,7 +108,7 @@ export function createNativeVoiceAdapter(): VoiceAdapter | null {
   if (!sttAvailable && !ttsAvailable) return null;
 
   // ── Per-session subscriptions, torn down on end/stop/abort/error ──────────
-  let subs: EventSubscription[] = [];
+  let subs: SpeechSubscription[] = [];
   let active = false;
   let lastFinal = '';
   let lastInterim = '';
@@ -142,38 +161,50 @@ export function createNativeVoiceAdapter(): VoiceAdapter | null {
       lastInterim = '';
 
       try {
+        // The real jamsch API: ExpoSpeechRecognitionModule is an Expo
+        // EventEmitter (NativeModule), so we subscribe with `.addListener(name,
+        // cb)` — each returns a subscription with `.remove()`. Events: 'start'
+        // (mic live), 'result' (interim/final transcripts), 'error', and 'end'
+        // (session finished). (There is NO top-level `addSpeechRecognitionListener`
+        // export — using it threw "undefined is not a function" at runtime.)
         subs.push(
-          addSpeechRecognitionListener('start', () => {
+          ExpoSpeechRecognitionModule.addListener('start', () => {
             handlers.onStart?.();
           }),
         );
 
         subs.push(
-          addSpeechRecognitionListener('result', (ev) => {
-            const text = ev?.results?.[0]?.transcript ?? '';
-            if (ev?.isFinal) {
-              lastFinal = text;
-            } else {
-              lastInterim = text;
-            }
-            handlers.onTranscript?.({ text, isFinal: !!ev?.isFinal });
-            if (ev?.isFinal && text.trim().length > 0) {
-              handlers.onFinal?.(text);
-            }
-          }),
+          ExpoSpeechRecognitionModule.addListener(
+            'result',
+            (ev: ExpoSpeechRecognitionResultEvent) => {
+              const text = ev?.results?.[0]?.transcript ?? '';
+              if (ev?.isFinal) {
+                lastFinal = text;
+              } else {
+                lastInterim = text;
+              }
+              handlers.onTranscript?.({ text, isFinal: !!ev?.isFinal });
+              if (ev?.isFinal && text.trim().length > 0) {
+                handlers.onFinal?.(text);
+              }
+            },
+          ),
         );
 
         subs.push(
-          addSpeechRecognitionListener('error', (ev) => {
-            const code = normaliseErrorCode(ev?.error);
-            handlers.onError?.(code, ev?.message ?? 'Recognition error.');
-            teardown();
-            handlers.onEnd?.();
-          }),
+          ExpoSpeechRecognitionModule.addListener(
+            'error',
+            (ev: ExpoSpeechRecognitionErrorEvent) => {
+              const code = normaliseErrorCode(ev?.error);
+              handlers.onError?.(code, ev?.message ?? 'Recognition error.');
+              teardown();
+              handlers.onEnd?.();
+            },
+          ),
         );
 
         subs.push(
-          addSpeechRecognitionListener('end', () => {
+          ExpoSpeechRecognitionModule.addListener('end', () => {
             // Some platforms end WITHOUT a discrete final result event. If we
             // captured an interim but no final, promote the last interim so the
             // user's words are never silently lost.

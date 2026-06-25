@@ -65,7 +65,12 @@ jest.mock('expo-router', () => {
 type AuthState = { isAuthenticated: boolean; isLoading: boolean; user: any };
 const mockAuth: AuthState = { isAuthenticated: false, isLoading: true, user: null };
 jest.mock('@/store/authStore', () => ({
-  useAuthStore: () => mockAuth,
+  // app/index.tsx subscribes with per-field selectors `(s) => s.field` (added to
+  // stop re-render churn); the mock must APPLY the selector like real zustand,
+  // else every field reads back the whole object (truthy) and the gate sticks on
+  // "loading". Fall back to the whole holder if called with no selector.
+  useAuthStore: (selector?: (s: AuthState) => unknown) =>
+    selector ? selector(mockAuth) : mockAuth,
 }));
 
 // Skeleton placeholder → passthrough <View testID="skeleton"> so the suite does

@@ -94,3 +94,10 @@ exercises/**/*.mp4
 exercises/**/*.mov
 exercises/**/*.webm
 exercises/**/*.MP4
+
+replicate-token.txt
+
+app_images/
+_gen-tiles.js
+_gen.log
+_gen2.log

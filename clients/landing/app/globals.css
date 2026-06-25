@@ -1,0 +1,37 @@
+@import "tailwindcss";
+@import "../styles.css";
+
+/* Zeitra design tokens for Tailwind + 21st.dev components. The hand-written
+   section styles (lime/Barlow/glass) live in ../styles.css, imported above. */
+@theme {
+  --color-background: #0a0c12;
+  --color-foreground: #f4f6fb;
+  --color-card: #13161f;
+  --color-card-foreground: #f4f6fb;
+  --color-popover: #0a0c12;
+  --color-popover-foreground: #f4f6fb;
+  --color-primary: #a8cc3c;
+  --color-primary-foreground: #0a0c12;
+  --color-secondary: #1b2030;
+  --color-secondary-foreground: #f4f6fb;
+  --color-muted: #1b2030;
+  --color-muted-foreground: #9ba3b4;
+  --color-accent: #a8cc3c;
+  --color-accent-foreground: #0a0c12;
+  --color-destructive: #ff4444;
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-input: rgba(255, 255, 255, 0.1);
+  --color-ring: #a8cc3c;
+
+  --color-lime: #a8cc3c;
+  --color-lime-light: #c5e06b;
+  --color-lime-dark: #93b82e;
+  --color-cyan: #00d4aa;
+  --color-ink: #0a0c12;
+
+  --radius-lg: 18px;
+  --radius-md: 12px;
+
+  --font-sans: 'Barlow', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Barlow Condensed', 'Barlow', sans-serif;
+}
