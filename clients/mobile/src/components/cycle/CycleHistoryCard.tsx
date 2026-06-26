@@ -21,6 +21,10 @@ import type { CycleHistoryResponse, CycleHistoryEntry } from '@/api/cycle';
  * fabricated average.
  */
 
+// Coral period/cycle accent (the brand `accent.coral` token resolves to LIME
+// post-rebrand, so coral is an explicit literal here).
+const CORAL = '#FF7A90';
+
 export interface CycleHistoryCardProps {
     history?: CycleHistoryResponse;
 }
@@ -72,7 +76,7 @@ export function CycleHistoryCard({ history }: CycleHistoryCardProps) {
         <GlassCard radius={borderRadius['2xl']} style={styles.card}>
             <View style={styles.inner}>
                 <View style={styles.header}>
-                    <Ionicons name="stats-chart-outline" size={18} color={colors.accent.coral} />
+                    <Ionicons name="stats-chart-outline" size={18} color={CORAL} />
                     <Text style={[typography.overline, styles.headerLabel, { color: colors.text.secondary }]}>
                         CYCLE HISTORY
                     </Text>
@@ -121,8 +125,8 @@ export function CycleHistoryCard({ history }: CycleHistoryCardProps) {
                             {cycles.map((c) => {
                                 const isCurrent = c.cycleLengthDays == null;
                                 const dotColor = isCurrent
-                                    ? colors.accent.red
-                                    : withAlpha(colors.accent.red, 0.45);
+                                    ? CORAL
+                                    : withAlpha(CORAL, 0.45);
                                 return (
                                     <View
                                         key={c.startDate}

@@ -5,9 +5,11 @@
  *   Home · Train · [Quick-Log — centre coral control] · Feed · More
  *
  * The centre control is an intentional Aurora Quick-Log button (not a bare
- * "+"): tapping it opens a chooser sheet offering Meal / Workout / Sleep, each
- * routing to its existing log destination. The Ria AI Coach FAB floats above
- * the tab bar on every screen and is unrelated to the Quick-Log control.
+ * "+"): tapping it opens a "Quick add" chooser sheet — a 3×2 grid of object-image
+ * tiles (Meal / Workout / Water / Sleep / Weight / Cycle) plus a "Scan a meal"
+ * CTA and a "tell Ria" hand-off — each routing to its existing log destination.
+ * The Ria AI Coach FAB floats above the tab bar on every screen and is unrelated
+ * to the Quick-Log control.
  *
  * Hidden tabs (reachable via in-screen navigation):
  *   schedule → redirects to /(shifts)
@@ -30,10 +32,21 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { SafeBlurView } from '@/components/SafeBlurView';
-import { GlassCard } from '@/components/ui';
+import { GlassCard, CtaButton } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import { colors as C } from '@/theme/colors';
+
+// Bundled Quick-add tile art (transparent Zeitra object renders). Bundled via
+// require() so the chooser never depends on an external host (no 404 / rate-limit).
+// '@/*' resolves to ./src, so assets are required by relative path from app/(tabs).
+const QA_MEAL_IMG = require('../../assets/images/qa-meal.png');
+const QA_WORKOUT_IMG = require('../../assets/images/qa-workout.png');
+const QA_WATER_IMG = require('../../assets/images/meal-hydration.png');
+const QA_SLEEP_IMG = require('../../assets/images/qa-sleep.png');
+const QA_WEIGHT_IMG = require('../../assets/images/qa-stats.png');
+const QA_CYCLE_IMG = require('../../assets/images/qa-cycle.png');
 
 // ─── Heights ─────────────────────────────────────────────────────────────────
 
@@ -105,8 +118,8 @@ function CentreButton({ onPress }: { onPress?: () => void }) {
         <GestureDetector gesture={tap}>
             <AnimatedPressable
                 accessibilityRole="button"
-                accessibilityLabel="Quick log"
-                accessibilityHint="Opens a chooser to log a meal, workout, or sleep"
+                accessibilityLabel="Quick add"
+                accessibilityHint="Opens a chooser to log a meal, workout, water, sleep, weight, or cycle"
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={cb.touch}
             >
@@ -167,26 +180,37 @@ const cb = StyleSheet.create({
 // A native <Modal> presented as a bottom action sheet (zeego is not a project
 // dependency, so per the ui-native-modals rule we use a native Modal — which
 // brings built-in accessibility / back-button handling — rather than a custom
-// JS bottom-sheet library). Each row is a Pressable (not a Touchable) routing to
-// the existing log destination. Row icon discs are icon-only colored gradients
-// (no <Text> inside a coral-token gradient), so none is a labeled coral CTA.
+// JS bottom-sheet library). The body is a 3×2 grid of object-image tiles; each
+// tile is a Pressable (not a Touchable) routing to the existing log destination
+// via the shared close-then-navigate `onSelect`. A lime "Scan a meal" CtaButton
+// and an "or just tell Ria…" line sit beneath the grid.
 
 type QuickLogOption = {
-    id: 'meal' | 'workout' | 'sleep';
+    id: 'meal' | 'workout' | 'water' | 'sleep' | 'weight' | 'cycle';
     label: string;
-    sublabel: string;
-    icon: keyof typeof Ionicons.glyphMap;
+    image: number;
     accent: string;
     route: string;
 };
 
-// Meal → the nutrition tab's primary log-meal flow ((meals)/log-meal, the same
-// destination nutrition.tsx's "Log a meal" CTA targets). Workout → the active
-// workout modal. Sleep → the log-sleep modal.
+// Each tile maps onto an EXISTING log destination (no new routes invented):
+//   Meal    → the nutrition tab's primary log-meal flow ((meals)/log-meal, the
+//             same destination nutrition.tsx's "Log a meal" CTA targets).
+//   Workout → the active-workout modal.
+//   Water   → the performance Hydration screen (same route the Performance hub's
+//             Hydration quick-link uses).
+//   Sleep   → the log-sleep modal.
+//   Weight  → the performance Body Metrics screen (the Performance hub's
+//             Body Metrics quick-link route).
+//   Cycle   → the performance Cycle screen.
+// `accent` is used only for the per-tile pressed tint + soft border glow.
 const QUICK_LOG_OPTIONS: readonly QuickLogOption[] = [
-    { id: 'meal', label: 'Log a meal', sublabel: 'Food, macros & calories', icon: 'restaurant', accent: C.accent.cyan, route: '/(meals)/log-meal' },
-    { id: 'workout', label: 'Start a workout', sublabel: 'Track sets & exercises', icon: 'barbell', accent: C.accent.coral, route: '/(modals)/active-workout' },
-    { id: 'sleep', label: 'Log sleep', sublabel: 'Bedtime & wake time', icon: 'moon', accent: C.accent.purple, route: '/(modals)/log-sleep' },
+    { id: 'meal', label: 'Meal', image: QA_MEAL_IMG, accent: C.accent.cyan, route: '/(meals)/log-meal' },
+    { id: 'workout', label: 'Workout', image: QA_WORKOUT_IMG, accent: C.accent.coral, route: '/(modals)/active-workout' },
+    { id: 'water', label: 'Water', image: QA_WATER_IMG, accent: C.accent.blue, route: '/(performance)/hydration' },
+    { id: 'sleep', label: 'Sleep', image: QA_SLEEP_IMG, accent: C.accent.purple, route: '/(modals)/log-sleep' },
+    { id: 'weight', label: 'Weight', image: QA_WEIGHT_IMG, accent: C.accent.emerald, route: '/(performance)/body-metrics' },
+    { id: 'cycle', label: 'Cycle', image: QA_CYCLE_IMG, accent: C.accent.pink, route: '/(performance)/cycle' },
 ] as const;
 
 function QuickLogSheet({
@@ -213,51 +237,99 @@ function QuickLogSheet({
             <Pressable
                 style={qs.backdrop}
                 accessibilityRole="button"
-                accessibilityLabel="Close quick log"
+                accessibilityLabel="Close quick add"
                 onPress={onClose}
             >
                 {/* Stop propagation so taps on the sheet body don't dismiss it. */}
                 <Pressable
-                    style={[qs.sheetWrap, { paddingBottom: insets.bottom + 16 }]}
+                    style={[qs.sheetWrap, { paddingBottom: insets.bottom + 22 }]}
                     onPress={() => {}}
                 >
-                    <GlassCard style={qs.card} intensity={50}>
-                        <View style={qs.grabber} />
-                        <Text style={[typography.heading, qs.title, { color: colors.text.primary }]}>
-                            Quick log
-                        </Text>
+                    <GlassCard style={qs.card} intensity={50} radius={28}>
+                        <View style={[qs.grabber, { backgroundColor: withAlpha(colors.text.primary, 0.18) }]} />
 
-                        {QUICK_LOG_OPTIONS.map((opt) => (
+                        {/* Header — "Quick add" title + circular close X. */}
+                        <View style={qs.headerRow}>
+                            <Text style={[typography.h2, qs.title, { color: colors.text.primary }]}>
+                                Quick add
+                            </Text>
                             <Pressable
-                                key={opt.id}
                                 accessibilityRole="button"
-                                accessibilityLabel={opt.label}
-                                onPress={() => onSelect(opt.route)}
+                                accessibilityLabel="Close quick add"
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                onPress={onClose}
                                 style={({ pressed }) => [
-                                    qs.row,
-                                    { borderColor: withAlpha(colors.text.primary, 0.08) },
-                                    pressed ? { backgroundColor: withAlpha(colors.text.primary, 0.06) } : null,
+                                    qs.closeBtn,
+                                    {
+                                        backgroundColor: colors.background.secondary,
+                                        borderColor: withAlpha(colors.text.primary, 0.1),
+                                    },
+                                    pressed ? { opacity: 0.7 } : null,
                                 ]}
                             >
-                                <LinearGradient
-                                    colors={[withAlpha(opt.accent, 0.95), withAlpha(opt.accent, 0.6)]}
-                                    style={qs.rowIcon}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
+                                <Ionicons name="close" size={18} color={colors.text.secondary} />
+                            </Pressable>
+                        </View>
+
+                        {/* 3×2 grid of object-image tiles — each routes to its existing
+                            log destination via the shared close-then-navigate onSelect. */}
+                        <View style={qs.grid}>
+                            {QUICK_LOG_OPTIONS.map((opt) => (
+                                <Pressable
+                                    key={opt.id}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={opt.label}
+                                    onPress={() => onSelect(opt.route)}
+                                    style={({ pressed }) => [
+                                        qs.tile,
+                                        {
+                                            backgroundColor: colors.background.secondary,
+                                            borderColor: withAlpha(opt.accent, 0.28),
+                                        },
+                                        pressed
+                                            ? { backgroundColor: withAlpha(opt.accent, 0.14), borderColor: withAlpha(opt.accent, 0.5) }
+                                            : null,
+                                    ]}
                                 >
-                                    <Ionicons name={opt.icon} size={20} color="#fff" />
-                                </LinearGradient>
-                                <View style={qs.rowText}>
-                                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>
+                                    <Image
+                                        source={opt.image}
+                                        style={qs.tileImg}
+                                        contentFit="contain"
+                                        cachePolicy="memory-disk"
+                                        transition={150}
+                                    />
+                                    <Text
+                                        style={[typography.bodyMedium, { color: colors.text.primary }]}
+                                        maxFontSizeMultiplier={1.3}
+                                    >
                                         {opt.label}
                                     </Text>
-                                    <Text style={[typography.caption, { color: colors.text.secondary }]}>
-                                        {opt.sublabel}
-                                    </Text>
-                                </View>
-                                <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} />
-                            </Pressable>
-                        ))}
+                                </Pressable>
+                            ))}
+                        </View>
+
+                        {/* Primary action — scan a meal (Open Food Facts barcode camera). */}
+                        <CtaButton
+                            label="Scan a meal"
+                            icon="camera"
+                            size="lg"
+                            accessibilityLabel="Scan a meal"
+                            onPress={() => onSelect('/(modals)/barcode-scanner')}
+                            style={qs.scanCta}
+                        />
+
+                        {/* Secondary nudge — hand off to the Ria AI coach. */}
+                        <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel="Tell Ria what you had"
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            onPress={() => onSelect('/(modals)/ai-coach')}
+                            style={({ pressed }) => [qs.riaLine, pressed ? { opacity: 0.6 } : null]}
+                        >
+                            <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center' }]}>
+                                or just tell Ria — “I had a chicken bowl” 💬
+                            </Text>
+                        </Pressable>
                     </GlassCard>
                 </Pressable>
             </Pressable>
@@ -272,44 +344,63 @@ const qs = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     sheetWrap: {
-        paddingHorizontal: 14,
+        paddingHorizontal: 12,
     },
     card: {
-        padding: 18,
+        paddingHorizontal: 18,
+        paddingTop: 14,
+        paddingBottom: 22,
     },
     grabber: {
         alignSelf: 'center',
-        width: 40,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: 'rgba(255,255,255,0.25)',
-        marginBottom: 14,
+        width: 42,
+        height: 5,
+        borderRadius: 3,
+        marginBottom: 16,
     },
-    title: {
-        fontSize: 18,
-        marginBottom: 12,
-    },
-    row: {
+    headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 14,
-        paddingVertical: 12,
-        paddingHorizontal: 10,
+        justifyContent: 'space-between',
+        marginBottom: 18,
+    },
+    title: {
+        fontWeight: '700',
+    },
+    closeBtn: {
+        width: 32,
+        height: 32,
         borderRadius: 16,
         borderWidth: 1,
-        marginBottom: 10,
-        minHeight: 64,
-    },
-    rowIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    rowText: {
-        flex: 1,
-        gap: 2,
+    grid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        rowGap: 12,
+    },
+    tile: {
+        width: '31.5%',
+        borderRadius: 18,
+        borderWidth: 1,
+        paddingVertical: 13,
+        paddingHorizontal: 6,
+        alignItems: 'center',
+        gap: 7,
+    },
+    tileImg: {
+        width: 56,
+        height: 56,
+    },
+    scanCta: {
+        marginTop: 18,
+        borderRadius: 15,
+    },
+    riaLine: {
+        marginTop: 13,
+        alignSelf: 'center',
     },
 });
 

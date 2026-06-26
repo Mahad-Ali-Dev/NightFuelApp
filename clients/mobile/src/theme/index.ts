@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import { colors, ColorScheme } from './colors';
+import { colors, ColorScheme, getThemeVariantColors, DEFAULT_THEME_VARIANT } from './colors';
 import { nightReadColors } from './nightRead';
 import { typography } from './typography';
 import { spacing, borderRadius, iconSizes } from './spacing';
@@ -73,14 +73,38 @@ export function getNightReadColors(): ThemeColors {
 }
 
 /**
- * Single entry point the provider uses: pick the active palette from the
- * resolved color scheme and the Night Read flag. When `nightRead` is OFF the
- * result is byte-identical to `getThemeColors(scheme)` (Aurora is untouched);
- * when ON it returns the deep-red Night Read palette regardless of scheme
- * (Night Read is a single dark variant, so light/dark collapses to it).
+ * Single entry point the provider uses: pick the active palette from the Night
+ * Read flag and the selected color-theme variant.
+ *
+ * Priority (highest first):
+ *   1. `nightRead` ON  → the deep-red Night Read palette, regardless of scheme
+ *      or variant (Night Read is a single dark variant; behaviour UNCHANGED).
+ *   2. otherwise        → the selected `themeVariant` palette (one of the 9 in
+ *      colors.ts). Defaults to `'midnight-lime'`, which is byte-identical to
+ *      `getThemeColors('dark')`, so the historical default look is preserved.
+ *
+ * Backward-compat: `themeVariant` is OPTIONAL and defaults to the Aurora-dark
+ * variant. Any unknown id falls back to that default (never crashes). The
+ * legacy `scheme` argument is still accepted; when the caller passes the default
+ * variant it is honoured only by `midnight-lime` matching Aurora dark — explicit
+ * variants own their own light/dark identity, so the picker is the source of
+ * truth for palette while `scheme` continues to drive StatusBar/keyboard styling
+ * elsewhere. With no `themeVariant` and `nightRead` false the result is exactly
+ * `getThemeColors('dark')` (the equality the theme tests assert) — and for a
+ * 'light' scheme it stays `getThemeColors('light')` so older call sites are safe.
  */
-export function resolveThemeColors(scheme: ColorScheme, nightRead: boolean): ThemeColors {
-  return nightRead ? getNightReadColors() : getThemeColors(scheme);
+export function resolveThemeColors(
+  scheme: ColorScheme,
+  nightRead: boolean,
+  themeVariant: string = DEFAULT_THEME_VARIANT,
+): ThemeColors {
+  if (nightRead) return getNightReadColors();
+  // Preserve the pre-variant contract for callers that don't pass a variant:
+  // default variant → fall through to the scheme-driven Aurora palette so a
+  // 'light' scheme still yields the light palette (and dark yields midnight-lime,
+  // which IS Aurora dark). An explicit non-default variant owns its palette.
+  if (themeVariant === DEFAULT_THEME_VARIANT) return getThemeColors(scheme);
+  return getThemeVariantColors(themeVariant) as unknown as ThemeColors;
 }
 
 interface ThemeContextValue {

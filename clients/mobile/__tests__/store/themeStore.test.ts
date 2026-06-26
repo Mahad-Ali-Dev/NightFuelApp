@@ -32,7 +32,7 @@ import { useThemeStore } from '@/store/themeStore';
  * off. setState merges, leaving the actions intact.
  */
 beforeEach(() => {
-  useThemeStore.setState({ theme: 'dark', nightRead: false });
+  useThemeStore.setState({ theme: 'dark', nightRead: false, themeVariant: 'midnight-lime' });
 });
 
 // ─── nightRead default ────────────────────────────────────────────────────────
@@ -58,6 +58,48 @@ describe('themeStore.nightRead', () => {
     // theme slice is independent of the nightRead slice
     expect(useThemeStore.getState().theme).toBe('dark');
     expect(useThemeStore.getState().nightRead).toBe(true);
+  });
+});
+
+// ─── themeVariant (the additive 9-theme color-system selector) ──────────────────
+
+describe('themeStore.themeVariant', () => {
+  test("defaults to 'midnight-lime' (the unchanged Aurora dark look) on a fresh store", () => {
+    expect(useThemeStore.getState().themeVariant).toBe('midnight-lime');
+  });
+
+  test('setThemeVariant(id) round-trips the selected variant', () => {
+    useThemeStore.getState().setThemeVariant('ember');
+    expect(useThemeStore.getState().themeVariant).toBe('ember');
+
+    useThemeStore.getState().setThemeVariant('aurora-violet');
+    expect(useThemeStore.getState().themeVariant).toBe('aurora-violet');
+
+    // back to the default
+    useThemeStore.getState().setThemeVariant('midnight-lime');
+    expect(useThemeStore.getState().themeVariant).toBe('midnight-lime');
+  });
+
+  test('setThemeVariant does NOT disturb the theme or nightRead slices (persist isolation)', () => {
+    expect(useThemeStore.getState().theme).toBe('dark');
+    expect(useThemeStore.getState().nightRead).toBe(false);
+
+    useThemeStore.getState().setThemeVariant('rose');
+
+    // only the variant slice changed
+    expect(useThemeStore.getState().themeVariant).toBe('rose');
+    expect(useThemeStore.getState().theme).toBe('dark');
+    expect(useThemeStore.getState().nightRead).toBe(false);
+  });
+
+  test('toggling nightRead / theme leaves the selected variant untouched', () => {
+    useThemeStore.getState().setThemeVariant('mono');
+
+    useThemeStore.getState().setNightRead(true);
+    expect(useThemeStore.getState().themeVariant).toBe('mono');
+
+    useThemeStore.getState().setTheme('light');
+    expect(useThemeStore.getState().themeVariant).toBe('mono');
   });
 });
 

@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { useTheme, spacing as spacingTokens, borderRadius } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { CtaButton } from '@/components/ui/CtaButton';
 import { Skeleton, EmptyState } from '@/components/ui';
 import { SleepLoggedToast } from '@/components/SleepLoggedToast';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +16,6 @@ import { getCurrent } from '@/api/shifts';
 import { invalidateSleep } from '@/utils/invalidateSleep';
 import { computeLightPlan } from '@/lib/lightPlan';
 import { computeAnchorSleep } from '@/lib/circadian/anchorSleep';
-import { CircularProgress } from '@/components/ui/CircularProgress';
 import { CircadianTimelineRow } from '@/components/CircadianTimelineRow';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -59,22 +59,75 @@ const CAFFEINE_CUTOFF_LEAD_HOURS = 6;
 const HOUR_MS = 3_600_000;
 
 /**
- * Height of the pinned "Log Rest Block" CTA (must match `styles.logBtn.height`).
- * Named so the ScrollView's bottom clearance is DERIVED from the docked button
- * rather than a free-floating magic number: the content padding below is
- * `LOG_BTN_HEIGHT + 2× spacing.xl` (a margin above the button and below it),
- * on top of the safe-area inset, so the last card always clears the footer and
- * the clearance tracks the button if its height ever changes.
+ * The nightly sleep TARGET, in minutes (8h). This is the SAME 480-min reference
+ * the sleep-service scores duration against (`getQuality`: durationMins / 480),
+ * reused here so the hero's "last night vs. target" fill and the score agree. It
+ * is the screen's honest stand-in for the mockup's sleep-stages bar: the backend
+ * stores no Deep/Light/REM/Awake breakdown (sleep_sessions has only start/end/
+ * quality/disturbances), so rather than fabricate stage percentages we render the
+ * one duration fact we DO have — how much of the 8h target last night reached.
+ */
+const SLEEP_TARGET_MINS = 480;
+
+/** Weekday initials, Sun-indexed, for the weekly chart's per-night labels. */
+const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
+
+/**
+ * Format a minute count as a compact "7h 12m" / "48m" duration. Empty (0 / null /
+ * undefined) collapses to an em-dash so a missing night never reads "0h 0m".
+ */
+function formatDurationMins(mins: number | null | undefined): string {
+    if (mins == null || mins <= 0) return '—';
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    if (h <= 0) return `${m}m`;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+/**
+ * Map a 0–100 recovery quality score to the hero's short verdict badge text —
+ * the real-data analogue of the mockup's static "Good" pill. Returns null below
+ * any usable score so the badge is simply omitted rather than guessing.
+ */
+function qualityBadge(score: number | null | undefined): string | null {
+    if (score == null) return null;
+    if (score >= 85) return 'Excellent';
+    if (score >= 70) return 'Good';
+    if (score >= 55) return 'Fair';
+    if (score >= 35) return 'Light';
+    return 'Poor';
+}
+
+/**
+ * Parse a `chartData` entry's `YYYY-MM-DD` date to a weekday initial for the
+ * weekly bar labels. Falls back to '' on a malformed date so a bad row labels
+ * blank instead of crashing.
+ */
+function weekdayInitial(isoDate: string): string {
+    const d = new Date(`${isoDate}T00:00:00`);
+    const i = d.getDay();
+    return Number.isNaN(i) ? '' : (WEEKDAY_INITIALS[i] ?? '');
+}
+
+/**
+ * Height of the pinned "Log Rest Block" CTA footer's button (drives the
+ * ScrollView's bottom clearance below). Named so the content padding is DERIVED
+ * from the docked button rather than a free-floating magic number: the clearance
+ * is `LOG_BTN_HEIGHT + 2× spacing.xl` on top of the safe-area inset, so the last
+ * card always clears the footer and tracks the button if its height ever changes.
  */
 const LOG_BTN_HEIGHT = 56;
 
+/** Fixed pixel height of the weekly chart's plot area (bars scale within this). */
+const WEEK_CHART_HEIGHT = 96;
+
 export default function SleepOptimizerScreen() {
-    const { colors, typography, spacing, shadows } = useTheme();
+    const { colors, typography, spacing } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
 
-    // Drives the in-app peak-end success affirmation (animated check + purple
+    // Drives the in-app peak-end success affirmation (animated check + lime
     // glow) that replaces the old blocking Alert on a successful log. Cleared by
     // the toast's own auto-hide timer via onHide.
     const [showLogged, setShowLogged] = React.useState(false);
@@ -82,7 +135,7 @@ export default function SleepOptimizerScreen() {
 
     // Bottom clearance for the ScrollViews: the pinned CTA footer's height plus a
     // margin above and below it, on top of the device safe-area inset. Derived
-    // from LOG_BTN_HEIGHT + spacing tokens (8-pt grid) so it tracks the docked
+    // from LOG_BTN_HEIGHT + spacing tokens (4-pt grid) so it tracks the docked
     // button instead of a hard-coded magic number.
     const scrollBottomPad = insets.bottom + LOG_BTN_HEIGHT + spacing.xl * 2;
 
@@ -116,7 +169,7 @@ export default function SleepOptimizerScreen() {
             // ['sleep-analytics'] — otherwise this quick "log 8h block" leaves the
             // log-sleep modal's Recovery-History list (['sleep-sessions']) stale.
             invalidateSleep(queryClient);
-            // Peak-end reward: an in-app affirmation (animated check + purple glow)
+            // Peak-end reward: an in-app affirmation (animated check + lime glow)
             // instead of a blocking system Alert, paired with a success haptic.
             // Both are non-blocking; the haptic is ignored on web / unsupported.
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -180,17 +233,32 @@ export default function SleepOptimizerScreen() {
         ? formatLightTime(new Date(anchorSleep.anchor.start.getTime() - CAFFEINE_CUTOFF_LEAD_HOURS * HOUR_MS))
         : '—';
 
-    // The hero shows a recovery RING once there's anything to show (a score or a
-    // server summary). With neither — a brand-new account that has never logged a
-    // sleep block — we swap the ring for a calm, inviting empty state rather than
-    // a permanent "--" ring (peak-end: the first screen shouldn't feel broken).
+    // The hero shows a recovery summary once there's anything to show (a score or
+    // a server summary). With neither — a brand-new account that has never logged
+    // a sleep block — we swap it for a calm, inviting empty state rather than a
+    // permanent "--" card (peak-end: the first screen shouldn't feel broken).
     const hasRecoveryData = analytics?.qualityScore != null || !!analytics?.summary;
 
-    // Optional secondary recovery stats from the analytics payload (present once
-    // sessions exist). Rendered value-dominant beneath the ring; each is omitted
-    // individually when the server hasn't computed it yet, so the strip never
-    // shows a bare "—".
+    // ── Last night + weekly series (derived from the SAME chartData the server
+    // already returns; no new fetch, no fabricated values) ────────────────────
+    // chartData is up to the 7 most-recent nights, oldest→newest, each
+    // { date, durationMins, quality, alignmentScore }. The last entry is "last
+    // night"; the whole array drives the weekly bar chart. Defensive: tolerate a
+    // missing/empty array (older payloads / brand-new accounts) → no week, and a
+    // last-night duration that falls back to the average when the latest row has
+    // no duration yet.
+    const week = Array.isArray(analytics?.chartData) ? analytics!.chartData : [];
+    const lastNight = week.length > 0 ? week[week.length - 1] : null;
     const avgDuration = typeof analytics?.avgDuration === 'number' ? analytics.avgDuration : null;
+    const lastNightMins =
+        lastNight && lastNight.durationMins > 0 ? lastNight.durationMins : avgDuration;
+    // Fraction of the 8h target last night reached (0..1), for the hero bar.
+    const targetFraction =
+        lastNightMins != null ? Math.min(1, Math.max(0, lastNightMins / SLEEP_TARGET_MINS)) : 0;
+    // Tallest night in the week, used to normalise the weekly bar heights. Guard
+    // against an all-zero week so we never divide by zero.
+    const weekMax = week.reduce((m, d) => Math.max(m, d.durationMins), 0);
+    const badge = qualityBadge(analytics?.qualityScore);
     const avgQuality = typeof analytics?.avgQuality === 'number' ? analytics.avgQuality : null;
 
     return (
@@ -200,24 +268,25 @@ export default function SleepOptimizerScreen() {
                 <Pressable hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={({ pressed }) => [styles.backBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }, pressed && styles.pressedScale]}>
                     <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
                 </Pressable>
-                <Text style={[typography.h3, { color: colors.text.primary }]}>Sleep Optimizer</Text>
-                <View style={{ width: 40 }} />
+                <Text style={[typography.h3, { color: colors.text.primary }]}>Sleep</Text>
+                {/* Date pill — the mockup's "Today" affordance. Non-interactive
+                    (the screen shows the latest data); kept as chrome, not a control. */}
+                <View style={[styles.datePill, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                    <Ionicons name="moon" size={12} color={colors.accent.lime} />
+                    <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: spacing.xs }]}>Today</Text>
+                </View>
             </View>
 
             {isLoading ? (
                 <ScrollView contentContainerStyle={[styles.scrollContent, { padding: spacing.xl, paddingBottom: scrollBottomPad }]} showsVerticalScrollIndicator={false}>
-                    {/* Hero score card */}
-                    <View style={{ alignItems: 'center', marginBottom: spacing['3xl'] }}>
-                        <Skeleton width={150} height={150} radius={borderRadius.full} style={{ marginVertical: spacing.xl }} />
-                        <Skeleton width="90%" height={14} radius={borderRadius.sm} style={{ marginBottom: spacing.sm }} />
-                        <Skeleton width="70%" height={14} radius={borderRadius.sm} />
-                    </View>
+                    {/* Hero "last night" card */}
+                    <Skeleton width="100%" height={168} radius={borderRadius['2xl']} style={{ marginBottom: spacing['2xl'] }} />
                     {/* Section header */}
-                    <Skeleton width={180} height={16} radius={borderRadius.sm} style={{ marginBottom: spacing.lg }} />
-                    {/* Timeline */}
-                    <Skeleton width="100%" height={240} radius={borderRadius.xl} style={{ marginBottom: spacing.xl }} />
-                    {/* Guidance cards */}
-                    <Skeleton width="100%" height={96} radius={borderRadius.xl} style={{ marginBottom: spacing.lg }} />
+                    <Skeleton width={120} height={16} radius={borderRadius.sm} style={{ marginBottom: spacing.lg }} />
+                    {/* Weekly chart */}
+                    <Skeleton width="100%" height={160} radius={borderRadius.xl} style={{ marginBottom: spacing.xl }} />
+                    {/* Tip + guidance cards */}
+                    <Skeleton width="100%" height={84} radius={borderRadius.xl} style={{ marginBottom: spacing.lg }} />
                     <Skeleton width="100%" height={96} radius={borderRadius.xl} />
                 </ScrollView>
             ) : isError ? (
@@ -237,85 +306,94 @@ export default function SleepOptimizerScreen() {
             ) : (
                 <ScrollView contentContainerStyle={[styles.scrollContent, { padding: spacing.xl, paddingBottom: scrollBottomPad }]} showsVerticalScrollIndicator={false}>
 
-                    {/* ── Hero: recovery ring (calm purple) ─────────────────────
-                        The focal value of the screen. The big numeral dominates its
-                        QUALITY label. When there's nothing yet (no score AND no
-                        server summary), this becomes an inviting empty state instead
-                        of a permanent "--" ring. */}
+                    {/* ── Hero: "Last night" ─────────────────────────────────────
+                        The focal card. Big DURATION numeral (last-night sleep, from
+                        the latest chartData row, falling back to the rolling average
+                        when the newest night has no duration yet) dominates; a lime
+                        verdict badge (mapped from the recovery qualityScore) and the
+                        quality score sit to the right; a horizontal "vs 8h target"
+                        fill anchors the bottom. NB: the backend stores no sleep-stage
+                        breakdown (Deep/Light/REM/Awake), so — rather than fabricate
+                        stage percentages like the static mockup — the bar shows the
+                        one real duration fact we have: progress toward the 8h target.
+                        With no data at all this becomes an inviting empty state. */}
                     <Animated.View entering={enter(0)}>
                         <GlassCard
-                            glow={colors.accent.purple}
-                            style={[
-                                styles.heroCard,
-                                { borderColor: withAlpha(colors.accent.purple, 0.3) },
-                            ]}
+                            glow={colors.accent.lime}
+                            style={[styles.heroCard, { borderColor: withAlpha(colors.accent.lime, 0.3) }]}
                         >
                             <LinearGradient
-                                colors={[withAlpha(colors.accent.purple, 0.16), 'transparent']}
+                                colors={[withAlpha(colors.accent.lime, 0.14), 'transparent']}
                                 start={{ x: 0, y: 0 }}
-                                end={{ x: 0, y: 1 }}
+                                end={{ x: 0.6, y: 1 }}
                                 style={StyleSheet.absoluteFillObject}
                                 pointerEvents="none"
                             />
 
                             {hasRecoveryData ? (
-                                <>
-                                    {/* The focal metric, announced as ONE coherent unit. The
-                                        decorative ring + the score numeral + 'QUALITY' overline
-                                        + summary are separate Text nodes, so without `accessible`
-                                        a screen reader reads disjoint fragments ("82", "QUALITY",
-                                        …) and the CircularProgress conveys no value. Collapsing
-                                        them under one labelled node fixes both. */}
-                                    <View
-                                        accessible
-                                        accessibilityRole="text"
-                                        accessibilityLabel={`Sleep quality score: ${analytics?.qualityScore ?? 0} out of 100. ${analytics?.summary ?? 'Log a sleep block to see your recovery analytics.'}`}
-                                        style={styles.heroScoreBlock}
-                                    >
-                                        <Text style={[typography.overline, { color: colors.accent.purple, marginBottom: spacing.xl }]}>Sleep Quality Score</Text>
-                                        <View style={styles.heroSection}>
-                                            <View style={shadows.glow(colors.accent.purple)}>
-                                                <CircularProgress progress={(analytics?.qualityScore ?? 0) / 100} size={150} strokeWidth={12} color={colors.accent.purple} trackColor={colors.background.tertiary} />
-                                            </View>
-                                            <View style={styles.heroTextOverlay}>
-                                                <Text style={[typography.statLarge, { color: colors.text.primary }]}>{analytics?.qualityScore ?? '--'}</Text>
-                                                <Text style={[typography.overline, { color: colors.accent.purple, marginTop: spacing.xs }]}>QUALITY</Text>
+                                <View
+                                    accessible
+                                    accessibilityRole="text"
+                                    accessibilityLabel={`Last night: ${formatDurationMins(lastNightMins)} of sleep.${badge ? ` Recovery rated ${badge}.` : ''} Quality score ${analytics?.qualityScore ?? 0} out of 100.`}
+                                >
+                                    <View style={styles.heroTopRow}>
+                                        <View style={styles.heroFlexShrink}>
+                                            <Text style={[typography.overline, { color: colors.text.tertiary }]}>Last night</Text>
+                                            {/* Big hours numeral, "Xh Ym" split so the units read
+                                                muted/small against the dominant figures. */}
+                                            <View style={styles.heroDurationRow}>
+                                                {lastNightMins != null ? (
+                                                    <>
+                                                        <Text style={[typography.statLarge, styles.heroNum, { color: colors.text.primary }]}>{Math.floor(lastNightMins / 60)}</Text>
+                                                        <Text style={[typography.statSmall, styles.heroUnit, { color: colors.text.tertiary }]}>h</Text>
+                                                        <Text style={[typography.statLarge, styles.heroNum, { color: colors.text.primary }]}>{lastNightMins % 60}</Text>
+                                                        <Text style={[typography.statSmall, styles.heroUnit, { color: colors.text.tertiary }]}>m</Text>
+                                                    </>
+                                                ) : (
+                                                    <Text style={[typography.statLarge, styles.heroNum, { color: colors.text.primary }]}>—</Text>
+                                                )}
                                             </View>
                                         </View>
 
-                                        <Text style={[typography.body, styles.heroSummary, { color: colors.text.secondary }]}>
-                                            {analytics?.summary ?? 'Log a sleep block to see your recovery analytics.'}
-                                        </Text>
+                                        <View style={styles.heroRight}>
+                                            {badge ? (
+                                                <View style={[styles.qualityBadge, { backgroundColor: withAlpha(colors.accent.lime, 0.14), borderColor: withAlpha(colors.accent.lime, 0.4) }]}>
+                                                    <Text style={[typography.captionMedium, { color: colors.accent.lime }]}>{badge}</Text>
+                                                </View>
+                                            ) : null}
+                                            {analytics?.qualityScore != null ? (
+                                                <Text style={[typography.caption, styles.heroScoreLine, { color: colors.text.secondary }]}>
+                                                    Score <Text style={{ color: colors.text.primary, fontWeight: '700' }}>{analytics.qualityScore}</Text>/100
+                                                </Text>
+                                            ) : null}
+                                        </View>
                                     </View>
 
-                                    {/* Secondary recovery stats — value over label, only
-                                        when the server has computed them. */}
-                                    {avgDuration != null || avgQuality != null ? (
-                                        <View style={[styles.statStrip, { borderTopColor: colors.border.default }]}>
-                                            {avgDuration != null ? (
-                                                <View style={styles.statCell}>
-                                                    <Text style={[typography.statSmall, { color: colors.text.primary }]}>{avgDuration.toFixed(1)}</Text>
-                                                    <Text style={[typography.overline, styles.statLabel, { color: colors.text.tertiary }]}>Avg hrs</Text>
-                                                </View>
-                                            ) : null}
-                                            {avgDuration != null && avgQuality != null ? (
-                                                <View style={[styles.statSep, { backgroundColor: colors.border.default }]} />
-                                            ) : null}
-                                            {avgQuality != null ? (
-                                                <View style={styles.statCell}>
-                                                    <Text style={[typography.statSmall, { color: colors.text.primary }]}>{Math.round(avgQuality)}</Text>
-                                                    <Text style={[typography.overline, styles.statLabel, { color: colors.text.tertiary }]}>Avg quality</Text>
-                                                </View>
-                                            ) : null}
+                                    {/* Honest duration bar — last night vs the 8h target. */}
+                                    <View style={[styles.heroBarTrack, { backgroundColor: colors.background.tertiary }]}>
+                                        <View
+                                            style={[
+                                                styles.heroBarFill,
+                                                { width: `${Math.round(targetFraction * 100)}%`, backgroundColor: colors.accent.lime },
+                                            ]}
+                                        />
+                                    </View>
+                                    <View style={styles.heroLegendRow}>
+                                        <View style={styles.legendItem}>
+                                            <View style={[styles.legendSwatch, { backgroundColor: colors.accent.lime }]} />
+                                            <Text style={[typography.caption, { color: colors.text.tertiary }]}>
+                                                {formatDurationMins(lastNightMins)} logged
+                                            </Text>
                                         </View>
-                                    ) : null}
-                                </>
+                                        <Text style={[typography.caption, { color: colors.text.tertiary }]}>8h target</Text>
+                                    </View>
+                                </View>
                             ) : (
                                 <View style={styles.heroEmpty}>
-                                    <View style={[styles.heroEmptyIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.14), borderColor: withAlpha(colors.accent.purple, 0.3) }]}>
-                                        <Ionicons name="moon" size={32} color={colors.accent.purple} />
+                                    <View style={[styles.heroEmptyIcon, { backgroundColor: withAlpha(colors.accent.lime, 0.14), borderColor: withAlpha(colors.accent.lime, 0.3) }]}>
+                                        <Ionicons name="moon" size={32} color={colors.accent.lime} />
                                     </View>
-                                    <Text style={[typography.h2, styles.heroEmptyTitle, { color: colors.text.primary }]}>No recovery data yet</Text>
+                                    <Text style={[typography.h2, styles.heroEmptyTitle, { color: colors.text.primary }]}>No sleep logged yet</Text>
                                     <Text style={[typography.body, styles.heroEmptySubtitle, { color: colors.text.secondary }]}>
                                         Log your first rest block and Zeitra will start scoring your recovery and tuning your circadian plan.
                                     </Text>
@@ -324,39 +402,94 @@ export default function SleepOptimizerScreen() {
                         </GlassCard>
                     </Animated.View>
 
+                    {/* ── This week: 7-night duration bar chart ──────────────────
+                        Built entirely from the SAME `chartData` array the analytics
+                        endpoint already returns (oldest→newest), so it's real logged
+                        history, not a fabricated series. Each bar's height is its
+                        night's duration normalised to the week's tallest night; the
+                        most-recent night is tinted lime to match the hero. An "Avg
+                        this week" footer reuses the server's `avgDuration`. Hidden
+                        entirely until there's at least one night to plot. */}
+                    {week.length > 0 ? (
+                        <>
+                            <Animated.View entering={enter(1)}>
+                                <Text style={[typography.subhead, styles.sectionTitle, { color: colors.text.primary }]}>This week</Text>
+                            </Animated.View>
+                            <Animated.View entering={enter(2)}>
+                                <GlassCard style={styles.weekCard}>
+                                    <View style={styles.weekChartRow}>
+                                        {week.map((d, i) => {
+                                            const isLatest = i === week.length - 1;
+                                            const h = weekMax > 0 ? Math.max(6, Math.round((d.durationMins / weekMax) * WEEK_CHART_HEIGHT)) : 6;
+                                            return (
+                                                <View key={`${d.date}-${i}`} style={styles.weekCol}>
+                                                    <View
+                                                        style={[
+                                                            styles.weekBar,
+                                                            {
+                                                                height: h,
+                                                                backgroundColor: isLatest ? colors.accent.lime : colors.background.quaternary,
+                                                            },
+                                                        ]}
+                                                    />
+                                                    <Text style={[typography.caption, styles.weekLabel, { color: isLatest ? colors.accent.lime : colors.text.tertiary }]}>
+                                                        {weekdayInitial(d.date)}
+                                                    </Text>
+                                                </View>
+                                            );
+                                        })}
+                                    </View>
+                                    {avgDuration != null ? (
+                                        <View style={[styles.weekFooter, { borderTopColor: colors.border.default }]}>
+                                            <Text style={[typography.caption, { color: colors.text.tertiary }]}>Avg this week</Text>
+                                            <Text style={[typography.captionMedium, { color: colors.text.primary }]}>{formatDurationMins(avgDuration)}</Text>
+                                        </View>
+                                    ) : null}
+                                </GlassCard>
+                            </Animated.View>
+                        </>
+                    ) : null}
+
+                    {/* ── Your shift sleep window (circadian tip) ────────────────
+                        The mockup's moon-stars tip card, backed by the REAL local
+                        anchor-sleep window (computeAnchorSleep, the same shared
+                        circadian source the dashboard renders). When there's no
+                        usable shift the window is an honest "—" and the copy degrades
+                        to general guidance — never a fabricated time. */}
+                    {!shiftLoading && anchorSleep ? (
+                        <Animated.View entering={enter(3)}>
+                            <GlassCard style={[styles.tipCard, { borderColor: withAlpha(colors.accent.lime, 0.3) }]}>
+                                <View style={[styles.tipIcon, { backgroundColor: withAlpha(colors.accent.lime, 0.14), borderColor: withAlpha(colors.accent.lime, 0.3) }]}>
+                                    <Ionicons name="moon" size={20} color={colors.accent.lime} />
+                                </View>
+                                <View style={styles.heroFlexShrink}>
+                                    <Text style={[typography.subhead, { color: colors.text.primary }]}>Your shift sleep window</Text>
+                                    <Text style={[typography.bodySm, styles.tipBody, { color: colors.text.secondary }]}>
+                                        Aim for <Text style={{ color: colors.accent.lime, fontWeight: '700' }}>{anchorSleepWindow}</Text> after your shift. Keep the room dark and cool — that 4h core block anchors your clock through the rotation.
+                                    </Text>
+                                </View>
+                            </GlassCard>
+                        </Animated.View>
+                    ) : null}
+
                     {/* ── Circadian timeline: the night, in order ───────────────
                         A calm vertical rail that sequences the post-shift recovery
                         anchor and the two light windows as ONE ordered timeline
-                        (seek light → avoid light → recovery sleep), instead of
-                        scattered cards. Each node's TIME is the dominant value.
-
-                        Loading → Skeleton while the shift query is in flight.
-                        No usable shift (none scheduled, or a malformed shift whose
-                        ISO made the pure libs throw → lightPlan/anchorSleep null) →
-                        an EmptyState, never a crash. The displayed windows are the
-                        guarded `lightPlan` / `anchorSleep` computed above (the SAME
-                        shared circadian sources the dashboard renders), never a
-                        phantom GET /v1/sleep/analytics field.
-
-                        react-native-skills applied here:
-                        • js-hoist-intl: every time renders through the module-scope
-                          `formatLightTime` — no per-render Intl formatter.
-                        • rendering-no-falsy-and: the section is chosen with
-                          ternaries resolving to a component or `null`, so a falsy
-                          never leaks into the tree as text.
-                        • scroll-position-no-state: additive ScrollView content only;
-                          no onScroll / scroll position is tracked in state.
-                        • list-performance-inline-objects: repeated row styles live
-                          in StyleSheet / the memoized CircadianTimelineRow, not
-                          rebuilt inline each render. */}
-                    <Animated.View entering={enter(1)}>
+                        (seek light → avoid light → recovery sleep). Loading →
+                        Skeleton while the shift query is in flight. No usable shift
+                        (none scheduled, or a malformed shift whose ISO made the pure
+                        libs throw → lightPlan/anchorSleep null) → an EmptyState,
+                        never a crash. The displayed windows are the guarded
+                        `lightPlan` / `anchorSleep` (the SAME shared circadian sources
+                        the dashboard renders), never a phantom analytics field. */}
+                    <Animated.View entering={enter(4)}>
                         <Text style={[typography.overline, styles.sectionHeader, { color: colors.text.secondary }]}>Your night, in order</Text>
                     </Animated.View>
 
                     {shiftLoading ? (
                         <Skeleton width="100%" height={240} radius={borderRadius.xl} style={styles.timelineSkeleton} />
                     ) : !lightPlan || !anchorSleep ? (
-                        <Animated.View entering={enter(2)}>
+                        <Animated.View entering={enter(5)}>
                             <GlassCard style={[styles.sectionCard, { borderColor: colors.border.default }]}>
                                 <EmptyState
                                     icon="sunny-outline"
@@ -367,7 +500,7 @@ export default function SleepOptimizerScreen() {
                             </GlassCard>
                         </Animated.View>
                     ) : (
-                        <Animated.View entering={enter(2)}>
+                        <Animated.View entering={enter(5)}>
                             <GlassCard style={[styles.sectionCard, { borderColor: withAlpha(colors.accent.blue, 0.22) }]}>
                                 <Text style={[typography.bodySm, styles.timelineIntro, { color: colors.text.tertiary }]}>
                                     Three steps across your shift — anchor alertness early, dim down, then protect your recovery sleep.
@@ -413,11 +546,11 @@ export default function SleepOptimizerScreen() {
                         (CAFFEINE_CUTOFF_LEAD_HOURS before sleep) when a shift exists,
                         and degrades to general copy ("—") otherwise — never a
                         fabricated window. */}
-                    <Animated.View entering={enter(3)}>
+                    <Animated.View entering={enter(6)}>
                         <Text style={[typography.overline, styles.sectionHeader, { color: colors.text.secondary }]}>Guidance</Text>
                     </Animated.View>
 
-                    <Animated.View entering={enter(4)}>
+                    <Animated.View entering={enter(7)}>
                         <GlassCard style={[styles.guidanceCard, { borderColor: withAlpha(colors.accent.amber, 0.22) }]}>
                             <View style={styles.guidanceHeader}>
                                 <View style={[styles.guidanceIcon, { backgroundColor: withAlpha(colors.accent.amber, 0.14), borderColor: withAlpha(colors.accent.amber, 0.28) }]}>
@@ -431,7 +564,7 @@ export default function SleepOptimizerScreen() {
                         </GlassCard>
                     </Animated.View>
 
-                    <Animated.View entering={enter(5)}>
+                    <Animated.View entering={enter(8)}>
                         <GlassCard style={[styles.guidanceCard, { borderColor: withAlpha(colors.accent.blue, 0.22) }]}>
                             <View style={styles.guidanceHeader}>
                                 <View style={[styles.guidanceIcon, { backgroundColor: withAlpha(colors.accent.blue, 0.14), borderColor: withAlpha(colors.accent.blue, 0.28) }]}>
@@ -447,19 +580,27 @@ export default function SleepOptimizerScreen() {
                         </GlassCard>
                     </Animated.View>
 
+                    {avgQuality != null ? (
+                        <Animated.View entering={enter(9)}>
+                            <Text style={[typography.caption, styles.avgQualityNote, { color: colors.text.tertiary }]}>
+                                Average quality across recent nights: {Math.round(avgQuality)}/100
+                            </Text>
+                        </Animated.View>
+                    ) : null}
+
                 </ScrollView>
             )}
 
             {/* ── Primary action (pinned thumb-zone footer) ─────────────────────
                 Lifted OUT of the ScrollView so the one full-accent action lives in
-                the bottom third at rest on this content-rich screen, instead of
-                sitting below the fold. Mirrors (shifts)/index.tsx: a box-none
+                the bottom third at rest on this content-rich screen. A box-none
                 wrapper (taps pass through the transparent scrim to the content
                 behind), a top-fading scrim so the cards scroll up underneath, and a
                 safe-area bottom inset. Only mounts in the loaded state — the loading
-                Skeleton and the full-screen error own their own layouts. Purple
-                gradient + handler / a11y / pending state preserved verbatim; the
-                Pressable adds the mandated pressed-scale 0.96. */}
+                Skeleton and the full-screen error own their own layouts. Now the
+                sanctioned CtaButton primitive (lime fill + ink label + glow +
+                pressed scale + a11y), driving the same logMutation handler / pending
+                state as before. */}
             {!isLoading && !isError ? (
                 <View pointerEvents="box-none" style={[styles.footer, { paddingBottom: insets.bottom + spacing.lg }]}>
                     <LinearGradient
@@ -467,34 +608,18 @@ export default function SleepOptimizerScreen() {
                         style={StyleSheet.absoluteFillObject}
                         pointerEvents="none"
                     />
-                    <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel="Log rest block"
-                        accessibilityState={{ disabled: logMutation.isPending, busy: logMutation.isPending }}
-                        style={({ pressed }) => [styles.logBtn, shadows.glow(colors.accent.purple), pressed && !logMutation.isPending && styles.pressedScale]}
+                    <CtaButton
+                        label="Log Rest Block"
+                        icon="bed"
+                        size="lg"
+                        loading={logMutation.isPending}
                         onPress={() => logMutation.mutate()}
-                        disabled={logMutation.isPending}
-                    >
-                        <LinearGradient
-                            colors={colors.gradients.purple}
-                            start={{ x: 0, y: 0 }}
-                            end={{ x: 1, y: 0 }}
-                            style={styles.logBtnGradient}
-                        >
-                            {logMutation.isPending ? (
-                                <ActivityIndicator color={colors.text.primary} />
-                            ) : (
-                                <>
-                                    <Ionicons name="bed" size={20} color={colors.text.primary} style={{ marginRight: spacing.sm }} />
-                                    <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>Log Rest Block</Text>
-                                </>
-                            )}
-                        </LinearGradient>
-                    </Pressable>
+                        accessibilityLabel="Log rest block"
+                    />
                 </View>
             ) : null}
 
-            {/* Peak-end in-app success affirmation (animated check + purple glow),
+            {/* Peak-end in-app success affirmation (animated check + lime glow),
                 replacing the old blocking Alert. Floats above everything; auto-hides. */}
             <SleepLoggedToast visible={showLogged} onHide={hideLogged} />
         </View>
@@ -513,36 +638,46 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    heroCard: {
-        alignItems: 'center',
-        padding: spacingTokens['2xl'],
-        marginBottom: spacingTokens['3xl'],
-        overflow: 'hidden',
-    },
-    // Accessible wrapper that groups the overline + ring + numeral + summary into
-    // one screen-reader unit. alignSelf:'stretch' + centered children preserve the
-    // original centered hero layout the GlassCard supplied.
-    heroScoreBlock: { alignSelf: 'stretch', alignItems: 'center' },
-    heroSection: { alignItems: 'center', justifyContent: 'center' },
-    heroTextOverlay: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-    heroSummary: {
-        textAlign: 'center',
-        marginTop: spacingTokens.xl,
-        marginHorizontal: spacingTokens.sm,
-    },
-    // Secondary recovery-stat strip beneath the ring (avg hrs / avg quality).
-    statStrip: {
+    // "Today" date pill on the right of the header (mockup affordance).
+    datePill: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        alignSelf: 'stretch',
-        marginTop: spacingTokens.xl,
-        paddingTop: spacingTokens.lg,
-        borderTopWidth: StyleSheet.hairlineWidth,
+        paddingHorizontal: spacingTokens.md,
+        height: 32,
+        borderRadius: borderRadius.full,
+        borderWidth: 1,
     },
-    statCell: { flex: 1, alignItems: 'center' },
-    statLabel: { marginTop: spacingTokens.xs },
-    statSep: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', marginVertical: spacingTokens.xs },
+    // ── Hero "last night" card ───────────────────────────────────────────────
+    heroCard: {
+        padding: spacingTokens['2xl'],
+        marginBottom: spacingTokens['2xl'],
+        overflow: 'hidden',
+    },
+    heroTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+    heroFlexShrink: { flex: 1 },
+    heroDurationRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: spacingTokens.xs },
+    // Tall hero numerals sit on the baseline with the small units between them.
+    heroNum: { lineHeight: 52 },
+    heroUnit: { marginHorizontal: spacingTokens.xxs },
+    heroRight: { alignItems: 'flex-end', marginLeft: spacingTokens.md },
+    qualityBadge: {
+        paddingHorizontal: spacingTokens.md,
+        paddingVertical: spacingTokens.xs,
+        borderRadius: borderRadius.full,
+        borderWidth: 1,
+    },
+    heroScoreLine: { marginTop: spacingTokens.sm },
+    // Horizontal "vs 8h target" fill (honest stand-in for the mockup's stage bar).
+    heroBarTrack: {
+        height: 14,
+        borderRadius: borderRadius.sm,
+        overflow: 'hidden',
+        marginTop: spacingTokens.xl,
+    },
+    heroBarFill: { height: '100%', borderRadius: borderRadius.sm },
+    heroLegendRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacingTokens.sm },
+    legendItem: { flexDirection: 'row', alignItems: 'center' },
+    legendSwatch: { width: 9, height: 9, borderRadius: 2, marginRight: spacingTokens.xs },
     // Hero empty state (brand-new account, no sleep ever logged).
     heroEmpty: { alignItems: 'center', paddingVertical: spacingTokens.lg },
     heroEmptyIcon: {
@@ -556,6 +691,43 @@ const styles = StyleSheet.create({
     },
     heroEmptyTitle: { textAlign: 'center' },
     heroEmptySubtitle: { textAlign: 'center', marginTop: spacingTokens.sm, maxWidth: 280 },
+    // ── Weekly chart ─────────────────────────────────────────────────────────
+    sectionTitle: { marginBottom: spacingTokens.lg },
+    weekCard: { padding: spacingTokens.xl, marginBottom: spacingTokens['2xl'] },
+    weekChartRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
+        justifyContent: 'space-between',
+        height: WEEK_CHART_HEIGHT,
+    },
+    weekCol: { flex: 1, alignItems: 'center' },
+    weekBar: { width: 18, borderRadius: borderRadius.sm },
+    weekLabel: { marginTop: spacingTokens.sm },
+    weekFooter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: spacingTokens.lg,
+        paddingTop: spacingTokens.md,
+        borderTopWidth: StyleSheet.hairlineWidth,
+    },
+    // ── Shift sleep-window tip card ──────────────────────────────────────────
+    tipCard: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        padding: spacingTokens.lg,
+        marginBottom: spacingTokens['2xl'],
+    },
+    tipIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: borderRadius.md,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: spacingTokens.md,
+    },
+    tipBody: { marginTop: spacingTokens.xs, lineHeight: 20 },
     // Overline header that opens a grouped section.
     sectionHeader: { marginBottom: spacingTokens.lg },
     // Generic grouped-section glass card (timeline + empty fallback).
@@ -577,22 +749,8 @@ const styles = StyleSheet.create({
     guidanceTitle: { marginLeft: spacingTokens.md },
     guidanceSpacer: { flex: 1 },
     guidanceBody: { marginTop: spacingTokens.md },
-    // Pinned thumb-zone CTA. Height pinned to LOG_BTN_HEIGHT so the ScrollView's
-    // derived bottom clearance always matches; no marginTop now that it's the
-    // footer's sole child (the footer owns the surrounding spacing).
-    logBtn: {
-        height: LOG_BTN_HEIGHT,
-        borderRadius: borderRadius.full,
-        overflow: 'hidden',
-    },
-    logBtnGradient: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    // Shared pressed-scale for the hand-rolled controls (back button + CTA),
-    // matching the Button primitive's spring-press. Transform/opacity only.
+    avgQualityNote: { textAlign: 'center', marginTop: spacingTokens.sm },
+    // Shared pressed-scale for the hand-rolled back button. Transform/opacity only.
     pressedScale: { transform: [{ scale: 0.96 }] },
     // Safe-area guard for the full-screen error EmptyState rendered OUTSIDE the
     // inset-padded ScrollView: flex:1 centers it; the screen supplies the bottom

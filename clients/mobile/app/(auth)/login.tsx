@@ -9,22 +9,24 @@ import {
   Pressable,
   Image,
   AccessibilityInfo,
+  useWindowDimensions,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, Link } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useAuthStore } from '@/store/authStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Input, CtaButton, GlassCard } from '@/components/ui';
+import { Input, CtaButton } from '@/components/ui';
 import { useTheme } from '@/theme';
 import { spacing, borderRadius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
-import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
 import { isValidEmail, sanitizeInput } from '@/utils/validation';
 
-const ZEITRA_LOGO = require('../../assets/images/logo_app.png');
+// Hero model — bundled female athlete asset (mockup: login-preview.html).
+const HERO_FEMALE = require('../../assets/images/hero-female-1.png');
 
 // Per-item entrance: a staggered FadeInDown spring. Each block enters ~45ms
 // after the previous so the hero, form, CTA and footer cascade in (premium,
@@ -37,6 +39,7 @@ export default function LoginScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -97,6 +100,19 @@ export default function LoginScreen() {
     }
   };
 
+  // Social sign-in is not yet provisioned (no Apple/Google provider wired in this
+  // build). The buttons are part of the design; rather than silently no-op, give
+  // an honest, accessible "coming soon" cue via the same error surface.
+  const handleSocial = (provider: 'Apple' | 'Google') => {
+    const message = `${provider} sign-in is coming soon.`;
+    setError(message);
+    AccessibilityInfo.announceForAccessibility(message);
+  };
+
+  // Full-bleed hero width: cancel the ScrollView's horizontal padding so the band
+  // spans edge to edge under the rounded form card.
+  const heroWidth = width;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
       <StatusBar style="light" />
@@ -107,197 +123,204 @@ export default function LoginScreen() {
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
-            // Guarantee clearance for the CTA + footer above the home indicator
-            // and below the status bar, instead of relying on SafeAreaView edge
-            // padding under a vertically-centered layout (matches register.tsx).
-            {
-              paddingTop: insets.top + spacing['4xl'],
-              paddingBottom: insets.bottom + spacing['3xl'],
-            },
+            // Bottom clearance for the CTA + footer above the home indicator.
+            { paddingBottom: insets.bottom + spacing['3xl'] },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Branded hero */}
-          <Animated.View entering={enter(0)} style={styles.header}>
-            <View
-              style={[
-                styles.logoBadge,
-                {
-                  backgroundColor: withAlpha(colors.accent.coral, 0.1),
-                  borderColor: withAlpha(colors.accent.coral, 0.3),
-                },
-                shadows.glow(colors.accent.coral),
+          {/* Hero band — female athlete + dark gradient fade + overlaid title */}
+          <Animated.View
+            entering={enter(0)}
+            style={[
+              styles.hero,
+              { width: heroWidth, marginLeft: -spacing['2xl'], marginRight: -spacing['2xl'] },
+            ]}
+          >
+            <LinearGradient
+              colors={[withAlpha(colors.accent.coral, 0.16), colors.background.secondary, colors.background.primary]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <Image
+              source={HERO_FEMALE}
+              style={styles.heroImage}
+              resizeMode="contain"
+              accessibilityRole="image"
+              accessibilityLabel="Zeitra"
+            />
+            {/* Fade the image down into the background so the title reads cleanly */}
+            <LinearGradient
+              colors={[
+                withAlpha(colors.background.primary, 0.33),
+                'transparent',
+                withAlpha(colors.background.primary, 0.73),
+                colors.background.primary,
               ]}
-            >
-              <Image
-                source={ZEITRA_LOGO}
-                style={styles.logoImage}
-                resizeMode="contain"
-                accessibilityRole="image"
-                accessibilityLabel="Zeitra"
-              />
-            </View>
-
-            <Text style={[styles.kicker, { color: colors.accent.coral }]}>Zeitra</Text>
-            <Text
-              style={[styles.logo, { color: colors.text.primary }]}
-              accessibilityRole="header"
-              maxFontSizeMultiplier={1.3}
-            >
-              Welcome <Text style={{ color: colors.accent.coral }}>back</Text>
-            </Text>
-            <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
-              Fuel your shift. Pick up right where you left off.
-            </Text>
-
-            {/* Calm trust cue — secure sign-in, lime-on-ink chip */}
-            <View
-              style={[
-                styles.trustChip,
-                {
-                  backgroundColor: colors.background.secondary,
-                  borderColor: colors.border.default,
-                },
-              ]}
-            >
-              <Ionicons name="shield-checkmark" size={13} color={colors.accent.coral} />
-              <Text style={[styles.trustText, { color: colors.text.tertiary }]}>
-                Encrypted, private sign-in
+              locations={[0, 0.3, 0.78, 1]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <View style={[styles.heroCopy, { paddingTop: insets.top }]}>
+              <Text
+                style={[styles.heroTitle, { color: colors.text.primary }]}
+                accessibilityRole="header"
+                maxFontSizeMultiplier={1.3}
+              >
+                Welcome back
+              </Text>
+              <Text style={[styles.heroSubtitle, { color: colors.text.secondary }]}>
+                Sign in to keep your streak going 🔥
               </Text>
             </View>
           </Animated.View>
 
           {/* Form */}
-          <Animated.View entering={enter(1)}>
-            <GlassCard style={styles.form}>
-              <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionLabel, { color: colors.text.secondary }]}>
-                  Sign in to your account
-                </Text>
-                <Text style={[styles.requiredHint, { color: colors.text.tertiary }]}>
-                  <Text style={{ color: colors.accent.coral }}>*</Text> Required
-                </Text>
-              </View>
+          <Animated.View entering={enter(1)} style={styles.form}>
+            <Text
+              style={[styles.fieldLabel, { color: colors.text.secondary }]}
+              maxFontSizeMultiplier={1.4}
+            >
+              Email <Text style={{ color: colors.accent.coral }}>*</Text>
+            </Text>
+            <Input
+              placeholder="you@example.com"
+              value={email}
+              onChangeText={(t) => {
+                setEmail(t);
+                if (emailError) setEmailError('');
+              }}
+              onBlur={handleEmailBlur}
+              error={emailError || undefined}
+              icon="mail-outline"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="email"
+              textContentType="emailAddress"
+              returnKeyType="next"
+            />
 
+            {/* Password field. The show/hide toggle is rendered as a
+                dedicated 44x44 overlay (PasswordToggle) rather than the Input
+                primitive's rightIcon, whose ~28px tap area is sub-44pt — and
+                the primitive is shared, so it is fixed here on-screen instead.
+                The label is rendered locally (with an explicit lineHeight) so
+                the input box sits at a deterministic offset the overlay can
+                anchor to; the TextInput reserves room via paddingRight. */}
+            <View style={styles.passwordField}>
               <Text
                 style={[styles.fieldLabel, { color: colors.text.secondary }]}
                 maxFontSizeMultiplier={1.4}
               >
-                Email <Text style={{ color: colors.accent.coral }}>*</Text>
+                Password <Text style={{ color: colors.accent.coral }}>*</Text>
               </Text>
               <Input
-                placeholder="you@example.com"
-                value={email}
+                placeholder="Enter your password"
+                value={password}
                 onChangeText={(t) => {
-                  setEmail(t);
-                  if (emailError) setEmailError('');
+                  setPassword(t);
+                  if (passwordError) setPasswordError('');
                 }}
-                onBlur={handleEmailBlur}
-                error={emailError || undefined}
-                icon="mail-outline"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="email"
-                textContentType="emailAddress"
-                returnKeyType="next"
+                onBlur={handlePasswordBlur}
+                error={passwordError || undefined}
+                icon="lock-closed-outline"
+                secureTextEntry={!showPassword}
+                style={styles.passwordInput}
+                autoComplete="password"
+                textContentType="password"
+                returnKeyType="go"
+                onSubmitEditing={handleLogin}
               />
+              <PasswordToggle
+                visible={showPassword}
+                onToggle={() => setShowPassword((v) => !v)}
+                tintColor={colors.text.tertiary}
+                pressedColor={colors.accent.coral}
+              />
+            </View>
 
-              {/* Password field. The show/hide toggle is rendered as a
-                  dedicated 44x44 overlay (PasswordToggle) rather than the Input
-                  primitive's rightIcon, whose ~28px tap area is sub-44pt — and
-                  the primitive is shared, so it is fixed here on-screen instead.
-                  The label is rendered locally (with an explicit lineHeight) so
-                  the input box sits at a deterministic offset the overlay can
-                  anchor to; the TextInput reserves room via paddingRight. */}
-              <View style={styles.passwordField}>
-                <Text
-                  style={[styles.fieldLabel, { color: colors.text.secondary }]}
-                  maxFontSizeMultiplier={1.4}
-                >
-                  Password <Text style={{ color: colors.accent.coral }}>*</Text>
+            <Link href="/(auth)/forgot-password" asChild>
+              <Pressable
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="link"
+                accessibilityLabel="Forgot password"
+                style={({ pressed }) => [styles.forgotLink, pressed && styles.pressed]}
+              >
+                <Text style={[styles.forgotText, { color: colors.accent.coral }]}>
+                  Forgot password?
                 </Text>
-                <Input
-                  placeholder="Enter your password"
-                  value={password}
-                  onChangeText={(t) => {
-                    setPassword(t);
-                    if (passwordError) setPasswordError('');
-                  }}
-                  onBlur={handlePasswordBlur}
-                  error={passwordError || undefined}
-                  icon="lock-closed-outline"
-                  secureTextEntry={!showPassword}
-                  style={styles.passwordInput}
-                  autoComplete="password"
-                  textContentType="password"
-                  returnKeyType="go"
-                  onSubmitEditing={handleLogin}
-                />
-                <PasswordToggle
-                  visible={showPassword}
-                  onToggle={() => setShowPassword((v) => !v)}
-                  tintColor={colors.text.tertiary}
-                  pressedColor={colors.accent.coral}
-                />
+              </Pressable>
+            </Link>
+
+            {error ? (
+              <View
+                style={[
+                  styles.errorBox,
+                  {
+                    backgroundColor: withAlpha(colors.error, 0.1),
+                    borderColor: withAlpha(colors.error, 0.25),
+                  },
+                ]}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="assertive"
+              >
+                <Ionicons name="alert-circle" size={16} color={colors.error} />
+                <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
               </View>
+            ) : null}
 
-              <Link href="/(auth)/forgot-password" asChild>
-                <Pressable
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="link"
-                  accessibilityLabel="Forgot password"
-                  style={({ pressed }) => [styles.forgotLink, pressed && styles.pressed]}
-                >
-                  <Text style={[styles.forgotText, { color: colors.accent.coral }]}>
-                    Forgot password?
-                  </Text>
-                </Pressable>
-              </Link>
+            <CtaButton
+              label="Sign in"
+              size="lg"
+              icon="log-in-outline"
+              loading={loading}
+              onPress={handleLogin}
+              style={styles.cta}
+            />
 
-              {error ? (
-                <View
-                  style={[
-                    styles.errorBox,
-                    {
-                      backgroundColor: withAlpha(colors.error, 0.1),
-                      borderColor: withAlpha(colors.error, 0.25),
-                    },
-                  ]}
-                  accessibilityRole="alert"
-                  accessibilityLiveRegion="assertive"
-                >
-                  <Ionicons name="alert-circle" size={16} color={colors.error} />
-                  <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-                </View>
-              ) : null}
+            {/* "or continue with" divider */}
+            <View style={styles.dividerRow}>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
+              <Text style={[styles.dividerText, { color: colors.text.tertiary }]}>
+                or continue with
+              </Text>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
+            </View>
 
-              <CtaButton
-                label="Sign In"
-                size="lg"
-                icon="log-in-outline"
-                loading={loading}
-                onPress={handleLogin}
-                style={styles.cta}
+            {/* Social auth — Apple + Google */}
+            <View style={styles.socialRow}>
+              <SocialButton
+                provider="Apple"
+                icon="logo-apple"
+                onPress={() => handleSocial('Apple')}
+                colors={colors}
               />
-            </GlassCard>
+              <SocialButton
+                provider="Google"
+                icon="logo-google"
+                onPress={() => handleSocial('Google')}
+                colors={colors}
+              />
+            </View>
           </Animated.View>
 
           {/* Register link */}
           <Animated.View entering={enter(2)} style={styles.registerRow}>
             <Text style={[styles.registerText, { color: colors.text.secondary }]}>
-              Don't have an account?{' '}
+              New to Zeitra?{' '}
             </Text>
             <Link href="/(auth)/register" asChild>
               <Pressable
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityRole="link"
-                accessibilityLabel="Sign up for a new account"
+                accessibilityLabel="Create a new account"
                 style={({ pressed }) => pressed && styles.pressed}
               >
                 <Text style={[styles.registerLink, { color: colors.accent.coral }]}>
-                  Sign Up
+                  Create account
                 </Text>
               </Pressable>
             </Link>
@@ -305,6 +328,42 @@ export default function LoginScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
+  );
+}
+
+/**
+ * SocialButton — a dark, outlined provider button (Apple / Google) matching the
+ * mockup's `.soc` chips. Icon + label, 44pt+ tall, transform/opacity pressed
+ * feedback and full a11y wiring.
+ */
+function SocialButton({
+  provider,
+  icon,
+  onPress,
+  colors,
+}: {
+  provider: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Continue with ${provider}`}
+      style={({ pressed }) => [
+        styles.social,
+        {
+          backgroundColor: colors.background.secondary,
+          borderColor: colors.border.default,
+        },
+        pressed && styles.socialPressed,
+      ]}
+    >
+      <Ionicons name={icon} size={19} color={colors.text.primary} />
+      <Text style={[styles.socialText, { color: colors.text.primary }]}>{provider}</Text>
+    </Pressable>
   );
 }
 
@@ -347,78 +406,45 @@ function PasswordToggle({
   );
 }
 
+const HERO_HEIGHT = 252;
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
     paddingHorizontal: spacing['2xl'],
-    // paddingTop / paddingBottom are applied inline from safe-area insets.
+    // paddingBottom is applied inline from safe-area insets.
   },
-  header: {
-    alignItems: 'flex-start',
-    marginBottom: spacing['3xl'],
-  },
-  logoBadge: {
-    width: 72,
-    height: 72,
-    borderRadius: borderRadius['2xl'],
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xl,
-  },
-  logoImage: {
-    width: 42,
-    height: 42,
-  },
-  kicker: {
-    ...typography.overline,
-    marginBottom: spacing.xs,
-  },
-  logo: {
-    ...typography.display,
-    fontSize: 34,
-    lineHeight: 40,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    // Real token (no hand-mixed family override): Inter Medium 15/22 reads as a
-    // calm, non-bold subtitle and won't silently break if a token changes.
-    ...typography.bodyMedium,
-    marginTop: spacing.sm,
-  },
-  trustChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    marginTop: spacing.lg,
-  },
-  trustText: {
-    ...typography.caption,
-    fontWeight: '500',
-    letterSpacing: 0.2,
-  },
-  form: {
-    padding: spacing.xl,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  hero: {
+    height: HERO_HEIGHT,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
     marginBottom: spacing.lg,
   },
-  sectionLabel: {
-    ...typography.overline,
+  heroImage: {
+    position: 'absolute',
+    top: 0,
+    alignSelf: 'center',
+    height: HERO_HEIGHT + 78,
+    width: '100%',
   },
-  requiredHint: {
-    ...typography.caption,
+  heroCopy: {
+    paddingHorizontal: spacing['2xl'],
+    paddingBottom: spacing.lg,
+  },
+  heroTitle: {
+    ...typography.display,
+    fontSize: 30,
+    lineHeight: 34,
+    letterSpacing: -0.5,
+  },
+  heroSubtitle: {
+    ...typography.bodyMedium,
+    marginTop: spacing.xs,
+  },
+  form: {
+    paddingTop: spacing.xs,
   },
   // Visible, required-marked field label (forms best-practice: label not
   // placeholder-only), rendered locally so it stays consistent across Email and
@@ -479,6 +505,42 @@ const styles = StyleSheet.create({
   },
   cta: {
     width: '100%',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    ...typography.caption,
+  },
+  socialRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  social: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    height: 50,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+  },
+  socialPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.98 }],
+  },
+  socialText: {
+    ...typography.bodySm,
+    fontWeight: '600',
   },
   registerRow: {
     flexDirection: 'row',

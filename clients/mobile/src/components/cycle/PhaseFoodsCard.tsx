@@ -25,6 +25,10 @@ import { getMicronutrientMeta, formatMicroAmount } from '@/lib/micronutrients';
  * the rationale is shown verbatim from the backend, which is worded that way.
  */
 
+// Coral period/cycle accent (the brand `accent.coral` token resolves to LIME
+// post-rebrand, so coral is an explicit literal here).
+const CORAL = '#FF7A90';
+
 /** Phase as it arrives from the status query — may be absent or 'UNKNOWN'. */
 type IncomingPhase = CyclePhaseName | 'UNKNOWN' | null | undefined;
 
@@ -66,14 +70,14 @@ export function PhaseFoodsCard({ phase }: PhaseFoodsCardProps) {
 
     return (
         <GlassCard
-            glow={withAlpha(colors.accent.coral, 0.12)}
+            glow={withAlpha(CORAL, 0.12)}
             radius={borderRadius['2xl']}
             style={styles.card}
             testID="phase-foods-card"
         >
             <View style={styles.inner}>
                 <View style={styles.header}>
-                    <Ionicons name="nutrition-outline" size={18} color={colors.accent.coral} />
+                    <Ionicons name="nutrition-outline" size={18} color={CORAL} />
                     <Text style={[typography.overline, styles.headerLabel, { color: colors.text.secondary }]}>
                         {heading.toUpperCase()}
                     </Text>
@@ -151,7 +155,7 @@ function PhaseFoodCard({ food, focusNutrient }: { food: FoodItem; focusNutrient:
                 style={[
                     styles.foodImgWrap,
                     { backgroundColor: colors.background.tertiary },
-                    !food.imageUrl && { borderWidth: 1, borderColor: withAlpha(colors.accent.coral, 0.18) },
+                    !food.imageUrl && { borderWidth: 1, borderColor: withAlpha(CORAL, 0.18) },
                 ]}
             >
                 {food.imageUrl ? (
@@ -164,7 +168,7 @@ function PhaseFoodCard({ food, focusNutrient }: { food: FoodItem; focusNutrient:
                     />
                 ) : (
                     <>
-                        <Ionicons name="nutrition-outline" size={26} color={colors.accent.coral} />
+                        <Ionicons name="nutrition-outline" size={26} color={CORAL} />
                         <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 4, fontSize: 10 }]}>
                             No photo
                         </Text>
@@ -175,7 +179,7 @@ function PhaseFoodCard({ food, focusNutrient }: { food: FoodItem; focusNutrient:
                 {food.name}
             </Text>
             {focusText ? (
-                <Text style={[typography.caption, { color: colors.accent.coral, marginTop: 2, fontSize: 11 }]}>
+                <Text style={[typography.caption, { color: CORAL, marginTop: 2, fontSize: 11 }]}>
                     {focusText}
                 </Text>
             ) : null}

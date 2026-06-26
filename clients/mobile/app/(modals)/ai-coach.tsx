@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TextInput,
-    Platform, ActivityIndicator, Linking, Keyboard,
+    Platform, ActivityIndicator, Linking, Keyboard, Image,
 } from 'react-native';
 import Reanimated, {
     useSharedValue, useDerivedValue, useAnimatedStyle,
@@ -30,6 +30,11 @@ import { useRateLimit } from '@/hooks/useRateLimit';
 import { captureException } from '@/lib/sentry';
 import { getVoiceAdapter } from '@/lib/voice';
 import { VOICE_ERROR_MESSAGES, type VoiceErrorCode, type VoiceListenState } from '@/lib/voice.types';
+
+// Ria's avatar — the Zeitra app mark in a lime-ringed circle, used in the header
+// identity row and on each Ria bubble (mirrors the messaging look of a real
+// coach DM). Required once at module scope so Metro bundles it a single time.
+const RIA_AVATAR = require('../../assets/images/logo_app.png');
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -639,83 +644,86 @@ export default function AICoachScreen() {
             <View style={[styles.headerClip, { borderBottomColor: colors.border.light }]}>
                 <GlassCard radius={0} intensity={40} tint="dark" style={styles.glassEdge}>
                     <View style={styles.header}>
-                        <View style={styles.headerLeft}>
-                            <GestureDetector gesture={Gesture.Tap().onEnd(() => { router.back(); })}>
-                                <View
-                                    accessibilityRole="button"
-                                    accessibilityLabel="Close"
-                                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                                    style={styles.headerIconBtn}
-                                >
-                                    <Ionicons name="chevron-down" size={26} color={colors.text.secondary} />
-                                </View>
-                            </GestureDetector>
-
-                            {/* Ria identity: glowing AI orb (purple = the AI signal)
-                                + a Barlow-Condensed name that dominates its status
-                                label. A pulsing presence dot rides the thinking state. */}
-                            <View style={styles.riaAvatarWrap}>
-                                <LinearGradient
-                                    colors={colors.gradients.purple}
-                                    style={[styles.riaAvatar, shadows.glow(colors.accent.purple)]}
-                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                                >
-                                    <Ionicons name="sparkles" size={18} color={colors.text.primary} />
-                                </LinearGradient>
-                                <View style={[styles.presenceDot, {
-                                    backgroundColor: isTyping ? colors.accent.amber : colors.accent.emerald,
-                                    borderColor: colors.background.primary,
-                                }]} />
+                        <GestureDetector gesture={Gesture.Tap().onEnd(() => { router.back(); })}>
+                            <View
+                                accessibilityRole="button"
+                                accessibilityLabel="Close"
+                                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                style={styles.headerIconBtn}
+                            >
+                                <Ionicons name="chevron-back" size={26} color={colors.text.primary} />
                             </View>
-                            <View style={styles.headerTitleCol}>
+                        </GestureDetector>
+
+                        {/* Ria identity: the Zeitra app mark in a lime-ringed circle
+                            (a real-coach DM look), her name, and a lime presence row
+                            "online · your coach". A live dot rides the thinking state. */}
+                        <View style={styles.riaAvatarWrap}>
+                            <View style={[styles.riaAvatar, { borderColor: withAlpha(colors.accent.lime, 0.55) }]}>
+                                <Image source={RIA_AVATAR} style={styles.riaAvatarImg} resizeMode="cover" />
+                            </View>
+                            <View style={[styles.presenceDot, {
+                                backgroundColor: isTyping ? colors.accent.amber : colors.accent.lime,
+                                borderColor: colors.background.primary,
+                            }]} />
+                        </View>
+                        <View style={styles.headerTitleCol}>
+                            <Text
+                                style={[typography.h3, { color: colors.text.primary, fontSize: 18, lineHeight: 22 }]}
+                                maxFontSizeMultiplier={1.3}
+                                numberOfLines={1}
+                            >
+                                Ria
+                            </Text>
+                            <View style={styles.statusBadge}>
+                                <View style={[styles.statusDot, { backgroundColor: isTyping ? colors.accent.amber : colors.accent.lime }]} />
                                 <Text
-                                    style={[typography.h3, { color: colors.text.primary, fontSize: 19, lineHeight: 22 }]}
+                                    style={[typography.caption, { color: isTyping ? colors.accent.amberLight : colors.accent.lime, fontWeight: '600', fontSize: 11, letterSpacing: 0.2 }]}
                                     maxFontSizeMultiplier={1.3}
+                                    accessibilityLiveRegion="polite"
                                     numberOfLines={1}
                                 >
-                                    Coach Ria
+                                    {isTyping ? 'thinking…' : 'online · your coach'}
                                 </Text>
-                                <View style={styles.statusBadge}>
-                                    <Text
-                                        style={[typography.caption, { color: isTyping ? colors.accent.amber : colors.accent.emerald, fontWeight: 'bold', fontSize: 11, letterSpacing: 0.3 }]}
-                                        maxFontSizeMultiplier={1.3}
-                                        accessibilityLiveRegion="polite"
-                                    >
-                                        {isTyping ? 'Thinking…' : 'AI Coach · Online'}
-                                    </Text>
-                                </View>
                             </View>
                         </View>
 
-                        {/* Right slot: the "N left today" quota pill, or a spacer.
-                            Value-dominant — the count reads big, "left today" small. */}
+                        {/* Right slot: the "N left today" quota pill (value-dominant —
+                            the count reads big, "LEFT" small) followed by the overflow
+                            menu dots from the mockup. The pill is hidden until history
+                            loads / outside the exhausted banner. */}
                         {showQuotaHint ? (
                             <View
                                 style={[styles.quotaPill, {
-                                    borderColor: withAlpha(remaining > 0 ? colors.accent.purpleLight : colors.accent.amber, 0.5),
-                                    backgroundColor: withAlpha(remaining > 0 ? colors.accent.purple : colors.accent.amber, 0.14),
+                                    borderColor: withAlpha(remaining > 0 ? colors.accent.lime : colors.accent.amber, 0.5),
+                                    backgroundColor: withAlpha(remaining > 0 ? colors.accent.lime : colors.accent.amber, 0.14),
                                 }]}
                                 accessibilityRole="text"
                                 accessibilityLabel={`${remaining} AI messages left today`}
                             >
                                 <Text
-                                    style={[typography.statSmall, { color: remaining > 0 ? colors.accent.purpleLight : colors.accent.amberLight, fontSize: 17, lineHeight: 18 }]}
+                                    style={[typography.statSmall, { color: remaining > 0 ? colors.accent.limeLight : colors.accent.amberLight, fontSize: 16, lineHeight: 18 }]}
                                     maxFontSizeMultiplier={1.3}
                                     numberOfLines={1}
                                 >
                                     {remaining}
                                 </Text>
                                 <Text
-                                    style={[typography.caption, { color: remaining > 0 ? withAlpha(colors.accent.purpleLight, 0.85) : colors.accent.amberLight, fontWeight: '700', fontSize: 9, letterSpacing: 0.4 }]}
+                                    style={[typography.caption, { color: remaining > 0 ? withAlpha(colors.accent.limeLight, 0.85) : colors.accent.amberLight, fontWeight: '700', fontSize: 9, letterSpacing: 0.4 }]}
                                     maxFontSizeMultiplier={1.3}
                                     numberOfLines={1}
                                 >
                                     LEFT
                                 </Text>
                             </View>
-                        ) : (
-                            <View style={{ width: 40 }} />
-                        )}
+                        ) : null}
+                        <View
+                            accessibilityRole="image"
+                            accessibilityLabel="Conversation options"
+                            style={styles.headerMenuBtn}
+                        >
+                            <Ionicons name="ellipsis-vertical" size={20} color={colors.text.secondary} />
+                        </View>
                     </View>
                 </GlassCard>
             </View>
@@ -742,14 +750,10 @@ export default function AICoachScreen() {
 
                     {historyQuery.isLoading && !hasLoaded ? (
                         <View style={styles.loadingWrap}>
-                            <LinearGradient
-                                colors={colors.gradients.purple}
-                                style={[styles.loadingOrb, shadows.glow(colors.accent.purple)]}
-                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                            >
-                                <Ionicons name="sparkles" size={22} color={colors.text.primary} />
-                            </LinearGradient>
-                            <ActivityIndicator color={colors.accent.purpleLight} style={{ marginTop: 16 }} />
+                            <View style={[styles.loadingOrb, { borderColor: withAlpha(colors.accent.lime, 0.5) }, shadows.glow(colors.accent.lime)]}>
+                                <Image source={RIA_AVATAR} style={styles.loadingOrbImg} resizeMode="cover" />
+                            </View>
+                            <ActivityIndicator color={colors.accent.limeLight} style={{ marginTop: 16 }} />
                             <Text
                                 style={[typography.caption, { color: colors.text.tertiary, marginTop: 10, fontSize: 12 }]}
                                 maxFontSizeMultiplier={1.3}
@@ -795,16 +799,20 @@ export default function AICoachScreen() {
                         <MessageBubble key={msg.id} msg={msg} colors={colors} typography={typography} />
                     ))}
 
-                    {/* Typing indicator (hidden once live tokens are streaming) */}
+                    {/* Typing indicator (hidden once live tokens are streaming) —
+                        a Ria avatar disc + her dark-glass bubble carrying the dots,
+                        mirroring a live "from them" message in the mockup. */}
                     {showThinkingDots && (
-                        <View style={[styles.thinkingBubble, {
-                            backgroundColor: colors.background.quaternary,
-                            borderColor: withAlpha(colors.accent.purple, 0.35),
-                        }, shadows.glow(colors.accent.purple), { shadowOpacity: 0.18 }]}>
-                            <View style={styles.aiHeader}>
-                                <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', fontSize: 10, letterSpacing: 0.5 }]} maxFontSizeMultiplier={1.3}>RIA</Text>
+                        <View style={styles.thinkingRow}>
+                            <View style={[styles.riaAvatarSmall, { borderColor: withAlpha(colors.accent.lime, 0.4) }]}>
+                                <Image source={RIA_AVATAR} style={styles.riaAvatarSmallImg} resizeMode="cover" />
                             </View>
-                            <TypingDots color={colors.accent.purpleLight} />
+                            <View style={[styles.thinkingBubble, {
+                                backgroundColor: colors.background.tertiary,
+                                borderColor: colors.border.default,
+                            }]}>
+                                <TypingDots color={colors.accent.lime} />
+                            </View>
                         </View>
                     )}
 
@@ -842,10 +850,10 @@ export default function AICoachScreen() {
                         <Reanimated.View entering={FadeInDown.delay(120).springify().damping(18)} style={styles.suggestBlock}>
                             <View style={styles.suggestHeader}>
                                 <View style={[styles.suggestSparkle, {
-                                    backgroundColor: withAlpha(colors.accent.purple, 0.16),
-                                    borderColor: withAlpha(colors.accent.purpleLight, 0.4),
+                                    backgroundColor: withAlpha(colors.accent.lime, 0.16),
+                                    borderColor: withAlpha(colors.accent.lime, 0.4),
                                 }]}>
-                                    <Ionicons name="bulb" size={14} color={colors.accent.purpleLight} />
+                                    <Ionicons name="sparkles" size={13} color={colors.accent.lime} />
                                 </View>
                                 <Text
                                     style={[typography.overline, { color: colors.text.secondary }]}
@@ -904,7 +912,7 @@ export default function AICoachScreen() {
                                         ) : <View />}
                                         {listenState === 'listening' ? (
                                             <Text
-                                                style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: '800', fontSize: 11 }]}
+                                                style={[typography.caption, { color: colors.accent.limeLight, fontWeight: '800', fontSize: 11 }]}
                                                 maxFontSizeMultiplier={1.3}
                                                 accessibilityLiveRegion="polite"
                                             >
@@ -937,14 +945,14 @@ export default function AICoachScreen() {
                                     <TextInput
                                         style={[styles.textInput, {
                                             color: colors.text.primary,
-                                            backgroundColor: colors.background.tertiary,
-                                            // Lime focus tint when the user has typed
-                                            // (their composing surface); listening uses
-                                            // Ria's purple to mirror the live mic state.
+                                            backgroundColor: colors.background.secondary,
+                                            // Lime focus tint both while composing AND
+                                            // while listening (the whole composer reads
+                                            // in the one brand accent — the mockup look).
                                             borderColor: listenState === 'listening'
-                                                ? withAlpha(colors.accent.purple, 0.55)
+                                                ? withAlpha(colors.accent.lime, 0.55)
                                                 : input.trim()
-                                                    ? withAlpha(colors.accent.coral, 0.5)
+                                                    ? withAlpha(colors.accent.lime, 0.5)
                                                     : colors.border.default,
                                         }]}
                                         placeholder={listenState === 'listening' ? 'Listening… speak to Ria' : 'Ask Ria about your shift protocol...'}
@@ -1026,11 +1034,11 @@ function SuggestionChip({ label, index = 0, colors, typography, onPress }: { lab
         .onFinalize(() => { pressed.set(withTiming(0, { duration: 120 })); })
         .onEnd(() => { runOnJS(onPress)(); });
     const animStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: interpolate(pressed.get(), [0, 1], [1, 0.96]) }],
-        opacity: interpolate(pressed.get(), [0, 1], [1, 0.85]),
+        transform: [{ scale: interpolate(pressed.get(), [0, 1], [1, 0.94]) }],
+        opacity: interpolate(pressed.get(), [0, 1], [1, 0.8]),
     }));
-    // Starter prompts read as the USER's intent → a restrained lime (coral) tint
-    // at low opacity (60/30/10: lime is the 10% accent, never a full fill here).
+    // Starter-prompt pills — neutral dark glass chips (mockup): a quiet surface +
+    // hairline so they read as suggestions, never competing with the one lime CTA.
     return (
         <GestureDetector gesture={tap}>
             <Reanimated.View
@@ -1038,12 +1046,11 @@ function SuggestionChip({ label, index = 0, colors, typography, onPress }: { lab
                 accessibilityRole="button"
                 accessibilityLabel={label}
                 style={[styles.suggestionChip, {
-                    borderColor: withAlpha(colors.accent.coral, 0.4),
-                    backgroundColor: withAlpha(colors.accent.coral, 0.1),
+                    borderColor: colors.border.default,
+                    backgroundColor: colors.background.tertiary,
                 }, animStyle]}
             >
-                <Ionicons name="arrow-forward-circle-outline" size={15} color={withAlpha(colors.accent.coralLight, 0.9)} />
-                <Text style={[typography.bodySm, { color: colors.text.primary, fontWeight: '600', flexShrink: 1 }]} maxFontSizeMultiplier={1.3}>{label}</Text>
+                <Text style={[typography.bodySm, { color: colors.text.secondary, fontWeight: '600', fontSize: 12 }]} maxFontSizeMultiplier={1.3} numberOfLines={1}>{label}</Text>
             </Reanimated.View>
         </GestureDetector>
     );
@@ -1137,21 +1144,21 @@ function MicButton({ state, disabled, colors, onPress }: { state: VoiceListenSta
                 style={[
                     styles.micBtn,
                     {
-                        backgroundColor: active ? colors.accent.purple : colors.background.tertiary,
+                        backgroundColor: active ? withAlpha(colors.accent.lime, 0.18) : colors.background.tertiary,
                         borderWidth: 1,
                         borderColor: active
-                            ? withAlpha(colors.accent.purpleLight, 0.6)
+                            ? withAlpha(colors.accent.lime, 0.6)
                             : colors.border.default,
                         opacity: unavailable ? 0.45 : 1,
                     },
-                    active ? shadows.glow(colors.accent.purple) : null,
+                    active ? shadows.glow(colors.accent.lime) : null,
                     animStyle,
                 ]}
             >
                 <Ionicons
                     name={unavailable ? 'mic-off' : 'mic'}
                     size={20}
-                    color={active ? colors.text.primary : (unavailable ? colors.text.tertiary : colors.accent.purpleLight)}
+                    color={active ? colors.accent.limeLight : (unavailable ? colors.text.tertiary : colors.text.secondary)}
                 />
             </Reanimated.View>
         </GestureDetector>
@@ -1182,17 +1189,17 @@ function SpeakToggle({ on, colors, typography, onPress }: { on: boolean; colors:
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 testID="speak-toggle"
                 style={[styles.speakToggle, {
-                    borderColor: on ? withAlpha(colors.accent.purpleLight, 0.6) : colors.border.default,
-                    backgroundColor: on ? withAlpha(colors.accent.purple, 0.16) : 'transparent',
+                    borderColor: on ? withAlpha(colors.accent.lime, 0.6) : colors.border.default,
+                    backgroundColor: on ? withAlpha(colors.accent.lime, 0.16) : 'transparent',
                 }, animStyle]}
             >
                 <Ionicons
                     name={on ? 'volume-high' : 'volume-mute'}
                     size={14}
-                    color={on ? colors.accent.purpleLight : colors.text.tertiary}
+                    color={on ? colors.accent.limeLight : colors.text.tertiary}
                 />
                 <Text
-                    style={[typography.caption, { color: on ? colors.accent.purpleLight : colors.text.tertiary, fontWeight: '700', fontSize: 11 }]}
+                    style={[typography.caption, { color: on ? colors.accent.limeLight : colors.text.tertiary, fontWeight: '700', fontSize: 11 }]}
                     maxFontSizeMultiplier={1.3}
                 >
                     Ria speaks replies
@@ -1230,11 +1237,11 @@ function RetryButton({ colors, typography, onPress }: { colors: any; typography:
                 accessibilityLabel="Retry loading your conversation"
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 style={[styles.retryBtn, {
-                    borderColor: withAlpha(colors.accent.purpleLight, 0.6),
-                    backgroundColor: withAlpha(colors.accent.purple, 0.14),
+                    borderColor: withAlpha(colors.accent.lime, 0.6),
+                    backgroundColor: withAlpha(colors.accent.lime, 0.14),
                 }, animStyle]}
             >
-                <Ionicons name="refresh" size={16} color={colors.accent.purpleLight} />
+                <Ionicons name="refresh" size={16} color={colors.accent.limeLight} />
                 <Text style={[typography.body, { color: colors.text.primary, fontWeight: '800', fontSize: 14 }]} maxFontSizeMultiplier={1.3}>
                     Retry
                 </Text>
@@ -1287,9 +1294,10 @@ function renderLinkifiedSpans(spans: LinkifySpan[], linkColor: string): React.Re
 
 const MessageBubble = React.memo(function MessageBubble({ msg, colors, typography }: { msg: Message; colors: any; typography: any }) {
     const isAI = msg.sender === 'ai';
-    // Link colour follows the bubble's own accent: purple inside a Ria bubble,
-    // lime inside a user bubble (so a tapped URL stays on-tone with its sender).
-    const linkColor = isAI ? colors.accent.purpleLight : colors.accent.coralLight;
+    // Link colour is the brand lime on both bubbles (the mockup emphasises inline
+    // detail in lime); the brighter lime reads cleanly on the dark Ria glass and
+    // on the user's lime-tint surface alike.
+    const linkColor = isAI ? colors.accent.lime : colors.accent.limeLight;
     // Compute the spans once so we can both render them and detect tappable links.
     const spans = linkify(msg.text);
     const hasLinks = spans.some((s) => s.type === 'link');
@@ -1315,62 +1323,52 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
             accessibilityLiveRegion={msg.streaming ? 'polite' : 'none'}
         >
             {isAI && (
-                <LinearGradient
-                    colors={colors.gradients.purple}
-                    style={[styles.riaAvatarSmall, shadows.glow(colors.accent.purple), { shadowOpacity: 0.25 }]}
-                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                >
-                    <Ionicons name="sparkles" size={12} color={colors.text.primary} />
-                </LinearGradient>
+                <View style={[styles.riaAvatarSmall, { borderColor: withAlpha(colors.accent.lime, 0.4) }]}>
+                    <Image source={RIA_AVATAR} style={styles.riaAvatarSmallImg} resizeMode="cover" />
+                </View>
             )}
             <View style={[
                 styles.messageBubble,
                 isAI
+                    // Ria bubble = dark glass (elevated surface + a subtle hairline),
+                    // with a TIGHT bottom-left corner — the messaging-app "from them"
+                    // shape in the mockup. A faint streaming dot rides the live reply.
                     ? [styles.aiBubble, {
-                        // Higher-contrast Ria bubble: elevated fill + a brighter
-                        // purple glass hairline + a soft purple glow (AI = purple).
-                        backgroundColor: colors.background.quaternary,
+                        backgroundColor: colors.background.tertiary,
                         borderWidth: 1,
-                        borderColor: withAlpha(colors.accent.purple, 0.38),
-                    }, shadows.glow(colors.accent.purple), { shadowOpacity: 0.18 }]
+                        borderColor: colors.border.default,
+                    }]
                     // User bubble = restrained LIME tint (60/30/10: lime is the
                     // accent, used here as a low-opacity tinted glass — NOT a full
-                    // lime fill, which is reserved for the one primary Send action).
+                    // lime fill, which is reserved for the one primary Send action),
+                    // right-aligned with a TIGHT bottom-right corner.
                     : [styles.userBubble, {
-                        backgroundColor: withAlpha(colors.accent.coral, 0.16),
+                        backgroundColor: withAlpha(colors.accent.lime, 0.14),
                         borderWidth: 1,
-                        borderColor: withAlpha(colors.accent.coral, 0.45),
-                    }, shadows.glow(colors.accent.coral), { shadowOpacity: 0.14 }],
+                        borderColor: withAlpha(colors.accent.lime, 0.32),
+                    }],
             ]}>
-                {isAI ? (
-                    <View style={styles.aiHeader}>
-                        <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: 'bold', fontSize: 10, letterSpacing: 0.6 }]} maxFontSizeMultiplier={1.3}>RIA</Text>
-                        {msg.streaming && <StreamingCursorDot color={colors.accent.purpleLight} />}
-                    </View>
-                ) : (
-                    <View style={[styles.aiHeader, { justifyContent: 'flex-end' }]}>
-                        <Text style={[typography.caption, { color: withAlpha(colors.accent.coralLight, 0.95), fontWeight: 'bold', fontSize: 10, letterSpacing: 0.6 }]} maxFontSizeMultiplier={1.3}>YOU</Text>
-                    </View>
-                )}
                 <Text style={[typography.body, {
-                    color: colors.text.primary,
-                    lineHeight: 22,
+                    color: isAI ? colors.text.primary : colors.accent.limeLight,
+                    fontSize: 14,
+                    lineHeight: 21,
                 }]}>
                     {renderLinkifiedSpans(spans, linkColor)}
-                    {msg.streaming ? <StreamingCursor color={colors.accent.purpleLight} /> : null}
+                    {msg.streaming ? <StreamingCursor color={colors.accent.lime} /> : null}
                 </Text>
-                <Text
-                    style={[typography.caption, {
-                        color: colors.text.tertiary,
-                        fontSize: 10,
-                        marginTop: 6,
-                        textAlign: isAI ? 'left' : 'right',
-                    }]}
-                    maxFontSizeMultiplier={1.3}
-                    importantForAccessibility="no"
-                >
-                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
+                <View style={[styles.bubbleMeta, { justifyContent: isAI ? 'flex-start' : 'flex-end' }]}>
+                    {isAI && msg.streaming ? <StreamingCursorDot color={colors.accent.lime} /> : null}
+                    <Text
+                        style={[typography.caption, {
+                            color: isAI ? colors.text.tertiary : withAlpha(colors.accent.limeLight, 0.7),
+                            fontSize: 10,
+                        }]}
+                        maxFontSizeMultiplier={1.3}
+                        importantForAccessibility="no"
+                    >
+                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                </View>
             </View>
         </Reanimated.View>
     );
@@ -1429,35 +1427,45 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
         paddingHorizontal: 12,
-        paddingVertical: 12,
-    },
-    headerLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flex: 1,
-        minWidth: 0,
+        paddingVertical: 10,
     },
     headerIconBtn: {
-        width: 36,
+        width: 30,
         height: 44,
         alignItems: 'flex-start',
         justifyContent: 'center',
     },
+    // Overflow menu dots (mockup right-edge). Decorative parity affordance — the
+    // chevron/back stays the functional navigation control.
+    headerMenuBtn: {
+        width: 30,
+        height: 44,
+        alignItems: 'flex-end',
+        justifyContent: 'center',
+    },
     headerTitleCol: {
-        marginLeft: 10,
-        flexShrink: 1,
+        marginLeft: 11,
+        flex: 1,
+        minWidth: 0,
     },
     riaAvatarWrap: {
-        marginLeft: 2,
+        marginLeft: 4,
     },
+    // The avatar is now an IMAGE disc (Zeitra app mark) with a lime hairline ring,
+    // matching the messaging-app coach identity in the mockup.
     riaAvatar: {
         width: 38,
         height: 38,
         borderRadius: 19,
+        borderWidth: 1.5,
+        overflow: 'hidden',
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    riaAvatarImg: {
+        width: '100%',
+        height: '100%',
     },
     // Live presence dot riding the avatar's corner (online / thinking).
     presenceDot: {
@@ -1469,20 +1477,40 @@ const styles = StyleSheet.create({
         borderRadius: 6,
         borderWidth: 2,
     },
+    // Per-bubble Ria avatar: the app-mark image disc with a faint lime ring,
+    // sitting at the foot of each Ria bubble (messaging-app coach look).
     riaAvatarSmall: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        borderWidth: 1,
+        overflow: 'hidden',
         marginRight: 8,
         alignSelf: 'flex-end',
-        marginBottom: 4,
+        marginBottom: 2,
+    },
+    riaAvatarSmallImg: {
+        width: '100%',
+        height: '100%',
+    },
+    // Footer row inside a bubble: timestamp (+ a streaming dot on a live Ria reply).
+    bubbleMeta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 5,
     },
     statusBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        marginTop: 1,
+        gap: 5,
+        marginTop: 2,
+    },
+    // Small lime presence dot leading the "online · your coach" row (mockup).
+    statusDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
     },
     quotaPill: {
         flexDirection: 'row',
@@ -1516,8 +1544,14 @@ const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
+        borderWidth: 1.5,
+        overflow: 'hidden',
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    loadingOrbImg: {
+        width: '100%',
+        height: '100%',
     },
     messageRow: {
         flexDirection: 'row',
@@ -1526,27 +1560,27 @@ const styles = StyleSheet.create({
     },
     messageBubble: {
         maxWidth: '80%',
-        padding: 14,
-        borderRadius: 18,
+        paddingHorizontal: 13,
+        paddingVertical: 11,
+        borderRadius: 16,
     },
-    aiHeader: {
+    // Tight tail corners (5px) — the messaging-bubble shape from the mockup.
+    aiBubble: { borderBottomLeftRadius: 5 },
+    userBubble: { borderBottomRightRadius: 5 },
+    // "Thinking" row (no live text yet) — a Ria avatar + her dark-glass bubble
+    // carrying the dots, flattened bottom-left tail corner like a real Ria bubble.
+    thinkingRow: {
         flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 6,
-        gap: 6,
-    },
-    aiBubble: { borderBottomLeftRadius: 4 },
-    userBubble: { borderBottomRightRadius: 4 },
-    // Standalone "thinking" bubble (no live text yet) — mirrors a Ria AI bubble:
-    // elevated fill, brighter purple glass hairline, flattened tail corner.
-    thinkingBubble: {
-        alignSelf: 'flex-start',
-        maxWidth: '80%',
-        padding: 14,
-        borderRadius: 18,
-        borderBottomLeftRadius: 4,
-        borderWidth: 1,
+        alignItems: 'flex-end',
         marginBottom: 14,
+    },
+    thinkingBubble: {
+        maxWidth: '80%',
+        paddingHorizontal: 13,
+        paddingVertical: 12,
+        borderRadius: 16,
+        borderBottomLeftRadius: 5,
+        borderWidth: 1,
     },
     streamingDot: {
         width: 6,
@@ -1583,17 +1617,19 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     suggestionsContainer: {
-        gap: 10,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 9,
     },
+    // Rounded neutral pill (mockup chip rail). Single-line label, generous tap area.
     suggestionChip: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
-        paddingHorizontal: 16,
-        paddingVertical: 13,
-        borderRadius: 16,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 20,
         borderWidth: 1,
-        minHeight: 52,
+        minHeight: 40,
     },
     // Upgrade card shown inline in the scroll when the daily quota is exhausted.
     upgradeCard: {

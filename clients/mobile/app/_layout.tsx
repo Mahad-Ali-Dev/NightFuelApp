@@ -12,7 +12,7 @@ import { BarlowCondensed_600SemiBold, BarlowCondensed_700Bold, BarlowCondensed_8
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ThemeContext, getThemeColors, getNightReadColors, typography, spacing, borderRadius, shadows, ColorScheme } from '@/theme';
+import { ThemeContext, resolveThemeColors, typography, spacing, borderRadius, shadows, ColorScheme } from '@/theme';
 import { colors } from '@/theme/colors';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
@@ -58,13 +58,15 @@ function RootLayout() {
     BarlowCondensed_600SemiBold, BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold,
   });
   useEffect(() => { if (fontsLoaded) SplashScreen.hideAsync().catch(() => {}); }, [fontsLoaded]);
-  const { isDarkTheme, nightRead } = useThemeStore();
+  const { isDarkTheme, nightRead, themeVariant } = useThemeStore();
   const scheme = (isDarkTheme(systemScheme) ? 'dark' : 'light') as ColorScheme;
   // Night Read (when ON) swaps in the deep-red, melatonin-safe palette so every
-  // `useTheme()` consumer re-themes; when OFF this is exactly getThemeColors(scheme).
+  // `useTheme()` consumer re-themes (highest priority). Otherwise the selected
+  // color-theme variant drives the palette (default 'midnight-lime' = the
+  // unchanged Aurora dark look, so existing users see exactly the current theme).
   const themeColors = React.useMemo(
-    () => (nightRead ? getNightReadColors() : getThemeColors(scheme)),
-    [scheme, nightRead],
+    () => resolveThemeColors(scheme, nightRead, themeVariant),
+    [scheme, nightRead, themeVariant],
   );
 
   // Memoized so the ThemeContext value is referentially stable across the root's
@@ -79,7 +81,7 @@ function RootLayout() {
     spacing,
     borderRadius,
     shadows,
-  }), [scheme, nightRead, themeColors]);
+  }), [scheme, nightRead, themeVariant, themeColors]);
 
   // Per-field scoped selectors: an unscoped `useAuthStore()` destructure
   // subscribes the root to EVERY auth-store change, so any field mutation

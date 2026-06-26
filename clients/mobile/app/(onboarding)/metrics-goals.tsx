@@ -21,10 +21,10 @@ import { Ionicons } from '@expo/vector-icons';
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const SEX_OPTIONS = [
-    { value: 'MALE', label: 'Male', icon: 'male' },
-    { value: 'FEMALE', label: 'Female', icon: 'female' },
-    { value: 'OTHER', label: 'Other', icon: 'male-female' },
-    { value: 'PREFER_NOT_TO_SAY', label: 'Prefer not to say', icon: 'help-circle' },
+    { value: 'MALE', label: 'Male', emoji: '♂️', icon: 'male' },
+    { value: 'FEMALE', label: 'Female', emoji: '♀️', icon: 'female' },
+    { value: 'OTHER', label: 'Other', emoji: '⚧️', icon: 'male-female' },
+    { value: 'PREFER_NOT_TO_SAY', label: 'Prefer not to say', emoji: '🔒', icon: 'help-circle' },
 ] as const;
 
 // Hard cap on the raw characters the numeric weight/height TextInputs accept.
@@ -210,18 +210,15 @@ export default function BiologicalDataScreen() {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
-                {/* Hero — display heading (brand signature). The step indicator
-                    lives ONLY in the onboarding layout header ("STEP 1 OF 4" +
-                    progress bar, lime) — the screen no longer renders its own
-                    0X/0Y numeral so there is a single source of truth for which
-                    step the worker is on. Spring entrance matches every sibling
-                    section below. */}
+                {/* Hero — big display heading (mockup signature). The step
+                    indicator lives ONLY in the onboarding layout header
+                    ("STEP 1 OF 4" + progress bar, lime) — the screen no longer
+                    renders its own 0X/0Y numeral so there is a single source of
+                    truth for which step the worker is on. Spring entrance matches
+                    every sibling section below. */}
                 <Animated.View entering={FadeInDown.duration(420).springify()} style={{ marginBottom: spacing['2xl'] }}>
-                    <Text style={[typography.overline, { color: colors.accent.coral, marginBottom: spacing.sm }]}>
-                        ABOUT YOU
-                    </Text>
                     <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
-                        Your <Text style={{ color: colors.accent.coral }}>biological profile</Text>
+                        Tell us <Text style={{ color: colors.accent.coral }}>about you</Text>
                     </Text>
                     <Text style={[typography.body, { color: colors.text.secondary }]}>
                         We use these to calculate your personalized macro targets and caloric needs.
@@ -291,19 +288,21 @@ export default function BiologicalDataScreen() {
                     </GlassCard>
                 </Animated.View>
 
-                {/* Biological sex — premium selection cards in a 2-up grid. */}
+                {/* Biological sex — full-width selectable rows (mockup language:
+                    emoji tile + label + lime check medallion on the right). */}
                 <Animated.View entering={FadeInDown.delay(200).duration(420).springify()}>
                     <View style={styles.sectionLabelRow}>
                         <Ionicons name="person-outline" size={15} color={colors.accent.coral} style={{ marginRight: spacing.sm }} />
                         <Text style={[typography.overline, { color: colors.text.secondary }]}>Biological Sex</Text>
                     </View>
-                    <View style={styles.sexGrid}>
+                    <View style={styles.sexList}>
                         {SEX_OPTIONS.map((s) => {
                             const isSelected = sex === s.value;
                             return (
                                 <SexCard
                                     key={s.value}
                                     label={s.label}
+                                    emoji={s.emoji}
                                     icon={s.icon}
                                     selected={isSelected}
                                     onPress={() => setSex(sex === s.value ? null : (s.value as any))}
@@ -343,6 +342,7 @@ export default function BiologicalDataScreen() {
             >
                 <CtaButton
                     label="Continue"
+                    icon="arrow-forward"
                     size="lg"
                     onPress={handleNext}
                     disabled={!isValid}
@@ -431,18 +431,22 @@ function MetricField({
 }
 
 // ── SexCard ──────────────────────────────────────────────────────────────────
-// A premium selection tile for the biological-sex grid: dark-glass at rest, and
-// on `selected` a lime hairline ring + minimal glow, a solid lime icon medallion
-// with an ink glyph, and a checkmark badge — the brand's "chosen" state. Colour
-// is never the only signal (medallion fill + check + bolder label all shift).
+// A full-width selectable row for biological sex (mockup language): a rounded-
+// square emoji tile on the left, the label in the middle, and on `selected` a
+// lime hairline ring + minimal glow + a lime check medallion on the right. An
+// Ionicons fallback (or optional image) renders inside the tile when no emoji is
+// supplied. Colour is never the only signal (the check badge + filled tile +
+// bolder label all shift).
 function SexCard({
     label,
+    emoji,
     icon,
     image,
     selected,
     onPress,
 }: {
     label: string;
+    emoji?: string;
     icon: keyof typeof Ionicons.glyphMap;
     image?: ImageSourcePropType;
     selected: boolean;
@@ -451,7 +455,7 @@ function SexCard({
     const { colors, typography, spacing, borderRadius, shadows } = useTheme();
 
     // Spring-driven pressed scale (transform only) for parity with UnitToggle /
-    // CtaButton — replaces the instant, non-animated RN style snap. 0.96 per spec.
+    // CtaButton — replaces the instant, non-animated RN style snap. 0.97 per spec.
     const scale = useSharedValue(1);
     const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
@@ -459,7 +463,7 @@ function SexCard({
         <AnimatedPressable
             onPress={onPress}
             onPressIn={() => {
-                scale.value = withSpring(0.96, { damping: 18, stiffness: 320 });
+                scale.value = withSpring(0.97, { damping: 18, stiffness: 320 });
             }}
             onPressOut={() => {
                 scale.value = withSpring(1, { damping: 16, stiffness: 280 });
@@ -485,25 +489,26 @@ function SexCard({
                 <View style={[styles.sexCardBody, { padding: spacing.lg }]}>
                     <View
                         style={[
-                            styles.sexMedallion,
+                            styles.sexTile,
                             {
                                 backgroundColor: selected
-                                    ? colors.accent.coral
-                                    : withAlpha(colors.accent.coral, 0.14),
+                                    ? withAlpha(colors.accent.coral, 0.22)
+                                    : colors.background.tertiary,
                                 borderColor: selected
-                                    ? 'transparent'
-                                    : withAlpha(colors.accent.coral, 0.28),
+                                    ? withAlpha(colors.accent.coral, 0.4)
+                                    : withAlpha(colors.text.primary, 0.06),
                             },
-                            selected ? shadows.glow(colors.accent.coral) : null,
                         ]}
                     >
                         {image ? (
-                            <Image source={image} style={styles.sexMedallionImage} resizeMode="contain" />
+                            <Image source={image} style={styles.sexTileImage} resizeMode="contain" />
+                        ) : emoji ? (
+                            <Text style={styles.sexEmoji} maxFontSizeMultiplier={1.2}>{emoji}</Text>
                         ) : (
                             <Ionicons
                                 name={icon}
                                 size={22}
-                                color={selected ? colors.text.inverse : colors.accent.coral}
+                                color={selected ? colors.accent.coral : colors.text.secondary}
                             />
                         )}
                     </View>
@@ -511,20 +516,22 @@ function SexCard({
                         style={[
                             typography.subhead,
                             {
-                                color: selected ? colors.text.primary : colors.text.secondary,
-                                marginTop: spacing.md,
+                                flex: 1,
+                                color: colors.text.primary,
                             },
                         ]}
-                        numberOfLines={2}
+                        numberOfLines={1}
                     >
                         {label}
                     </Text>
 
                     {selected ? (
-                        <View style={[styles.sexCheck, { backgroundColor: colors.accent.coral }]}>
-                            <Ionicons name="checkmark" size={14} color={colors.text.inverse} />
+                        <View style={[styles.sexCheck, { backgroundColor: colors.accent.coral }, shadows.glow(colors.accent.coral)]}>
+                            <Ionicons name="checkmark" size={15} color={colors.text.inverse} />
                         </View>
-                    ) : null}
+                    ) : (
+                        <View style={[styles.sexEmptyDot, { borderColor: colors.border.light }]} />
+                    )}
                 </View>
             </GlassCard>
         </AnimatedPressable>
@@ -563,46 +570,49 @@ const styles = StyleSheet.create({
     divider: {
         height: StyleSheet.hairlineWidth,
     },
-    sexGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        rowGap: 16,
+    sexList: {
+        gap: 12,
     },
     sexCardWrap: {
-        width: '48%',
+        width: '100%',
     },
     sexCard: {
-        minHeight: 132,
+        // Row, not square — the mockup's compact full-width list item.
     },
     sexCardBody: {
-        flex: 1,
-        minHeight: 132,
-        justifyContent: 'flex-start',
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
     },
-    sexMedallion: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
+    sexTile: {
+        width: 46,
+        height: 46,
+        borderRadius: 14,
         borderWidth: 1,
         justifyContent: 'center',
         alignItems: 'center',
     },
-    // Roughly fills the 48pt medallion slot (with a little inset) so the premium
-    // tile reads at the same visual weight the Ionicon glyph (size 22) did.
-    sexMedallionImage: {
-        width: 32,
-        height: 32,
+    sexEmoji: {
+        fontSize: 22,
+    },
+    // Roughly fills the 46pt tile slot (with a little inset) so an image reads at
+    // the same visual weight the emoji / Ionicon glyph (size 22) does.
+    sexTileImage: {
+        width: 30,
+        height: 30,
     },
     sexCheck: {
-        position: 'absolute',
-        top: 16,
-        right: 16,
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    sexEmptyDot: {
         width: 24,
         height: 24,
         borderRadius: 12,
-        justifyContent: 'center',
-        alignItems: 'center',
+        borderWidth: 1.5,
     },
     footer: {
         position: 'absolute',

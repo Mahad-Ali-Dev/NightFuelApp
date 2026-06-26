@@ -118,6 +118,13 @@ jest.mock('@expo/vector-icons', () => {
   };
 });
 
+// useAuth → the re-skinned "Crew" header reads the current user for its profile
+// avatar. Mock the hook directly (mirrors profile.errorStates.test.tsx) so the
+// real authStore (→ expo-secure-store + the axios auth client) never loads.
+jest.mock('@/hooks/useAuth', () => ({
+  useAuth: () => ({ user: { id: 'me', name: 'Test User', avatarUrl: null } }),
+}));
+
 // Deterministic insets so the screen lays out without the native provider.
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),

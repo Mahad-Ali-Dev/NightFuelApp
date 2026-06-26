@@ -9,14 +9,16 @@ import {
   Pressable,
   Image,
   AccessibilityInfo,
+  useWindowDimensions,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthStore } from '@/store/authStore';
 import { useRouter, Link } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Input, CtaButton, GlassCard } from '@/components/ui';
+import { Input, CtaButton } from '@/components/ui';
 import { useTheme } from '@/theme';
 import { spacing, borderRadius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
@@ -29,21 +31,21 @@ import {
   passwordIssues,
 } from '@/utils/validation';
 
-// Brand mark — the Zeitra lime logo asset (same source login.tsx uses) so the
-// primary signup screen carries the real mark, not a generic glyph.
-const ZEITRA_LOGO = require('../../assets/images/logo_app.png');
+// Hero model — bundled male athlete asset (mockup: signup-preview.html).
+const HERO_MALE = require('../../assets/images/hero-male-2.png');
 
 // Staggered entrance: FadeInDown with SPRING physics (not duration/linear) so
 // each block settles with a little overshoot. Keeps the original 60ms stagger
-// deltas (delay 0 / 60 / 120 / 180 / 240) — back button, header, form, CTA,
-// login row cascade in. Transform/opacity only → cheap + interruptible.
+// deltas (delay 0 / 60 / 120 / 180 / 240) — hero, form, CTA, login row cascade
+// in. Transform/opacity only → cheap + interruptible.
 const enter = (delay: number) =>
   FadeInDown.delay(delay).springify().damping(16).mass(0.9);
 
 export default function RegisterScreen() {
-  const { colors, shadows } = useTheme();
+  const { colors } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
   const { register } = useAuthStore();
 
@@ -54,6 +56,9 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Terms & Privacy consent. Gates submission (a standard signup requirement);
+  // surfaced as the mockup's checkbox row. Defaults to unchecked.
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // Per-field inline errors, surfaced BELOW each field on blur (forms best-practice:
   // validate-on-blur + recovery path). Independent of the form-level `error` pill,
@@ -122,6 +127,10 @@ export default function RegisterScreen() {
       fail('Password must be at least 8 characters with a number and uppercase letter');
       return;
     }
+    if (!termsAccepted) {
+      fail('Please accept the Terms & Privacy Policy to continue');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -139,6 +148,13 @@ export default function RegisterScreen() {
     }
   };
 
+  // Social sign-up is not yet provisioned (no Apple/Google provider wired in this
+  // build). The buttons are part of the design; rather than silently no-op, give
+  // an honest, accessible "coming soon" cue via the same error surface.
+  const handleSocial = (provider: 'Apple' | 'Google') => {
+    fail(`${provider} sign-up is coming soon.`);
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
       <StatusBar style="light" />
@@ -149,13 +165,47 @@ export default function RegisterScreen() {
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing['3xl'] },
+            { paddingBottom: insets.bottom + spacing['3xl'] },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Back button */}
-          <Animated.View entering={enter(0)}>
+          {/* Hero band — male athlete + dark gradient fade + overlaid title.
+              Holds the back button (top-left) so navigation is preserved. */}
+          <Animated.View
+            entering={enter(0)}
+            style={[
+              styles.hero,
+              { width, marginLeft: -spacing['2xl'], marginRight: -spacing['2xl'] },
+            ]}
+          >
+            <LinearGradient
+              colors={[withAlpha(colors.accent.coral, 0.16), colors.background.secondary, colors.background.primary]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <Image
+              source={HERO_MALE}
+              style={styles.heroImage}
+              resizeMode="contain"
+              accessibilityRole="image"
+              accessibilityLabel="Zeitra"
+            />
+            <LinearGradient
+              colors={[
+                withAlpha(colors.background.primary, 0.33),
+                'transparent',
+                withAlpha(colors.background.primary, 0.73),
+                colors.background.primary,
+              ]}
+              locations={[0, 0.28, 0.76, 1]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+
+            {/* Back button */}
             <Pressable
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityRole="button"
@@ -163,179 +213,193 @@ export default function RegisterScreen() {
               onPress={() => router.back()}
               style={({ pressed }) => [
                 styles.backBtn,
-                {
-                  backgroundColor: colors.background.secondary,
-                  borderColor: colors.border.default,
-                },
-                // Physical tap feedback: scale + dim (not opacity-only). 0.94
-                // reads well on this 44pt control.
+                { top: insets.top + spacing.sm },
                 pressed && styles.backBtnPressed,
               ]}
             >
-              <Ionicons name="arrow-back" size={22} color={colors.text.primary} />
+              <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
             </Pressable>
-          </Animated.View>
 
-          {/* Header — Zeitra logo badge + big bold display title (matches login brand language) */}
-          <Animated.View entering={enter(60)} style={styles.header}>
-            <View
-              style={[
-                styles.logoBadge,
-                {
-                  backgroundColor: withAlpha(colors.accent.coral, 0.12),
-                  borderColor: withAlpha(colors.accent.coral, 0.35),
-                },
-                shadows.glow(colors.accent.coral),
-              ]}
-            >
-              <Image
-                source={ZEITRA_LOGO}
-                style={styles.logoImage}
-                resizeMode="contain"
-                accessibilityRole="image"
-                accessibilityLabel="Zeitra"
-              />
+            <View style={[styles.heroCopy, { paddingTop: insets.top }]}>
+              <Text
+                style={[styles.heroTitle, { color: colors.text.primary }]}
+                accessibilityRole="header"
+                maxFontSizeMultiplier={1.3}
+              >
+                Create account
+              </Text>
+              <Text style={[styles.heroSubtitle, { color: colors.text.secondary }]}>
+                Start training on your clock 🌙
+              </Text>
             </View>
-            <Text style={[styles.kicker, { color: colors.accent.coral }]}>Get started</Text>
-            <Text
-              style={[styles.title, { color: colors.text.primary }]}
-              accessibilityRole="header"
-              maxFontSizeMultiplier={1.3}
-            >
-              Create your{'\n'}
-              <Text style={{ color: colors.accent.coral }}>account</Text>
-            </Text>
-            <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
-              Start optimizing your shift nutrition today
-            </Text>
           </Animated.View>
 
           {/* Form */}
-          <Animated.View entering={enter(120)}>
-            <GlassCard style={styles.formCard}>
-              <View style={styles.sectionHeader}>
-                <Text style={[styles.sectionLabel, { color: colors.text.secondary }]}>
-                  Your details
-                </Text>
-                <Text style={[styles.requiredHint, { color: colors.text.tertiary }]}>
-                  <Text style={{ color: colors.accent.coral }}>*</Text> Required
+          <Animated.View entering={enter(120)} style={styles.form}>
+            <FieldLabel text="Full Name" required colors={colors} />
+            <Input
+              placeholder="John Doe"
+              value={name}
+              onChangeText={text => {
+                setName(text);
+                if (fieldErrors.name) setFieldError('name', undefined);
+              }}
+              onBlur={validateName}
+              error={fieldErrors.name}
+              icon="person-outline"
+              autoCapitalize="words"
+              textContentType="name"
+              returnKeyType="next"
+            />
+
+            <FieldLabel text="Email" required colors={colors} />
+            <Input
+              placeholder="you@example.com"
+              value={email}
+              onChangeText={text => {
+                setEmail(text);
+                if (fieldErrors.email) setFieldError('email', undefined);
+              }}
+              onBlur={validateEmail}
+              error={fieldErrors.email}
+              icon="mail-outline"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="emailAddress"
+              returnKeyType="next"
+            />
+
+            <FieldLabel text="Password" required colors={colors} />
+            <Input
+              placeholder="Min 8 characters"
+              value={password}
+              onChangeText={text => {
+                setPassword(text);
+                if (fieldErrors.password) setFieldError('password', undefined);
+              }}
+              onBlur={validatePassword}
+              error={fieldErrors.password}
+              icon="lock-closed-outline"
+              secureTextEntry={!showPassword}
+              rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+              onRightIconPress={() => setShowPassword(!showPassword)}
+              rightIconAccessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+              rightIconActive={showPassword}
+              textContentType="newPassword"
+              returnKeyType="next"
+            />
+
+            {password.length > 0 && <PasswordStrength password={password} />}
+
+            <FieldLabel text="Confirm Password" required colors={colors} />
+            <Input
+              placeholder="Repeat your password"
+              value={confirmPassword}
+              onChangeText={text => {
+                setConfirmPassword(text);
+                if (fieldErrors.confirmPassword) setFieldError('confirmPassword', undefined);
+              }}
+              onBlur={validateConfirm}
+              error={fieldErrors.confirmPassword}
+              icon="shield-checkmark-outline"
+              secureTextEntry={!showPassword}
+              textContentType="newPassword"
+              returnKeyType="done"
+              onSubmitEditing={handleRegister}
+            />
+
+            {/* Live "passwords match" affirmation (recovery-positive, color is NOT the only signal) */}
+            {confirmPassword.length > 0 &&
+            password === confirmPassword &&
+            !fieldErrors.confirmPassword ? (
+              <View style={styles.matchRow} accessibilityRole="text" accessibilityLabel="Passwords match">
+                <Ionicons name="checkmark-circle" size={14} color={colors.accent.emerald} />
+                <Text style={[styles.matchText, { color: colors.accent.emerald }]}>
+                  Passwords match
                 </Text>
               </View>
+            ) : null}
 
-              <FieldLabel text="Full Name" required colors={colors} />
-              <Input
-                placeholder="John Doe"
-                value={name}
-                onChangeText={text => {
-                  setName(text);
-                  if (fieldErrors.name) setFieldError('name', undefined);
-                }}
-                onBlur={validateName}
-                error={fieldErrors.name}
-                icon="person-outline"
-                autoCapitalize="words"
-                textContentType="name"
-                returnKeyType="next"
-              />
+            {/* Terms & Privacy consent row */}
+            <Pressable
+              onPress={() => setTermsAccepted(v => !v)}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: termsAccepted }}
+              accessibilityLabel="I agree to the Terms and Privacy Policy"
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              style={({ pressed }) => [styles.termsRow, pressed && styles.pressed]}
+            >
+              <View
+                style={[
+                  styles.checkbox,
+                  termsAccepted
+                    ? { backgroundColor: colors.accent.coral, borderColor: colors.accent.coral }
+                    : { backgroundColor: 'transparent', borderColor: colors.border.light },
+                ]}
+              >
+                {termsAccepted ? (
+                  <Ionicons name="checkmark" size={13} color={colors.text.inverse} />
+                ) : null}
+              </View>
+              <Text style={[styles.termsText, { color: colors.text.secondary }]}>
+                I agree to the{' '}
+                <Text style={{ color: colors.accent.coral, fontWeight: '600' }}>Terms</Text>
+                {' & '}
+                <Text style={{ color: colors.accent.coral, fontWeight: '600' }}>Privacy</Text>
+              </Text>
+            </Pressable>
 
-              <FieldLabel text="Email" required colors={colors} />
-              <Input
-                placeholder="you@example.com"
-                value={email}
-                onChangeText={text => {
-                  setEmail(text);
-                  if (fieldErrors.email) setFieldError('email', undefined);
-                }}
-                onBlur={validateEmail}
-                error={fieldErrors.email}
-                icon="mail-outline"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                textContentType="emailAddress"
-                returnKeyType="next"
-              />
+            {error ? (
+              <View
+                style={[
+                  styles.errorBox,
+                  {
+                    backgroundColor: withAlpha(colors.error, 0.1),
+                    borderColor: withAlpha(colors.error, 0.25),
+                  },
+                ]}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="assertive"
+              >
+                <Ionicons name="alert-circle" size={16} color={colors.error} />
+                <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+              </View>
+            ) : null}
 
-              <FieldLabel text="Password" required colors={colors} />
-              <Input
-                placeholder="Min 8 characters"
-                value={password}
-                onChangeText={text => {
-                  setPassword(text);
-                  if (fieldErrors.password) setFieldError('password', undefined);
-                }}
-                onBlur={validatePassword}
-                error={fieldErrors.password}
-                icon="lock-closed-outline"
-                secureTextEntry={!showPassword}
-                rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                onRightIconPress={() => setShowPassword(!showPassword)}
-                rightIconAccessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-                rightIconActive={showPassword}
-                textContentType="newPassword"
-                returnKeyType="next"
-              />
-
-              {password.length > 0 && <PasswordStrength password={password} />}
-
-              <FieldLabel text="Confirm Password" required colors={colors} />
-              <Input
-                placeholder="Repeat your password"
-                value={confirmPassword}
-                onChangeText={text => {
-                  setConfirmPassword(text);
-                  if (fieldErrors.confirmPassword) setFieldError('confirmPassword', undefined);
-                }}
-                onBlur={validateConfirm}
-                error={fieldErrors.confirmPassword}
-                icon="shield-checkmark-outline"
-                secureTextEntry={!showPassword}
-                textContentType="newPassword"
-                returnKeyType="done"
-                onSubmitEditing={handleRegister}
-              />
-
-              {/* Live "passwords match" affirmation (recovery-positive, color is NOT the only signal) */}
-              {confirmPassword.length > 0 &&
-              password === confirmPassword &&
-              !fieldErrors.confirmPassword ? (
-                <View style={styles.matchRow} accessibilityRole="text" accessibilityLabel="Passwords match">
-                  <Ionicons name="checkmark-circle" size={14} color={colors.accent.emerald} />
-                  <Text style={[styles.matchText, { color: colors.accent.emerald }]}>
-                    Passwords match
-                  </Text>
-                </View>
-              ) : null}
-
-              {error ? (
-                <View
-                  style={[
-                    styles.errorBox,
-                    {
-                      backgroundColor: withAlpha(colors.error, 0.1),
-                      borderColor: withAlpha(colors.error, 0.25),
-                    },
-                  ]}
-                  accessibilityRole="alert"
-                  accessibilityLiveRegion="assertive"
-                >
-                  <Ionicons name="alert-circle" size={16} color={colors.error} />
-                  <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-                </View>
-              ) : null}
-            </GlassCard>
-          </Animated.View>
-
-          {/* Primary CTA — outside the GlassCard so the coral glow halo reads on the dark bg */}
-          <Animated.View entering={enter(180)}>
             <CtaButton
-              label="Create Account"
+              label="Create account"
               size="lg"
               icon="rocket-outline"
               loading={loading}
               onPress={handleRegister}
               style={styles.cta}
             />
+
+            {/* "or sign up with" divider */}
+            <View style={styles.dividerRow}>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
+              <Text style={[styles.dividerText, { color: colors.text.tertiary }]}>
+                or sign up with
+              </Text>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
+            </View>
+
+            {/* Social auth — Apple + Google */}
+            <View style={styles.socialRow}>
+              <SocialButton
+                provider="Apple"
+                icon="logo-apple"
+                onPress={() => handleSocial('Apple')}
+                colors={colors}
+              />
+              <SocialButton
+                provider="Google"
+                icon="logo-google"
+                onPress={() => handleSocial('Google')}
+                colors={colors}
+              />
+            </View>
           </Animated.View>
 
           {/* Login link */}
@@ -350,7 +414,7 @@ export default function RegisterScreen() {
                 accessibilityLabel="Sign in to an existing account"
                 style={({ pressed }) => pressed && styles.pressed}
               >
-                <Text style={[styles.loginLink, { color: colors.accent.coral }]}>Sign In</Text>
+                <Text style={[styles.loginLink, { color: colors.accent.coral }]}>Sign in</Text>
               </Pressable>
             </Link>
           </Animated.View>
@@ -375,6 +439,42 @@ function FieldLabel({
       {text}
       {required ? <Text style={{ color: colors.accent.coral }}> *</Text> : null}
     </Text>
+  );
+}
+
+/**
+ * SocialButton — a dark, outlined provider button (Apple / Google) matching the
+ * mockup's `.soc` chips. Icon + label, 44pt+ tall, transform/opacity pressed
+ * feedback and full a11y wiring.
+ */
+function SocialButton({
+  provider,
+  icon,
+  onPress,
+  colors,
+}: {
+  provider: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Continue with ${provider}`}
+      style={({ pressed }) => [
+        styles.social,
+        {
+          backgroundColor: colors.background.secondary,
+          borderColor: colors.border.default,
+        },
+        pressed && styles.socialPressed,
+      ]}
+    >
+      <Ionicons name={icon} size={19} color={colors.text.primary} />
+      <Text style={[styles.socialText, { color: colors.text.primary }]}>{provider}</Text>
+    </Pressable>
   );
 }
 
@@ -475,6 +575,8 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
+const HERO_HEIGHT = 214;
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   flex: { flex: 1 },
@@ -482,63 +584,50 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: spacing['2xl'],
   },
-  backBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.full,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xl,
-  },
-  header: {
-    marginBottom: spacing['2xl'],
-  },
-  logoBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius['2xl'],
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  hero: {
+    height: HERO_HEIGHT,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
     marginBottom: spacing.lg,
   },
-  logoImage: {
-    width: 34,
-    height: 34,
+  heroImage: {
+    position: 'absolute',
+    top: -6,
+    alignSelf: 'center',
+    height: HERO_HEIGHT + 86,
+    width: '100%',
   },
-  kicker: {
-    ...typography.overline,
-    marginBottom: spacing.sm,
+  heroCopy: {
+    paddingHorizontal: spacing['2xl'],
+    paddingBottom: spacing.md,
   },
-  // Title intentionally mirrors login.tsx's display treatment (40/46/-1) so the
-  // two auth screens share an identical brand wordmark size — a deliberate,
-  // documented override (the raw typography.display token is 36/44; login runs
-  // it at 40, and we match login here rather than the bare token).
-  title: {
+  heroTitle: {
     ...typography.display,
-    fontSize: 40,
-    lineHeight: 46,
-    letterSpacing: -1,
+    fontSize: 29,
+    lineHeight: 33,
+    letterSpacing: -0.5,
   },
-  subtitle: {
-    ...typography.body,
-    marginTop: spacing.sm,
+  heroSubtitle: {
+    ...typography.bodyMedium,
+    marginTop: spacing.xs,
   },
-  formCard: {
-    padding: spacing.xl,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
+  backBtn: {
+    position: 'absolute',
+    left: spacing.lg,
+    width: 40,
+    height: 40,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
+    justifyContent: 'center',
+    zIndex: 2,
   },
-  sectionLabel: {
-    ...typography.overline,
+  // Back button: scale + dim so the primary touch affordance feels physical
+  // (not opacity-only). 0.94 reads well on a 44pt control.
+  backBtnPressed: {
+    opacity: 0.6,
+    transform: [{ scale: 0.94 }],
   },
-  requiredHint: {
-    ...typography.caption,
+  form: {
+    paddingTop: spacing.xs,
   },
   fieldLabel: {
     ...typography.captionMedium,
@@ -547,12 +636,6 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.6,
-  },
-  // Back button: scale + dim so the primary touch affordance feels physical
-  // (not opacity-only). 0.94 reads well on a 44pt control.
-  backBtnPressed: {
-    opacity: 0.6,
-    transform: [{ scale: 0.94 }],
   },
   matchRow: {
     flexDirection: 'row',
@@ -564,6 +647,25 @@ const styles = StyleSheet.create({
   matchText: {
     ...typography.caption,
     fontWeight: '600',
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.xs,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  termsText: {
+    ...typography.bodySm,
+    flex: 1,
   },
   errorBox: {
     flexDirection: 'row',
@@ -580,7 +682,42 @@ const styles = StyleSheet.create({
   },
   cta: {
     width: '100%',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
     marginTop: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    ...typography.caption,
+  },
+  socialRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  social: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    height: 50,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+  },
+  socialPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.98 }],
+  },
+  socialText: {
+    ...typography.bodySm,
+    fontWeight: '600',
   },
   loginRow: {
     flexDirection: 'row',

@@ -12,8 +12,8 @@ import { StatusBar } from 'expo-status-bar';
 import { withAlpha } from '@/theme/utils';
 import { spacing } from '@/theme/spacing';
 import { Skeleton, EmptyState } from '@/components/ui';
-import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { CtaButton } from '@/components/ui/CtaButton';
 import { LineChart } from 'react-native-gifted-charts';
 import { resolveDemo, resolveDemoFrames, tipsFor } from '@/constants/exerciseDemos';
 import { getCuratedDemo, getCuratedDemoFrames, getCuratedDemoVerified } from '@/constants/curatedDemos';
@@ -75,8 +75,8 @@ export default function ExerciseDetailScreen() {
     const isSingleParagraph = instructions.length === 1;
     // ── Read-aloud (TTS) for the How-To steps ─────────────────────────────────
     // Uses the gate-safe voice seam: real expo-speech in an EAS build, an honest
-    // no-op in Expo Go / jest. `ttsAvailable` is false there, so the speaker
-    // control isn't rendered at all (no dead button) — matching the screen's
+    // no-op in Expo Go / jest. `ttsAvailable` is false there, so the "Hear it from
+    // Ria" voice row isn't rendered at all (no dead button) — matching the screen's
     // existing "only show what actually works" honesty.
     const voice = useRef(getVoiceAdapter()).current;
     const ttsAvailable = voice.isTTSAvailable();
@@ -171,6 +171,28 @@ export default function ExerciseDetailScreen() {
     }, [exercise?.bodyPart, exercise?.muscleGroup]);
     // Set of primary muscle keys so secondary chips can drop any repeat (case-insensitive).
     const primaryKeys = useMemo(() => new Set(primaryMuscles.map((m) => m.toLowerCase())), [primaryMuscles]);
+    // Secondary muscles minus any that repeat a primary, de-duped (case-insensitive).
+    const secondaryFiltered = useMemo<string[]>(
+        () => secondaryMuscles.filter((m, i, a) => !primaryKeys.has(m.trim().toLowerCase()) && a.findIndex((x) => x.trim().toLowerCase() === m.trim().toLowerCase()) === i),
+        [secondaryMuscles, primaryKeys],
+    );
+    // Muscle-target chips shown under the title (the mockup's Quads/Glutes/Core row).
+    // Primary muscles first (lime), then a couple of secondary muscles, capped so the
+    // row never wraps into a wall of chips. Surfaces the SAME real data the Muscles
+    // tab breaks down in full.
+    const targetChips = useMemo<string[]>(() => {
+        const out: string[] = [];
+        const seen = new Set<string>();
+        for (const m of [...primaryMuscles, ...secondaryFiltered]) {
+            const label = muscleLabel(m);
+            const key = label.toLowerCase();
+            if (!label || seen.has(key)) continue;
+            seen.add(key);
+            out.push(label);
+            if (out.length >= 4) break;
+        }
+        return out;
+    }, [primaryMuscles, secondaryFiltered]);
     // Display label: prefer bodyPart, mapped to a human label (no raw "upper legs").
     const targetLabel = exercise?.bodyPart
         ? muscleLabel(exercise.bodyPart)
@@ -220,7 +242,7 @@ export default function ExerciseDetailScreen() {
     // Header stat tiles — value DOMINATES its label (big condensed numeral/word
     // over a tiny overline). 60/30/10 restraint: Target reads informational
     // (blue), Equipment cyan, Level inherits the semantic difficulty hue. Lime is
-    // held back for the one primary CTA + the active-tab indicator.
+    // held back for the one primary CTA + the active-tab indicator + the voice row.
     const statTiles = [
         { icon: 'body', label: 'Target', value: targetLabel, color: colors.accent.blue },
         { icon: 'barbell', label: 'Equipment', value: exercise.equipment || 'None', color: colors.accent.cyan },
@@ -253,7 +275,7 @@ export default function ExerciseDetailScreen() {
                     tutorialUrl={demoUrl}
                 />
                 <View style={{ paddingHorizontal: spacing.xl, marginTop: -44 }}>
-                    {/* Title block — big condensed display headline (value dominates). */}
+                    {/* Title block — overline (muscle/level) + big condensed display name. */}
                     <Animated.View entering={FadeInDown.duration(420).springify().damping(20).mass(0.7)}>
                         {curatedVerified === false ? (
                             <View
@@ -264,46 +286,126 @@ export default function ExerciseDetailScreen() {
                                 <Text style={[typography.overline, { color: colors.text.tertiary, fontSize: 10 }]}>Unreviewed</Text>
                             </View>
                         ) : null}
-                        <View style={{ flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md, flexWrap: 'wrap' }}>
-                            <View style={[s.badge, { backgroundColor: withAlpha(diffColor, 0.14), borderColor: withAlpha(diffColor, 0.55) }]}><Text style={[typography.overline, { color: diffColor, fontSize: 10 }]}>{(exercise.difficulty||'N/A').toUpperCase()}</Text></View>
-                            {exercise.muscleGroup && <View style={[s.badge, { backgroundColor: withAlpha(colors.accent.cyan, 0.14), borderColor: withAlpha(colors.accent.cyan, 0.55) }]}><Text style={[typography.overline, { color: colors.accent.cyan, fontSize: 10 }]}>{exercise.muscleGroup.toUpperCase()}</Text></View>}
-                        </View>
+                        {/* Overline echoes the mockup's "Exercise N of M" eyebrow with the REAL
+                            target muscle group + difficulty (no fabricated counter). */}
+                        <Text style={[typography.overline, { color: colors.text.tertiary, marginBottom: spacing.xs }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+                            {[muscleLabel(exercise.muscleGroup) || targetLabel, (exercise.difficulty || '').trim()].filter(Boolean).join(' · ') || 'Exercise'}
+                        </Text>
                         <Text style={[typography.display, { color: colors.text.primary, fontSize: 34, lineHeight: 38 }]} maxFontSizeMultiplier={1.3}>{exercise.name}</Text>
                         {exercise.equipment && <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.xs }]} maxFontSizeMultiplier={1.4}>Equipment · {exercise.equipment}</Text>}
                     </Animated.View>
+                    {/* Muscle-target chips (the mockup's Quads / Glutes / Core row) — lime,
+                        sourced from the real primary + secondary muscles. */}
+                    {targetChips.length > 0 ? (
+                        <Animated.View entering={FadeInDown.delay(45).duration(420)} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.lg }}>
+                            {targetChips.map((label) => (
+                                <View key={label} style={[s.targetChip, { backgroundColor: withAlpha(colors.accent.lime, 0.12), borderColor: withAlpha(colors.accent.lime, 0.45) }]}>
+                                    <Text style={[typography.captionMedium, { color: colors.accent.lime, fontSize: 12 }]} maxFontSizeMultiplier={1.3}>{label}</Text>
+                                </View>
+                            ))}
+                        </Animated.View>
+                    ) : null}
+                    {/* "Hear it from Ria" voice row — the prominent lime speaker control. Wired
+                        to the EXISTING TTS seam (toggleSpeak/voice). Gated on real instructions
+                        + an available TTS engine so it never renders a dead button. */}
+                    {instructions.length > 0 && ttsAvailable ? (
+                        <Animated.View entering={FadeInDown.delay(90).duration(420)} style={{ marginTop: spacing.lg }}>
+                            <PressableScale
+                                onPress={toggleSpeak}
+                                accessibilityRole="button"
+                                accessibilityLabel={speaking ? 'Stop the spoken walkthrough' : 'Hear it from Ria — play the spoken walkthrough'}
+                                accessibilityState={{ selected: speaking }}
+                            >
+                                <GlassCard radius={borderRadius.lg} glow={speaking ? colors.accent.lime : undefined}>
+                                    <View style={s.voiceRow}>
+                                        <View style={[s.voiceDisc, { backgroundColor: colors.accent.lime }]}>
+                                            <Ionicons name={speaking ? 'stop' : 'volume-high'} size={22} color={colors.text.inverse} />
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={[typography.bodyMedium, { color: colors.text.primary }]} maxFontSizeMultiplier={1.4}>Hear it from Ria</Text>
+                                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 1 }]} maxFontSizeMultiplier={1.4}>{speaking ? 'Playing the spoken walkthrough…' : 'Play the spoken walkthrough'}</Text>
+                                        </View>
+                                        <Ionicons name={speaking ? 'pause-circle' : 'play'} size={speaking ? 26 : 22} color={colors.accent.lime} />
+                                    </View>
+                                </GlassCard>
+                            </PressableScale>
+                        </Animated.View>
+                    ) : null}
                     {/* Stat tiles — value over label, premium glass, 8pt rhythm. */}
-                    <Animated.View entering={FadeInDown.delay(70).duration(420).springify().damping(20).mass(0.7)} style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl }}>
+                    <Animated.View entering={FadeInDown.delay(120).duration(420).springify().damping(20).mass(0.7)} style={{ flexDirection: 'row', gap: spacing.md, marginTop: spacing.xl }}>
                         {statTiles.map((c)=>(
-                            <Card key={c.label} variant="glass" noPadding style={{ flex: 1 }}>
+                            <GlassCard key={c.label} radius={borderRadius.lg} style={{ flex: 1 }}>
                                 <View style={{ paddingVertical: spacing.lg, paddingHorizontal: spacing.sm, alignItems: 'center' }}>
                                     <View style={{ width:36,height:36,borderRadius:18,alignItems:'center',justifyContent:'center',backgroundColor:withAlpha(c.color,0.14) }}><Ionicons name={c.icon as any} size={18} color={c.color} /></View>
                                     <Text style={[typography.statSmall, { color: colors.text.primary, marginTop: spacing.sm, fontSize: 21, lineHeight: 23, textAlign: 'center' }]} numberOfLines={2} maxFontSizeMultiplier={1.2}>{c.value}</Text>
                                     <Text style={[typography.overline, { color: colors.text.tertiary, fontSize: 9, marginTop: spacing.xxs }]} maxFontSizeMultiplier={1.2}>{c.label}</Text>
                                 </View>
-                            </Card>
+                            </GlassCard>
                         ))}
                     </Animated.View>
                     {/* Tabs — the active indicator is one of the few LIME (10%) accents. */}
-                    <Animated.View entering={FadeInDown.delay(140).duration(420)} style={[s.tabRow, { borderBottomColor: colors.border.default, marginTop: spacing['3xl'] }]}>
+                    <Animated.View entering={FadeInDown.delay(180).duration(420)} style={[s.tabRow, { borderBottomColor: colors.border.default, marginTop: spacing['3xl'] }]}>
                         {TABS.map((tab) => { const sel = activeTab===tab.key; return (<PressableScale key={tab.key} accessibilityRole="tab" accessibilityState={{ selected: sel }} accessibilityLabel={tab.label} onPress={() => setActiveTab(tab.key)} hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }} style={[s.tab, sel && { borderBottomColor: colors.accent.lime }]}><Text style={[typography.overline, { color: sel ? colors.text.primary : colors.text.secondary, fontSize: 11.5 }]} maxFontSizeMultiplier={1.3}>{tab.label}</Text></PressableScale>); })}
                     </Animated.View>
-                    <Animated.View entering={FadeInDown.delay(200).duration(420)} style={{ marginTop: spacing.xl }}>
-                        {activeTab==='howto' && <View style={{ gap: spacing.xl }}>{instructions.length>0&&ttsAvailable?(<View style={{flexDirection:'row',alignItems:'center',justifyContent:'space-between'}}><Text style={[typography.h3,{color:colors.text.primary}]}>How to perform</Text><PressableScale onPress={toggleSpeak} accessibilityRole="button" accessibilityLabel={speaking?'Stop reading instructions aloud':'Read instructions aloud'} accessibilityState={{selected:speaking}} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={[s.listenBtn,{borderColor:speaking?withAlpha(colors.accent.lime,0.45):colors.border.light,backgroundColor:speaking?withAlpha(colors.accent.lime,0.16):colors.background.tertiary}]}><Ionicons name={speaking?'stop':'volume-high'} size={16} color={speaking?colors.accent.lime:colors.text.secondary} /><Text style={[typography.captionMedium,{color:speaking?colors.accent.lime:colors.text.secondary,fontSize:12}]}>{speaking?'Stop':'Listen'}</Text></PressableScale></View>):null}{instructions.length===0?<View style={{gap:spacing.lg}}><View style={{flexDirection:'row',alignItems:'center',gap:spacing.md}}><View style={{width:36,height:36,borderRadius:18,alignItems:'center',justifyContent:'center',backgroundColor:withAlpha(colors.accent.amber,0.14)}}><Ionicons name="bulb-outline" size={18} color={colors.accent.amber} /></View><Text style={[typography.h3,{color:colors.text.primary}]}>Instructions coming soon</Text></View><Text style={[typography.bodySm,{color:colors.text.tertiary}]}>Step-by-step instructions aren't available yet. In the meantime, keep these coaching cues in mind:</Text>{tips.map((tip,i)=>(<View key={i} style={{flexDirection:'row',gap:spacing.md,alignItems:'flex-start'}}><View style={{width:6,height:6,borderRadius:3,marginTop:9,backgroundColor:colors.accent.amber}} /><Text style={[typography.body,{color:colors.text.secondary,flex:1}]} maxFontSizeMultiplier={1.5}>{tip}</Text></View>))}</View>:isSingleParagraph?<Text style={[typography.body,{color:colors.text.secondary,lineHeight:24}]} maxFontSizeMultiplier={1.5}>{instructions[0]}</Text>:instructions.map((step:string,idx:number)=>(<View key={idx} style={{ flexDirection:'row',gap:spacing.lg,alignItems:'flex-start' }}><View style={[s.stepNum,{backgroundColor:withAlpha(colors.accent.lime,0.14),borderColor:withAlpha(colors.accent.lime,0.32)}]}><Text style={[typography.statTiny,{color:colors.text.primary,fontSize:14}]}>{idx+1}</Text></View><Text style={[typography.body,{color:colors.text.secondary,flex:1,lineHeight:24,paddingTop:spacing.xs}]} maxFontSizeMultiplier={1.5}>{step}</Text></View>))}</View>}
-                        {activeTab==='muscles' && (()=>{ const secondaryFiltered=secondaryMuscles.filter((m,i,a)=>!primaryKeys.has(m.trim().toLowerCase())&&a.findIndex((x)=>x.trim().toLowerCase()===m.trim().toLowerCase())===i); return <Card variant="glass"><Text style={[typography.overline,{color:colors.text.tertiary,marginBottom:spacing.md}]}>Primary Muscles</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:spacing.sm}}>{primaryMuscles.map((m:string,i:number)=>(<View key={i} style={[s.chip,{backgroundColor:withAlpha(colors.accent.lime,0.14),borderColor:withAlpha(colors.accent.lime,0.5)}]}><Text style={[typography.captionMedium,{color:colors.text.secondary}]}>{muscleLabel(m)}</Text></View>))}</View>{secondaryFiltered.length>0 && <><Text style={[typography.overline,{color:colors.text.tertiary,marginTop:spacing.xl,marginBottom:spacing.md}]}>Secondary Muscles</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:spacing.sm}}>{secondaryFiltered.map((m:string,i:number)=>(<View key={i} style={[s.chip,{backgroundColor:withAlpha(colors.accent.cyan,0.14),borderColor:withAlpha(colors.accent.cyan,0.5)}]}><Text style={[typography.captionMedium,{color:colors.accent.cyan}]}>{muscleLabel(m)}</Text></View>))}</View></>}</Card>; })()}
-                        {activeTab==='tips' && <Card variant="glass"><View style={{flexDirection:'row',alignItems:'center',marginBottom:spacing.lg}}><View style={{width:38,height:38,borderRadius:19,alignItems:'center',justifyContent:'center',backgroundColor:withAlpha(colors.accent.amber,0.14)}}><Ionicons name="bulb" size={20} color={colors.accent.amber} /></View><Text style={[typography.h3,{color:colors.text.primary,marginLeft:spacing.md}]}>{tipsAreGeneral?'Training Tips':"Coach's Tips"}</Text></View>{tips.map((tip,i)=>(<View key={i} style={{flexDirection:'row',gap:spacing.md,marginBottom:spacing.md}}><View style={{width:6,height:6,borderRadius:3,marginTop:8,backgroundColor:colors.accent.amber}} /><Text style={[typography.body,{color:colors.text.secondary,flex:1}]} maxFontSizeMultiplier={1.5}>{tip}</Text></View>))}</Card>}
-                        {activeTab==='progress' && (analyticsQuery.isLoading?<Card variant="glass"><Skeleton width={180} height={18} radius={6} style={{marginBottom:spacing.xl}} /><Skeleton width="100%" height={180} radius={borderRadius.md} /></Card>:analyticsQuery.isError?<EmptyState icon="cloud-offline-outline" title="Couldn't load progress" subtitle="We hit a snag fetching your weight progression. Check your connection and try again." actionLabel="Retry" onAction={()=>analyticsQuery.refetch()} />:chartData.length>0?<Card variant="glass"><Text style={[typography.overline,{color:colors.text.tertiary,marginBottom:spacing.lg}]}>Weight Progression · KG</Text><LineChart data={chartData} width={width-100} height={180} color={colors.accent.cyan} thickness={3} startFillColor={colors.accent.cyan} startOpacity={0.4} endOpacity={0.1} initialSpacing={20} noOfSections={4} yAxisColor={colors.border.default} xAxisColor={colors.border.default} yAxisTextStyle={{color:colors.text.secondary,fontSize:10}} xAxisLabelTextStyle={{color:colors.text.secondary,fontSize:10}} /></Card>:<EmptyState icon="stats-chart-outline" title="No progress yet" subtitle="Log a set of this exercise and your weight progression will start charting here." actionLabel="Log This Exercise" onAction={()=>router.push({pathname:'/training/workout',params:{exercise:exercise.name}})} />)}
+                    <Animated.View entering={FadeInDown.delay(240).duration(420)} style={{ marginTop: spacing.xl }}>
+                        {activeTab==='howto' && (
+                            <View style={{ gap: spacing.lg }}>
+                                {instructions.length === 0 ? (
+                                    <View style={{ gap: spacing.lg }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+                                            <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: withAlpha(colors.accent.amber, 0.14) }}><Ionicons name="bulb-outline" size={18} color={colors.accent.amber} /></View>
+                                            <Text style={[typography.h3, { color: colors.text.primary }]}>Instructions coming soon</Text>
+                                        </View>
+                                        <Text style={[typography.bodySm, { color: colors.text.tertiary }]}>Step-by-step instructions aren't available yet. In the meantime, keep these coaching cues in mind:</Text>
+                                        {tips.map((tip, i) => (
+                                            <View key={i} style={{ flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' }}>
+                                                <View style={{ width: 6, height: 6, borderRadius: 3, marginTop: 9, backgroundColor: colors.accent.amber }} />
+                                                <Text style={[typography.body, { color: colors.text.secondary, flex: 1 }]} maxFontSizeMultiplier={1.5}>{tip}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                ) : (
+                                    <>
+                                        <Text style={[typography.h3, { color: colors.text.primary }]}>How to do it</Text>
+                                        {isSingleParagraph ? (
+                                            <Text style={[typography.body, { color: colors.text.secondary, lineHeight: 24 }]} maxFontSizeMultiplier={1.5}>{instructions[0]}</Text>
+                                        ) : (
+                                            instructions.map((step: string, idx: number) => (
+                                                <View key={idx} style={s.step}>
+                                                    <View style={[s.stepNum, { backgroundColor: withAlpha(colors.accent.lime, 0.14), borderColor: withAlpha(colors.accent.lime, 0.4) }]}>
+                                                        <Text style={[typography.captionMedium, { color: colors.accent.lime, fontSize: 12 }]}>{idx + 1}</Text>
+                                                    </View>
+                                                    <Text style={[typography.bodySm, { color: '#DFE3EA', flex: 1, lineHeight: 21, paddingTop: 2 }]} maxFontSizeMultiplier={1.5}>{step}</Text>
+                                                </View>
+                                            ))
+                                        )}
+                                    </>
+                                )}
+                            </View>
+                        )}
+                        {activeTab==='muscles' && (
+                            <GlassCard style={{ padding: spacing.xl }}>
+                                <Text style={[typography.overline,{color:colors.text.tertiary,marginBottom:spacing.md}]}>Primary Muscles</Text>
+                                <View style={{flexDirection:'row',flexWrap:'wrap',gap:spacing.sm}}>{primaryMuscles.map((m:string,i:number)=>(<View key={i} style={[s.chip,{backgroundColor:withAlpha(colors.accent.lime,0.14),borderColor:withAlpha(colors.accent.lime,0.5)}]}><Text style={[typography.captionMedium,{color:colors.accent.lime}]}>{muscleLabel(m)}</Text></View>))}</View>
+                                {secondaryFiltered.length>0 && <><Text style={[typography.overline,{color:colors.text.tertiary,marginTop:spacing.xl,marginBottom:spacing.md}]}>Secondary Muscles</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:spacing.sm}}>{secondaryFiltered.map((m:string,i:number)=>(<View key={i} style={[s.chip,{backgroundColor:withAlpha(colors.accent.cyan,0.14),borderColor:withAlpha(colors.accent.cyan,0.5)}]}><Text style={[typography.captionMedium,{color:colors.accent.cyan}]}>{muscleLabel(m)}</Text></View>))}</View></>}
+                            </GlassCard>
+                        )}
+                        {activeTab==='tips' && (
+                            <GlassCard style={{ padding: spacing.xl }}>
+                                <View style={{flexDirection:'row',alignItems:'center',marginBottom:spacing.lg}}><View style={{width:38,height:38,borderRadius:19,alignItems:'center',justifyContent:'center',backgroundColor:withAlpha(colors.accent.amber,0.14)}}><Ionicons name="bulb" size={20} color={colors.accent.amber} /></View><Text style={[typography.h3,{color:colors.text.primary,marginLeft:spacing.md}]}>{tipsAreGeneral?'Training Tips':"Coach's Tips"}</Text></View>
+                                {tips.map((tip,i)=>(<View key={i} style={{flexDirection:'row',gap:spacing.md,marginBottom:spacing.md}}><View style={{width:6,height:6,borderRadius:3,marginTop:8,backgroundColor:colors.accent.amber}} /><Text style={[typography.body,{color:colors.text.secondary,flex:1}]} maxFontSizeMultiplier={1.5}>{tip}</Text></View>))}
+                            </GlassCard>
+                        )}
+                        {activeTab==='progress' && (analyticsQuery.isLoading?<GlassCard style={{ padding: spacing.xl }}><Skeleton width={180} height={18} radius={6} style={{marginBottom:spacing.xl}} /><Skeleton width="100%" height={180} radius={borderRadius.md} /></GlassCard>:analyticsQuery.isError?<EmptyState icon="cloud-offline-outline" title="Couldn't load progress" subtitle="We hit a snag fetching your weight progression. Check your connection and try again." actionLabel="Retry" onAction={()=>analyticsQuery.refetch()} />:chartData.length>0?<GlassCard style={{ padding: spacing.xl }}><Text style={[typography.overline,{color:colors.text.tertiary,marginBottom:spacing.lg}]}>Weight Progression · KG</Text><LineChart data={chartData} width={width-100} height={180} color={colors.accent.cyan} thickness={3} startFillColor={colors.accent.cyan} startOpacity={0.4} endOpacity={0.1} initialSpacing={20} noOfSections={4} yAxisColor={colors.border.default} xAxisColor={colors.border.default} yAxisTextStyle={{color:colors.text.secondary,fontSize:10}} xAxisLabelTextStyle={{color:colors.text.secondary,fontSize:10}} /></GlassCard>:<EmptyState icon="stats-chart-outline" title="No progress yet" subtitle="Log a set of this exercise and your weight progression will start charting here." actionLabel="Log This Exercise" onAction={()=>router.push({pathname:'/training/workout',params:{exercise:exercise.name}})} />)}
                     </Animated.View>
                 </View>
             </ScrollView>
             <View style={[s.footer,{paddingBottom:Math.max(insets.bottom,20)}]}>
                 <LinearGradient colors={['transparent', colors.background.primary]} pointerEvents="none" style={s.footerFade} />
-                <Button
-                    variant="primary"
+                <CtaButton
                     size="lg"
-                    fullWidth
-                    title="LOG THIS EXERCISE"
-                    icon={<Ionicons name="add-circle" size={22} color={colors.text.inverse} />}
-                    accessibilityRole="button"
+                    icon="add-circle"
+                    label="LOG THIS EXERCISE"
                     accessibilityLabel="Log this exercise"
                     onPress={()=>router.push({pathname:'/training/workout',params:{exercise:exercise.name}})}
                 />
@@ -314,11 +416,13 @@ export default function ExerciseDetailScreen() {
 const s = StyleSheet.create({
     container:{flex:1}, headerRow:{position:'absolute',top:0,left:0,right:0,zIndex:10,flexDirection:'row',justifyContent:'space-between',paddingHorizontal:spacing.xl,paddingBottom:spacing.sm},
     overlayBtn:{width:44,height:44,borderRadius:22,alignItems:'center',justifyContent:'center'},
-    badge:{paddingHorizontal:spacing.md,paddingVertical:spacing.xs,borderRadius:999,borderWidth:1},
     reviewBadge:{flexDirection:'row',alignItems:'center',gap:spacing.xs,alignSelf:'flex-start',marginBottom:spacing.sm,paddingHorizontal:spacing.sm,paddingVertical:3,borderRadius:999,borderWidth:1,backgroundColor:'transparent'},
+    targetChip:{paddingHorizontal:spacing.md,paddingVertical:6,borderRadius:999,borderWidth:1},
+    voiceRow:{flexDirection:'row',alignItems:'center',gap:spacing.md,paddingVertical:spacing.md,paddingHorizontal:spacing.lg},
+    voiceDisc:{width:42,height:42,borderRadius:21,alignItems:'center',justifyContent:'center'},
     tabRow:{flexDirection:'row',borderBottomWidth:1}, tab:{paddingVertical:spacing.md,marginRight:spacing.xl,borderBottomWidth:2,borderBottomColor:'transparent'},
-    stepNum:{width:30,height:30,borderRadius:15,alignItems:'center',justifyContent:'center',borderWidth:1},
-    listenBtn:{flexDirection:'row',alignItems:'center',gap:spacing.xs,paddingHorizontal:spacing.md,paddingVertical:7,borderRadius:999,borderWidth:1},
+    step:{flexDirection:'row',gap:spacing.md,alignItems:'flex-start',paddingVertical:spacing.md,borderBottomWidth:1,borderBottomColor:'#1A1D24'},
+    stepNum:{width:26,height:26,borderRadius:13,alignItems:'center',justifyContent:'center',borderWidth:1},
     chip:{paddingHorizontal:spacing.md,paddingVertical:spacing.xs,borderRadius:999,borderWidth:1},
     footer:{position:'absolute',bottom:0,left:0,right:0,paddingHorizontal:spacing.xl},
     footerFade:{position:'absolute',left:0,right:0,bottom:0,height:120},

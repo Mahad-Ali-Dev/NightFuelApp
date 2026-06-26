@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getRoutines, getActiveSession, Routine } from '@/api/exercises';
 import { Skeleton, EmptyState, GlassCard, CtaButton } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StatCard, CategoryCard, RoutineCard, CAROUSEL_CARD_W } from '@/components/TrainingCards';
+import { StatCard, CategoryCard, MuscleCard, RoutineCard, CAROUSEL_CARD_W, MUSCLE_CARD_W } from '@/components/TrainingCards';
 const { width } = Dimensions.get('window');
 // Bundled Aurora dark-glass art (no external host → offline-safe, no 404 /
 // rate-limit). '@/*' resolves to ./src, so assets are required by relative path
@@ -27,14 +27,43 @@ const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
 const QA_WORKOUT_IMG = require('../../assets/images/qa-workout.png');
 const MUSCLE_CHEST_IMG = require('../../assets/images/muscle-chest.png');
 const MUSCLE_BACK_IMG = require('../../assets/images/muscle-back.png');
-// Category accents map to canonical Aurora theme tokens (module scope can't read
-// the hook, so we use the exact accent hex values from '@/theme/colors').
+// Gender-neutral muscle-group tiles (male art per the "Workouts grid" mockup;
+// the muscle browser itself swaps to female art from the profile). Bundled →
+// offline-safe; '@/*' resolves to ./src so we require by relative path.
+const MUSCLE_CHEST_M = require('../../assets/images/muscle-chest-male.png');
+const MUSCLE_BACK_M = require('../../assets/images/muscle-back-male.png');
+const MUSCLE_SHOULDERS_M = require('../../assets/images/muscle-shoulders-male.png');
+const MUSCLE_ARMS_M = require('../../assets/images/muscle-arms-male.png');
+const MUSCLE_CORE_M = require('../../assets/images/muscle-core-male.png');
+const MUSCLE_LEGS_M = require('../../assets/images/muscle-legs-male.png');
+// Workout-category bento tiles. `route` keeps the EXISTING deep-links into the
+// exercise library (?category=…); `icon` + `color` drive the lime-glow card.
+// Colors are the exact Aurora accent hex values from '@/theme/colors' (module
+// scope can't read the useTheme() hook). `span` lays the bento out 2-up with a
+// tall lead tile, matching the mockup's interlocking grid design language.
 const CATS = [
-    { id:'gym', title:'Gym', img:CAT_GYM_IMG, route:'/(exercises)?category=gym', color:'#A8CC3C' },
-    { id:'home', title:'Home', img:CAT_HOME_IMG, route:'/(exercises)?category=home', color:'#00D4AA' },
-    { id:'cardio', title:'Cardio', img:CAT_CARDIO_IMG, route:'/(exercises)?category=cardio', color:'#10B981' },
-    { id:'recover', title:'Recovery', img:CAT_RECOVERY_IMG, route:'/(exercises)?category=kegel', color:'#7C4DFF' },
+    { id:'gym', title:'Strength', icon:'barbell', img:CAT_GYM_IMG, route:'/(exercises)?category=gym', color:'#A8CC3C', span:'lead' as const },
+    { id:'cardio', title:'Cardio', icon:'heart', img:CAT_CARDIO_IMG, route:'/(exercises)?category=cardio', color:'#00D4AA', span:'half' as const },
+    { id:'home', title:'Home', icon:'home', img:CAT_HOME_IMG, route:'/(exercises)?category=home', color:'#10B981', span:'half' as const },
+    { id:'recover', title:'Recovery', icon:'leaf', img:CAT_RECOVERY_IMG, route:'/(exercises)?category=kegel', color:'#7C4DFF', span:'full' as const },
 ];
+// Muscle-group carousel — each card deep-links into the real Muscle Map browser
+// (/(exercises)/muscles), preserving navigation while adding a fast entry point.
+const MUSCLES = [
+    { id:'chest', label:'Chest', img:MUSCLE_CHEST_M },
+    { id:'back', label:'Back', img:MUSCLE_BACK_M },
+    { id:'shoulders', label:'Shoulders', img:MUSCLE_SHOULDERS_M },
+    { id:'arms', label:'Arms', img:MUSCLE_ARMS_M },
+    { id:'core', label:'Core', img:MUSCLE_CORE_M },
+    { id:'legs', label:'Legs', img:MUSCLE_LEGS_M },
+];
+// Bento tile widths — derived once from the window width (20px page padding
+// both sides, 12px inter-tile gutter). The lead tile takes the larger column
+// and the stacked half-tiles share the remainder; the full tile spans the row.
+const BENTO_GUTTER = 12;
+const BENTO_FULL_W = width - 40;
+const BENTO_LEAD_W = Math.round((BENTO_FULL_W - BENTO_GUTTER) * 0.46);
+const BENTO_HALF_W = BENTO_FULL_W - BENTO_GUTTER - BENTO_LEAD_W;
 // Static routine-card artwork (constant — hoisted out of render to avoid
 // re-allocating this array on every routine row). Bundled, rotated by index%4.
 const ROUTINE_IMGS = [
@@ -98,21 +127,34 @@ export default function TrainingHubScreen() {
                         </Animated.View>
                     ) : (
                         <Animated.View entering={FadeInDown.delay(80).springify().damping(18)}>
-                        <TouchableOpacity activeOpacity={0.9} accessibilityRole="button" accessibilityLabel="Start new session" style={{marginHorizontal:20,marginBottom:24}} onPress={()=>router.push('/training/onboarding' as any)}>
-                            <GlassCard glow={colors.accent.coral} style={{borderColor:colors.border.light}}>
-                                <View style={s.startCard}>
-                                    <LinearGradient colors={[withAlpha(colors.accent.coral,0.22),withAlpha(colors.accent.pink,0.10),'transparent']} start={{x:0,y:0}} end={{x:1,y:1}} style={StyleSheet.absoluteFillObject} />
-                                    <LinearGradient colors={['rgba(255,255,255,0.06)','rgba(255,255,255,0)']} start={{x:0,y:0}} end={{x:0,y:1}} style={s.startSheen} pointerEvents="none" />
-                                    <View style={{zIndex:1}}><Text style={[typography.overline,{color:colors.accent.coral,marginBottom:6}]}>READY WHEN YOU ARE</Text><Text style={[typography.h2,{color:colors.text.primary}]}>Start New Session</Text><Text style={[typography.body,{color:colors.text.secondary,marginTop:4}]}>Pick a routine or go freestyle.</Text>
-                                        <View style={[s.beginBadge,shadows.glow(colors.accent.coral)]}>
-                                            <LinearGradient colors={colors.gradients.coralCta} start={{x:0,y:0}} end={{x:1,y:0}} style={StyleSheet.absoluteFillObject} />
-                                            <Ionicons name="flash" size={15} color={colors.text.inverse} /><Text maxFontSizeMultiplier={1.3} style={[s.badgeTxt,{color:colors.text.inverse}]}>BEGIN</Text>
-                                        </View>
+                        <View style={s.secHd}><Text style={[typography.overline,{color:colors.text.secondary}]}>Workout of the Day</Text></View>
+                        <TouchableOpacity activeOpacity={0.9} accessibilityRole="button" accessibilityLabel="Start new session" style={{marginHorizontal:20,marginBottom:14}} onPress={()=>router.push('/training/onboarding' as any)}>
+                            <GlassCard glow={colors.accent.coral} radius={18} style={{borderColor:colors.border.light}}>
+                                <View style={s.wodCard}>
+                                    <Image source={HERO_TRAINING} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                                    <LinearGradient colors={['rgba(8,10,16,0.35)','rgba(8,10,16,0.62)','rgba(8,10,16,0.92)']} start={{x:0,y:0}} end={{x:0,y:1}} style={StyleSheet.absoluteFillObject} />
+                                    {/* Center play affordance */}
+                                    <View style={s.wodPlayWrap} pointerEvents="none">
+                                        <View style={s.wodPlay}><Ionicons name="play" size={23} color="#FFF" /></View>
                                     </View>
-                                    <Ionicons name="barbell" size={86} color={withAlpha(colors.accent.coral,0.12)} style={s.bgIco} />
+                                    {/* Bottom-left title + duration */}
+                                    <View style={s.wodMeta}>
+                                        <Text style={[typography.h2,{color:'#FFF',fontWeight:'800'}]}>Start New Session</Text>
+                                        <Text style={[typography.body,{color:'rgba(255,255,255,0.78)',marginTop:2}]}>Pick a routine or go freestyle</Text>
+                                    </View>
+                                    {/* Bottom-right Start pill (lime) */}
+                                    <View style={[s.wodStart,shadows.glow(colors.accent.coral)]}>
+                                        <Text maxFontSizeMultiplier={1.3} style={[s.wodStartTxt,{color:colors.text.inverse}]}>Start</Text>
+                                    </View>
                                 </View>
                             </GlassCard>
                         </TouchableOpacity>
+                        {/* Page dots */}
+                        <View style={s.dotsRow}>
+                            {[0,1,2,3].map((d)=>(
+                                <View key={d} style={d===0?[s.dotActive,{backgroundColor:colors.accent.coral}]:[s.dot,{backgroundColor:colors.border.light}]} />
+                            ))}
+                        </View>
                         </Animated.View>
                     )}
                     <Animated.View entering={FadeInDown.delay(120).duration(420)} style={s.statRow}>
@@ -120,20 +162,64 @@ export default function TrainingHubScreen() {
                         <StatCard index={1} label="Exercises" value={totalExercises} icon="barbell-outline" accent={colors.accent.cyan} />
                         <StatCard index={2} label="Weekly Sets" value={totalSets} icon="flame-outline" accent={colors.accent.purple} />
                     </Animated.View>
-                    <View style={s.secHd}><Text style={[typography.overline,{color:colors.text.secondary}]}>Explore Workouts</Text></View>
-                    <View style={s.catGrid}>
-                        {CATS.map((cat,idx)=>(
+                    <View style={s.secHd}><Text style={[typography.heading,{color:colors.text.primary,fontSize:18}]}>Workouts</Text></View>
+                    <View style={s.bentoGrid}>
+                        {/* Top row: tall lead tile + a stacked pair of half tiles */}
+                        <View style={s.bentoLead}>
                             <CategoryCard
-                                key={cat.id}
+                                index={0}
+                                title={CATS[0]!.title}
+                                img={CATS[0]!.img}
+                                icon={CATS[0]!.icon as any}
+                                accent={CATS[0]!.color}
+                                cardWidth={BENTO_LEAD_W}
+                                height={172}
+                                accessibilityLabel={`${CATS[0]!.title} workouts`}
+                                onPress={()=>router.push(CATS[0]!.route as any)}
+                            />
+                        </View>
+                        <View style={s.bentoStack}>
+                            {[CATS[1]!,CATS[2]!].map((cat,i)=>(
+                                <CategoryCard
+                                    key={cat.id}
+                                    index={i+1}
+                                    title={cat.title}
+                                    img={cat.img}
+                                    icon={cat.icon as any}
+                                    accent={cat.color}
+                                    cardWidth={BENTO_HALF_W}
+                                    height={80}
+                                    accessibilityLabel={`${cat.title} workouts`}
+                                    onPress={()=>router.push(cat.route as any)}
+                                />
+                            ))}
+                        </View>
+                        {/* Full-width tile */}
+                        <CategoryCard
+                            index={3}
+                            title={CATS[3]!.title}
+                            img={CATS[3]!.img}
+                            icon={CATS[3]!.icon as any}
+                            accent={CATS[3]!.color}
+                            cardWidth={BENTO_FULL_W}
+                            height={88}
+                            accessibilityLabel={`${CATS[3]!.title} workouts`}
+                            onPress={()=>router.push(CATS[3]!.route as any)}
+                        />
+                    </View>
+                    <View style={s.secHd}><Text style={[typography.heading,{color:colors.text.primary,fontSize:18}]}>Muscle groups</Text><TouchableOpacity activeOpacity={0.85} accessibilityRole="button" hitSlop={{top:8,bottom:8,left:8,right:8}} onPress={()=>router.push('/(exercises)/muscles' as any)}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold'}]}>VIEW ALL</Text></TouchableOpacity></View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={MUSCLE_CARD_W+11} snapToAlignment="start" contentContainerStyle={{paddingHorizontal:20,gap:11,paddingBottom:8}}>
+                        {MUSCLES.map((m,idx)=>(
+                            <MuscleCard
+                                key={m.id}
                                 index={idx}
-                                title={cat.title}
-                                img={cat.img}
-                                accent={cat.color}
-                                accessibilityLabel={`${cat.title} workouts`}
-                                onPress={()=>router.push(cat.route as any)}
+                                label={m.label}
+                                img={m.img}
+                                accessibilityLabel={`${m.label} exercises`}
+                                onPress={()=>router.push('/(exercises)/muscles' as any)}
                             />
                         ))}
-                    </View>
+                    </ScrollView>
                     <View style={s.secHd}><Text style={[typography.overline,{color:colors.text.secondary}]}>Your Routines</Text><TouchableOpacity activeOpacity={0.85} accessibilityRole="button" hitSlop={{top:8,bottom:8,left:8,right:8}} onPress={()=>router.push('/(exercises)/routines' as any)}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold'}]}>VIEW ALL</Text></TouchableOpacity></View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={CAROUSEL_CARD_W+16} snapToAlignment="start" contentContainerStyle={{paddingHorizontal:20,gap:16,paddingBottom:8}}>
                         {routinesQ.isLoading?
@@ -243,13 +329,24 @@ const s = StyleSheet.create({
     switcher:{flexDirection:'row',borderRadius:14,padding:4}, swBtn:{flex:1,paddingVertical:10,borderRadius:10,alignItems:'center'},
     activeWrap:{borderRadius:24,overflow:'hidden'}, activeCard:{padding:20}, activeRow:{flexDirection:'row',alignItems:'center'},
     activeIcon:{width:40,height:40,borderRadius:20,backgroundColor:'#FFF',alignItems:'center',justifyContent:'center'},
-    startCard:{padding:28,height:178,justifyContent:'center',overflow:'hidden'},
-    startSheen:{position:'absolute',top:0,left:0,right:0,height:64},
-    beginBadge:{alignSelf:'flex-start',flexDirection:'row',alignItems:'center',paddingHorizontal:16,paddingVertical:8,borderRadius:9999,marginTop:18,overflow:'hidden'},
-    badgeTxt:{fontSize:11,fontWeight:'900',marginLeft:5,letterSpacing:0.5}, bgIco:{position:'absolute',right:-12,bottom:-12},
+    // "Workout of the Day" hero (inside GlassCard): full-bleed art + scrim, a
+    // center play disc, bottom-left meta, bottom-right lime Start pill.
+    wodCard:{height:150,overflow:'hidden'},
+    wodPlayWrap:{...StyleSheet.absoluteFillObject,alignItems:'center',justifyContent:'center'},
+    wodPlay:{width:52,height:52,borderRadius:26,backgroundColor:'rgba(255,255,255,0.12)',borderWidth:1.5,borderColor:'#FFF',alignItems:'center',justifyContent:'center'},
+    wodMeta:{position:'absolute',left:14,bottom:13,right:96},
+    wodStart:{position:'absolute',right:14,bottom:15,backgroundColor:'#A8CC3C',paddingHorizontal:19,paddingVertical:9,borderRadius:11},
+    wodStartTxt:{fontSize:13,fontWeight:'800',letterSpacing:0.3},
+    dotsRow:{flexDirection:'row',justifyContent:'center',alignItems:'center',gap:6,marginBottom:22},
+    dot:{width:6,height:6,borderRadius:3},
+    dotActive:{width:18,height:6,borderRadius:3},
     secHd:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:20,marginBottom:16,marginTop:8},
     statRow:{flexDirection:'row',gap:10,paddingHorizontal:20,marginBottom:24},
-    catGrid:{flexDirection:'row',flexWrap:'wrap',paddingHorizontal:20,gap:12,marginBottom:24},
+    // Bento grid: a top row (tall lead tile + a stacked half-tile pair) then a
+    // full-width tile beneath. Wraps so the lead + stack sit side by side.
+    bentoGrid:{flexDirection:'row',flexWrap:'wrap',paddingHorizontal:20,gap:12,marginBottom:24},
+    bentoLead:{},
+    bentoStack:{flex:1,justifyContent:'space-between',gap:12},
     emptyR:{width:CAROUSEL_CARD_W,height:168,alignItems:'center',justifyContent:'center',padding:16},
     emptyRIcon:{width:48,height:48,borderRadius:24,borderWidth:1,alignItems:'center',justifyContent:'center'},
     planCard:{height:220,borderRadius:20,overflow:'hidden'}, planImg:{width:'100%',height:220,position:'absolute'},

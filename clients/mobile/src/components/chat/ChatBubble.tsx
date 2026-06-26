@@ -151,9 +151,9 @@ function ChatBubbleComponent({ text, isOwn, timestamp, senderName, status, onRet
         accessibilityLabel={bodyA11yLabel}
       >
         {senderName ? (
-          // Peer name uses the AI/coach hue (purple/blue), not lime — the peer here
-          // is Coach Ria, and lime is reserved for the one primary action.
-          <Text style={[typography.caption, { color: colors.accent.purpleLight, fontWeight: '700', marginBottom: 4 }]}>
+          // Peer name reads in the brand lime — the peer here is Coach Ria, and the
+          // Ria identity is lime-accented across the redesigned chat (mockup).
+          <Text style={[typography.caption, { color: colors.accent.lime, fontWeight: '700', marginBottom: 4 }]}>
             {senderName}
           </Text>
         ) : null}

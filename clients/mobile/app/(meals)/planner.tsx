@@ -37,6 +37,10 @@ const MEAL_IMGS: Record<string,number> = {
     dinner:require('../../assets/images/meal-dinner.png'),
     snack:require('../../assets/images/meal-snack.png'),
 };
+// Ria's avatar for the "Meal generator" intro card (same bundled mark the chat /
+// notifications screens use for Ria). '@/*' resolves to ./src, so it is required
+// by relative path.
+const RIA_AVATAR = require('../../assets/images/logo_app.png');
 // Human-readable "resets" line for the daily-limit upgrade block. Renders a
 // short local clock time ("Resets at 6:00 AM") when `resetsAt` is a parseable
 // ISO timestamp, else a sensible fallback so the block never shows a raw date
@@ -150,13 +154,16 @@ export default function MealPlannerScreen() {
     return (
         <View style={[s.container,{backgroundColor:colors.background.primary}]}>
             <StatusBar style="light" />
+            {/* Header — back chevron, "Meal generator" title (left-weighted, per
+                the generator mockup) and a lime sparkles glyph as the trailing
+                AI cue. Back nav + a11y unchanged. */}
             <View style={[s.header,{paddingTop:insets.top+16,borderBottomColor:colors.border.default}]}>
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Go back" onPress={()=>router.back()} style={[s.iconBtn,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Ionicons name="arrow-back" size={22} color={colors.text.primary} /></TouchableOpacity>
-                <View style={{alignItems:'center'}}>
+                <View style={s.headerTitleWrap}>
                     <Text style={[typography.overline,{color:colors.accent.coral,fontSize:10,letterSpacing:1.5}]}>RIA NUTRITION</Text>
-                    <Text style={[typography.h3,{color:colors.text.primary,marginTop:2}]}>Meal Planner</Text>
+                    <Text style={[typography.h3,{color:colors.text.primary,marginTop:2}]}>Meal generator</Text>
                 </View>
-                <View style={{width:40}} />
+                <Ionicons name="sparkles" size={22} color={colors.accent.coral} />
             </View>
             {/* ── Day-selector carousel ─────────────────────────────────────────
                 Horizontal snapping week strip. Selected day = lime fill with INK
@@ -203,17 +210,83 @@ export default function MealPlannerScreen() {
                     />
                 ):
                 !plan?(
-                    <Animated.View entering={FadeInDown.delay(60).duration(420)} style={s.emptyState}>
-                        <View style={[s.emptyIcon,{backgroundColor:withAlpha(colors.accent.purple,0.12),borderColor:withAlpha(colors.accent.purple,0.24),borderWidth:1},shadows.glow(colors.accent.purple)]}><Ionicons name="sparkles" size={48} color={colors.accent.purple} /></View>
-                        <Text style={[typography.overline,{color:colors.accent.purple,textAlign:'center',marginTop:24}]}>RIA NUTRITION ENGINE</Text>
-                        <Text style={[typography.h2,{color:colors.text.primary,textAlign:'center',marginTop:8}]}>No plan for this day</Text>
-                        <Text style={[typography.body,{color:colors.text.secondary,textAlign:'center',marginTop:8,maxWidth:300}]}>Let Ria analyze your shift schedule and build a perfect nutrition protocol.</Text>
+                    <Animated.View entering={FadeInDown.delay(60).duration(420)}>
+                        {/* ── Ria intro card ─────────────────────────────────────
+                            Logo avatar + Ria's opener, exactly like the generator
+                            mockup. Sets the "tell me your craving" tone before the
+                            (shift-derived) generate action. */}
+                        <View style={[s.riaIntro,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
+                            <View style={[s.riaAvatar,{borderColor:withAlpha(colors.accent.coral,0.4)}]}>
+                                <Image source={RIA_AVATAR} style={s.riaAvatarImg} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                            </View>
+                            <Text style={[typography.caption,{color:colors.text.secondary,flex:1,lineHeight:18}]}>Tell me your craving — I'll build a protocol around your shift, macros &amp; diet.</Text>
+                        </View>
+
+                        {/* "What are you in the mood for?" — Ria reads your shift
+                            schedule to seed the plan, so this surfaces the live
+                            shift context as her input line (the generate call is
+                            shift-derived; no free-form param is sent). */}
+                        <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'700',marginTop:22,marginBottom:10}]}>What are you in the mood for?</Text>
+                        <View style={[s.moodField,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
+                            <Text style={[typography.body,{color:colors.text.secondary,flex:1}]} numberOfLines={1}>{shiftQ.data?.type ? `Fuel for my ${String(shiftQ.data.type).toLowerCase()} shift` : 'A protocol built around my shift'}</Text>
+                            <Ionicons name="sparkles-outline" size={18} color={colors.accent.coral} />
+                        </View>
+
+                        {/* Style cue chips — Ria optimises for high-protein,
+                            shift-aware fuelling; surfaced as the active style so
+                            the generator reads like the mockup. Visual cue only. */}
+                        <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'700',marginTop:22,marginBottom:10}]}>Style</Text>
+                        <View style={s.chipRow}>
+                            {(['High-protein','Quick','Comfort','Light','Budget'] as const).map((label,i)=>{
+                                const on = i===0;
+                                return (
+                                    <View key={label} style={[s.cueChip,{backgroundColor:on?withAlpha(colors.accent.coral,0.14):colors.background.secondary,borderColor:on?colors.accent.coral:colors.border.default}]}>
+                                        <Text style={[typography.caption,{color:on?colors.accent.coral:colors.text.secondary,fontWeight:on?'700':'500'}]}>{label}</Text>
+                                    </View>
+                                );
+                            })}
+                        </View>
+
+                        {/* Target — Ria's calorie/macro aim for the day, presented
+                            as the mockup's target card. The bar reflects the
+                            kcalTarget reference (visual only, never persisted). */}
+                        <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'700',marginTop:22,marginBottom:10}]}>Target</Text>
+                        <View style={[s.targetCard,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}>
+                            <View style={s.targetTopRow}>
+                                <Text style={[typography.caption,{color:colors.text.secondary}]}>Calories</Text>
+                                <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'700'}]}>~{kcalTarget} kcal</Text>
+                            </View>
+                            <View style={[s.targetTrack,{backgroundColor:colors.border.default}]}>
+                                <View style={[s.targetFill,{backgroundColor:colors.accent.coral}]}>
+                                    <View style={[s.targetKnob,{backgroundColor:colors.accent.coral}]} />
+                                </View>
+                            </View>
+                            <View style={s.targetMacroRow}>
+                                {[{l:'Protein',c:colors.accent.emerald},{l:'Carbs',c:colors.accent.cyan},{l:'Fat',c:colors.accent.amber}].map((mm)=>(
+                                    <View key={mm.l} style={s.targetMacro}><View style={[s.statDot,{backgroundColor:mm.c}]} /><Text style={[typography.caption,{color:colors.text.secondary,marginLeft:6}]}>{mm.l}</Text></View>
+                                ))}
+                            </View>
+                        </View>
+
+                        {/* Ready in — meal-timing window cue chips (mockup row). */}
+                        <Text style={[typography.subhead,{color:colors.text.primary,fontWeight:'700',marginTop:22,marginBottom:10}]}>Ready in</Text>
+                        <View style={s.chipRow}>
+                            {(['10 min','20 min','30 min+'] as const).map((label,i)=>{
+                                const on = i===1;
+                                return (
+                                    <View key={label} style={[s.cueChip,{backgroundColor:on?withAlpha(colors.accent.coral,0.14):colors.background.secondary,borderColor:on?colors.accent.coral:colors.border.default}]}>
+                                        <Text style={[typography.caption,{color:on?colors.accent.coral:colors.text.secondary,fontWeight:on?'700':'500'}]}>{label}</Text>
+                                    </View>
+                                );
+                            })}
+                        </View>
+
                         <CtaButton
                             size="lg"
                             icon="sparkles"
-                            label="GENERATE AI PLAN"
+                            label="Generate recipe"
                             accessibilityLabel="Generate AI plan"
-                            style={[s.genBtnWrap,{marginTop:32}]}
+                            style={[s.genBtnWrap,{marginTop:28}]}
                             onPress={runGenerate}
                             loading={genM.isPending}
                         />
@@ -346,6 +419,21 @@ const s = StyleSheet.create({
     aiBadge:{flexDirection:'row',alignItems:'center',paddingHorizontal:10,paddingVertical:5,borderRadius:999,borderWidth:1},
     emptyState:{alignItems:'center',justifyContent:'center',marginTop:40},
     emptyIcon:{width:100,height:100,borderRadius:50,alignItems:'center',justifyContent:'center'},
+    headerTitleWrap:{flex:1,marginLeft:14},
+    // ── Generator (empty-state) surfaces — token-filled Views, mockup-faithful.
+    riaIntro:{flexDirection:'row',alignItems:'center',gap:12,padding:14,borderRadius:16,borderWidth:1,borderCurve:'continuous'},
+    riaAvatar:{width:42,height:42,borderRadius:21,borderWidth:1.5,overflow:'hidden'},
+    riaAvatarImg:{width:'100%',height:'100%'},
+    moodField:{flexDirection:'row',alignItems:'center',gap:10,paddingHorizontal:14,paddingVertical:14,borderRadius:14,borderWidth:1,borderCurve:'continuous'},
+    chipRow:{flexDirection:'row',flexWrap:'wrap',gap:9},
+    cueChip:{paddingHorizontal:14,paddingVertical:9,borderRadius:20,borderWidth:1,borderCurve:'continuous'},
+    targetCard:{padding:16,borderRadius:14,borderWidth:1,borderCurve:'continuous'},
+    targetTopRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between'},
+    targetTrack:{height:6,borderRadius:4,marginTop:12,overflow:'visible'},
+    targetFill:{width:'58%',height:'100%',borderRadius:4,position:'relative'},
+    targetKnob:{position:'absolute',right:-7,top:-4,width:14,height:14,borderRadius:7},
+    targetMacroRow:{flexDirection:'row',justifyContent:'space-between',marginTop:14},
+    targetMacro:{flexDirection:'row',alignItems:'center'},
     // Inner stat layout for the loaded-plan summary GlassCard (the glass surface —
     // radius / hairline / clip / blur / marginBottom — is owned by GlassCard).
     // Calorie ring on the left, PROTEIN + HYDRATION columns on the right.

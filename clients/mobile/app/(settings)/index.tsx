@@ -1,32 +1,36 @@
 /**
  * Settings home — the account/app/support hub reached from the More tab. Zeitra
- * premium reskin: a dark-glass profile hero (avatar in a lime brand ring,
- * identity, a tier pill driven by the REAL subscription tier) sits under a
- * back-button header; settings are
- * organised into grouped glass cards with overline+icon section headers and
- * tinted icon-chip rows (value pills + chevrons), and the screen enters with a
- * STAGGERED Reanimated FadeInDown. Rows use the local <SettingsRow> for a springy
- * pressed-scale 0.96. Lime is the 10% accent (ring / Pro pill / icon chips at
- * ~12% / switch tracks); Log Out is the one destructive action — RED, glyph'd
- * and separated at the bottom of the scroll (thumb zone).
+ * premium reskin aligned to the settings mockup: a COMPACT tappable identity row
+ * (avatar in a lime brand ring + name + email + chevron, opening Edit Profile)
+ * sits in its own grouped glass card under a back-button header; settings are
+ * organised into grouped glass cards with PLAIN uppercase overline section labels
+ * (no icon) and tinted icon-chip rows (value pills + chevrons), and the screen
+ * enters with a STAGGERED Reanimated FadeInDown. Rows use the local <SettingsRow>
+ * for a springy pressed-scale 0.96. Lime is the 10% accent (ring / icon chips at
+ * ~12% / switch tracks); Log Out ("Sign out") is the one destructive action — a
+ * centered RED row inside its own glass card, separated at the bottom of the
+ * scroll (thumb zone).
  *
- * Lime (the 10% accent) keeps a SINGLE restrained moment on the hero — the card
- * glow + faint wash; the avatar ring lost its separate glow, the header eyebrow
- * and section overlines are neutral (text.tertiary), and the tier pill is lime
- * ONLY for a paid plan. Skeletons cover the avatar/name/email/tier while the
- * profile + subscription queries load; the StatusBar style follows the active
- * scheme so the Dark Mode switch can't strand it on the light theme.
+ * Lime (the 10% accent) keeps a SINGLE restrained moment on the profile card —
+ * the card glow + faint wash; the avatar ring has no separate glow, and section
+ * overlines are neutral (text.tertiary). The REAL subscription tier is still
+ * surfaced on the "Manage Subscription" row's value pill (the old hero tier pill
+ * was retired with the hero). Skeletons cover the avatar/name/email while the
+ * profile query loads; the StatusBar style follows the active scheme so the Dark
+ * Mode switch can't strand it on the light theme.
  *
  * VISUAL redesign only — every data hook (useAuthStore / useThemeStore /
- * getProfile / getStatus), the SETTINGS_SECTIONS map, all routes/urls, the
+ * getProfile / getStatus), the SETTINGS_SECTIONS map (incl. the Theme picker row
+ * + its 9-variant modal driving setThemeVariant), all routes/urls, the
  * subscription tier value, the Dark Mode + Night Read switch wiring (with the
  * single-source-of-truth `checked` state mirrored into accessibilityState), the
  * logout confirmation Alert + handler, appVersion and every a11y label/role/state
  * are preserved exactly.
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Alert,
+    Modal, Pressable,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
@@ -45,7 +49,7 @@ import { useThemeStore } from '@/store/themeStore';
 import Constants from 'expo-constants';
 import { GlassCard, Skeleton } from '@/components/ui';
 import { SettingsRow } from '@/components/SettingsRow';
-import { colors as C } from '@/theme/colors';
+import { colors as C, themeVariantList } from '@/theme/colors';
 
 // Brand-accent alias for this screen. Every reference below keys off the single
 // brand token (C.accent.coral === #A8CC3C) under the name `LIME` so no brand
@@ -60,7 +64,15 @@ export default function SettingsIndexScreen() {
     const router = useRouter();
 
     const { user } = useAuthStore();
-    const { theme, setTheme, nightRead, setNightRead } = useThemeStore();
+    const { theme, setTheme, nightRead, setNightRead, themeVariant, setThemeVariant } = useThemeStore();
+
+    // Theme-picker sheet visibility. Purely local UI state — additive, never
+    // persisted, and independent of the theme selection itself.
+    const [themePickerOpen, setThemePickerOpen] = useState(false);
+    // The active variant's descriptor (for the row's value pill). Falls back to
+    // the first/default variant, which is always present in the list.
+    const activeVariant =
+        themeVariantList.find((v) => v.id === themeVariant) ?? themeVariantList[0]!;
 
     const { data: profile, isLoading: profileLoading } = useQuery({
         queryKey: ['user-profile'],
@@ -68,8 +80,9 @@ export default function SettingsIndexScreen() {
     });
 
     // Mirror subscription.tsx's query so the cache is shared. While loading,
-    // `subscription` is undefined and the row shows no value (see useMemo below).
-    const { data: subscription, isLoading: subscriptionLoading } = useQuery({
+    // `subscription` is undefined and the "Manage Subscription" row shows no value
+    // pill (see useMemo below); the tier is surfaced there, not on the profile row.
+    const { data: subscription } = useQuery({
         queryKey: ['subscription-status'],
         queryFn: getStatus,
     });
@@ -108,6 +121,9 @@ export default function SettingsIndexScreen() {
         // Purely-visual per-row accent for the icon chip / value pill. Additive —
         // it never affects routing or behaviour; defaults to the brand lime.
         tint?: string;
+        // Optional in-screen action (e.g. open a sheet) for rows that neither
+        // navigate (`route`) nor open a URL. Additive — checked after route/url.
+        action?: () => void;
     };
 
     const SETTINGS_SECTIONS: { title: string; icon: string; items: SettingItemType[] }[] = useMemo(() => [
@@ -138,6 +154,15 @@ export default function SettingsIndexScreen() {
                     tint: C.accent.purple,
                     subtitle: 'Deep-red palette that preserves your dark-adapted night vision on late shifts.',
                 },
+                {
+                    // Color-theme picker — opens a sheet of 9 palette tiles. Layout is
+                    // identical across themes; only color tokens swap. Shows the active
+                    // variant's name as the value pill.
+                    label: 'Theme',
+                    icon: 'color-palette-outline',
+                    value: activeVariant.name,
+                    action: () => setThemePickerOpen(true),
+                },
             ]
         },
         {
@@ -148,7 +173,7 @@ export default function SettingsIndexScreen() {
                 { label: 'Terms of Service', icon: 'document-text-outline', url: 'https://zeitra.app/terms' },
             ]
         }
-    ], [subscription?.tier]);
+    ], [subscription?.tier, activeVariant.name]);
 
     // Identity, with a branded fallback for the avatar hole (replaces the prior
     // off-brand external random-face service). All reads are the exact data hooks.
@@ -163,22 +188,11 @@ export default function SettingsIndexScreen() {
         .map((w: string) => w[0]?.toUpperCase() ?? '')
         .join('');
 
-    // Skeletons while identity/plan resolve, so the hero never flashes the 'User'
-    // fallback over an EMPTY email line, and the tier pill never renders a false
-    // (or blank) plan. The avatar block has its own loading branch below.
+    // Skeleton while identity resolves, so the profile row never flashes the
+    // 'User' fallback over an EMPTY email line. The avatar block has its own
+    // loading branch below. (The subscription tier now lives on the "Manage
+    // Subscription" row's value pill, so no separate plan-loading state is needed.)
     const identityLoading = profileLoading && !p.name && !user?.name;
-    const tierLoading = subscriptionLoading && !subscription;
-
-    // Drive the hero pill from the REAL subscription tier (was a hardcoded
-    // 'Zeitra Pro' shown to everyone, incl. free users). Lime — the 10% accent —
-    // is reserved for a genuinely PAID plan; FREE renders a neutral pill so the
-    // hero isn't a triumphant-but-false lime badge on a free account.
-    const tier = subscription?.tier; // 'FREE' | 'PRO' | 'PREMIUM' | 'ENTERPRISE'
-    const isPaid = !!tier && tier !== 'FREE';
-    const tierLabel = tier
-        ? `Zeitra ${tier.charAt(0) + tier.slice(1).toLowerCase()}` // 'Zeitra Pro', 'Zeitra Free'
-        : '';
-    const pillTint = isPaid ? LIME : colors.text.tertiary;
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
@@ -208,12 +222,15 @@ export default function SettingsIndexScreen() {
                 contentContainerStyle={{ paddingBottom: insets.bottom + spacing['5xl'], paddingTop: spacing.sm }}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Profile Summary — dark-glass hero. ONE restrained lime moment:
-                    the GlassCard glow + a faint inner wash. The avatar ring keeps a
-                    lime hairline but NO separate glow (its stacked glow was dropped
-                    so the 10% accent isn't front-loaded four-deep into one surface). */}
+                {/* Profile Summary — compact tappable identity ROW (mockup look):
+                    avatar + name + email + chevron, inside a grouped glass card.
+                    Tapping opens Edit Profile (the real existing route). A single
+                    restrained lime moment stays: the card glow + a faint inner wash.
+                    The avatar keeps a lime ring/initials fallback — never an external
+                    face. The REAL subscription tier is still surfaced on the "Manage
+                    Subscription" row's value pill below, so no plan info is lost. */}
                 <Animated.View entering={FadeInDown.duration(380).springify().damping(18)}>
-                    <GlassCard radius={borderRadius['2xl']} glow={LIME} style={{ marginHorizontal: spacing.md }}>
+                    <GlassCard radius={borderRadius.xl} glow={LIME} style={{ marginHorizontal: spacing.md }}>
                         {/* Warm lime wash inside the glass, above its blur fill, below content */}
                         <LinearGradient
                             colors={[withAlpha(LIME, 0.12), withAlpha(LIME, 0.03)]}
@@ -221,13 +238,19 @@ export default function SettingsIndexScreen() {
                             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                             pointerEvents="none"
                         />
-                        <View style={styles.profileInner}>
+                        <TouchableOpacity
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityLabel="Edit profile"
+                            onPress={() => router.push('/(tabs)/profile/edit')}
+                            style={styles.profileInner}
+                        >
                             {/* Avatar nested in a lime brand ring (no separate glow). Falls
                                 back to branded initials / a person glyph — never an external
                                 face. While identity loads, a Skeleton fills the ring. */}
                             <View style={[styles.avatarRing, { borderColor: withAlpha(LIME, 0.55), backgroundColor: colors.background.secondary }]}>
                                 {identityLoading ? (
-                                    <Skeleton width={72} height={72} radius={36} />
+                                    <Skeleton width={54} height={54} radius={27} />
                                 ) : avatarUrl ? (
                                     <Image
                                         source={avatarUrl}
@@ -239,23 +262,23 @@ export default function SettingsIndexScreen() {
                                 ) : (
                                     <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: withAlpha(LIME, 0.14) }]}>
                                         {initials ? (
-                                            <Text style={[typography.h2, { color: LIME }]} maxFontSizeMultiplier={1.2}>{initials}</Text>
+                                            <Text style={[typography.h3, { color: LIME }]} maxFontSizeMultiplier={1.2}>{initials}</Text>
                                         ) : (
-                                            <Ionicons name="person" size={32} color={LIME} />
+                                            <Ionicons name="person" size={26} color={LIME} />
                                         )}
                                     </View>
                                 )}
                             </View>
-                            <View style={{ marginLeft: spacing.lg, flex: 1 }}>
+                            <View style={{ marginLeft: spacing.md, flex: 1 }}>
                                 {identityLoading ? (
                                     <>
                                         {/* Name + email placeholders — no 'User' + blank-line flash. */}
-                                        <Skeleton width={150} height={20} radius={6} />
-                                        <Skeleton width={190} height={13} radius={6} style={{ marginTop: 8 }} />
+                                        <Skeleton width={150} height={18} radius={6} />
+                                        <Skeleton width={190} height={13} radius={6} style={{ marginTop: 7 }} />
                                     </>
                                 ) : (
                                     <>
-                                        <Text style={[typography.h2, { color: colors.text.primary }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+                                        <Text style={[typography.subhead, { color: colors.text.primary }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
                                             {displayName}
                                         </Text>
                                         <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: 2 }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
@@ -263,18 +286,9 @@ export default function SettingsIndexScreen() {
                                         </Text>
                                     </>
                                 )}
-                                {/* Tier pill: Skeleton while loading; lime ONLY for a paid plan;
-                                    neutral pill for Free; driven by the REAL subscription tier. */}
-                                {tierLoading ? (
-                                    <Skeleton width={92} height={24} radius={999} style={{ marginTop: 10 }} />
-                                ) : tier ? (
-                                    <View style={[styles.badge, { backgroundColor: withAlpha(pillTint, 0.14), borderColor: withAlpha(pillTint, 0.30) }]}>
-                                        <Ionicons name={isPaid ? 'flash' : 'person-outline'} size={11} color={pillTint} />
-                                        <Text style={[typography.captionMedium, { color: pillTint, marginLeft: 5 }]} maxFontSizeMultiplier={1.4}>{tierLabel}</Text>
-                                    </View>
-                                ) : null}
                             </View>
-                        </View>
+                            <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} />
+                        </TouchableOpacity>
                     </GlassCard>
                 </Animated.View>
 
@@ -285,12 +299,12 @@ export default function SettingsIndexScreen() {
                         entering={FadeInDown.delay(90 + idx * 45).springify().damping(18)}
                         style={{ marginTop: spacing.xl }}
                     >
-                        <View style={styles.sectionHeader}>
-                            <Ionicons name={section.icon as any} size={13} color={colors.text.tertiary} />
-                            <Text style={[typography.overline, { color: colors.text.secondary, marginLeft: 6 }]}>
-                                {section.title}
-                            </Text>
-                        </View>
+                        {/* Plain uppercase overline label (mockup look) — the per-section
+                            icon is dropped; `section.icon` stays in the data map (unused
+                            here) so the section schema is untouched. */}
+                        <Text style={[typography.overline, styles.sectionHeader, { color: colors.text.tertiary }]}>
+                            {section.title}
+                        </Text>
                         <GlassCard radius={borderRadius.xl} style={{ marginHorizontal: spacing.md }}>
                             {/* Grouped-list wash inside the glass, above blur fill, below rows */}
                             <LinearGradient
@@ -300,9 +314,10 @@ export default function SettingsIndexScreen() {
                             />
                             {section.items.map((item, itemIdx) => {
                                 // A row is genuinely actionless only when it has no route,
-                                // no external url, and is not a switch — rendered explicitly
-                                // disabled so the UI never implies a dead tap target.
-                                const isDisabled = !item.route && !item.url && !item.isSwitch;
+                                // no external url, no in-screen action, and is not a switch —
+                                // rendered explicitly disabled so the UI never implies a dead
+                                // tap target.
+                                const isDisabled = !item.route && !item.url && !item.action && !item.isSwitch;
 
                                 // Single source of truth for the switch's on/off state so the
                                 // visible `value` and the announced `accessibilityState.checked`
@@ -336,6 +351,7 @@ export default function SettingsIndexScreen() {
                                         onPress={() => {
                                             if (item.route) router.push(item.route as any);
                                             else if (item.url) Linking.openURL(item.url);
+                                            else if (item.action) item.action();
                                         }}
                                     />
                                 );
@@ -344,25 +360,124 @@ export default function SettingsIndexScreen() {
                     </Animated.View>
                 ))}
 
-                {/* Log Out — the one destructive action: RED, glyph'd, separated and
+                {/* Log Out — the one destructive action: a centered RED row inside its
+                    own grouped glass card (mockup "Sign out" look), separated and
                     sitting in the thumb zone at the bottom of the scroll. */}
-                <Animated.View entering={FadeInDown.delay(90 + SETTINGS_SECTIONS.length * 45).springify().damping(18)}>
-                    <TouchableOpacity
-                        activeOpacity={0.85}
-                        accessibilityRole="button"
-                        accessibilityLabel="Log Out"
-                        style={[styles.logoutBtn, { borderColor: withAlpha(colors.accent.red, 0.40), backgroundColor: withAlpha(colors.accent.red, 0.08), borderRadius: borderRadius.lg, marginHorizontal: spacing.md }]}
-                        onPress={confirmLogout}
-                    >
-                        <Ionicons name="log-out-outline" size={18} color={colors.accent.red} />
-                        <Text style={[typography.subhead, { color: colors.accent.red, fontWeight: '700', marginLeft: spacing.sm }]} maxFontSizeMultiplier={1.4}>Log Out</Text>
-                    </TouchableOpacity>
+                <Animated.View
+                    entering={FadeInDown.delay(90 + SETTINGS_SECTIONS.length * 45).springify().damping(18)}
+                    style={{ marginTop: spacing['3xl'] }}
+                >
+                    <GlassCard radius={borderRadius.xl} style={{ marginHorizontal: spacing.md }}>
+                        <LinearGradient
+                            colors={colors.gradients.card}
+                            style={StyleSheet.absoluteFillObject}
+                            pointerEvents="none"
+                        />
+                        <TouchableOpacity
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityLabel="Log Out"
+                            style={styles.logoutBtn}
+                            onPress={confirmLogout}
+                        >
+                            <Ionicons name="log-out-outline" size={18} color={colors.accent.red} />
+                            <Text style={[typography.subhead, { color: colors.accent.red, fontWeight: '700', marginLeft: spacing.sm }]} maxFontSizeMultiplier={1.4}>Log Out</Text>
+                        </TouchableOpacity>
+                    </GlassCard>
                 </Animated.View>
 
                 <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing['3xl'] }]}>
                     Zeitra v{appVersion}
                 </Text>
             </ScrollView>
+
+            {/* Theme picker — a bottom sheet of 9 palette preview tiles. Selecting a
+                tile calls setThemeVariant(id); the whole app (this screen included)
+                re-themes live via useTheme(). Layout is identical across themes —
+                only color tokens change. The sheet itself re-themes too. */}
+            <Modal
+                visible={themePickerOpen}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setThemePickerOpen(false)}
+            >
+                <Pressable
+                    style={[styles.modalBackdrop, { backgroundColor: withAlpha('#000000', 0.55) }]}
+                    accessibilityLabel="Close theme picker"
+                    accessibilityRole="button"
+                    onPress={() => setThemePickerOpen(false)}
+                />
+                <View
+                    style={[
+                        styles.sheet,
+                        {
+                            paddingBottom: insets.bottom + spacing.xl,
+                            backgroundColor: colors.background.secondary,
+                            borderColor: colors.border.default,
+                        },
+                    ]}
+                >
+                    <View style={[styles.sheetGrabber, { backgroundColor: colors.border.light }]} />
+                    <Text style={[typography.overline, { color: colors.text.tertiary, marginBottom: 2 }]}>APPEARANCE</Text>
+                    <Text style={[typography.h2, { color: colors.text.primary, marginBottom: spacing.lg }]}>Theme</Text>
+
+                    <View style={styles.tileGrid}>
+                        {themeVariantList.map((v) => {
+                            const selected = v.id === themeVariant;
+                            return (
+                                <TouchableOpacity
+                                    key={v.id}
+                                    activeOpacity={0.85}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`${v.name} theme`}
+                                    accessibilityState={{ selected }}
+                                    onPress={() => setThemeVariant(v.id)}
+                                    style={[
+                                        styles.tile,
+                                        {
+                                            backgroundColor: v.bg,
+                                            borderColor: selected ? v.accent : withAlpha(v.accent, 0.30),
+                                            borderWidth: selected ? 2 : 1,
+                                        },
+                                    ]}
+                                >
+                                    {/* Preview cluster: an accent swatch + two neutral bars hint at
+                                        the palette without rendering a full mock screen. */}
+                                    <View style={styles.tilePreview}>
+                                        <View style={[styles.tileSwatch, { backgroundColor: v.accent }]} />
+                                        <View style={{ flex: 1, marginLeft: 8 }}>
+                                            <View style={[styles.tileBar, { backgroundColor: withAlpha(v.accent, 0.55), width: '70%' }]} />
+                                            <View style={[styles.tileBar, { backgroundColor: withAlpha(v.isDark ? '#FFFFFF' : '#000000', 0.18), width: '90%', marginTop: 5 }]} />
+                                        </View>
+                                        {selected ? (
+                                            <View style={[styles.tileCheck, { backgroundColor: v.accent }]}>
+                                                <Ionicons name="checkmark" size={13} color={v.isDark ? '#0A0C12' : '#FFFFFF'} />
+                                            </View>
+                                        ) : null}
+                                    </View>
+                                    <Text
+                                        style={[typography.captionMedium, { color: v.isDark ? '#FFFFFF' : '#16161A', marginTop: 10 }]}
+                                        numberOfLines={1}
+                                        maxFontSizeMultiplier={1.3}
+                                    >
+                                        {v.name}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+
+                    <TouchableOpacity
+                        activeOpacity={0.85}
+                        accessibilityRole="button"
+                        accessibilityLabel="Done"
+                        onPress={() => setThemePickerOpen(false)}
+                        style={[styles.sheetDone, { borderColor: colors.border.default }]}
+                    >
+                        <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>Done</Text>
+                    </TouchableOpacity>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -373,11 +488,30 @@ const styles = StyleSheet.create({
     // with the card stack (every card uses marginHorizontal: spacing.md).
     header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingTop: 8, paddingBottom: 16 },
     backBtn: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-    profileInner: { flexDirection: 'row', alignItems: 'center', padding: 20 },
-    avatarRing: { width: 84, height: 84, borderRadius: 42, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-    avatar: { width: 72, height: 72, borderRadius: 36 },
+    // Compact identity row (mockup): smaller avatar, trailing chevron.
+    profileInner: { flexDirection: 'row', alignItems: 'center', padding: 14 },
+    avatarRing: { width: 60, height: 60, borderRadius: 30, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+    avatar: { width: 54, height: 54, borderRadius: 27 },
     avatarFallback: { alignItems: 'center', justifyContent: 'center' },
-    badge: { flexDirection: 'row', alignSelf: 'flex-start', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1, marginTop: 10 },
-    sectionHeader: { flexDirection: 'row', alignItems: 'center', marginLeft: 12, marginBottom: 8 },
-    logoutBtn: { flexDirection: 'row', marginTop: 40, padding: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+    // Plain uppercase overline label above each group card (mockup `.lbl`).
+    sectionHeader: { marginLeft: 20, marginBottom: 8 },
+    // Centered destructive row; the surrounding GlassCard owns the surface/radius.
+    logoutBtn: { flexDirection: 'row', padding: 15, alignItems: 'center', justifyContent: 'center' },
+    // Theme picker sheet
+    modalBackdrop: { ...StyleSheet.absoluteFillObject },
+    sheet: {
+        position: 'absolute', left: 0, right: 0, bottom: 0,
+        borderTopLeftRadius: 24, borderTopRightRadius: 24,
+        borderWidth: 1, borderBottomWidth: 0,
+        paddingHorizontal: 16, paddingTop: 12,
+    },
+    sheetGrabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginBottom: 14 },
+    tileGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+    // ~3 tiles per row (each ~30%); wraps to 3 rows of 3 for the 9 variants.
+    tile: { width: '31.5%', borderRadius: 16, padding: 10, marginBottom: 12 },
+    tilePreview: { flexDirection: 'row', alignItems: 'center' },
+    tileSwatch: { width: 22, height: 22, borderRadius: 7 },
+    tileBar: { height: 5, borderRadius: 3 },
+    tileCheck: { width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginLeft: 4 },
+    sheetDone: { marginTop: 4, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderRadius: 14 },
 });

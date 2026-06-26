@@ -628,9 +628,9 @@ export default function UnifiedChatScreen() {
                 >
                     <View>
                         <Avatar uri={peer?.avatarUrl ?? undefined} name={peer?.displayName} size={40} borderColor={colors.border.default} />
-                        {/* Presence pip — the one lime/cyan accent in the header */}
+                        {/* Presence pip — lime, matching the "online" status + the DM mockup. */}
                         {!isLoading && !peerTyping ? (
-                            <View style={[styles.presencePip, { backgroundColor: colors.success, borderColor: colors.background.primary }, shadows.glow(colors.success)]} />
+                            <View style={[styles.presencePip, { backgroundColor: colors.accent.coral, borderColor: colors.background.primary }, shadows.glow(colors.accent.coral)]} />
                         ) : null}
                     </View>
                     <View style={styles.headerText}>
@@ -649,13 +649,28 @@ export default function UnifiedChatScreen() {
                                 typing…
                             </Text>
                         ) : (
+                            // Online status — a lime presence dot + label, matching the
+                            // DM mockup (lime is the brand presence accent here).
                             <View style={styles.statusRow}>
-                                <Text style={[typography.caption, { color: colors.text.secondary }]}>Active now</Text>
+                                <View style={[styles.statusDot, { backgroundColor: colors.accent.coral }]} />
+                                <Text style={[typography.caption, { color: colors.accent.coral }]}>online</Text>
                             </View>
                         )}
                     </View>
                 </PressableScale>
-                <View style={{ width: 40 }} />
+                {/* Call affordance — opens the peer's profile (no in-app calling),
+                    so the icon stays functional and never dead-ends. */}
+                <TouchableOpacity
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={peer?.displayName ? `View ${peer.displayName}'s profile` : 'View profile'}
+                    activeOpacity={0.85}
+                    disabled={!peerUserId}
+                    onPress={openPeerProfile}
+                    style={styles.headerCallBtn}
+                >
+                    <Ionicons name="call-outline" size={20} color={colors.text.secondary} />
+                </TouchableOpacity>
             </Animated.View>
 
             {/* Request banner (recipient) — Accept / Decline in a GlassCard */}
@@ -759,6 +774,13 @@ export default function UnifiedChatScreen() {
                     const sendDisabled = !inputText.trim() || composerDisabled;
                     return (
                         <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8, borderTopColor: colors.border.default, backgroundColor: colors.background.primary }]}>
+                            {/* Leading "+" — a decorative composer affordance from the
+                                mockup. No attachment feature exists yet, so it is
+                                non-interactive and hidden from assistive tech rather
+                                than promising an action it can't fulfil. */}
+                            <View style={styles.inputPlus} importantForAccessibility="no" accessibilityElementsHidden>
+                                <Ionicons name="add" size={26} color={colors.text.tertiary} />
+                            </View>
                             <View style={[styles.inputFieldWrap, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
                                 <TextInput
                                     // Composer joins the Barlow type system (typography.body)
@@ -897,10 +919,12 @@ const styles = StyleSheet.create({
     skeletonList: { flex: 1, padding: 20 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, height: 68, borderBottomWidth: 1, gap: 12 },
     headerBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    headerCallBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
     headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
     headerText: { flex: 1 },
     headerSpinner: { alignSelf: 'flex-start', marginTop: 2 },
-    statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    statusRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    statusDot: { width: 6, height: 6, borderRadius: 3 },
     presencePip: { position: 'absolute', right: -1, bottom: -1, width: 12, height: 12, borderRadius: 6, borderWidth: 2 },
     listContent: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 },
     row: { marginBottom: 16 },
@@ -924,7 +948,8 @@ const styles = StyleSheet.create({
     bannerActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 16 },
     declineBtn: { flex: 1, height: 44, borderRadius: 14, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     acceptBtn: { flex: 1 },
-    inputBar: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, gap: 10 },
+    inputBar: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, gap: 8 },
+    inputPlus: { width: 36, height: 48, alignItems: 'center', justifyContent: 'center' },
     inputFieldWrap: { flex: 1, borderRadius: 24, borderWidth: 1, paddingHorizontal: 6, justifyContent: 'center', minHeight: 48, maxHeight: 132 },
     // fontSize/lineHeight come from typography.body (applied inline) so the field matches the bubbles.
     textInput: { paddingHorizontal: 12, paddingVertical: Platform.OS === 'ios' ? 12 : 8 },

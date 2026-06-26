@@ -17,8 +17,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Skeleton, EmptyState, GlassCard } from '@/components/ui';
 import {
-    MacroTile, MealSlotCard, RecipeCard, RecipeDiscoverCard, HydrationRing,
-    RECIPE_CARD_W, GRID_CARD_W,
+    MacroTile, MealSlotCard, RecipeDiscoverCard, HydrationRing,
+    NextMealHero, MacroRingStrip, ExploreBento, TonightCard,
+    GRID_CARD_W, TONIGHT_CARD_W,
+    type BentoTile, type MacroRing,
 } from '@/components/NutritionCards';
 import { format } from 'date-fns';
 import { withAlpha } from '@/theme/utils';
@@ -34,6 +36,13 @@ const HERO_NUTRITION = require('../../assets/images/hero-nutrition.png');
 const RECIPE_FALLBACK = require('../../assets/images/recipe-fallback.png');
 const FOOD_FALLBACK = require('../../assets/images/food-fallback.png');
 const RECIPE_IMGS = [RECIPE_FALLBACK, FOOD_FALLBACK];
+// Bundled meal/food photography for the "next meal" hero + the Explore-meals
+// bento tiles (all already shipped in assets/images — offline-safe require()).
+const MEAL_BREAKFAST = require('../../assets/images/meal-breakfast.png');
+const MEAL_LUNCH = require('../../assets/images/meal-lunch.png');
+const MEAL_DINNER = require('../../assets/images/meal-dinner.png');
+const MEAL_SNACK = require('../../assets/images/meal-snack.png');
+const QA_MEAL = require('../../assets/images/qa-meal.png');
 
 // Human-readable label for a MealLog's `mealType` enum. Mirrors the same map in
 // (meals)/log-planned-meal.tsx — kept local here because that lives in a screen
@@ -172,6 +181,70 @@ export default function NutritionHubScreen() {
     // EmptyState below doesn't re-render on unrelated parent updates.
     const openLogMeal = useCallback(() => router.push('/(meals)/log-meal' as any), [router]);
 
+    // ── Macro RING strip (Protein / Carbs / Fat / Water) ─────────────────────
+    // The mockup's 4-ring glance. Each ring's fraction is clamped to [0,1] and
+    // its percent rounded, all from the REAL consumed/target reads (and the
+    // hydration read) — no fabricated numbers. These rings render ABOVE the
+    // calorie dashboard, so the calorie ring stays the LAST CircularProgress in
+    // the tree (the macro-guard test reads the last ring as the calorie ring).
+    const ringFor = (current: number, target: number, color: string, label: string): MacroRing => {
+        const frac = target > 0 ? Math.min(1, Math.max(0, finiteNum(current) / target)) : 0;
+        return { label, color, fraction: frac, percent: Math.round(frac * 100) };
+    };
+    const macroRings: MacroRing[] = [
+        ringFor(stats.consumed.protein, stats.target.protein, colors.accent.coral, 'Protein'),
+        ringFor(stats.consumed.carbs, stats.target.carbs, colors.accent.cyan, 'Carbs'),
+        ringFor(stats.consumed.fat, stats.target.fat, colors.accent.amber, 'Fat'),
+        ringFor(hydrationActual, hydrationTarget, colors.accent.blue, 'Water'),
+    ];
+
+    // ── "Next meal" hero ─────────────────────────────────────────────────────
+    // Derived from the REAL plan: the first plan meal that carries a label/name.
+    // Tapping the hero CTA logs that meal (the same preset route the plan-slot
+    // grid uses), so the hero is a shortcut to existing behaviour — never a
+    // fabricated card. When the plan has no labelled meal, the hero is omitted
+    // and the existing Daily-Plan empty/generate CTA carries the flow.
+    // Cast to `any` to read both the typed PlanMeal fields (label/time/macros)
+    // and the looser server shape — the same `(m: any)` access pattern the plan
+    // grid below already uses. Macros may be top-level or nested under `macros`.
+    const nextMeal: any = (plan?.meals || []).find((m: any) => m && (m.label || m.name)) || null;
+    const nextMealTitle: string | null = nextMeal ? (nextMeal.label || nextMeal.name) : null;
+    const nextMealKcal = nextMeal ? finiteNum(nextMeal.calories ?? nextMeal.macros?.calories) : 0;
+    const nextMealProtein = nextMeal ? finiteNum(nextMeal.protein ?? nextMeal.macros?.protein) : 0;
+    const nextMealMeta = nextMeal
+        ? ([
+            nextMealKcal > 0 ? `${Math.round(nextMealKcal)} kcal` : null,
+            nextMealProtein > 0 ? `${Math.round(nextMealProtein)}g protein` : null,
+        ].filter(Boolean).join(' · ') || undefined)
+        : undefined;
+    // Eyebrow does NOT embed the time — the time is passed separately to the hero
+    // so it renders as its own discrete chip/text node.
+    const nextMealEyebrow = nextMeal
+        ? `Next · ${(progress as any)?.shiftType || 'today'}`
+        : '';
+    // The Daily-Plan grid below lists the plan's labelled meals. To avoid showing
+    // the SAME meal twice (the hero already spotlights the next/first one), drop
+    // that meal from the grid — but ONLY when the plan has more than one labelled
+    // meal, so a single-meal plan still appears in the grid rather than leaving it
+    // empty. When the hero is not shown (no labelled meal) the grid is unchanged.
+    const labelledPlanMeals = (plan?.meals || []).filter((m: any) => m && (m.label || m.name));
+    const planGridMeals = nextMeal && labelledPlanMeals.length > 1
+        ? labelledPlanMeals.filter((m: any) => m !== nextMeal)
+        : labelledPlanMeals;
+
+    // ── "Explore meals" bento tiles ──────────────────────────────────────────
+    // Six discovery filters; each routes into the EXISTING recipes screen with a
+    // tag param (the recipes endpoint already accepts `tags`). No new surface —
+    // just on-brand entry points. Photos rotate over the bundled meal art.
+    const exploreTiles: BentoTile[] = [
+        { key: 'quick', title: 'Quick & easy', icon: 'flash', accent: colors.accent.coral, img: QA_MEAL, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { tags: 'quick' } } as any) },
+        { key: 'protein', title: 'High protein', icon: 'barbell', accent: colors.accent.coral, img: MEAL_DINNER, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { tags: 'high-protein' } } as any) },
+        { key: 'recovery', title: 'Recovery', icon: 'leaf', accent: colors.accent.cyan, img: MEAL_LUNCH, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { tags: 'recovery' } } as any) },
+        { key: 'budget', title: 'Budget', icon: 'cash-outline', accent: colors.accent.amber, img: MEAL_SNACK, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { tags: 'budget' } } as any) },
+        { key: 'vegan', title: 'Vegan', icon: 'nutrition', accent: colors.accent.emerald, img: FOOD_FALLBACK, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { tags: 'vegan' } } as any) },
+        { key: 'comfort', title: 'Comfort', icon: 'cafe', accent: colors.accent.purple, img: MEAL_BREAKFAST, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { tags: 'comfort' } } as any) },
+    ];
+
     return (
         <ImageBackground
             blurRadius={4}
@@ -213,6 +286,52 @@ export default function NutritionHubScreen() {
                         <Ionicons name="receipt-outline" size={22} color={colors.text.primary} />
                     </TouchableOpacity>
                 </Animated.View>
+
+                {/* Search bar — taps into the existing food/library search flow
+                    (no new screen). A button (not a live TextInput) so a single
+                    tap opens the encyclopedia search, matching the mockup's search
+                    affordance while reusing existing navigation. */}
+                <Animated.View entering={FadeInDown.delay(40).duration(420)} style={styles.searchWrap}>
+                    <TouchableOpacity
+                        activeOpacity={0.85}
+                        accessibilityRole="search"
+                        accessibilityLabel="Search foods and recipes"
+                        onPress={openLibrary}
+                        style={[styles.searchBar, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
+                    >
+                        <Ionicons name="search" size={18} color={colors.text.tertiary} />
+                        <Text style={[typography.body, { color: colors.text.tertiary, marginLeft: 10 }]} numberOfLines={1}>
+                            Search foods, recipes…
+                        </Text>
+                    </TouchableOpacity>
+                </Animated.View>
+
+                {/* Next-meal hero — derived from the REAL plan (first labelled
+                    meal). Omitted when the plan has no labelled meal; the Daily
+                    Plan section below then carries the generate/empty flow. */}
+                {nextMealTitle ? (
+                    <View style={styles.heroWrap}>
+                        <NextMealHero
+                            eyebrow={nextMealEyebrow}
+                            time={nextMeal?.time}
+                            title={nextMealTitle}
+                            meta={nextMealMeta}
+                            img={MEAL_LUNCH}
+                            onPress={() => router.push({ pathname: '/(meals)/log-meal', params: { preset: nextMealTitle } } as any)}
+                        />
+                    </View>
+                ) : null}
+
+                {/* Macro RING strip (Protein / Carbs / Fat / Water) — the
+                    mockup's 4-ring glance, from the REAL macro + hydration reads.
+                    Rendered ABOVE the calorie dashboard so the calorie ring stays
+                    the last CircularProgress in the tree. Hidden while the macro
+                    reads load / error (the dashboard below shows those states). */}
+                {!macroLoading && !macroError ? (
+                    <View style={styles.ringStripWrap}>
+                        <MacroRingStrip rings={macroRings} />
+                    </View>
+                ) : null}
 
                 {/* Macro Dashboard */}
                 {macroLoading ? (
@@ -501,7 +620,7 @@ export default function NutritionHubScreen() {
                         </TouchableOpacity>
                     ) : (
                         <View style={styles.slotGrid}>
-                            {(plan.meals || []).filter((m: any) => m && (m.label || m.name)).map((m: any, i: number) => (
+                            {planGridMeals.map((m: any, i: number) => (
                                 <MealSlotCard
                                     key={i}
                                     index={i}
@@ -518,9 +637,22 @@ export default function NutritionHubScreen() {
                     )}
                 </View>
 
-                {/* Recipe ideas — horizontal CAROUSEL */}
+                {/* Explore meals — BENTO grid (tall feature card on the right +
+                    a stack of smaller tiles on the left). A distinct pattern from
+                    the Train screen's even 2-col grid. Each tile routes into the
+                    existing recipes screen with a tag filter. */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <Text style={[typography.heading, { color: colors.text.primary }]}>Explore meals</Text>
+                    </View>
+                    <ExploreBento tiles={exploreTiles} />
+                </View>
+
+                {/* Recipes for tonight — horizontal CAROUSEL. Same recipes query,
+                    navigation and empty/discover fallback as before, re-skinned to
+                    the mockup's compact art tiles. */}
                 <View style={styles.sectionHeaderRow}>
-                    <Text style={[typography.heading, { color: colors.text.primary }]}>Recipe Ideas</Text>
+                    <Text style={[typography.heading, { color: colors.text.primary }]}>Recipes for tonight</Text>
                     <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={openRecipes}>
                         <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: 'bold' }]}>VIEW ALL</Text>
                     </TouchableOpacity>
@@ -529,29 +661,33 @@ export default function NutritionHubScreen() {
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     decelerationRate="fast"
-                    snapToInterval={RECIPE_CARD_W + 14}
+                    snapToInterval={TONIGHT_CARD_W + 11}
                     snapToAlignment="start"
-                    contentContainerStyle={{ paddingHorizontal: 20, gap: 14, paddingBottom: 4 }}
+                    contentContainerStyle={{ paddingHorizontal: 20, gap: 11, paddingBottom: 4 }}
                 >
                     {recipesQuery.isLoading ? (
-                        [0, 1, 2].map((i) => <Skeleton key={i} width={RECIPE_CARD_W} height={168} radius={borderRadius.xl} />)
+                        [0, 1, 2].map((i) => <Skeleton key={i} width={TONIGHT_CARD_W} height={132} radius={borderRadius.lg} />)
                     ) : recipes.length === 0 ? (
                         <RecipeDiscoverCard onPress={openRecipes} />
                     ) : (
                         <>
-                            {recipes.map((r: any, i: number) => (
-                                <RecipeCard
-                                    key={r?.id ?? i}
-                                    index={i}
-                                    title={r?.title || r?.name || 'Recipe'}
-                                    calories={r?.calories}
-                                    protein={r?.protein}
-                                    minutes={(finiteNum(r?.prepTimeMins) + finiteNum(r?.cookTimeMins)) || undefined}
-                                    img={RECIPE_IMGS[i % RECIPE_IMGS.length]!}
-                                    accent={colors.accent.coral}
-                                    onPress={() => router.push({ pathname: '/(meals)/recipes', params: { id: r?.id } } as any)}
-                                />
-                            ))}
+                            {recipes.map((r: any, i: number) => {
+                                const mins = (finiteNum(r?.prepTimeMins) + finiteNum(r?.cookTimeMins)) || 0;
+                                const meta = [
+                                    typeof r?.calories === 'number' && r.calories > 0 ? `${Math.round(r.calories)} kcal` : null,
+                                    mins > 0 ? `${mins} min` : null,
+                                ].filter(Boolean).join(' · ') || undefined;
+                                return (
+                                    <TonightCard
+                                        key={r?.id ?? i}
+                                        index={i}
+                                        title={r?.title || r?.name || 'Recipe'}
+                                        meta={meta}
+                                        img={RECIPE_IMGS[i % RECIPE_IMGS.length]!}
+                                        onPress={() => router.push({ pathname: '/(meals)/recipes', params: { id: r?.id } } as any)}
+                                    />
+                                );
+                            })}
                             <RecipeDiscoverCard onPress={openRecipes} />
                         </>
                     )}
@@ -632,8 +768,12 @@ const ToolCard = React.memo(function ToolCard({ icon, title, color, onPress }: a
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 20 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 },
     historyBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    searchWrap: { paddingHorizontal: 20, marginBottom: 18 },
+    searchBar: { flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14 },
+    heroWrap: { paddingHorizontal: 20, marginBottom: 20 },
+    ringStripWrap: { paddingHorizontal: 16, marginBottom: 24 },
     macroDashboard: { marginHorizontal: 20, padding: 24, alignItems: 'center', overflow: 'hidden' },
     mainCircle: { width: 180, height: 180, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
     circleText: { position: 'absolute', alignItems: 'center' },

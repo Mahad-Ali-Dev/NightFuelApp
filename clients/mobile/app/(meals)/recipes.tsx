@@ -190,11 +190,31 @@ export default function RecipesScreen() {
                             </View>
                         ):detailQ.data?(
                             <ScrollView showsVerticalScrollIndicator={false}>
-                                <Image source={detailQ.data.image ? { uri: detailQ.data.image } : RECIPE_FALLBACK} style={s.modalHero} contentFit="cover" cachePolicy="memory-disk" transition={300} />
-                                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Close" style={[s.closeBtn,{backgroundColor:withAlpha(colors.background.primary,0.5),top:insets.top+12}]} onPress={()=>setDetailId(null)}><Ionicons name="close" size={24} color={colors.text.primary} /></TouchableOpacity>
+                                {/* ── Full-bleed food-photo hero ─────────────────
+                                    The image fills the hero; a top→bottom scrim
+                                    fades it into the body so the overlaid badge +
+                                    title read cleanly (meal-detail mockup). */}
+                                <View style={s.heroWrap}>
+                                    <Image source={detailQ.data.image ? { uri: detailQ.data.image } : RECIPE_FALLBACK} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={300} />
+                                    <LinearGradient colors={[withAlpha(colors.background.primary,0.33),withAlpha(colors.background.primary,0),withAlpha(colors.background.primary,0.95)]} locations={[0,0.4,1]} style={StyleSheet.absoluteFillObject} />
+                                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Close" style={[s.closeBtn,{backgroundColor:withAlpha(colors.background.primary,0.5),top:insets.top+12}]} onPress={()=>setDetailId(null)}><Ionicons name="close" size={24} color={colors.text.primary} /></TouchableOpacity>
+                                    {/* Overlaid badge + title pinned to the hero foot. */}
+                                    <Animated.View entering={FadeInDown.delay(40).duration(360).springify().damping(16)} style={s.heroFoot}>
+                                        <View style={[s.preShiftBadge,{backgroundColor:withAlpha(colors.accent.coral,0.16),borderColor:withAlpha(colors.accent.coral,0.4)}]}>
+                                            <Ionicons name="moon" size={12} color={colors.accent.coral} />
+                                            <Text style={[typography.overline,{color:colors.accent.coral,fontSize:10,letterSpacing:0.6,marginLeft:5}]}>BEST PRE-SHIFT</Text>
+                                        </View>
+                                        {/* Title — typography.display family (BarlowCondensed ExtraBold); no fontWeight override. */}
+                                        <Text style={[typography.display,{color:colors.text.primary,fontSize:27,marginTop:9}]}>{detailQ.data.title}</Text>
+                                    </Animated.View>
+                                </View>
                                 <View style={s.modalBody}>
-                                    {/* Title — rely on the typography.display family (BarlowCondensed ExtraBold); no fontWeight override (a no-op vs a named family). */}
-                                    <Animated.Text entering={FadeInDown.delay(40).duration(360).springify().damping(16)} style={[typography.display,{color:colors.text.primary,fontSize:26}]}>{detailQ.data.title}</Animated.Text>
+                                    {/* Time / kcal / difficulty meta row (mockup). */}
+                                    <Animated.View entering={FadeInDown.delay(60).duration(360).springify().damping(16)} style={s.metaRow}>
+                                        <View style={s.metaItem}><Ionicons name="time-outline" size={16} color={colors.text.secondary} /><Text style={[typography.caption,{color:colors.text.secondary,marginLeft:5}]}>{(detailQ.data.prepTimeMins||0)+(detailQ.data.cookTimeMins||0)} min</Text></View>
+                                        <View style={s.metaItem}><Ionicons name="flame-outline" size={16} color={colors.text.secondary} /><Text style={[typography.caption,{color:colors.text.secondary,marginLeft:5}]}>{Math.round(detailQ.data.calories)} kcal</Text></View>
+                                        <View style={s.metaItem}><Ionicons name="restaurant-outline" size={16} color={colors.text.secondary} /><Text style={[typography.caption,{color:colors.text.secondary,marginLeft:5}]}>{detailQ.data.servings} serving{detailQ.data.servings===1?'':'s'}</Text></View>
+                                    </Animated.View>
                                     <Animated.View entering={FadeInDown.delay(90).duration(360).springify().damping(16)}>
                                         <GlassCard radius={borderRadius.lg} style={{marginBottom:8}}>
                                             <View style={{paddingVertical:20,paddingHorizontal:4}}>
@@ -232,10 +252,10 @@ export default function RecipesScreen() {
                                         </View>
                                     ))}
                                     <CtaButton
-                                        label="LOG AS MEAL"
-                                        icon="restaurant"
+                                        label="Add to today"
+                                        icon="checkmark"
                                         size="lg"
-                                        accessibilityLabel="Log as meal"
+                                        accessibilityLabel="Add to today"
                                         style={[s.ctaWrap,{marginTop:40}]}
                                         onPress={()=>{ setDetailId(null); router.push({pathname:'/(meals)/log-meal',params:{recipeId:detailQ.data?.id}}); }}
                                     />
@@ -272,9 +292,15 @@ const s = StyleSheet.create({
     // PREP/COOK/KCAL count-up row sits under the macro rings inside the GlassCard, divided by a hairline.
     statTriRow:{flexDirection:'row',justifyContent:'space-around',marginTop:18,paddingTop:16,borderTopWidth:1},
     modalCnt:{flex:1,marginTop:60,borderTopLeftRadius:28,borderTopRightRadius:28,overflow:'hidden'},
-    modalHero:{width:'100%',height:300},
+    // Full-bleed food-photo hero with overlaid badge + title at its foot.
+    heroWrap:{width:'100%',height:300,justifyContent:'flex-end'},
+    heroFoot:{paddingHorizontal:24,paddingBottom:18},
+    preShiftBadge:{flexDirection:'row',alignItems:'center',alignSelf:'flex-start',paddingHorizontal:10,paddingVertical:5,borderRadius:999,borderWidth:1,borderCurve:'continuous'},
+    // Time / kcal / difficulty meta row under the hero.
+    metaRow:{flexDirection:'row',gap:16,marginBottom:18},
+    metaItem:{flexDirection:'row',alignItems:'center'},
     closeBtn:{position:'absolute',right:20,width:44,height:44,borderRadius:22,alignItems:'center',justifyContent:'center'},
-    modalBody:{padding:24,marginTop:-40},
+    modalBody:{padding:24,paddingTop:4},
     stepNum:{width:30,height:30,borderRadius:15,alignItems:'center',justifyContent:'center'},
     ctaWrap:{height:60,borderRadius:30,marginBottom:40},
 });

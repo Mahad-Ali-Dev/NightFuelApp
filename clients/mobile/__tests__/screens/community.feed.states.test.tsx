@@ -244,6 +244,13 @@ jest.mock('@expo/vector-icons', () => {
   };
 });
 
+// useAuth → the re-skinned "Crew" header reads the current user for its profile
+// avatar. Mock the hook directly (mirrors profile.errorStates.test.tsx) so the
+// real authStore (→ expo-secure-store + the axios auth client) never loads.
+jest.mock('@/hooks/useAuth', () => ({
+  useAuth: () => ({ user: { id: 'me', name: 'Test User', avatarUrl: null } }),
+}));
+
 // Deterministic insets so the screen lays out without the native provider.
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 44, bottom: 34, left: 0, right: 0 }),
@@ -373,8 +380,10 @@ describe('CommunityTab — feed loading / error / empty / loaded states', () => 
     expect(screen.UNSAFE_queryByType(require('react-native').ActivityIndicator)).toBeNull();
 
     // The header title renders in every branch (it lives outside the conditional),
-    // a sanity check that the screen mounted at all.
-    expect(screen.getByText('Community')).toBeTruthy();
+    // a sanity check that the screen mounted at all. The tab's screen header was
+    // re-skinned to the "Crew" mockup (the tab-bar label in _layout.tsx is
+    // unchanged); this asserts the on-screen title.
+    expect(screen.getByText('Crew')).toBeTruthy();
   });
 
   // ── Test B: error → retry RE-INVOKES the feed query ────────────────────────
@@ -413,9 +422,11 @@ describe('CommunityTab — feed loading / error / empty / loaded states', () => 
     renderScreen();
 
     // The post content + author render (proving the loaded branch, not an
-    // EmptyState or the skeleton, is on screen).
+    // EmptyState or the skeleton, is on screen). The author name now also appears
+    // as the story-strip caption for the same member, so we assert >= 1 match
+    // (getAllByText) rather than a single exclusive node.
     expect(screen.getByText('hello world')).toBeTruthy();
-    expect(screen.getByText('Sam')).toBeTruthy();
+    expect(screen.getAllByText('Sam').length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText('No posts yet')).toBeNull();
     expect(screen.queryByText("Couldn't load the feed")).toBeNull();
     expect(screen.queryByLabelText('Loading the feed')).toBeNull();

@@ -116,6 +116,21 @@ export default function LifestyleScreen() {
         isValidTime(startHour) &&
         isValidTime(endHour);
 
+    // Sleep-window duration (in hours), wrapping past midnight — drives the lime
+    // info hint under the two time cards (mockup: "That's a 7-hour sleep window").
+    // Only computed when both times are valid; otherwise the hint is hidden.
+    const sleepHours = (() => {
+        if (!isValidTime(startHour) || !isValidTime(endHour)) return null;
+        const startParts = startHour.split(':');
+        const endParts = endHour.split(':');
+        const startMins = Number(startParts[0] ?? 0) * 60 + Number(startParts[1] ?? 0);
+        const endMins = Number(endParts[0] ?? 0) * 60 + Number(endParts[1] ?? 0);
+        let mins = endMins - startMins;
+        if (mins <= 0) mins += 24 * 60; // wrap overnight (e.g. 08:00 → 15:00 same day, or 23:00 → 07:00)
+        const hrs = Math.round((mins / 60) * 10) / 10;
+        return Number.isInteger(hrs) ? String(hrs) : hrs.toFixed(1);
+    })();
+
     // ── Premium section scaffolding ──────────────────────────────────────────
     // Single-choice chip group: bold overline label with a leading accent icon,
     // then a wrapping row of lime SelectionChips. Re-tapping the active chip
@@ -191,16 +206,12 @@ export default function LifestyleScreen() {
                 }}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Hero — the layout header already owns the "STEP X OF N"
-                    counter + progress bar, so the hero no longer repeats the
-                    numeric step indicator (avoids two competing counters). It
-                    keeps only the single overline + large bold display heading
-                    (brand signature). */}
+                {/* Hero — big display heading (mockup signature). The layout
+                    header already owns the "STEP X OF N" counter + progress bar,
+                    so the hero leads straight with the question + supporting
+                    line. */}
                 <Animated.View entering={FadeInDown.duration(420)} style={{ marginBottom: spacing['2xl'] }}>
-                    <Text style={[typography.overline, { color: colors.accent.coral }]}>
-                        YOUR LIFESTYLE
-                    </Text>
-                    <Text style={[typography.display, { color: colors.text.primary, marginTop: spacing.sm, marginBottom: spacing.sm }]}>
+                    <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
                         How you <Text style={{ color: colors.accent.coral }}>live & work</Text>
                     </Text>
                     <Text style={[typography.body, { color: colors.text.secondary }]}>
@@ -219,23 +230,48 @@ export default function LifestyleScreen() {
                     <SelectionGroup label="Training Experience" icon="barbell-outline" options={EXPERIENCE_LEVELS} selected={experience} onSelect={setExperience} />
                     <SelectionGroup label="Activity Level" icon="flame-outline" options={ACTIVITY_LEVELS} selected={activity} onSelect={setActivity} />
 
-                    {/* Sleep window — the two native time pickers framed in a glass card. */}
+                    {/* Sleep window — two big "Sleep at / Wake at" time cards
+                        (mockup language): a lime icon tile + label on the left, the
+                        native time picker's value/trigger on the right. The picker
+                        (DateTimeField) keeps its own validation + 'HH:MM' string
+                        contract + error live-region. A lime info hint below reports
+                        the resulting window length. */}
                     <View style={{ marginBottom: spacing['2xl'] }}>
                         <View style={styles.sectionLabelRow}>
                             <Ionicons name="bed-outline" size={15} color={colors.accent.coral} style={{ marginRight: spacing.sm }} />
                             <Text style={[typography.overline, { color: colors.text.secondary }]}>Sleep Window</Text>
                         </View>
-                        <GlassCard radius={borderRadius.xl} style={{ padding: spacing.lg }}>
-                            <View style={styles.row}>
-                                <View style={{ flex: 1 }}>
-                                    <DateTimeField mode="time" label="Bedtime" value={startHour} onChange={setStartHour} error={startHourError} />
+
+                        <GlassCard radius={borderRadius.xl} style={{ padding: spacing.lg, marginBottom: spacing.md }}>
+                            <View style={styles.timeCardRow}>
+                                <View style={[styles.timeIconTile, { backgroundColor: withAlpha(colors.accent.coral, 0.16), borderColor: withAlpha(colors.accent.coral, 0.3) }]}>
+                                    <Ionicons name="bed" size={22} color={colors.accent.coral} />
                                 </View>
-                                <View style={{ width: spacing.md }} />
                                 <View style={{ flex: 1 }}>
-                                    <DateTimeField mode="time" label="Wake Up" value={endHour} onChange={setEndHour} error={endHourError} />
+                                    <DateTimeField mode="time" label="Sleep at" value={startHour} onChange={setStartHour} error={startHourError} />
                                 </View>
                             </View>
                         </GlassCard>
+
+                        <GlassCard radius={borderRadius.xl} style={{ padding: spacing.lg }}>
+                            <View style={styles.timeCardRow}>
+                                <View style={[styles.timeIconTile, { backgroundColor: withAlpha(colors.accent.coral, 0.16), borderColor: withAlpha(colors.accent.coral, 0.3) }]}>
+                                    <Ionicons name="sunny" size={22} color={colors.accent.coral} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <DateTimeField mode="time" label="Wake at" value={endHour} onChange={setEndHour} error={endHourError} />
+                                </View>
+                            </View>
+                        </GlassCard>
+
+                        {sleepHours ? (
+                            <View style={[styles.sleepHint, { backgroundColor: withAlpha(colors.accent.coral, 0.1), borderColor: withAlpha(colors.accent.coral, 0.3) }]}>
+                                <Ionicons name="bulb" size={18} color={colors.accent.coral} style={{ marginTop: 1 }} />
+                                <Text style={[typography.caption, { flex: 1, color: colors.text.secondary, lineHeight: 18 }]}>
+                                    That's a <Text style={{ color: colors.accent.coral, fontWeight: '600' }}>{sleepHours}-hour</Text> sleep window — we'll protect it from reminders. ✨
+                                </Text>
+                            </View>
+                        ) : null}
                     </View>
 
                     {/* Health conditions — OPTIONAL multi-select. The cyan accent
@@ -277,7 +313,8 @@ export default function LifestyleScreen() {
 
             <View style={[styles.footer, { backgroundColor: withAlpha(colors.background.primary, 0.92), borderTopColor: colors.border.default, paddingHorizontal: spacing.xl, paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? spacing['2xl'] : spacing.xl) }]}>
                 <CtaButton
-                    label="Continue"
+                    label="Build my plan"
+                    icon="checkmark"
                     size="lg"
                     onPress={handleNext}
                     disabled={!isValid}
@@ -305,6 +342,29 @@ const styles = StyleSheet.create({
     },
     row: {
         flexDirection: 'row',
+    },
+    timeCardRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 15,
+    },
+    timeIconTile: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sleepHint: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 9,
+        borderWidth: 1,
+        borderRadius: 13,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginTop: 18,
     },
     chipsWrap: {
         flexDirection: 'row',

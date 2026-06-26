@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, TouchableOpacity, FlatList, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, TouchableOpacity, FlatList, Image, Platform } from 'react-native';
 
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -14,22 +14,25 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getAll, markRead, Notification } from '@/api/notifications';
 import { EmptyState, Skeleton, GlassCard, CtaButton } from '@/components/ui';
 
+// Ria's avatar — the app logo, shown on coach-authored notifications (mirrors the
+// messaging look in (modals)/ai-coach.tsx + messages/index.tsx). Required once at
+// module scope so Metro bundles it a single time. Uses RN's <Image> (always
+// present on every renderer) rather than expo-image so the avatar is inert under
+// the screen test's renderer.
+const RIA_AVATAR = require('../../assets/images/logo_app.png');
+
 // ---------------------------------------------------------------------------
 // Date-bucketing — pure presentation logic over the existing `createdAt` field.
-// Buckets a notification into Today / Yesterday / Earlier using local-midnight
-// math on its timestamp. Deliberately uses ONLY Date arithmetic
-// (getTime/getFullYear/…) and NEVER `toLocaleDateString` — the row's visible
-// date cell is the sole caller of that formatter (the timestamp-guard test pins
-// it to exactly one call per valid row). Malformed/empty timestamps fall into
-// 'Earlier' so the row is grouped, never dropped.
+// Buckets a notification into Today / Earlier using local-midnight math on its
+// timestamp. Deliberately uses ONLY Date arithmetic (getTime/getFullYear/…) and
+// NEVER `toLocaleDateString` — the row's visible date cell is the sole caller of
+// that formatter (the timestamp-guard test pins it to exactly one call per valid
+// row). Malformed/empty timestamps fall into 'Earlier' so the row is grouped,
+// never dropped. The mockup groups by Today / Earlier; "Yesterday" folds into
+// Earlier to match it.
 // ---------------------------------------------------------------------------
-type Bucket = 'Today' | 'Yesterday' | 'Earlier';
-const BUCKET_ORDER: Bucket[] = ['Today', 'Yesterday', 'Earlier'];
-const BUCKET_ICON: Record<Bucket, keyof typeof Ionicons.glyphMap> = {
-    Today: 'today-outline',
-    Yesterday: 'time-outline',
-    Earlier: 'calendar-outline',
-};
+type Bucket = 'Today' | 'Earlier';
+const BUCKET_ORDER: Bucket[] = ['Today', 'Earlier'];
 
 function bucketFor(createdAt: string): Bucket {
     const t = createdAt ? new Date(createdAt).getTime() : NaN;
@@ -38,9 +41,7 @@ function bucketFor(createdAt: string): Bucket {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const startOfDay = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    const dayMs = 86_400_000;
     if (startOfDay >= startOfToday) return 'Today';
-    if (startOfDay >= startOfToday - dayMs) return 'Yesterday';
     return 'Earlier';
 }
 
@@ -52,8 +53,58 @@ type HeaderItem = { _kind: 'header'; id: string; bucket: Bucket; count: number }
 type RowItem = { _kind: 'row'; id: string; notification: Notification; isLast: boolean };
 type ListItem = HeaderItem | RowItem;
 
+// ── Icon-tile classification ────────────────────────────────────────────────
+// The mockup shows three tile flavours: a Ria avatar (coach), social initials,
+// and a lime reminder glyph (everything else). We map the REAL `type` union
+// ('meal' | 'caffeine' | 'sleep' | 'workout' | 'coach' | 'system', plus the
+// 'social'/'streak' the backend may send) onto these without fabricating data.
+type TileKind = 'ria' | 'social' | 'reminder';
+
+function tileKindFor(type: string): TileKind {
+    if (type === 'coach') return 'ria';
+    if (type === 'social') return 'social';
+    return 'reminder';
+}
+
+// Per-type reminder glyph — a lime icon on a dark tile (the mockup look). All
+// reminder types render lime; the glyph just hints the category.
+const REMINDER_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
+    workout: 'barbell',
+    meal: 'restaurant',
+    caffeine: 'cafe',
+    sleep: 'moon',
+    streak: 'flame',
+    system: 'information-circle',
+};
+function reminderIconFor(type: string): keyof typeof Ionicons.glyphMap {
+    return REMINDER_ICON[type] ?? 'notifications';
+}
+
+// Derive 1–2 letter initials for a social tile from a name carried on the
+// notification's optional `data` bag — ONLY if a name-ish field is actually
+// present (never fabricated). Returns null when no usable name exists, so the
+// row falls back to a glyph tile instead of inventing initials.
+const NAME_KEYS = ['actorName', 'fromName', 'displayName', 'name', 'author', 'from', 'user'];
+function socialInitials(n: Notification): string | null {
+    const bag = n.data;
+    let raw: string | null = null;
+    if (bag) {
+        for (const k of NAME_KEYS) {
+            const v = bag[k];
+            if (typeof v === 'string' && v.trim()) { raw = v.trim(); break; }
+        }
+    }
+    if (!raw) return null;
+    const parts = raw.split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return null;
+    const first = parts[0]?.[0] ?? '';
+    const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '';
+    const initials = (first + last).toUpperCase();
+    return initials || null;
+}
+
 export default function NotificationsScreen() {
-    const { colors, typography, spacing } = useTheme();
+    const { colors, typography } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -81,12 +132,22 @@ export default function NotificationsScreen() {
         }
     });
 
-    // Count of unread rows — drives the lime header pill (a key indicator; the
-    // ONE place full-strength lime is earned on this screen).
-    const unreadCount = useMemo(
-        () => (notifications || []).reduce((n, x) => n + (x.isRead ? 0 : 1), 0),
+    // The unread rows — drives the count + the "Mark all read" action. Memoised so
+    // the action handler and the indicator read the same derived set.
+    const unreadIds = useMemo(
+        () => (notifications || []).filter((x) => !x.isRead).map((x) => x.id),
         [notifications],
     );
+    const unreadCount = unreadIds.length;
+
+    // "Mark all read" — marks EVERY currently-unread notification read by firing
+    // the existing per-row markRead mutation for each unread id (no new endpoint;
+    // the same mutation the rows use). onSuccess invalidates the list once per
+    // call so the inbox refreshes. A no-op when nothing is unread.
+    const markAllRead = useCallback(() => {
+        if (markReadMutation.isPending) return;
+        for (const id of unreadIds) markReadMutation.mutate(id);
+    }, [unreadIds, markReadMutation]);
 
     // Flatten the rows into [header, row, row, …, header, row, …] grouped by
     // date bucket, preserving the server order WITHIN each bucket. Built from the
@@ -94,7 +155,7 @@ export default function NotificationsScreen() {
     // FlatList render grouped sections without becoming a SectionList.
     const listData = useMemo<ListItem[]>(() => {
         const rows = notifications || [];
-        const groups: Record<Bucket, Notification[]> = { Today: [], Yesterday: [], Earlier: [] };
+        const groups: Record<Bucket, Notification[]> = { Today: [], Earlier: [] };
         for (const n of rows) groups[bucketFor(n.createdAt)].push(n);
 
         const out: ListItem[] = [];
@@ -114,41 +175,32 @@ export default function NotificationsScreen() {
         return out;
     }, [notifications]);
 
-    const getIconForType = useCallback((type: string) => {
-        switch (type) {
-            case 'workout': return { name: 'barbell', color: colors.accent.cyan };
-            case 'meal': return { name: 'restaurant', color: colors.accent.coral };
-            case 'social': return { name: 'people', color: colors.accent.purple };
-            case 'system': return { name: 'information-circle', color: colors.accent.amber };
-            default: return { name: 'notifications', color: colors.text.secondary };
-        }
-    }, [colors]);
-
-    // ── Section header row — overline label + count, the grouped-list convention.
+    // ── Section header — a quiet overline label (Today / Earlier), the mockup's
+    // grouped-list convention.
     const renderHeader = useCallback((item: HeaderItem, index: number) => (
         <Animated.View
             entering={FadeInDown.delay(Math.min(index, 8) * 40).duration(360).springify().damping(18)}
             style={styles.sectionHeader}
         >
-            <Ionicons name={BUCKET_ICON[item.bucket]} size={13} color={colors.text.tertiary} />
-            <Text style={[typography.overline, { color: colors.text.secondary, marginLeft: 6 }]}>
-                {item.bucket}
-            </Text>
-            <View style={styles.sectionHeaderSpacer} />
             <Text style={[typography.overline, { color: colors.text.tertiary }]}>
-                {item.count}
+                {item.bucket}
             </Text>
         </Animated.View>
     ), [colors, typography]);
 
-    // ── A single notification, rendered as a row inside a per-section glass card.
-    // Unread rows earn a faint lime wash + a lime accent rail + the lime dot
-    // (the screen's 10% accent / key indicator); read rows stay neutral. The VALUE
-    // (title) dominates its body + timestamp via weight + opacity.
+    // ── One notification row. Icon tile (Ria avatar / social initials / lime
+    // reminder glyph) + bold title + one-line preview + time, with a lime unread
+    // dot on unread rows. Unread rows earn a faint lime wash; read rows stay
+    // neutral. Whole row is the press target — tapping an unread row marks it read.
     const renderRow = useCallback((item: RowItem, index: number) => {
         const n = item.notification;
-        const iconConfig = getIconForType(n.type);
         const unread = !n.isRead;
+        const kind = tileKindFor(n.type);
+        const initials = kind === 'social' ? socialInitials(n) : null;
+        const lime = colors.accent.lime;
+        const dateText = n.createdAt && !isNaN(new Date(n.createdAt).getTime())
+            ? new Date(n.createdAt).toLocaleDateString()
+            : '';
         return (
             <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 40).duration(360).springify().damping(18)}>
                 <GlassCard
@@ -163,7 +215,7 @@ export default function NotificationsScreen() {
                     />
                     {unread ? (
                         <LinearGradient
-                            colors={[withAlpha(colors.accent.coral, 0.10), 'transparent']}
+                            colors={[withAlpha(lime, 0.12), 'transparent']}
                             start={{ x: 0, y: 0 }}
                             end={{ x: 1, y: 0 }}
                             style={StyleSheet.absoluteFillObject}
@@ -178,38 +230,54 @@ export default function NotificationsScreen() {
                         style={styles.cardInner}
                         onPress={() => !n.isRead && markReadMutation.mutate(n.id)}
                     >
-                        {/* Unread accent rail — colour is a redundant cue (the dot + */}
-                        {/* weight also signal unread), never the only signal. */}
-                        {unread ? (
-                            <View style={[styles.rail, { backgroundColor: colors.accent.coral }]} />
-                        ) : null}
-                        <View style={[styles.iconBox, { backgroundColor: withAlpha(iconConfig.color, 0.14), borderColor: withAlpha(iconConfig.color, 0.28) }]}>
-                            <Ionicons name={iconConfig.name as any} size={22} color={iconConfig.color} />
-                        </View>
-                        <View style={styles.body}>
-                            <View style={styles.titleRow}>
-                                <Text
-                                    style={[typography.subhead, { color: colors.text.primary, fontWeight: unread ? '700' : '500', flex: 1 }]}
-                                    numberOfLines={1}
-                                >
-                                    {n.title}
-                                </Text>
-                                {unread ? <View style={[styles.unreadDot, { backgroundColor: colors.accent.coral }]} /> : null}
+                        {/* ── Icon tile: three flavours, per the mockup. */}
+                        {kind === 'ria' ? (
+                            <View style={[styles.tile, { backgroundColor: withAlpha(lime, 0.14), borderColor: withAlpha(lime, 0.30) }]}>
+                                <Image source={RIA_AVATAR} style={styles.tileAvatar} resizeMode="cover" />
                             </View>
-                            <Text style={[typography.body, { color: colors.text.secondary, marginTop: 3 }]} numberOfLines={2}>
+                        ) : kind === 'social' && initials ? (
+                            <View style={[styles.tile, { backgroundColor: withAlpha(colors.accent.purple, 0.16), borderColor: withAlpha(colors.accent.purple, 0.30) }]}>
+                                <Text style={[typography.captionMedium, { color: colors.text.primary }]} maxFontSizeMultiplier={1.3}>
+                                    {initials}
+                                </Text>
+                            </View>
+                        ) : kind === 'social' ? (
+                            <View style={[styles.tile, { backgroundColor: withAlpha(colors.accent.purple, 0.16), borderColor: withAlpha(colors.accent.purple, 0.30) }]}>
+                                <Ionicons name="people" size={20} color={colors.accent.purple} />
+                            </View>
+                        ) : (
+                            <View style={[styles.tile, { backgroundColor: colors.background.tertiary, borderColor: colors.border.default }]}>
+                                <Ionicons name={reminderIconFor(n.type)} size={20} color={lime} />
+                            </View>
+                        )}
+
+                        {/* ── Body: title + preview. */}
+                        <View style={styles.body}>
+                            <Text
+                                style={[typography.subhead, { color: colors.text.primary, fontWeight: unread ? '700' : '500' }]}
+                                numberOfLines={1}
+                            >
+                                {n.title}
+                            </Text>
+                            <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: 2 }]} numberOfLines={1}>
                                 {n.body}
                             </Text>
-                            <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: 8 }]}>
-                                {n.createdAt && !isNaN(new Date(n.createdAt).getTime())
-                                    ? new Date(n.createdAt).toLocaleDateString()
-                                    : ''}
-                            </Text>
+                        </View>
+
+                        {/* ── Trailing: time + unread dot, stacked (mockup). */}
+                        <View style={styles.meta}>
+                            {dateText ? (
+                                <Text style={[typography.caption, { color: colors.text.tertiary }]} numberOfLines={1}>
+                                    {dateText}
+                                </Text>
+                            ) : null}
+                            {unread ? <View style={[styles.unreadDot, { backgroundColor: lime }]} /> : null}
                         </View>
                     </TouchableOpacity>
                 </GlassCard>
             </Animated.View>
         );
-    }, [getIconForType, colors, typography, markReadMutation]);
+    }, [colors, typography, markReadMutation]);
 
     const renderItem = useCallback(({ item, index }: { item: ListItem; index: number }) => (
         item._kind === 'header' ? renderHeader(item, index) : renderRow(item, index)
@@ -217,15 +285,15 @@ export default function NotificationsScreen() {
 
     const keyExtractor = useCallback((item: ListItem) => item.id, []);
 
-    // Loading placeholder shaped like a real notification row (icon + text lines).
+    // Loading placeholder shaped like a real notification row (tile + text lines).
     const renderSkeletonRow = (key: number) => (
         <View key={key} style={[styles.skeletonCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
-            <Skeleton width={44} height={44} radius={br.lg} />
-            <View style={{ flex: 1, marginLeft: spacing.lg }}>
-                <Skeleton width="55%" height={16} radius={br.sm} />
-                <Skeleton width="90%" height={14} radius={br.sm} style={{ marginTop: 8 }} />
-                <Skeleton width="30%" height={12} radius={br.sm} style={{ marginTop: 10 }} />
+            <Skeleton width={40} height={40} radius={br.md} />
+            <View style={{ flex: 1, marginLeft: spacing.md }}>
+                <Skeleton width="50%" height={14} radius={br.sm} />
+                <Skeleton width="85%" height={12} radius={br.sm} style={{ marginTop: 8 }} />
             </View>
+            <Skeleton width={24} height={12} radius={br.sm} />
         </View>
     );
 
@@ -244,21 +312,26 @@ export default function NotificationsScreen() {
                     <Ionicons name="arrow-back" size={20} color={colors.text.primary} />
                 </TouchableOpacity>
                 <View style={styles.headerTitleWrap}>
-                    <Text style={[typography.overline, { color: colors.accent.coral }]}>ZEITRA</Text>
-                    <Text style={[typography.h1, { color: colors.text.primary }]}>Notifications</Text>
+                    <Text style={[typography.h1, { color: colors.text.primary }]} numberOfLines={1}>
+                        Notifications
+                    </Text>
                 </View>
-                {/* Unread count — the screen's one earned full-lime indicator. */}
+                {/* "Mark all read" — marks every unread row read via the existing
+                    markRead mutation. Only shown when there's something unread. */}
                 {unreadCount > 0 ? (
-                    <View
-                        style={[styles.countPill, { backgroundColor: withAlpha(colors.accent.coral, 0.14), borderColor: withAlpha(colors.accent.coral, 0.32) }]}
-                        accessibilityRole="text"
-                        accessibilityLabel={`${unreadCount} unread`}
+                    <Pressable
+                        onPress={markAllRead}
+                        disabled={markReadMutation.isPending}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Mark all ${unreadCount} as read`}
+                        accessibilityState={{ disabled: markReadMutation.isPending, busy: markReadMutation.isPending }}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        style={({ pressed }) => [styles.markAllBtn, { opacity: pressed || markReadMutation.isPending ? 0.6 : 1 }]}
                     >
-                        <View style={[styles.countDot, { backgroundColor: colors.accent.coral }]} />
-                        <Text style={[typography.captionMedium, { color: colors.accent.coral }]} maxFontSizeMultiplier={1.4}>
-                            {unreadCount}
+                        <Text style={[typography.captionMedium, { color: colors.accent.lime }]} maxFontSizeMultiplier={1.3}>
+                            Mark all read
                         </Text>
-                    </View>
+                    </Pressable>
                 ) : null}
             </View>
 
@@ -297,7 +370,7 @@ export default function NotificationsScreen() {
                                     accessibilityLiveRegion="polite"
                                     accessibilityLabel="Couldn't mark as read"
                                 >
-                                    <Ionicons name="alert-circle" size={20} color={colors.accent.coral} />
+                                    <Ionicons name="alert-circle" size={20} color={colors.accent.lime} />
                                     <Text style={[typography.subhead, styles.statusText, { color: colors.text.primary }]}>
                                         Couldn't mark as read
                                     </Text>
@@ -312,14 +385,14 @@ export default function NotificationsScreen() {
                                     style={({ pressed }) => [
                                         styles.retryBtn,
                                         {
-                                            borderColor: withAlpha(colors.accent.coral, 0.4),
-                                            backgroundColor: withAlpha(colors.accent.coral, pressed ? 0.16 : 0.08),
+                                            borderColor: withAlpha(colors.accent.lime, 0.4),
+                                            backgroundColor: withAlpha(colors.accent.lime, pressed ? 0.16 : 0.08),
                                         },
                                     ]}
                                     testID="mark-read-error-retry"
                                 >
-                                    <Ionicons name="refresh-outline" size={15} color={colors.accent.coral} />
-                                    <Text style={[typography.caption, styles.retryLabel, { color: colors.accent.coral }]}>
+                                    <Ionicons name="refresh-outline" size={15} color={colors.accent.lime} />
+                                    <Text style={[typography.caption, styles.retryLabel, { color: colors.accent.lime }]}>
                                         Retry
                                     </Text>
                                 </Pressable>
@@ -388,18 +461,14 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     headerTitleWrap: { flex: 1, marginLeft: spacing.md },
-    countPill: {
-        flexDirection: 'row',
+    markAllBtn: {
+        minHeight: 32,
+        paddingHorizontal: spacing.sm,
+        justifyContent: 'center',
         alignItems: 'center',
-        gap: spacing.xs,
-        minHeight: 28,
-        paddingHorizontal: spacing.md,
-        borderRadius: br.full,
-        borderWidth: 1,
     },
-    countDot: { width: 6, height: 6, borderRadius: 3 },
 
-    // Grouped-section header (icon + overline + trailing count).
+    // Grouped-section header (quiet overline label).
     sectionHeader: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -407,7 +476,6 @@ const styles = StyleSheet.create({
         marginBottom: spacing.sm,
         paddingHorizontal: spacing.xs,
     },
-    sectionHeaderSpacer: { flex: 1 },
 
     // Notification card (one per row; the GlassCard owns the frosted fill +
     // hairline + radius — the wash gradients sit above its blur).
@@ -415,30 +483,38 @@ const styles = StyleSheet.create({
     cardLast: { marginBottom: spacing.xs },
     cardInner: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
-        padding: spacing.lg,
-        paddingLeft: spacing.lg + spacing.xs,
+        alignItems: 'center',
+        padding: spacing.md,
+        paddingRight: spacing.lg,
     },
-    rail: {
-        position: 'absolute',
-        left: 0,
-        top: spacing.md,
-        bottom: spacing.md,
-        width: 3,
-        borderTopRightRadius: br.sm,
-        borderBottomRightRadius: br.sm,
+    // The icon tile — 40px rounded square (mockup), one of three flavours.
+    tile: {
+        width: 40,
+        height: 40,
+        borderRadius: br.md,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
     },
-    iconBox: { width: 44, height: 44, borderRadius: br.lg, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-    body: { flex: 1, marginLeft: spacing.lg },
-    titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    unreadDot: { width: 8, height: 8, borderRadius: 4, marginLeft: spacing.sm },
+    tileAvatar: { width: '100%', height: '100%', borderRadius: br.md },
+    body: { flex: 1, marginLeft: spacing.md },
+    // Trailing time + unread dot, stacked top-right (mockup).
+    meta: {
+        marginLeft: spacing.sm,
+        alignItems: 'flex-end',
+        justifyContent: 'flex-start',
+        gap: spacing.sm,
+        minWidth: 28,
+    },
+    unreadDot: { width: 8, height: 8, borderRadius: 4 },
 
     skeletonCard: {
         flexDirection: 'row',
         alignItems: 'center',
         marginHorizontal: spacing.md,
         marginBottom: spacing.sm,
-        padding: spacing.lg,
+        padding: spacing.md,
         borderRadius: br.xl,
         borderWidth: 1,
     },

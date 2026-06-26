@@ -1,5 +1,5 @@
-import React, { useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useRef, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { useTheme } from '@/theme';
 import { EmptyState, Skeleton, CtaButton } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import { CyclePhaseHero } from '@/components/cycle/CyclePhaseHero';
+import { PhaseRecommendationCards } from '@/components/cycle/PhaseRecommendationCards';
 import { CyclePhaseCard } from '@/components/CyclePhaseCard';
 import { CycleCalendar } from '@/components/cycle/CycleCalendar';
 import { CycleHistoryCard } from '@/components/cycle/CycleHistoryCard';
@@ -19,6 +20,27 @@ import { LogPeriodCard } from '@/components/cycle/LogPeriodCard';
 import { MedicalDisclaimerBanner } from '@/components/MedicalDisclaimer';
 import { getMyProfile, getStatus } from '@/api/profile';
 import { getCycleForecast, getCycleHistory } from '@/api/cycle';
+
+// Coral period/cycle accent for this screen (the brand `accent.coral` token
+// resolves to LIME post-rebrand, so coral is an explicit literal here).
+const CORAL = '#FF7A90';
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** Parse a 'YYYY-MM-DD' to UTC-midnight ms, or null if malformed. Matches the
+ *  server's UTC date-only math so derived day counts never drift by a TZ. */
+function isoToUtcMs(iso: string | null | undefined): number | null {
+    if (!iso) return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return null;
+    const ms = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return Number.isNaN(ms) ? null : ms;
+}
+
+/** Today at UTC midnight (ms) — the reference "now" for all derived counts. */
+function todayUtcMs(): number {
+    const n = new Date();
+    return Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate());
+}
 
 /**
  * Cycle screen (F28) — the dedicated home for the menstrual-cycle tracker.
@@ -88,6 +110,56 @@ export default function CycleScreen() {
 
     const cyclePhase = (statusQuery.data as any)?.cyclePhase;
 
+    // ── Ring scalars for the hero — DERIVED from data the screen already holds.
+    // Sources, in order of preference, all already fetched (NO new request):
+    //   • cycle START   = profile.lastPeriodStartDate, else history's current
+    //     cycle (cycles[0].startDate, the entry whose cycleLengthDays is null).
+    //   • cycle LENGTH  = profile.avgCycleLengthDays, else history averages.
+    //   • next period / ovulation = the forecast's predicted dates.
+    // Every value is honest (omitted when its source is missing) and never a
+    // fabricated number — the hero degrades gracefully on any null.
+    const ringData = useMemo(() => {
+        const profileAny = profile as any;
+        const forecast = forecastQuery.data;
+        const history = historyQuery.data;
+        const today = todayUtcMs();
+
+        // Cycle start (most recent period start).
+        const currentHistCycle = history?.cycles?.find((c) => c.cycleLengthDays == null);
+        const startMs =
+            isoToUtcMs(profileAny?.lastPeriodStartDate) ?? isoToUtcMs(currentHistCycle?.startDate ?? null);
+
+        // Cycle length (ring denominator).
+        const cycleLengthDays =
+            (typeof profileAny?.avgCycleLengthDays === 'number' ? profileAny.avgCycleLengthDays : null) ??
+            history?.averages?.avgCycleLengthDays ??
+            null;
+
+        // Day-of-cycle = whole days since start + 1 (1-based, clamped to >= 1).
+        let cycleDay: number | null = null;
+        if (startMs != null && startMs <= today) {
+            cycleDay = Math.floor((today - startMs) / MS_PER_DAY) + 1;
+        }
+
+        // Days until predicted next period (>= 0).
+        const nextMs = isoToUtcMs(forecast?.predictedNextPeriodStart ?? null);
+        const daysUntilNextPeriod =
+            nextMs != null ? Math.max(0, Math.round((nextMs - today) / MS_PER_DAY)) : null;
+
+        // Days until predicted ovulation (omit once it has passed).
+        const ovMs = isoToUtcMs(forecast?.predictedOvulationDate ?? null);
+        const daysUntilOvulation =
+            ovMs != null ? Math.round((ovMs - today) / MS_PER_DAY) : null;
+
+        // 1-based day-of-cycle of ovulation, to position the lime ring marker.
+        const ovulationDayOfCycle =
+            ovMs != null && startMs != null && ovMs >= startMs
+                ? Math.floor((ovMs - startMs) / MS_PER_DAY) + 1
+                : null;
+
+        return { cycleDay, cycleLengthDays, daysUntilNextPeriod, daysUntilOvulation, ovulationDayOfCycle };
+    }, [profile, forecastQuery.data, historyQuery.data]);
+
     const Header = (
         <View style={styles.header}>
             <TouchableOpacity
@@ -113,11 +185,11 @@ export default function CycleScreen() {
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             <StatusBar style="light" />
-            {/* Calm purple/blue ambient wash behind the header — keeps the brand
-                while signalling the gentler, sensitive treatment of this space. */}
+            {/* Calm coral ambient wash behind the header — the period/cycle accent,
+                signalling the gentler, sensitive treatment of this space. */}
             <View
                 pointerEvents="none"
-                style={[styles.ambient, { backgroundColor: withAlpha(colors.accent.purple, 0.07) }]}
+                style={[styles.ambient, { backgroundColor: withAlpha(CORAL, 0.06) }]}
             />
             {Header}
 
@@ -153,26 +225,44 @@ export default function CycleScreen() {
                     contentContainerStyle={{ padding: spacing.xl, paddingTop: spacing.md, paddingBottom: insets.bottom + 96 }}
                     showsVerticalScrollIndicator={false}
                 >
-                    {/* Phase-tinted HERO — calm, phase-aware crown. Reads cyclePhase
-                        from status + soft predictions from the already-fetched
-                        forecast. Self-gates on null / UNKNOWN exactly like the card. */}
+                    {/* Phase-aware HERO — the big cycle ring (coral elapsed arc +
+                        lime ovulation marker) wrapping the DAY/phase readout, the
+                        "next period / ovulation" line, and the 4-phase strip. Reads
+                        cyclePhase from status + soft predictions from the already-
+                        fetched forecast, plus ring scalars DERIVED above from the
+                        profile/forecast/history the screen already holds (no new
+                        request). Self-gates on null / UNKNOWN exactly like the card. */}
                     <Animated.View entering={enter(0)}>
-                        <CyclePhaseHero cyclePhase={cyclePhase} forecast={forecastQuery.data} />
+                        <CyclePhaseHero
+                            cyclePhase={cyclePhase}
+                            forecast={forecastQuery.data}
+                            cycleDay={ringData.cycleDay}
+                            cycleLengthDays={ringData.cycleLengthDays}
+                            daysUntilNextPeriod={ringData.daysUntilNextPeriod}
+                            daysUntilOvulation={ringData.daysUntilOvulation}
+                            ovulationDayOfCycle={ringData.ovulationDayOfCycle}
+                        />
+                    </Animated.View>
+
+                    {/* "Tuned to your phase today" — two recommendation cards
+                        (training + nutrition). Self-gates on null / UNKNOWN. */}
+                    <Animated.View entering={enter(1)}>
+                        <PhaseRecommendationCards phase={cyclePhase} />
                     </Animated.View>
 
                     {/* Phase guidance card (reused) — tip + how today's plan adjusts. */}
-                    <Animated.View entering={enter(1)}>
+                    <Animated.View entering={enter(2)}>
                         <CyclePhaseCard cyclePhase={cyclePhase} />
                     </Animated.View>
 
                     {/* Best foods for the user's CONCRETE phase. Self-gates: renders
                         nothing for null / 'UNKNOWN', exactly like CyclePhaseCard. */}
-                    <Animated.View entering={enter(2)}>
+                    <Animated.View entering={enter(3)}>
                         <PhaseFoodsCard phase={cyclePhase} />
                     </Animated.View>
 
                     {/* Calendar — logged-vs-predicted + confidence-aware. */}
-                    <Animated.View entering={enter(3)}>
+                    <Animated.View entering={enter(4)}>
                         {forecastQuery.isLoading ? (
                             <View style={{ marginTop: 12 }}><Skeleton height={320} radius={24} /></View>
                         ) : forecastQuery.isError ? (
@@ -196,12 +286,12 @@ export default function CycleScreen() {
 
                     {/* Log a period (today or a past day) — the primary action.
                         Measured so the thumb-zone anchor can scroll straight to it. */}
-                    <Animated.View entering={enter(4)} onLayout={onLogCardLayout}>
+                    <Animated.View entering={enter(5)} onLayout={onLogCardLayout}>
                         <LogPeriodCard />
                     </Animated.View>
 
                     {/* History + averages + variability range. */}
-                    <Animated.View entering={enter(5)}>
+                    <Animated.View entering={enter(6)}>
                         {historyQuery.isLoading ? (
                             <View style={{ marginTop: 12 }}><Skeleton height={160} radius={24} /></View>
                         ) : historyQuery.isError ? (
@@ -220,7 +310,7 @@ export default function CycleScreen() {
                     </Animated.View>
 
                     {/* Consent-aware wellness disclaimer. */}
-                    <Animated.View entering={enter(6)}>
+                    <Animated.View entering={enter(7)}>
                         <MedicalDisclaimerBanner
                             text="Cycle phases and predictions are wellness estimates, not medical advice. They are not a contraceptive method or a substitute for professional care."
                             style={{ marginTop: 16 }}
@@ -228,18 +318,20 @@ export default function CycleScreen() {
                     </Animated.View>
 
                     {/* ENDING — a quiet, human affirmation closes the screen. */}
-                    <Animated.View entering={enter(7)}>
+                    <Animated.View entering={enter(8)}>
                         <Text style={[typography.bodySm, styles.affirmation, { color: colors.text.tertiary }]}>
                             Your body, your pace. Tracking is just for you.
                         </Text>
                     </Animated.View>
                 </ScrollView>
 
-                    {/* Persistent THUMB-ZONE anchor — the screen's core verb,
-                        always reachable in the bottom third on first paint. Floats
-                        above the safe-area inset and scrolls to the Log Period form
-                        (which owns the actual mutation). Compact so it reads as a
-                        shortcut, not a second primary surface. */}
+                    {/* Persistent THUMB-ZONE anchor — "Track today", the screen's
+                        core verb, always reachable in the bottom third on first
+                        paint. Floats above the safe-area inset and scrolls to the
+                        Log Period form (which owns the actual mutation). A coral
+                        period-accent pill (coral-tinted fill + coral text), matching
+                        the cycle mockup — distinct from the app's lime CTAs so it
+                        reads as the cycle action, not a second primary surface. */}
                     <Animated.View
                         entering={FadeInDown.delay(280).springify().damping(18).mass(0.7)}
                         pointerEvents="box-none"
@@ -249,14 +341,25 @@ export default function CycleScreen() {
                             pointerEvents="none"
                             style={[styles.logAnchorScrim, { backgroundColor: colors.background.primary }]}
                         />
-                        <CtaButton
-                            label="Log period"
-                            icon="add-circle-outline"
-                            size="sm"
+                        <Pressable
                             onPress={scrollToLog}
+                            accessibilityRole="button"
                             accessibilityLabel="Jump to log a period"
                             testID="cycle-log-anchor"
-                        />
+                            style={({ pressed }) => [
+                                styles.trackPill,
+                                {
+                                    backgroundColor: withAlpha(CORAL, 0.14),
+                                    borderColor: withAlpha(CORAL, 0.4),
+                                },
+                                pressed ? { transform: [{ scale: 0.97 }], opacity: 0.9 } : null,
+                            ]}
+                        >
+                            <Ionicons name="add" size={19} color={CORAL} />
+                            <Text style={[typography.subtitle, styles.trackPillLabel, { color: CORAL }]}>
+                                Track today
+                            </Text>
+                        </Pressable>
                     </Animated.View>
                 </>
             )}
@@ -302,4 +405,16 @@ const styles = StyleSheet.create({
         ...StyleSheet.absoluteFillObject,
         opacity: 0.92,
     },
+    // Coral "Track today" pill — the cycle action, in the period accent.
+    trackPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        minHeight: 48,
+        paddingVertical: 13,
+        borderRadius: 15,
+        borderWidth: 1,
+    },
+    trackPillLabel: { fontWeight: '600' },
 });

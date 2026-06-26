@@ -4,16 +4,23 @@
  * Because this is now a visible tab (not a pushed screen) the back
  * button is removed and replaced with a Settings shortcut.
  *
- * Zeitra premium reskin: a lime-washed cover header carries the avatar
- * inside an XP level RING, the STREAK numeral leads as a big Barlow-Condensed
- * statLarge marquee beside a stacked FATIGUE/ADHERENCE pair, and achievements
- * snap in a chip carousel — every chip DERIVED from live signals with honest
- * locked/earned states (lock glyph + '7 / 30 days' progress), never fabricated.
- * The screen enters with a staggered Reanimated FadeInDown and a uniform springy
- * pressed-scale (0.96) across every interactive element. Glass surfaces use the
- * shared GlassCard primitive; the single primary CTA uses CtaButton (ink-on-lime).
- * ALL data hooks / role flags / nav / a11y labels / testIDs and the honest-error
- * StatPill contract are preserved exactly.
+ * Zeitra "You" reskin (bold & minimal, matching app_images/you-preview.html):
+ * a centered avatar carries a lime LEVEL RING (CircularProgress) + an "LVL n"
+ * ink-on-lime badge; a big name sits above a "🌙 Night Owl · …" meta line; a
+ * single row of BIG stats (streak / workouts / days) is split by thin dividers;
+ * a secondary FATIGUE/ADHERENCE strip keeps the honest fetch-error contract; an
+ * "Achievements" 4-up grid renders earned tiles in lime and locked tiles greyed
+ * with a lock glyph; a "Consistency" section reuses the shared ActivityHeatmap;
+ * and a Settings row closes the screen. The screen enters with a staggered
+ * Reanimated FadeInDown and a uniform springy pressed-scale (0.96) across every
+ * interactive element. Glass surfaces use the shared GlassCard primitive; the
+ * single primary CTA uses CtaButton (ink-on-lime).
+ *
+ * EVERY value is DERIVED from live signals — no fabricated gamification. Each
+ * stat keeps the honest fetch-error contract ('—' / "Unavailable" / Retry) so a
+ * backend failure never masquerades as a healthy brand-new (genuinely zeroed)
+ * user. ALL data hooks / role flags / nav / a11y labels / testIDs and the
+ * honest-error StatCell contract are preserved exactly.
  */
 import React from 'react';
 import {
@@ -29,12 +36,14 @@ import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { getWeeklyStats, getStreak } from '@/api/progress';
 import { getMyProfile, getStatus } from '@/api/profile';
+import { getRecent } from '@/api/exercises';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { colors as C } from '@/theme/colors';
 import { withAlpha } from '@/theme/utils';
 import { Skeleton, GlassCard, CtaButton, CircularProgress, ProgressBar } from '@/components/ui';
+import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { CyclePhaseCard } from '@/components/CyclePhaseCard';
 import { TAB_BAR_H } from './_layout';
 
@@ -42,20 +51,23 @@ const H_PAD = 20;
 const CARD_GAP = 12;
 
 // ─── Achievements (DERIVED from real signals) ────────────────────────────────
-// No fabricated gamification: every chip is computed from live query data
-// (streak.current, stats.daysLogged, status scores). Not-yet-earned chips render
-// in a locked/greyed state with a lock glyph + honest progress ('7/30 days') so a
-// brand-new 0-streak user never sees a glamorous fake '30 Day Streak / Top 5%'.
+// No fabricated gamification: every tile is computed from live query data
+// (streak.current, stats.daysLogged, status scores, shiftType). Not-yet-earned
+// tiles render in a locked/greyed state with a lock glyph + honest progress
+// ('7 / 30 days') so a brand-new 0-streak user never sees a glamorous fake
+// '30 Day Streak'. The grid mirrors the mockup's 4-up square tiles.
 type Achievement = {
     title: string;
-    /** Earned tagline (e.g. '30 Day Streak'). Shown when unlocked. */
+    /** Short tile caption (e.g. '30-day'). */
+    label: string;
+    /** Earned tagline (e.g. '30 Day Streak'). Used for a11y when unlocked. */
     desc: string;
     icon: string;
     /** Token-sourced accent (single palette source — no raw hex). */
     color: string;
     /** 0–1 progress toward earning. */
     progress: number;
-    /** Honest progress label for locked chips (e.g. '7 / 30 days'). */
+    /** Honest progress label for locked tiles (e.g. '7 / 30 days'). */
     lockedLabel: string;
 };
 
@@ -63,31 +75,46 @@ function buildAchievements(args: {
     streakDays: number;
     daysLogged: number;
     adherence: number;
+    isNightOwl: boolean;
 }): Achievement[] {
-    const { streakDays, daysLogged, adherence } = args;
+    const { streakDays, daysLogged, adherence, isNightOwl } = args;
     const pct = (n: number, target: number) => Math.max(0, Math.min(1, target > 0 ? n / target : 0));
     return [
         {
             title: 'Streak Keeper',
+            label: '30-day',
             desc: '30 Day Streak',
             icon: 'flame',
-            color: C.warning,
+            color: C.accent.lime,
             progress: pct(streakDays, 30),
             lockedLabel: `${streakDays} / 30 days`,
         },
         {
+            // Night-owl badge is EARNED purely from the real shiftType flag — it's
+            // a binary signal, so its progress is 0 or 1 (never a fake fraction).
+            title: 'Night Owl',
+            label: 'Night owl',
+            desc: 'Night Shift',
+            icon: 'moon',
+            color: C.accent.lime,
+            progress: isNightOwl ? 1 : 0,
+            lockedLabel: 'Night shift only',
+        },
+        {
             title: 'Consistent',
+            label: 'Iron will',
             desc: '50 Days Logged',
-            icon: 'body',
-            color: C.accent.cyan,
+            icon: 'barbell',
+            color: C.accent.lime,
             progress: pct(daysLogged, 50),
             lockedLabel: `${daysLogged} / 50 days`,
         },
         {
             title: 'On Track',
+            label: '90% adher.',
             desc: '90% Adherence',
             icon: 'ribbon',
-            color: C.accent.purple,
+            color: C.accent.lime,
             progress: pct(adherence, 90),
             lockedLabel: `${Math.round(adherence)} / 90%`,
         },
@@ -105,11 +132,19 @@ export default function ProfileScreen() {
     const { data: profile, isLoading } = useQuery({ queryKey: ['my-profile'], queryFn: getMyProfile });
     // Secondary queries are destructured with isError + refetch so a backend
     // failure surfaces an HONEST indicator ('—' / "Unavailable" + retry) on the
-    // affected stat pills instead of coalescing to '0%' / '0d' / 'Level 1' — a
+    // affected stat cells instead of coalescing to '0%' / '0d' / 'Level 1' — a
     // failed fetch must NOT look like a healthy brand-new (genuinely zeroed) user.
     const { data: status, isError: statusError, refetch: refetchStatus } = useQuery({ queryKey: ['my-status'], queryFn: getStatus });
     const { data: stats, isError: statsError } = useQuery({ queryKey: ['profile-weekly-stats'], queryFn: getWeeklyStats });
     const { data: streak, isError: streakError, refetch: refetchStreak } = useQuery({ queryKey: ['profile-streak'], queryFn: getStreak });
+    // Lifetime workout count for the hero stat row — the same logged-workout feed
+    // the Consistency heatmap reads. Soft-fails to [] (caught) so a backend hiccup
+    // shows an honest 0, never crashes the screen.
+    const { data: workouts } = useQuery({
+        queryKey: ['profile-workouts'],
+        queryFn: () => getRecent(200).catch(() => []),
+        staleTime: 60_000,
+    });
 
     const isCoach = ['COACH', 'TRAINER', 'NUTRITIONIST', 'coach'].includes(user?.role ?? '');
     const isAdmin = user?.role === 'admin' || (user?.role as any) === 'ADMIN';
@@ -119,6 +154,10 @@ export default function ProfileScreen() {
     }
 
     const displayName = (profile as any)?.displayName ?? user?.name;
+    // Honest "Night Owl" badge: only a genuine night-shift worker is one. Falls
+    // back to the real occupation (or 'Member') so we never fabricate a persona.
+    const isNightOwl = user?.shiftType === 'night';
+    const metaLabel = isNightOwl ? 'Night Owl' : ((profile as any)?.occupation ?? 'Member');
 
     // ── Derived gamification values ──────────────────────────────────────────
     // Level math is preserved EXACTLY (days logged / 7, +1). The XP ring shows
@@ -128,15 +167,17 @@ export default function ProfileScreen() {
     const level = Math.floor(daysLogged / 7) + 1;
     const levelProgress = statsError ? 0 : (daysLogged % 7) / 7; // 0–1 toward next level
     const daysToNext = 7 - (daysLogged % 7);
+    const workoutCount = Array.isArray(workouts) ? workouts.length : 0;
 
     // Achievements derived from live signals (honest locked/earned states). The
-    // whole row is gated behind real loaded data: if BOTH the streak and stats
+    // whole grid is gated behind real loaded data: if BOTH the streak and stats
     // fetches failed we have no honest signal to grade against, so we hide it
-    // rather than render fabricated or all-zero chips.
+    // rather than render fabricated or all-zero tiles.
     const achievements = buildAchievements({
         streakDays: streakError ? 0 : (streak?.current ?? 0),
         daysLogged: statsError ? 0 : daysLogged,
         adherence: statusError ? 0 : ((status as any)?.adherenceScore ?? 0),
+        isNightOwl,
     });
     const showAchievements = !(streakError && statsError && statusError);
 
@@ -151,7 +192,7 @@ export default function ProfileScreen() {
                 {/* ══ COVER + HEADER ══════════════════════════════════════════ */}
                 <View style={[s.cover, { paddingTop: insets.top }]}>
                     <LinearGradient
-                        colors={[withAlpha(C.accent.coral, 0.22), withAlpha(C.accent.pink, 0.07), colors.background.primary]}
+                        colors={[withAlpha(C.accent.lime, 0.18), withAlpha(C.accent.lime, 0.05), colors.background.primary]}
                         start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }}
                         style={StyleSheet.absoluteFillObject}
                     />
@@ -182,14 +223,14 @@ export default function ProfileScreen() {
                 {/* ══ AVATAR + LEVEL RING ═════════════════════════════════════ */}
                 <Animated.View
                     entering={FadeInDown.delay(60).springify().damping(18)}
-                    style={[s.avatarWrap, shadows.glow(colors.accent.coral)]}
+                    style={[s.avatarWrap, shadows.glow(colors.accent.lime)]}
                 >
-                    {/* XP ring wraps the avatar — gamified progress to next level. */}
+                    {/* Lime level ring wraps the avatar — gamified progress to next level. */}
                     <CircularProgress
-                        size={120}
+                        size={122}
                         strokeWidth={4}
                         progress={levelProgress}
-                        color={colors.accent.coral}
+                        color={colors.accent.lime}
                         trackColor={withAlpha(colors.text.primary, 0.10)}
                     >
                         <View style={[s.avatarRing, { backgroundColor: colors.background.primary }]}>
@@ -202,15 +243,15 @@ export default function ProfileScreen() {
                                     accessibilityLabel={`${displayName ?? user?.name} profile photo`}
                                 />
                             ) : (
-                                <View style={[s.avatar, { backgroundColor: colors.background.tertiary, alignItems: 'center', justifyContent: 'center' }]} accessibilityLabel="No profile photo">
-                                    <Ionicons name="person" size={52} color={colors.text.tertiary} />
+                                <View style={[s.avatar, { backgroundColor: withAlpha(colors.accent.lime, 0.12), alignItems: 'center', justifyContent: 'center' }]} accessibilityLabel="No profile photo">
+                                    <Ionicons name="person" size={48} color={colors.accent.lime} />
                                 </View>
                             )}
                         </View>
                     </CircularProgress>
                     {/* Level badge anchored to the ring — ink-on-lime chip. */}
                     <View
-                        style={[s.levelBadge, { backgroundColor: colors.accent.coral, borderColor: colors.background.primary }]}
+                        style={[s.levelBadge, { backgroundColor: colors.accent.lime, borderColor: colors.background.primary }]}
                         accessible
                         accessibilityLabel={statsError ? 'Level unavailable' : `Level ${level}`}
                     >
@@ -221,14 +262,14 @@ export default function ProfileScreen() {
                 </Animated.View>
 
                 <View style={s.details}>
-                    {/* Name + title */}
+                    {/* Name + meta line */}
                     <Animated.View entering={FadeInDown.delay(110).springify().damping(18)} style={s.nameBlock}>
                         <Text style={[typography.display, { color: colors.text.primary, textAlign: 'center' }]}>
                             {displayName}
                         </Text>
                         <View style={s.metaRow}>
                             <Text style={[typography.body, { color: colors.text.secondary }]}>
-                                {(profile as any)?.occupation ?? 'Member'}
+                                {isNightOwl ? '🌙 ' : ''}{metaLabel}
                             </Text>
                             <View style={[s.metaDot, { backgroundColor: colors.text.tertiary }]} />
                             {/* Streak chip — animated gamification accent. */}
@@ -253,7 +294,7 @@ export default function ProfileScreen() {
                             <View style={s.xpHintWrap}>
                                 <ProgressBar
                                     progress={levelProgress * 100}
-                                    gradientColors={colors.gradients.coralCta}
+                                    gradientColors={colors.gradients.limeCta}
                                     height={5}
                                     trackColor={withAlpha(colors.text.primary, 0.08)}
                                 />
@@ -300,39 +341,47 @@ export default function ProfileScreen() {
                         </Animated.View>
                     )}
 
-                    {/* ══ HERO STATS ══════════════════════════════════════════
-                        STREAK leads as a wide statLarge (48px) marquee numeral with
-                        FATIGUE + ADHERENCE stacked as a secondary pair, so the hero
-                        numbers actually read as hero. Each cell keeps the honest
-                        fetch-error contract ('—' + retry) so a backend failure never
-                        masquerades as a zeroed new user. */}
-                    <Animated.View entering={FadeInDown.delay(195).springify().damping(18)} style={s.statsBandWrap}>
-                        <GlassCard radius={borderRadius['2xl']} style={s.statsBand}>
-                            <View style={s.statsBandInner}>
-                                {/* Lead cell — STREAK promoted to hero statLarge (48px). It's
-                                    the most gamified number so it reads as the marquee. */}
-                                <StatCell
-                                    label="STREAK"
-                                    value={`${streak?.current ?? 0}`}
-                                    unit="d"
-                                    color={C.accent.cyan}
-                                    isError={streakError}
-                                    onRetry={refetchStreak}
-                                    lead
-                                />
-                                <View style={[s.statDividerTall, { backgroundColor: withAlpha(colors.text.primary, 0.08) }]} />
-                                {/* Secondary pair — stacked smaller numerals beside the lead. */}
-                                <View style={s.statsSecondaryCol}>
-                                    <StatCell label="FATIGUE" value={`${(status as any)?.fatigueScore ?? 0}`} unit="%" color={C.warning} isError={statusError} onRetry={refetchStatus} />
-                                    <View style={[s.statRowDivider, { backgroundColor: withAlpha(colors.text.primary, 0.08) }]} />
-                                    <StatCell label="ADHERENCE" value={`${(status as any)?.adherenceScore ?? 0}`} unit="%" color={C.success} isError={statusError} onRetry={refetchStatus} />
-                                </View>
+                    {/* ══ HERO STATS ROW ══════════════════════════════════════
+                        Three big numerals (STREAK / WORKOUTS / DAYS) split by thin
+                        dividers, exactly like the mockup. STREAK leads in lime. The
+                        STREAK cell keeps the honest fetch-error contract ('—' + retry)
+                        so a backend failure never masquerades as a zeroed new user. */}
+                    <Animated.View entering={FadeInDown.delay(195).springify().damping(18)} style={s.heroStatsRow}>
+                        <StatCell
+                            label="STREAK"
+                            value={`${streak?.current ?? 0}`}
+                            color={colors.accent.lime}
+                            isError={streakError}
+                            onRetry={refetchStreak}
+                        />
+                        <View style={[s.heroDivider, { backgroundColor: withAlpha(colors.text.primary, 0.10) }]} />
+                        <StatCell
+                            label="WORKOUTS"
+                            value={`${workoutCount}`}
+                            color={colors.text.primary}
+                        />
+                        <View style={[s.heroDivider, { backgroundColor: withAlpha(colors.text.primary, 0.10) }]} />
+                        <StatCell
+                            label="DAYS"
+                            value={statsError ? '—' : `${daysLogged}`}
+                            color={colors.text.primary}
+                        />
+                    </Animated.View>
+
+                    {/* Secondary status strip — FATIGUE + ADHERENCE keep their honest
+                        '—' / "Unavailable" / Retry contract (refetch status). */}
+                    <Animated.View entering={FadeInDown.delay(215).springify().damping(18)} style={s.statusStripWrap}>
+                        <GlassCard radius={borderRadius['2xl']} style={s.statusStrip}>
+                            <View style={s.statusStripInner}>
+                                <StatCell label="FATIGUE" value={`${(status as any)?.fatigueScore ?? 0}`} unit="%" color={C.warning} isError={statusError} onRetry={refetchStatus} compact />
+                                <View style={[s.heroDivider, { backgroundColor: withAlpha(colors.text.primary, 0.10) }]} />
+                                <StatCell label="ADHERENCE" value={`${(status as any)?.adherenceScore ?? 0}`} unit="%" color={C.success} isError={statusError} onRetry={refetchStatus} compact />
                             </View>
                         </GlassCard>
                     </Animated.View>
 
                     {/* Circadian phase card */}
-                    <Animated.View entering={FadeInDown.delay(225).springify().damping(18)} style={{ width: '100%' }}>
+                    <Animated.View entering={FadeInDown.delay(235).springify().damping(18)} style={{ width: '100%' }}>
                         <GlassCard glow={withAlpha(C.accent.amber, 0.18)} radius={borderRadius['2xl']} style={s.circCard}>
                             <View style={s.circInner}>
                                 <View style={s.circHeader}>
@@ -388,42 +437,44 @@ export default function ProfileScreen() {
                                 accessibilityRole="button"
                                 accessibilityLabel="Open cycle tracker"
                                 onPress={() => router.push('/(performance)/cycle' as any)}
-                                style={({ pressed }) => [s.circBtn, { borderColor: withAlpha(colors.accent.coral, 0.3), marginTop: 10 }, pressed && s.pressed]}
+                                style={({ pressed }) => [s.circBtn, { borderColor: withAlpha(colors.accent.lime, 0.3), marginTop: 10 }, pressed && s.pressed]}
                             >
-                                <Text style={[s.circBtnTxt, { color: colors.accent.coral }]}>
+                                <Text style={[s.circBtnTxt, { color: colors.accent.lime }]}>
                                     View Cycle Tracker →
                                 </Text>
                             </Pressable>
                         </Animated.View>
                     )}
 
-                    {/* Achievements — snapping chip carousel, DERIVED from real
-                        signals. Earned chips glow; not-yet-earned chips render a
-                        locked/greyed state with a lock glyph + honest progress
-                        ('7 / 30 days') and an animated progress bar. */}
+                    {/* Achievements — 4-up square-tile grid, DERIVED from real signals.
+                        Earned tiles glow lime with the full-colour icon; not-yet-earned
+                        tiles render a locked/greyed state with a lock glyph + honest
+                        '7 / 30 days' progress. */}
                     {showAchievements && (
                         <Animated.View entering={FadeInDown.delay(285).springify().damping(18)} style={s.achSection}>
-                            <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>ACHIEVEMENTS</Text>
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                decelerationRate="fast"
-                                snapToInterval={124 + 12}
-                                snapToAlignment="start"
-                                contentContainerStyle={{ gap: 12, paddingRight: H_PAD }}
-                            >
+                            <View style={s.sectionHeader}>
+                                <Text style={[typography.h3, { color: colors.text.primary }]}>Achievements</Text>
+                                <Text style={[s.sectionHint, { color: colors.text.tertiary }]}>
+                                    {achievements.filter((a) => a.progress >= 1).length} earned
+                                </Text>
+                            </View>
+                            <View style={s.achGrid}>
                                 {achievements.map((ach, i) => (
-                                    <AchievementCard key={ach.title} ach={ach} index={i} />
+                                    <AchievementTile key={ach.title} ach={ach} index={i} />
                                 ))}
-                            </ScrollView>
+                            </View>
                         </Animated.View>
                     )}
 
-                    {/* ══ MORE FEATURES HUB (Moved to Home) ═══════════════════════════════════ */}
+                    {/* Consistency — reuse the shared ActivityHeatmap (16-week grid). */}
+                    <Animated.View entering={FadeInDown.delay(315).springify().damping(18)} style={s.consistencySection}>
+                        <Text style={[typography.h3, s.consistencyLbl, { color: colors.text.primary }]}>Consistency</Text>
+                        <ActivityHeatmap />
+                    </Animated.View>
 
                     {/* Coach Hub button (coach users only) */}
                     {isCoach && (
-                        <Animated.View entering={FadeInDown.delay(315).springify().damping(18)} style={{ width: '100%' }}>
+                        <Animated.View entering={FadeInDown.delay(335).springify().damping(18)} style={{ width: '100%' }}>
                             <Pressable
                                 accessibilityRole="button"
                                 accessibilityLabel="Open Coach Hub"
@@ -436,13 +487,31 @@ export default function ProfileScreen() {
                             </Pressable>
                         </Animated.View>
                     )}
+
+                    {/* Settings row — closes the screen like the mockup's bottom card. */}
+                    <Animated.View entering={FadeInDown.delay(355).springify().damping(18)} style={s.settingsRowWrap}>
+                        <GlassCard radius={borderRadius.xl} style={{ width: '100%' }}>
+                            <Pressable
+                                accessibilityRole="button"
+                                accessibilityLabel="Open Settings"
+                                style={({ pressed }) => [s.settingsRow, pressed ? { opacity: 0.85 } : null]}
+                                onPress={() => router.push('/(settings)' as any)}
+                            >
+                                <Ionicons name="settings" size={20} color={colors.accent.lime} />
+                                <Text style={[s.settingsTxt, { color: colors.text.primary }]} numberOfLines={1}>
+                                    Settings · theme · account
+                                </Text>
+                                <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
+                            </Pressable>
+                        </GlassCard>
+                    </Animated.View>
                 </View>
             </ScrollView>
         </View>
     );
 }
 
-// ─── StatCell sub-component (hero stat) ───────────────────────────────────────
+// ─── StatCell sub-component (hero / status stat) ──────────────────────────────
 
 function StatCell({
     label,
@@ -451,7 +520,7 @@ function StatCell({
     color,
     isError = false,
     onRetry,
-    lead = false,
+    compact = false,
 }: {
     label: string;
     value: string;
@@ -459,11 +528,11 @@ function StatCell({
     color: string;
     isError?: boolean;
     onRetry?: () => void;
-    /** Hero lead cell — renders the numeral in statLarge (48px) vs statMedium. */
-    lead?: boolean;
+    /** Smaller numeral (statMedium) for the secondary status strip. */
+    compact?: boolean;
 }) {
     const { typography, colors } = useTheme();
-    const valueStyle = lead ? typography.statLarge : typography.statMedium;
+    const valueStyle = compact ? typography.statMedium : typography.statLarge;
 
     // HONEST error state: the fetch failed, so we DON'T know this stat. Render
     // '—' + a small "Unavailable / Retry" affordance instead of the misleading
@@ -476,7 +545,7 @@ function StatCell({
                 accessibilityLabel={`${label} unavailable, tap to retry`}
                 onPress={() => onRetry?.()}
                 hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-                style={({ pressed }) => [lead ? s.statCellLead : s.statCell, pressed ? { opacity: 0.85, transform: [{ scale: 0.96 }] } : null]}
+                style={({ pressed }) => [s.statCell, pressed ? { opacity: 0.85, transform: [{ scale: 0.96 }] } : null]}
             >
                 <Text style={[valueStyle, { color: colors.text.tertiary }]} maxFontSizeMultiplier={1.2}>—</Text>
                 <Text style={[s.statLabel, { color: colors.text.secondary }]}>Unavailable</Text>
@@ -489,11 +558,11 @@ function StatCell({
     }
 
     return (
-        <View style={lead ? s.statCellLead : s.statCell} accessible accessibilityLabel={`${label} ${value}${unit ?? ''}`}>
+        <View style={s.statCell} accessible accessibilityLabel={`${label} ${value}${unit ?? ''}`}>
             <View style={s.statValueRow}>
                 <Text style={[valueStyle, { color }]} maxFontSizeMultiplier={1.2}>{value}</Text>
                 {!!unit && (
-                    <Text style={[lead ? typography.statSmall : typography.statTiny, s.statUnit, { color: withAlpha(color, 0.7) }]} maxFontSizeMultiplier={1.2}>{unit}</Text>
+                    <Text style={[compact ? typography.statTiny : typography.statSmall, s.statUnit, { color: withAlpha(color, 0.7) }]} maxFontSizeMultiplier={1.2}>{unit}</Text>
                 )}
             </View>
             <Text style={[s.statLabel, { color: colors.text.secondary }]}>{label}</Text>
@@ -501,55 +570,52 @@ function StatCell({
     );
 }
 
-// ─── AchievementCard sub-component (earned ↔ locked) ──────────────────────────
-// Animated locked→unlocked chip: earned chips glow with the full-colour icon;
-// locked chips grey out, swap to a lock glyph, and show an honest progress bar +
-// '7 / 30 days' label. This is the 'avoid static' gamification the brief asks
-// for — every state is derived from real query data, never fabricated.
+// ─── AchievementTile sub-component (earned ↔ locked) ──────────────────────────
+// Square grid tile mirroring the mockup: earned → lime icon on a lime-washed
+// tile; locked → greyed tile with a lock glyph + honest progress bar +
+// '7 / 30 days' caption. Every state is derived from real query data.
 
-function AchievementCard({ ach, index }: { ach: Achievement; index: number }) {
+function AchievementTile({ ach, index }: { ach: Achievement; index: number }) {
     const { colors, borderRadius } = useTheme();
     const earned = ach.progress >= 1;
     const accent = earned ? ach.color : colors.text.tertiary;
     const pct = Math.round(ach.progress * 100);
 
     return (
-        <Animated.View entering={FadeInDown.delay(300 + index * 40).springify().damping(18)}>
-            <GlassCard
-                radius={borderRadius.xl}
-                glow={earned ? withAlpha(ach.color, 0.16) : undefined}
-                style={s.achCard}
+        <Animated.View entering={FadeInDown.delay(300 + index * 40).springify().damping(18)} style={s.achTileWrap}>
+            <View
+                style={[
+                    s.achTile,
+                    {
+                        backgroundColor: earned ? withAlpha(ach.color, 0.12) : colors.background.secondary,
+                        borderColor: earned ? withAlpha(ach.color, 0.36) : withAlpha(colors.text.primary, 0.08),
+                    },
+                    !earned && s.achTileLocked,
+                ]}
+                accessible
+                accessibilityRole="image"
+                accessibilityLabel={
+                    earned
+                        ? `${ach.title} achievement earned: ${ach.desc}`
+                        : `${ach.title} achievement locked, ${ach.lockedLabel}`
+                }
+                accessibilityState={{ disabled: !earned }}
             >
-                <View
-                    style={[s.achInner, !earned && s.achInnerLocked]}
-                    accessible
-                    accessibilityRole="image"
-                    accessibilityLabel={
-                        earned
-                            ? `${ach.title} achievement earned: ${ach.desc}`
-                            : `${ach.title} achievement locked, ${ach.lockedLabel}`
-                    }
-                    accessibilityState={{ disabled: !earned }}
-                >
-                    <View style={[s.achIcon, { backgroundColor: withAlpha(accent, earned ? 0.13 : 0.08), borderColor: withAlpha(accent, earned ? 0.30 : 0.18) }]}>
-                        <Ionicons name={(earned ? ach.icon : 'lock-closed') as any} size={earned ? 24 : 20} color={accent} />
-                    </View>
-                    <Text style={[s.achTitle, { color: earned ? colors.text.primary : colors.text.secondary }]}>{ach.title}</Text>
-                    {earned ? (
-                        <Text style={[s.achDesc, { color: colors.text.secondary }]}>{ach.desc}</Text>
-                    ) : (
-                        <View style={s.achProgWrap}>
-                            <ProgressBar
-                                progress={pct}
-                                color={ach.color}
-                                height={4}
-                                trackColor={withAlpha(colors.text.primary, 0.08)}
-                            />
-                            <Text style={[s.achLockedTxt, { color: colors.text.tertiary }]}>{ach.lockedLabel}</Text>
-                        </View>
-                    )}
+                <Ionicons name={(earned ? ach.icon : 'lock-closed') as any} size={earned ? 26 : 20} color={accent} />
+            </View>
+            <Text style={[s.achLabel, { color: earned ? colors.text.secondary : colors.text.tertiary }]} numberOfLines={1}>
+                {ach.label}
+            </Text>
+            {!earned && (
+                <View style={s.achProgWrap}>
+                    <ProgressBar
+                        progress={pct}
+                        color={ach.color}
+                        height={3}
+                        trackColor={withAlpha(colors.text.primary, 0.08)}
+                    />
                 </View>
-            </GlassCard>
+            )}
         </Animated.View>
     );
 }
@@ -565,7 +631,7 @@ function ProfileSkeleton() {
             {/* Cover gradient wash */}
             <View style={[s.cover, { paddingTop: insets.top }]}>
                 <LinearGradient
-                    colors={[withAlpha(C.accent.coral, 0.22), withAlpha(C.accent.pink, 0.07), colors.background.primary]}
+                    colors={[withAlpha(C.accent.lime, 0.18), withAlpha(C.accent.lime, 0.05), colors.background.primary]}
                     start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }}
                     style={StyleSheet.absoluteFillObject}
                 />
@@ -580,7 +646,7 @@ function ProfileSkeleton() {
 
             {/* Avatar */}
             <View style={[s.avatarWrap, { marginBottom: 16 }]}>
-                <Skeleton width={120} height={120} radius={60} />
+                <Skeleton width={122} height={122} radius={61} />
             </View>
 
             <View style={s.details}>
@@ -593,20 +659,28 @@ function ProfileSkeleton() {
                     <Skeleton width="48%" height={48} radius={borderRadius.xl} />
                 </View>
 
-                {/* Stat band */}
-                <View style={s.statsBandWrap}>
-                    <Skeleton width="100%" height={96} radius={borderRadius['2xl']} />
+                {/* Hero stats row */}
+                <View style={s.heroStatsRow}>
+                    <Skeleton width="30%" height={64} radius={borderRadius.lg} />
+                    <Skeleton width="30%" height={64} radius={borderRadius.lg} />
+                    <Skeleton width="30%" height={64} radius={borderRadius.lg} />
+                </View>
+
+                {/* Status strip */}
+                <View style={s.statusStripWrap}>
+                    <Skeleton width="100%" height={80} radius={borderRadius['2xl']} />
                 </View>
 
                 {/* Circadian card */}
                 <Skeleton width="100%" height={170} radius={borderRadius['2xl']} style={{ marginBottom: spacing['3xl'] }} />
 
-                {/* Achievements row */}
-                <Skeleton width={140} height={14} radius={borderRadius.sm} style={{ alignSelf: 'flex-start', marginBottom: spacing.lg }} />
-                <View style={{ flexDirection: 'row', gap: spacing.md, alignSelf: 'flex-start' }}>
-                    <Skeleton width={124} height={120} radius={borderRadius.xl} />
-                    <Skeleton width={124} height={120} radius={borderRadius.xl} />
-                    <Skeleton width={124} height={120} radius={borderRadius.xl} />
+                {/* Achievements grid */}
+                <Skeleton width={160} height={20} radius={borderRadius.sm} style={{ alignSelf: 'flex-start', marginBottom: spacing.lg }} />
+                <View style={{ flexDirection: 'row', gap: 10, alignSelf: 'flex-start' }}>
+                    <Skeleton width={70} height={70} radius={borderRadius.lg} />
+                    <Skeleton width={70} height={70} radius={borderRadius.lg} />
+                    <Skeleton width={70} height={70} radius={borderRadius.lg} />
+                    <Skeleton width={70} height={70} radius={borderRadius.lg} />
                 </View>
             </View>
         </View>
@@ -622,13 +696,13 @@ const s = StyleSheet.create({
     pressed: { opacity: 0.9, transform: [{ scale: 0.96 }] },
 
     // Cover header
-    cover: { height: 140, width: '100%' },
+    cover: { height: 130, width: '100%' },
     navHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: H_PAD, height: 52 },
     navRight: { flexDirection: 'row', gap: 10 },
     iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
 
     // Avatar + level ring
-    avatarWrap: { marginTop: -60, alignSelf: 'center', marginBottom: 16 },
+    avatarWrap: { marginTop: -56, alignSelf: 'center', marginBottom: 16 },
     avatarRing: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     avatar: { width: 96, height: 96, borderRadius: 48 },
     levelBadge: {
@@ -655,21 +729,20 @@ const s = StyleSheet.create({
     btnTxt: { fontSize: 14, fontWeight: '700' },
     adminBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', paddingVertical: 13, marginBottom: 22 },
 
-    // Hero stat band — wide lead numeral + stacked secondary pair.
-    statsBandWrap: { width: '100%', marginBottom: 24 },
-    statsBand: { width: '100%' },
-    statsBandInner: { flexDirection: 'row', alignItems: 'stretch', paddingVertical: 18, paddingHorizontal: 14 },
+    // Hero stats row — three big numerals split by thin dividers (the mockup).
+    heroStatsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', width: '100%', marginBottom: 18, paddingVertical: 4 },
+    heroDivider: { width: 1, height: 34, alignSelf: 'center' },
     statCell: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 56 },
-    statCellLead: { flex: 1.1, alignItems: 'center', justifyContent: 'center', minHeight: 96 },
-    statsSecondaryCol: { flex: 1, justifyContent: 'center' },
-    statDivider: { width: 1, height: 44, alignSelf: 'center' },
-    statDividerTall: { width: 1, alignSelf: 'stretch', marginVertical: 4, marginHorizontal: 6 },
-    statRowDivider: { height: 1, alignSelf: 'stretch', marginVertical: 10 },
     statValueRow: { flexDirection: 'row', alignItems: 'baseline' },
     statUnit: { marginLeft: 1 },
-    statLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginTop: 2 },
+    statLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8, marginTop: 4, textTransform: 'lowercase' },
     statRetryRow: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 },
     statRetryTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4 },
+
+    // Secondary status strip (FATIGUE / ADHERENCE)
+    statusStripWrap: { width: '100%', marginBottom: 24 },
+    statusStrip: { width: '100%' },
+    statusStripInner: { flexDirection: 'row', alignItems: 'stretch', paddingVertical: 16, paddingHorizontal: 14 },
 
     // Circadian
     circCard: { width: '100%', marginBottom: 28 },
@@ -679,19 +752,29 @@ const s = StyleSheet.create({
     circBtn: { marginTop: 16, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1, alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
     circBtnTxt: { fontSize: 13, fontWeight: '700' },
 
-    // Achievements
-    achSection: { width: '100%' },
-    sectionLbl: { alignSelf: 'flex-start', marginBottom: 14 },
-    achCard: { width: 124 },
-    achInner: { padding: 16, alignItems: 'center', minHeight: 132, justifyContent: 'center' },
-    achInnerLocked: { opacity: 0.92 },
-    achIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 12, borderWidth: 1 },
-    achTitle: { fontSize: 12, fontWeight: '700', textAlign: 'center' },
-    achDesc: { fontSize: 11, textAlign: 'center', marginTop: 2 },
-    achProgWrap: { width: '100%', alignItems: 'center', gap: 5, marginTop: 6 },
-    achLockedTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+    // Section header (Achievements / Consistency)
+    sectionHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', width: '100%', marginBottom: 14 },
+    sectionHint: { fontSize: 11, fontWeight: '600' },
+
+    // Achievements grid (4-up squares)
+    achSection: { width: '100%', marginBottom: 28 },
+    achGrid: { flexDirection: 'row', width: '100%', gap: 10 },
+    achTileWrap: { flex: 1, alignItems: 'center' },
+    achTile: { width: '100%', aspectRatio: 1, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+    achTileLocked: { opacity: 0.85 },
+    achLabel: { fontSize: 10, fontWeight: '600', marginTop: 6, textAlign: 'center' },
+    achProgWrap: { width: '70%', marginTop: 5 },
+
+    // Consistency
+    consistencySection: { width: '100%', marginBottom: 24 },
+    consistencyLbl: { marginBottom: 14 },
 
     // Coach button
-    coachBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%', padding: 16, borderRadius: 18, borderWidth: 1, marginTop: 4 },
+    coachBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, width: '100%', padding: 16, borderRadius: 18, borderWidth: 1, marginTop: 4, marginBottom: 18 },
     coachBtnTxt: { flex: 1, fontSize: 14, fontWeight: '700' },
+
+    // Settings row
+    settingsRowWrap: { width: '100%' },
+    settingsRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 15, paddingHorizontal: 16, minHeight: 52 },
+    settingsTxt: { flex: 1, fontSize: 14, fontWeight: '600' },
 });

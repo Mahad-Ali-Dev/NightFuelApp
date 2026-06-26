@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    Alert,
+    Alert, Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -21,8 +21,14 @@ import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { GeneratingSteps, CtaButton } from '@/components/ui';
+import { GlassCard } from '@/components/ui/GlassCard';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { getErrorMessage } from '@/utils/validation';
+
+// Ria's avatar — the bundled Zeitra app mark, shown in the intro card so the
+// generator opens with a "Coach Ria is building this for you" beat (mockup:
+// workout-generator-preview.html). Bundled asset, no network hit.
+const RIA_AVATAR = require('../../assets/images/logo_app.png');
 
 // Staged status lines shown while Coach Ria builds the routine (10–30s).
 const WORKOUT_GEN_STEPS = [
@@ -192,6 +198,23 @@ export default function AIWorkoutPlannerScreen() {
                 {/* While pending, scrim + disable the whole form (only the footer
                     CTA + staged progress stay live). */}
                 <View pointerEvents={isPending ? 'none' : 'auto'} style={isPending ? { opacity: 0.45 } : undefined}>
+                    {/* Ria intro card — logo avatar + a warm "let's build your week"
+                        opener (mockup: workout-generator-preview.html). Glass surface
+                        via the sanctioned GlassCard primitive; the lime ring on the
+                        avatar keeps it on-brand. */}
+                    <Animated.View entering={FadeInDown.delay(30).springify().damping(18).mass(0.7)} style={{ paddingHorizontal: 20, paddingTop: 16 }}>
+                        <GlassCard radius={18}>
+                            <View style={s.introRow}>
+                                <View style={[s.introAvatar, { borderColor: withAlpha(LIME, 0.5) }]}>
+                                    <Image source={RIA_AVATAR} style={s.introAvatarImg} resizeMode="cover" />
+                                </View>
+                                <Text style={[typography.bodySm, { color: colors.text.secondary, flex: 1, lineHeight: 19 }]} maxFontSizeMultiplier={1.4}>
+                                    Let's build your week — I'll fit it to your goal, gear & shift recovery. 💪
+                                </Text>
+                            </View>
+                        </GlassCard>
+                    </Animated.View>
+
                     {/* Goal */}
                     <Animated.View entering={FadeInDown.delay(60).springify().damping(18).mass(0.7)}>
                         <SectionTitle label="WHAT'S YOUR GOAL?" colors={colors} typography={typography} />
@@ -345,31 +368,37 @@ export default function AIWorkoutPlannerScreen() {
                         </View>
                     </Animated.View>
 
-                    {/* Equipment */}
+                    {/* Equipment — a tile GRID (mockup: equipment tile grid). Each
+                        tile centres its glyph over the label inside a lime-ringed
+                        glass cell when active. Same EQUIPMENT_OPTIONS data + the
+                        single-select setEquipment handler, untouched. */}
                     <Animated.View entering={FadeInDown.delay(285).springify().damping(18).mass(0.7)}>
                         <SectionTitle label="AVAILABLE EQUIPMENT" colors={colors} typography={typography} />
-                        <View style={s.chipsRow}>
+                        <View style={s.equipGrid}>
                             {EQUIPMENT_OPTIONS.map(eq => {
                                 const active = equipment === eq.key;
                                 return (
                                     <PressableScale
                                         key={eq.key}
                                         pressedScale={0.95}
-                                        hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                                        hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                                         accessibilityRole="radio"
                                         accessibilityState={{ selected: active }}
                                         accessibilityLabel={eq.key}
                                         style={[
-                                            s.equipBtn,
+                                            s.equipTile,
                                             {
-                                                backgroundColor: active ? withAlpha(LIME, 0.18) : colors.background.secondary,
+                                                backgroundColor: active ? withAlpha(LIME, 0.16) : colors.background.secondary,
                                                 borderColor: active ? LIME : colors.border.default,
                                             },
+                                            active && shadows.glow(LIME),
                                         ]}
                                         onPress={() => setEquipment(eq.key)}
                                     >
-                                        <Ionicons name={eq.icon as any} size={18} color={active ? LIME : colors.text.tertiary} />
-                                        <Text style={[typography.caption, { color: active ? LIME : colors.text.secondary, fontWeight: '600', fontSize: 13, marginLeft: 8 }]}>
+                                        <View style={[s.equipIcon, { backgroundColor: withAlpha(active ? LIME : colors.text.primary, active ? 0.18 : 0.06) }]}>
+                                            <Ionicons name={eq.icon as any} size={22} color={active ? LIME : colors.text.tertiary} />
+                                        </View>
+                                        <Text style={[typography.caption, { color: active ? LIME : colors.text.secondary, fontWeight: '700', fontSize: 12, marginTop: 8, textAlign: 'center' }]} numberOfLines={1}>
                                             {eq.key}
                                         </Text>
                                     </PressableScale>
@@ -574,9 +603,24 @@ const s = StyleSheet.create({
         minHeight: 44, justifyContent: 'center',
         paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, borderWidth: 1,
     },
-    equipBtn: {
-        flexDirection: 'row', alignItems: 'center', minHeight: 44,
-        paddingHorizontal: 14, paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderCurve: 'continuous',
+    // Ria intro card — avatar disc + opener copy (mockup: generator preview).
+    introRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+    introAvatar: {
+        width: 40, height: 40, borderRadius: 20, borderWidth: 1.5,
+        overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
+    },
+    introAvatarImg: { width: '100%', height: '100%' },
+    // Equipment tile GRID — two-up tiles, glyph chip over a centred label.
+    equipGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 20, gap: 10 },
+    equipTile: {
+        width: '47.5%', flexGrow: 1, minHeight: 92,
+        alignItems: 'center', justifyContent: 'center',
+        paddingVertical: 14, paddingHorizontal: 10,
+        borderRadius: 16, borderWidth: 1, borderCurve: 'continuous',
+    },
+    equipIcon: {
+        width: 44, height: 44, borderRadius: 14, borderCurve: 'continuous',
+        alignItems: 'center', justifyContent: 'center',
     },
     summaryCard: { borderRadius: 18, borderWidth: 1, borderCurve: 'continuous', padding: 18 },
     statRow: { flexDirection: 'row', alignItems: 'center' },

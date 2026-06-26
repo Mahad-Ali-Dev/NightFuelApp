@@ -45,6 +45,10 @@ export function localMidnightFromDateString(value: string): Date | undefined {
     return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
+// Coral period/cycle accent (the brand `accent.coral` token resolves to LIME
+// post-rebrand, so coral is an explicit literal here).
+const CORAL = '#FF7A90';
+
 export interface LogPeriodCardProps {
     /** Called after a successful log (e.g. to surface a toast at the screen level). */
     onLogged?: (stats: CycleStatsResponse) => void;
@@ -95,7 +99,7 @@ export function LogPeriodCard({ onLogged }: LogPeriodCardProps) {
         <GlassCard radius={borderRadius['2xl']} style={styles.card}>
             <View style={styles.inner}>
                 <View style={styles.header}>
-                    <Ionicons name="add-circle-outline" size={18} color={colors.accent.coral} />
+                    <Ionicons name="add-circle-outline" size={18} color={CORAL} />
                     <Text style={[typography.overline, styles.headerLabel, { color: colors.text.secondary }]}>
                         LOG PERIOD
                     </Text>

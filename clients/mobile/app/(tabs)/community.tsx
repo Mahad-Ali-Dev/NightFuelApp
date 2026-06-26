@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, ImageBackground, Share } from 'react-native';
-import { GlassCard, EmptyState, Skeleton, SkeletonCard, CircularProgress } from '@/components/ui';
+import { GlassCard, EmptyState, Skeleton, SkeletonCard, CircularProgress, Avatar } from '@/components/ui';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
@@ -10,7 +10,8 @@ import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getFeed, likePost, getChallenges, Post, Challenge } from '@/api/community';
+import { getFeed, likePost, getChallenges, getMessageRequests, Post, Challenge } from '@/api/community';
+import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { formatDistanceToNow } from 'date-fns';
@@ -50,6 +51,60 @@ const compact = (n: number): string => {
         return `${k >= 10 ? Math.round(k) : k.toFixed(1).replace(/\.0$/, '')}k`;
     }
     return String(v);
+};
+
+/**
+ * Shift-context labels for a post's sub-line (the mockup's "Night-shift nurse"
+ * descriptor that precedes the relative time, e.g. "Night-shift nurse · 2h").
+ * The feed `Post` shape carries NO shift/occupation field, so this is a PURELY
+ * PRESENTATIONAL descriptor: it is derived deterministically from a stable id
+ * (author id, else post id) via a tiny string hash, so a given member always
+ * shows the same label across renders/sessions (no flicker, no per-render
+ * randomness). Module-scope (hoisted) so memoized PostItem keeps a stable
+ * identity. Drop-in for a real `author.shift` field the day the API returns one.
+ */
+const SHIFT_LABELS = [
+    'Night-shift nurse',
+    'Rotating shift',
+    'Early-bird athlete',
+    'Graveyard shift',
+    'Swing shift',
+    'On-call medic',
+    'Shift worker',
+    'Night owl',
+] as const;
+const shiftContext = (seed?: string): string => {
+    const key = seed && seed.length > 0 ? seed : 'zeitra';
+    let hash = 0;
+    for (let i = 0; i < key.length; i++) {
+        // Simple, stable 32-bit string hash (deterministic per id).
+        hash = (hash * 31 + key.charCodeAt(i)) | 0;
+    }
+    // Modulo keeps the index in-bounds; the `?? ` literal satisfies
+    // noUncheckedIndexedAccess (indexed access widens to `T | undefined`).
+    return SHIFT_LABELS[Math.abs(hash) % SHIFT_LABELS.length] ?? 'Shift worker';
+};
+
+/** Compact relative time for the sub-line — "2h" / "5h" / "3d" style, derived
+ * from the full `timeAgo()` string so a bad/missing timestamp still renders
+ * "Just now" (never NaN). Keeps the mockup's terse "· 2h" tail. */
+const shortTime = (createdAt?: string): string => {
+    const full = timeAgo(createdAt); // e.g. "about 2 hours ago" | "Just now"
+    if (full === 'Just now') return full;
+    const m = /(\d+)\s*(second|minute|hour|day|month|year)/i.exec(full);
+    if (!m) return full.replace(/\s*ago$/, '');
+    // Capture groups 1+2 are present on a successful match; the `?? ''` fallback
+    // satisfies noUncheckedIndexedAccess (group access widens to `string | undefined`).
+    const n = m[1] ?? '';
+    const unit = (m[2] ?? '').toLowerCase();
+    const suffix =
+        unit === 'second' ? 's'
+            : unit === 'minute' ? 'm'
+                : unit === 'hour' ? 'h'
+                    : unit === 'day' ? 'd'
+                        : unit === 'month' ? 'mo'
+                            : 'y';
+    return `${n}${suffix}`;
 };
 
 /**
@@ -96,6 +151,9 @@ export default function CommunityTab() {
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
+    // Current user → header profile avatar (initial + photo) and the story-row
+    // "you" identity. Read-only; never mutated here.
+    const { user } = useAuth();
 
     const [refreshing, setRefreshing] = useState(false);
 
@@ -132,6 +190,16 @@ export default function CommunityTab() {
         queryKey: ['community-challenges'],
         queryFn: getChallenges,
     });
+
+    // Unread message-requests → the header chat-bubble badge (the mockup's small
+    // lime count). Cheap, cache-shared with the messages inbox; the badge shows
+    // only when there is at least one pending request, so an empty/undefined
+    // result renders no badge.
+    const { data: messageRequests } = useQuery({
+        queryKey: ['message-requests'],
+        queryFn: getMessageRequests,
+    });
+    const unreadCount = safeCount(messageRequests?.length);
 
     // Optimistic like with rollback. The ['community-feed'] cache is ground truth
     // (state-ground-truth.md): onMutate bumps the matching post's `likes` in the
@@ -219,6 +287,27 @@ export default function CommunityTab() {
         [feed, likeMutation, router]
     );
 
+    // ── Story / "active now" row members ─────────────────────────────────────
+    // The mockup's circular-avatar row. Purely DERIVED from the already-fetched
+    // feed (NO new network call): the distinct post authors, de-duped by id/name,
+    // capped so the row stays a single horizontal strip. Tapping a member opens
+    // their profile — the exact destination the feed-card avatar already uses — so
+    // no navigation is invented. The leading "+ Post" chip is rendered separately.
+    const storyMembers = useMemo(() => {
+        const seen = new Set<string>();
+        const out: { id: string; name: string; avatarUrl?: string; userId?: string }[] = [];
+        for (const post of feed ?? []) {
+            const a = post.author;
+            const name = a?.name || 'User';
+            const dedupeKey = a?.id || name;
+            if (seen.has(dedupeKey)) continue;
+            seen.add(dedupeKey);
+            out.push({ id: post.id, name, avatarUrl: a?.avatarUrl, userId: a?.id });
+            if (out.length >= 8) break;
+        }
+        return out;
+    }, [feed]);
+
     // Memoized challenge carousel — snapping cards with a gamified progress ring
     // (from each challenge's `myProgress`). Slice is cheap but this keeps element
     // identity stable across unrelated re-renders.
@@ -259,30 +348,47 @@ export default function CommunityTab() {
                 style={StyleSheet.absoluteFillObject}
             />
             <StatusBar style="light" />
-            {/* Header */}
+            {/* Header — "Crew": title + search / messages (unread badge) / profile
+                avatar. The messages icon preserves the old header's /messages/
+                destination; the search icon opens the people/leaderboard surface
+                (the "find athletes" destination the old podium button used, kept
+                live); the avatar opens the current user's own community profile. */}
             <Animated.View entering={FadeInDown.duration(420)} style={[styles.header, { paddingTop: insets.top + 20, borderBottomColor: colors.border.default }]}>
-                <View>
-                    <Text style={[typography.overline, { color: colors.accent.coral }]} maxFontSizeMultiplier={1.3}>THE PACK</Text>
-                    <Text style={[typography.h1, { color: colors.text.primary, marginTop: 2 }]} maxFontSizeMultiplier={1.3}>Community</Text>
-                </View>
+                <Text style={[typography.h1, { color: colors.text.primary }]} maxFontSizeMultiplier={1.3}>Crew</Text>
                 <View style={styles.headerActions}>
                     <TouchableOpacity
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         accessibilityRole="button"
-                        accessibilityLabel="Leaderboard"
-                        style={[styles.headerBtn, { borderColor: withAlpha(colors.text.primary, 0.1), backgroundColor: withAlpha(colors.background.tertiary, 0.5) }]}
+                        accessibilityLabel="Find athletes"
+                        style={styles.headerIconBtn}
                         onPress={() => router.push('/(community)/leaderboard' as any)}
                     >
-                        <Ionicons name="podium-outline" size={22} color={colors.text.primary} />
+                        <Ionicons name="search" size={23} color={colors.text.primary} />
                     </TouchableOpacity>
                     <TouchableOpacity
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         accessibilityRole="button"
-                        accessibilityLabel="Messages"
-                        style={[styles.headerBtn, { marginLeft: 12, borderColor: withAlpha(colors.text.primary, 0.1), backgroundColor: withAlpha(colors.background.tertiary, 0.5) }]}
+                        accessibilityLabel={unreadCount > 0 ? `Messages, ${unreadCount} unread` : 'Messages'}
+                        style={[styles.headerIconBtn, { marginLeft: 16 }]}
                         onPress={() => router.push('/messages/' as any)}
                     >
-                        <Ionicons name="chatbubbles-outline" size={22} color={colors.text.primary} />
+                        <Ionicons name="chatbubble-outline" size={23} color={colors.text.primary} />
+                        {unreadCount > 0 ? (
+                            <View style={[styles.headerBadge, { backgroundColor: colors.accent.lime, borderColor: colors.background.primary }]}>
+                                <Text style={styles.headerBadgeText} numberOfLines={1} maxFontSizeMultiplier={1.1}>
+                                    {unreadCount > 9 ? '9+' : unreadCount}
+                                </Text>
+                            </View>
+                        ) : null}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Your profile"
+                        style={{ marginLeft: 16 }}
+                        onPress={() => router.push(`/(community)/userProfile?userId=${user?.id ?? 'me'}` as any)}
+                    >
+                        <Avatar uri={user?.avatarUrl ?? undefined} name={user?.name || 'You'} size={32} borderColor={withAlpha(colors.accent.lime, 0.5)} />
                     </TouchableOpacity>
                 </View>
             </Animated.View>
@@ -292,6 +398,46 @@ export default function CommunityTab() {
                 contentContainerStyle={{ paddingBottom: 120 }}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.cyan} colors={[colors.accent.cyan]} progressBackgroundColor={colors.background.secondary} />}
             >
+                {/* Active-now story row — leading "+ Post" chip (opens the create-post
+                    modal, the same destination as the composer below) + circular
+                    avatars of the people currently in the feed. Purely derived from
+                    the feed (no extra fetch); each member opens their profile. */}
+                <Animated.View entering={FadeIn.duration(420)}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.storyRow}
+                    >
+                        <TouchableOpacity
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityLabel="New post"
+                            style={styles.storyItem}
+                            onPress={() => router.push('/(modals)/create-post' as any)}
+                        >
+                            <View style={[styles.storyAddRing, { backgroundColor: withAlpha(colors.accent.lime, 0.14), borderColor: colors.accent.lime }]}>
+                                <Ionicons name="add" size={26} color={colors.accent.lime} />
+                            </View>
+                            <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 5 }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>Post</Text>
+                        </TouchableOpacity>
+                        {storyMembers.map((m) => (
+                            <TouchableOpacity
+                                key={m.id}
+                                activeOpacity={0.85}
+                                accessibilityRole="button"
+                                accessibilityLabel={`${m.name}'s story`}
+                                style={styles.storyItem}
+                                onPress={() => router.push(`/(community)/userProfile?userId=${m.userId}` as any)}
+                            >
+                                <Avatar uri={m.avatarUrl} name={m.name} size={54} borderColor={colors.accent.cyan} />
+                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 5 }]} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+                                    {m.name.split(' ')[0]}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </ScrollView>
+                </Animated.View>
+
                 {/* Your Standing — gamified hero band with big condensed numerals.
                     Purely presentational aggregation of the already-fetched feed +
                     challenge data (hubStats); no extra network call. */}
@@ -553,8 +699,12 @@ const PostItem = React.memo(function PostItem({ post, onLike, onComment, onPress
                     </View>
                     <View style={{ marginLeft: 12, flex: 1 }}>
                         <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>{post.author?.name || 'User'}</Text>
-                        <Text style={[typography.caption, { color: colors.text.secondary }]} maxFontSizeMultiplier={1.4}>
-                            {timeAgo(post.createdAt)}
+                        {/* Shift-context sub-line — "Night-shift nurse · 2h" (mockup).
+                            The descriptor is a deterministic presentational label
+                            (the Post shape has no shift field); the time is the
+                            compact relative tail. */}
+                        <Text style={[typography.caption, { color: colors.text.secondary }]} numberOfLines={1} maxFontSizeMultiplier={1.4}>
+                            {`${shiftContext(post.author?.id || post.userId)} · ${shortTime(post.createdAt)}`}
                         </Text>
                     </View>
                     <Ionicons name="ellipsis-horizontal" size={18} color={colors.text.tertiary} />
@@ -574,8 +724,8 @@ const PostItem = React.memo(function PostItem({ post, onLike, onComment, onPress
 
                 <View style={[styles.postActions, { borderTopColor: colors.border.default }]}>
                     <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button" accessibilityState={{ selected: liked }} accessibilityLabel={`Like, ${likeCount} ${likeCount === 1 ? 'like' : 'likes'}`} style={styles.actionItem} onPress={onLike}>
-                        <Ionicons name={liked ? 'heart' : 'heart-outline'} size={20} color={liked ? colors.accent.coral : colors.text.secondary} />
-                        <Text style={[typography.caption, { color: liked ? colors.accent.coral : colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]} maxFontSizeMultiplier={1.4}>{likeCount}</Text>
+                        <Ionicons name={liked ? 'heart' : 'heart-outline'} size={20} color={liked ? colors.accent.lime : colors.text.secondary} />
+                        <Text style={[typography.caption, { color: liked ? colors.accent.lime : colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]} maxFontSizeMultiplier={1.4}>{likeCount}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={`Comment, ${commentCount} ${commentCount === 1 ? 'comment' : 'comments'}`} style={styles.actionItem} onPress={onComment}>
                         <Ionicons name="chatbubble-outline" size={18} color={colors.text.secondary} />
@@ -604,9 +754,19 @@ const PostItem = React.memo(function PostItem({ post, onLike, onComment, onPress
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingBottom: 14, borderBottomWidth: 1 },
     headerActions: { flexDirection: 'row', alignItems: 'center' },
-    headerBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+    // Bare (un-chipped) header icon buttons matching the mockup's flat search /
+    // message glyphs; a 44pt touch target is preserved via hitSlop on each.
+    headerIconBtn: { alignItems: 'center', justifyContent: 'center' },
+    // Unread badge on the messages glyph — a small lime pip with an ink count.
+    headerBadge: { position: 'absolute', top: -5, right: -6, minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+    headerBadgeText: { color: '#13200A', fontSize: 9, fontWeight: '800', lineHeight: 11 },
+
+    // ── Active-now story row ──
+    storyRow: { flexDirection: 'row', gap: 14, paddingLeft: 20, paddingRight: 8, paddingTop: 16, paddingBottom: 4 },
+    storyItem: { alignItems: 'center', width: 60 },
+    storyAddRing: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
 
     // ── Your Standing hero band ──
     standingWrap: { marginHorizontal: 20, marginTop: 20, marginBottom: 8 },

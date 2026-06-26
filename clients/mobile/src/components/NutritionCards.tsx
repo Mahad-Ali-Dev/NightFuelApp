@@ -34,12 +34,16 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/utils';
+import { CircularProgress } from '@/components/ui/CircularProgress';
+import { CtaButton, GlassCard } from '@/components/ui';
 
 const { width } = Dimensions.get('window');
 /** Two-column grid card width (20px page padding both sides, 12px gutter). */
 export const GRID_CARD_W = (width - 52) / 2;
 /** Carousel recipe card width — peeks the next card a touch. */
 export const RECIPE_CARD_W = 188;
+/** "Recipes for tonight" carousel card width (taller, art-led tiles). */
+export const TONIGHT_CARD_W = 156;
 
 const finite = (n: unknown): number =>
   typeof n === 'number' && Number.isFinite(n) ? n : 0;
@@ -350,6 +354,258 @@ export function HydrationRing({ current, target, size = 72 }: HydrationRingProps
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* "Next meal" HERO card                                               */
+/* ------------------------------------------------------------------ */
+
+export interface NextMealHeroProps {
+  /** Leading eyebrow word/phrase, e.g. "Next · pre-shift". Rendered alongside an
+   *  optional discrete `time` chip so the scheduled time stays its OWN text node. */
+  eyebrow: string;
+  /** Scheduled time, e.g. "08:00". Rendered as a separate chip (own text node). */
+  time?: string;
+  /** Meal title, e.g. "Grilled chicken bowl". */
+  title: string;
+  /** Meta line under the title, e.g. "620 kcal · 48g protein". */
+  meta?: string;
+  /** Food photo (require()'d image). */
+  img: any;
+  /** Primary CTA label (defaults to "View meal"). */
+  ctaLabel?: string;
+  onPress?: () => void;
+  accessibilityLabel?: string;
+}
+
+/**
+ * Full-bleed "next meal" hero: a food photo with a left-to-right scrim, a lime
+ * eyebrow chip, the meal title + macro meta, and a `CtaButton` "View meal →".
+ * Pure UI — the screen owns the plan read and the navigation handler. The CTA is
+ * the sanctioned `CtaButton` primitive (no inline gradient CTA), and the card is
+ * a plain art surface (no SafeBlurView), so both repo guards stay green.
+ */
+export function NextMealHero({
+  eyebrow,
+  time,
+  title,
+  meta,
+  img,
+  ctaLabel = 'View meal',
+  onPress,
+  accessibilityLabel,
+}: NextMealHeroProps) {
+  const { colors, typography, borderRadius } = useTheme();
+  return (
+    <Animated.View entering={FadeInDown.delay(40).duration(420)}>
+      <View
+        style={[
+          st.heroCard,
+          { borderRadius: borderRadius.xl, borderColor: withAlpha(colors.accent.lime, 0.5) },
+        ]}
+      >
+        <Image source={img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+        {/* Left-anchored scrim so the copy reads over the photo. */}
+        <LinearGradient
+          colors={['rgba(10,12,18,0.94)', 'rgba(10,12,18,0.55)', 'rgba(10,12,18,0.12)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+        <View style={st.heroBody}>
+          {/* Eyebrow + a DISCRETE time chip. The time is its own <Text> node (not
+              concatenated into the eyebrow) so callers/tests can find the exact
+              scheduled time string. */}
+          <View style={st.heroChipRow}>
+            <View style={[st.heroChip, { backgroundColor: withAlpha(colors.accent.lime, 0.18), borderColor: withAlpha(colors.accent.lime, 0.4) }]}>
+              <Text style={[typography.caption, { color: colors.accent.lime, fontWeight: '700', fontSize: 10 }]} numberOfLines={1}>
+                {eyebrow}
+              </Text>
+            </View>
+            {time ? (
+              <View style={[st.heroTimeChip, { backgroundColor: 'rgba(10,12,18,0.5)', borderColor: withAlpha(colors.accent.lime, 0.3) }]}>
+                <Text style={[typography.caption, { color: '#FFF', fontWeight: '700', fontSize: 10 }]} numberOfLines={1}>
+                  {time}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={[typography.heading, { color: '#FFF', fontWeight: '800', marginTop: 8 }]} numberOfLines={1}>
+            {title}
+          </Text>
+          {meta ? (
+            <Text style={[typography.caption, { color: 'rgba(255,255,255,0.82)', marginTop: 3 }]} numberOfLines={1}>
+              {meta}
+            </Text>
+          ) : null}
+          <CtaButton
+            label={ctaLabel}
+            icon="arrow-forward"
+            size="sm"
+            onPress={onPress}
+            accessibilityLabel={accessibilityLabel ?? `${ctaLabel}: ${title}`}
+            style={st.heroCta}
+          />
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Macro RING strip — 4 CircularProgress rings (Protein/Carbs/Fat/Water)*/
+/* ------------------------------------------------------------------ */
+
+export interface MacroRing {
+  label: string;
+  /** Consumed / target fraction passed straight to CircularProgress. */
+  fraction: number;
+  /** Whole-percent for the centre numeral (already clamped by the screen). */
+  percent: number;
+  color: string;
+}
+
+/**
+ * A row of four compact `CircularProgress` rings — the at-a-glance macro/water
+ * summary from the mockup. The screen computes each ring's fraction + percent
+ * from the REAL daily-progress + meal-logs reads (and clamps them), so this is
+ * pure UI. IMPORTANT: these rings render BEFORE the screen's calorie ring in the
+ * tree, so the calorie ring stays the LAST CircularProgress (the macro-guard test
+ * reads the last ring's `progress` as the calorie fraction).
+ */
+export function MacroRingStrip({ rings }: { rings: MacroRing[] }) {
+  const { colors, typography } = useTheme();
+  return (
+    <Animated.View entering={FadeInDown.delay(70).duration(420)} style={st.ringStrip}>
+      {rings.map((ring) => (
+        <View
+          key={ring.label}
+          style={st.ringItem}
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={`${ring.label} ${ring.percent}%`}
+        >
+          <CircularProgress
+            progress={ring.fraction}
+            size={56}
+            strokeWidth={6}
+            color={ring.color}
+            trackColor={colors.background.tertiary}
+          >
+            <Text style={[typography.captionMedium, { color: colors.text.primary, fontSize: 12 }]} maxFontSizeMultiplier={1.2}>
+              {ring.percent}%
+            </Text>
+          </CircularProgress>
+          <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 11, marginTop: 5 }]} numberOfLines={1}>
+            {ring.label}
+          </Text>
+        </View>
+      ))}
+    </Animated.View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* "Explore meals" BENTO grid                                          */
+/* ------------------------------------------------------------------ */
+
+export interface BentoTile {
+  key: string;
+  title: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  accent: string;
+  img: any;
+  onPress?: () => void;
+}
+
+/** One full-bleed bento tile: art + scrim + accent icon + title. */
+function BentoCard({ tile, style, big, index }: { tile: BentoTile; style?: any; big?: boolean; index: number }) {
+  const { typography, borderRadius } = useTheme();
+  return (
+    <Animated.View entering={FadeInDown.delay(120 + index * 50).springify().damping(18)} style={style}>
+      <PressableScale onPress={tile.onPress} accessibilityLabel={tile.title} style={{ flex: 1 }}>
+        <View style={[st.bentoCard, { borderRadius: borderRadius.lg, borderColor: withAlpha(tile.accent, 0.55) }]}>
+          <Image source={tile.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+          <LinearGradient
+            colors={['rgba(10,12,18,0.30)', 'rgba(10,12,18,0.86)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0.4, y: 1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <Text style={[typography.subhead, st.bentoTitle, big ? { fontSize: 17 } : { fontSize: 14 }]} numberOfLines={2}>
+            {tile.title}
+          </Text>
+          <Ionicons name={tile.icon} size={big ? 22 : 18} color={tile.accent} style={st.bentoIcon} />
+        </View>
+      </PressableScale>
+    </Animated.View>
+  );
+}
+
+/**
+ * The "Explore meals" bento — a DISTINCT pattern from the Train screen's even
+ * 2-col CategoryCard grid: a tall feature card pinned to the RIGHT column with a
+ * stack of smaller tiles flowing on the left. Expects exactly 6 tiles; tile[1]
+ * (High protein) is the tall feature. Pure UI — the screen wires each onPress.
+ */
+export function ExploreBento({ tiles }: { tiles: BentoTile[] }) {
+  // Defensive: render whatever is provided; the screen passes a fixed 6.
+  const t = tiles;
+  const feature = t[1];
+  return (
+    <View style={st.bentoWrap}>
+      {/* Left column: Quick & easy (wide) on top, then Recovery / Budget pair,
+          then Vegan / Comfort pair — three rows that total the feature height. */}
+      <View style={st.bentoLeftCol}>
+        {t[0] ? <BentoCard tile={t[0]} index={0} big style={st.bentoWide} /> : null}
+        <View style={st.bentoPairRow}>
+          {t[2] ? <BentoCard tile={t[2]} index={2} style={st.bentoHalf} /> : null}
+          {t[3] ? <BentoCard tile={t[3]} index={3} style={st.bentoHalf} /> : null}
+        </View>
+        <View style={st.bentoPairRow}>
+          {t[4] ? <BentoCard tile={t[4]} index={4} style={st.bentoHalf} /> : null}
+          {t[5] ? <BentoCard tile={t[5]} index={5} style={st.bentoHalf} /> : null}
+        </View>
+      </View>
+      {/* Right column: the tall feature card. */}
+      {feature ? <BentoCard tile={feature} index={1} big style={st.bentoFeature} /> : null}
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* "Recipes for tonight" carousel tile                                 */
+/* ------------------------------------------------------------------ */
+
+export interface TonightCardProps {
+  title: string;
+  meta?: string;
+  img: any;
+  index?: number;
+  onPress?: () => void;
+}
+
+/** A compact art-led recipe tile for the "Recipes for tonight" carousel. */
+export function TonightCard({ title, meta, img, index = 0, onPress }: TonightCardProps) {
+  const { colors, typography, borderRadius } = useTheme();
+  return (
+    <PressableScale onPress={onPress} accessibilityLabel={title} accessibilityHint="Opens recipe">
+      <View style={[st.tonightCard, { width: TONIGHT_CARD_W, borderRadius: borderRadius.lg, borderColor: colors.border.default }]}>
+        <Image source={img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+        <LinearGradient colors={['rgba(0,0,0,0.05)', 'rgba(0,0,0,0.88)']} style={StyleSheet.absoluteFillObject} />
+        <View style={st.tonightBody}>
+          <Text style={[typography.captionMedium, { color: '#FFF', fontSize: 13, fontWeight: '700' }]} numberOfLines={1}>
+            {title}
+          </Text>
+          {meta ? (
+            <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 11, marginTop: 1 }]} numberOfLines={1}>
+              {meta}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+    </PressableScale>
+  );
+}
+
 const st = StyleSheet.create({
   macroTile: {
     flex: 1,
@@ -397,4 +653,31 @@ const st = StyleSheet.create({
   },
   recipeDiscover: { alignItems: 'center', justifyContent: 'center', padding: 16 },
   discoverIcon: { width: 52, height: 52, borderRadius: 26, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+
+  // ── Next-meal hero ──────────────────────────────────────────────────────
+  heroCard: { height: 158, borderWidth: 1.5, overflow: 'hidden', justifyContent: 'center' },
+  heroBody: { paddingHorizontal: 16, paddingVertical: 14 },
+  heroChipRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  heroChip: { borderWidth: 1, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20 },
+  heroTimeChip: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
+  heroCta: { alignSelf: 'flex-start', marginTop: 12, paddingHorizontal: 16 },
+
+  // ── Macro ring strip ────────────────────────────────────────────────────
+  ringStrip: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-start', marginTop: 2 },
+  ringItem: { alignItems: 'center' },
+
+  // ── Explore bento (tall feature on the right + stacked left tiles) ───────
+  bentoWrap: { flexDirection: 'row', gap: 10 },
+  bentoLeftCol: { flex: 1.05, gap: 10 },
+  bentoFeature: { flex: 0.78, minHeight: 232 },
+  bentoWide: { height: 78 },
+  bentoPairRow: { flexDirection: 'row', gap: 10 },
+  bentoHalf: { flex: 1, height: 64 },
+  bentoCard: { flex: 1, borderWidth: 1, overflow: 'hidden', justifyContent: 'center' },
+  bentoTitle: { position: 'absolute', top: 9, left: 11, right: 28, color: '#FFF', fontWeight: '800' },
+  bentoIcon: { position: 'absolute', bottom: 9, left: 11 },
+
+  // ── "Recipes for tonight" carousel tile ─────────────────────────────────
+  tonightCard: { height: 132, borderWidth: 1, overflow: 'hidden', justifyContent: 'flex-end' },
+  tonightBody: { padding: 11 },
 });

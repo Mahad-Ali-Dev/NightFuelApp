@@ -29,6 +29,11 @@ import type { CyclePhase, Confidence, ForecastDay } from '@/api/cycle';
  * render as plain (no phase) cells.
  */
 
+// Coral period/cycle accent (the brand `accent.coral` token resolves to LIME
+// post-rebrand, so coral is an explicit literal here). Logged period days, the
+// fertile/ovulation overlays and the legend all read in this period accent.
+const CORAL = '#FF7A90';
+
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTH_NAMES = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -142,7 +147,7 @@ export function CycleCalendar({
     };
 
     return (
-        <GlassCard glow={withAlpha(colors.accent.coral, 0.12)} radius={borderRadius['2xl']} style={styles.card}>
+        <GlassCard glow={withAlpha(CORAL, 0.12)} radius={borderRadius['2xl']} style={styles.card}>
             <View style={styles.inner}>
                 {/* ── Month header + prev/next nav ── */}
                 <View style={styles.headerRow}>
@@ -207,7 +212,7 @@ export function CycleCalendar({
                         let borderWidth = 0;
 
                         if (isLogged) {
-                            bg = colors.accent.red; // confirmed period — solid
+                            bg = CORAL; // confirmed period — solid coral
                         } else if (isOvulation) {
                             bg = withAlpha(colors.accent.purple, 0.22);
                             borderStyle = 'dotted';
@@ -268,7 +273,7 @@ export function CycleCalendar({
 
                 {/* ── Legend: distinguishes LOGGED (solid) vs PREDICTED (dotted) ── */}
                 <View style={styles.legend}>
-                    <LegendItem color={colors.accent.red} label="Logged period" solid colors={colors} typography={typography} />
+                    <LegendItem color={CORAL} label="Logged period" solid colors={colors} typography={typography} />
                     {showPredictions ? (
                         <LegendItem
                             color={colors.accent.purple}
