@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Body Metrics</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .sec{color:var(--tx);font-size:16px;font-weight:600}
+  .nbtn{width:36px;height:36px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center}
+  /* measurement call-out pin */
+  .pin{position:absolute;display:flex;align-items:center;gap:8px;background:rgba(21,24,31,0.9);border:1px solid var(--bd);border-radius:12px;padding:7px 11px}
+  .pin .v{color:var(--tx);font-size:15px;font-weight:600;line-height:1;letter-spacing:-0.3px}
+  .pin .l{color:var(--mu);font-size:9px;font-weight:500;letter-spacing:0.4px;text-transform:uppercase;margin-top:2px}
+  .dot{width:8px;height:8px;border-radius:5px;background:var(--lm);flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll" style="padding-bottom:96px">
+    <!-- status bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+    <!-- back header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 0;position:relative;z-index:6">
+      <div style="display:flex;align-items:center;gap:10px"><div class="nbtn"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:18px"></i></div><span style="color:var(--tx);font-size:18px;font-weight:600;letter-spacing:-0.3px">Body metrics</span></div>
+      <div class="nbtn"><i class="ti ti-camera" style="color:var(--mu);font-size:17px"></i></div>
+    </div>
+
+    <!-- figure stage with call-out pins -->
+    <div style="position:relative;height:392px;overflow:hidden">
+      <!-- soft radial stage behind the figure -->
+      <div style="position:absolute;top:30px;left:50%;transform:translateX(-50%);width:300px;height:330px;border-radius:50%;background:radial-gradient(ellipse at 50% 42%,rgba(37,42,51,0.9),transparent 68%)"></div>
+      <!-- subtle floor shadow -->
+      <div style="position:absolute;bottom:70px;left:50%;transform:translateX(-50%);width:170px;height:20px;border-radius:50%;background:radial-gradient(ellipse,rgba(0,0,0,0.55),transparent 72%);filter:blur(4px)"></div>
+
+      <img src="ready/muscle-chest-male.png" alt="" style="position:absolute;top:30px;left:50%;transform:translateX(-50%);height:320px;object-fit:contain;filter:drop-shadow(0 18px 30px rgba(0,0,0,0.55))">
+
+      <div class="pin" style="top:96px;left:16px"><span class="dot"></span><div><div class="v">105<span style="font-size:9px;color:var(--mu);font-weight:500"> cm</span></div><div class="l">Chest</div></div></div>
+      <div class="pin" style="top:70px;right:16px"><div style="text-align:right"><div class="v">38<span style="font-size:9px;color:var(--mu);font-weight:500"> cm</span></div><div class="l">Arms</div></div><span class="dot"></span></div>
+      <div class="pin" style="top:198px;left:14px"><span class="dot"></span><div><div class="v">85<span style="font-size:9px;color:var(--mu);font-weight:500"> cm</span></div><div class="l">Waist</div></div></div>
+      <div class="pin" style="top:250px;right:16px"><div style="text-align:right"><div class="v">100<span style="font-size:9px;color:var(--mu);font-weight:500"> cm</span></div><div class="l">Hips</div></div><span class="dot"></span></div>
+    </div>
+
+    <!-- weight + body fat headline -->
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;padding:4px 18px 0">
+      <div>
+        <div style="color:var(--mu);font-size:13px">Current weight</div>
+        <div style="display:flex;align-items:baseline;gap:5px;margin-top:2px"><span style="color:var(--tx);font-size:52px;font-weight:700;letter-spacing:-1.5px;line-height:0.9">82.5</span><span style="color:var(--mu);font-size:17px;font-weight:500">kg</span></div>
+        <div style="display:inline-flex;align-items:center;gap:5px;background:#1c2a0e;border:1px solid #2e3a16;padding:5px 11px;border-radius:20px;margin-top:10px"><i class="ti ti-trending-down" style="color:var(--lm);font-size:13px"></i><span style="color:var(--lm);font-size:12px;font-weight:600">0.8 kg</span><span style="color:var(--mu);font-size:11px">this week</span></div>
+      </div>
+      <div style="text-align:right">
+        <div style="color:var(--tx);font-size:30px;font-weight:700;letter-spacing:-0.8px;line-height:1">15.2<span style="font-size:14px;color:var(--mu);font-weight:500">%</span></div>
+        <div style="color:var(--mu);font-size:12px;margin-top:2px">Body fat</div>
+      </div>
+    </div>
+
+    <!-- 12-week weight -->
+    <div style="padding:22px 16px 0"><div class="zc" style="padding:16px 15px 12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div style="color:var(--tx);font-size:15px;font-weight:600">12-week weight</div><div style="color:var(--mu);font-size:12.5px;margin-top:1px">88.0 → 82.5 kg · trending down</div></div>
+        <div style="display:flex;align-items:center;gap:4px;background:#1c2a0e;border:1px solid #2e3a16;padding:4px 9px;border-radius:20px"><i class="ti ti-trending-down" style="color:var(--lm);font-size:12px"></i><span style="color:var(--lm);font-size:11px;font-weight:600">5.5 kg</span></div>
+      </div>
+      <svg viewBox="0 0 290 96" width="100%" height="96" style="margin-top:14px;overflow:visible">
+        <defs><linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#C2F03C" stop-opacity="0.16"/><stop offset="100%" stop-color="#C2F03C" stop-opacity="0"/></linearGradient></defs>
+        <line x1="0" y1="20" x2="290" y2="20" stroke="#252A33" stroke-width="1"/>
+        <line x1="0" y1="55" x2="290" y2="55" stroke="#252A33" stroke-width="1"/>
+        <path d="M6,16 C34,18 50,26 78,34 C108,42 124,40 152,50 C182,60 196,66 224,72 C252,77 268,80 284,82 L284,90 L6,90 Z" fill="url(#wg)"/>
+        <path d="M6,16 C34,18 50,26 78,34 C108,42 124,40 152,50 C182,60 196,66 224,72 C252,77 268,80 284,82" fill="none" stroke="#C2F03C" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="284" cy="82" r="4.5" fill="#C2F03C" stroke="#15181F" stroke-width="2.5"/>
+      </svg>
+      <div style="display:flex;justify-content:space-between;margin-top:4px;color:var(--mu);font-size:11px"><span>Apr 1</span><span>May</span><span style="color:var(--tx)">Jun 23</span></div>
+    </div></div>
+
+    <!-- latest measurements -->
+    <div class="sec" style="padding:22px 18px 10px">Latest measurements</div>
+    <div style="padding:0 16px;display:grid;grid-template-columns:1fr 1fr;gap:11px">
+      <div class="zc" style="padding:14px 15px;display:flex;align-items:center;gap:12px"><div style="width:36px;height:36px;border-radius:11px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center"><i class="ti ti-shirt" style="color:var(--lm);font-size:18px"></i></div><div><div style="color:var(--tx);font-size:21px;font-weight:600;line-height:1;letter-spacing:-0.5px">105<span style="font-size:11px;color:var(--mu);font-weight:500"> cm</span></div><div style="color:var(--mu);font-size:11px;margin-top:3px">Chest</div></div></div>
+      <div class="zc" style="padding:14px 15px;display:flex;align-items:center;gap:12px"><div style="width:36px;height:36px;border-radius:11px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center"><i class="ti ti-circle-dashed" style="color:var(--lm);font-size:18px"></i></div><div><div style="color:var(--tx);font-size:21px;font-weight:600;line-height:1;letter-spacing:-0.5px">85<span style="font-size:11px;color:var(--mu);font-weight:500"> cm</span></div><div style="color:var(--mu);font-size:11px;margin-top:3px">Waist</div></div></div>
+      <div class="zc" style="padding:14px 15px;display:flex;align-items:center;gap:12px"><div style="width:36px;height:36px;border-radius:11px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center"><i class="ti ti-walk" style="color:var(--lm);font-size:18px"></i></div><div><div style="color:var(--tx);font-size:21px;font-weight:600;line-height:1;letter-spacing:-0.5px">100<span style="font-size:11px;color:var(--mu);font-weight:500"> cm</span></div><div style="color:var(--mu);font-size:11px;margin-top:3px">Hips</div></div></div>
+      <div class="zc" style="padding:14px 15px;display:flex;align-items:center;gap:12px"><div style="width:36px;height:36px;border-radius:11px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center"><i class="ti ti-barbell" style="color:var(--lm);font-size:18px"></i></div><div><div style="color:var(--tx);font-size:21px;font-weight:600;line-height:1;letter-spacing:-0.5px">38<span style="font-size:11px;color:var(--mu);font-weight:500"> cm</span></div><div style="color:var(--mu);font-size:11px;margin-top:3px">Arms</div></div></div>
+    </div>
+
+    <!-- history -->
+    <div class="sec" style="padding:22px 18px 10px">History</div>
+    <div style="padding:0 16px"><div class="zc" style="padding:2px 15px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid #1f232b">
+        <div style="display:flex;align-items:center;gap:13px"><div style="width:38px;height:38px;border-radius:11px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center"><i class="ti ti-scan" style="color:var(--lm);font-size:18px"></i></div><div><div style="color:var(--tx);font-size:14px;font-weight:600;letter-spacing:-0.2px">Jun 23, 2026</div><div style="color:var(--mu);font-size:12px">82.5 kg · 15.2% BF</div></div></div>
+        <div style="display:flex;align-items:center;gap:3px"><i class="ti ti-trending-down" style="color:var(--lm);font-size:13px"></i><span style="color:var(--lm);font-size:13px;font-weight:600">0.8</span></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid #1f232b">
+        <div style="display:flex;align-items:center;gap:13px"><div style="width:38px;height:38px;border-radius:11px;background:#1e222b;border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-scan" style="color:var(--mu);font-size:18px"></i></div><div><div style="color:var(--tx);font-size:14px;font-weight:600;letter-spacing:-0.2px">Jun 16, 2026</div><div style="color:var(--mu);font-size:12px">83.3 kg · 15.6% BF</div></div></div>
+        <div style="display:flex;align-items:center;gap:3px"><i class="ti ti-trending-down" style="color:var(--mu);font-size:13px"></i><span style="color:var(--mu);font-size:13px;font-weight:600">0.8</span></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0">
+        <div style="display:flex;align-items:center;gap:13px"><div style="width:38px;height:38px;border-radius:11px;background:#1e222b;border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-scan" style="color:var(--mu);font-size:18px"></i></div><div><div style="color:var(--tx);font-size:14px;font-weight:600;letter-spacing:-0.2px">Jun 9, 2026</div><div style="color:var(--mu);font-size:12px">84.1 kg · 16.0% BF</div></div></div>
+        <div style="display:flex;align-items:center;gap:3px"><i class="ti ti-trending-down" style="color:var(--mu);font-size:13px"></i><span style="color:var(--mu);font-size:13px;font-weight:600">0.7</span></div>
+      </div>
+    </div></div>
+    <div style="height:20px"></div>
+  </div>
+
+  <!-- pinned CTA -->
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;background:linear-gradient(180deg,rgba(10,12,18,0),var(--bg) 32%)">
+    <div style="background:var(--lm);color:#13200a;height:52px;border-radius:15px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:600"><i class="ti ti-circle-plus" style="font-size:19px"></i>Add today's snapshot</div>
+  </div>
+</div>
+</body>
+</html>

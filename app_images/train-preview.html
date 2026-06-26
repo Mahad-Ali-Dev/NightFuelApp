@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Train</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar,.mscroll::-webkit-scrollbar{display:none}
+  .mscroll{overflow-x:auto;scrollbar-width:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .glow{border:1.5px solid var(--lm);box-shadow:0 0 14px #C2F03C44;background:linear-gradient(150deg,#2b303a,#14171e)}
+  .imgwrap{position:relative;overflow:hidden}.imgwrap img{width:100%;height:100%;object-fit:cover}
+  .cat{position:relative;border-radius:15px;overflow:hidden;border:1.5px solid var(--lm);box-shadow:0 0 14px #C2F03C44;background:linear-gradient(150deg,#2b303a,#14171e);display:flex;flex-direction:column;justify-content:flex-end}
+  .cat .ph{position:absolute;inset:0;background:radial-gradient(circle at 70% 30%,#1c2a0e55,transparent 60%)}
+  .cat img{position:absolute;right:-8px;bottom:-6px;height:72px;object-fit:contain;opacity:0.92}
+  .cat .ico{position:absolute;bottom:10px;left:12px;width:30px;height:30px;border-radius:9px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center;color:var(--lm);font-size:17px}
+  .cat b{position:absolute;top:12px;left:13px;color:#fff;font-size:14px;font-weight:600;letter-spacing:-0.2px}
+  .cat small{position:absolute;top:31px;left:13px;color:#cfd4dd;font-size:10.5px;font-weight:500}
+  .ria{position:absolute;right:0;top:300px;z-index:5;background:var(--lm);color:#13200a;width:44px;padding:11px 0;border-radius:16px 0 0 16px;display:flex;flex-direction:column;align-items:center;gap:5px;box-shadow:0 4px 16px #0008}
+</style>
+</head>
+<body>
+<div class="frame"><div class="scroll">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+  <!-- header: search / Workouts / avatar -->
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px 6px">
+    <div style="width:40px;height:40px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-search" style="color:var(--tx);font-size:20px"></i></div>
+    <div style="color:var(--tx);font-size:19px;font-weight:600;letter-spacing:-0.2px">Workouts</div>
+    <div style="width:40px;height:40px;border-radius:50%;background:#1c2a0e;border:1.5px solid #2e3a16;color:var(--lm);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600">A</div>
+  </div>
+
+  <!-- Workout of the Day -->
+  <div style="color:var(--tx);font-size:16px;font-weight:600;padding:14px 18px 10px">Workout of the Day</div>
+  <div style="padding:0 16px">
+    <div style="position:relative;height:150px;border-radius:18px;overflow:hidden;background:linear-gradient(150deg,#2b303a,#14171e)">
+      <img src="ready/muscle-chest-male.png" style="position:absolute;right:-24px;bottom:-8px;height:164px;width:auto;object-fit:contain;opacity:0.82">
+      <div style="position:absolute;inset:0;background:linear-gradient(98deg,#1b1e25 34%,transparent 84%)"></div>
+      <div style="position:relative;padding:15px 16px;height:100%;display:flex;flex-direction:column;align-items:flex-start">
+        <span style="background:var(--lm);color:#13200a;font-size:10px;font-weight:600;padding:3px 9px;border-radius:8px;letter-spacing:0.3px">WORKOUT OF THE DAY</span>
+        <div style="color:#fff;font-size:22px;font-weight:600;margin-top:8px;letter-spacing:-0.4px">Full Body Blast</div>
+        <div style="color:#cfd4dd;font-size:12.5px;margin-top:2px"><i class="ti ti-clock" style="color:var(--lm);font-size:13px;position:relative;top:1px"></i> 45 min · 8 exercises</div>
+        <div style="margin-top:auto;display:flex;align-items:center;gap:7px;background:var(--lm);color:#13200a;font-size:13px;font-weight:600;padding:9px 20px;border-radius:22px"><i class="ti ti-player-play" style="font-size:14px"></i>Start workout</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:center;gap:6px;padding:11px 0 0">
+      <span style="width:18px;height:6px;background:var(--lm);border-radius:6px"></span>
+      <span style="width:6px;height:6px;background:#3a3f49;border-radius:50%"></span>
+      <span style="width:6px;height:6px;background:#3a3f49;border-radius:50%"></span>
+      <span style="width:6px;height:6px;background:#3a3f49;border-radius:50%"></span>
+    </div>
+  </div>
+
+  <!-- interlocking bento of categories -->
+  <div style="color:var(--tx);font-size:16px;font-weight:600;padding:22px 18px 10px">Browse by style</div>
+  <div style="padding:0 16px">
+    <div style="position:relative;width:100%;height:401px">
+      <!-- HIIT: 1/3, tall -->
+      <div class="cat" style="position:absolute;left:0;top:0;width:96px;height:173px;border-radius:18px">
+        <img src="ready/hero-female-1.png" alt="" style="position:absolute;right:50%;bottom:0;height:100%;transform:translateX(50%);object-fit:contain;filter:grayscale(1) contrast(1.08);opacity:0.85;z-index:0">
+        <div style="position:absolute;inset:0;background:linear-gradient(155deg,#0A0C12cc 12%,transparent 58%);z-index:1"></div>
+        <b style="z-index:2;font-size:16px">HIIT</b><div class="ico" style="z-index:2"><i class="ti ti-flame"></i></div>
+      </div>
+      <!-- Strength: TRUE L-shape (SVG) — Cardio nests in the empty notch, zero overlap -->
+      <div style="position:absolute;left:105px;top:0;width:203px;height:173px">
+        <svg viewBox="0 0 203 173" width="100%" height="100%" style="position:absolute;inset:0;overflow:visible;filter:drop-shadow(0 0 6px #C2F03C55)">
+          <defs>
+            <linearGradient id="sgA" x1="0" y1="0" x2="0.8" y2="1"><stop offset="0" stop-color="#2b303a"/><stop offset="1" stop-color="#14171e"/></linearGradient>
+            <linearGradient id="sgD" x1="0" y1="0" x2="1" y2="0.45"><stop offset="0.12" stop-color="#0A0C12" stop-opacity="0.85"/><stop offset="0.62" stop-color="#0A0C12" stop-opacity="0"/></linearGradient>
+            <clipPath id="lc"><path d="M 0,18 A 18,18 0 0 1 18,0 L 185,0 A 18,18 0 0 1 203,18 L 203,88 A 18,18 0 0 1 185,106 L 113,106 A 18,18 0 0 0 95,124 L 95,155 A 18,18 0 0 1 77,173 L 18,173 A 18,18 0 0 1 0,155 Z"/></clipPath>
+          </defs>
+          <g clip-path="url(#lc)">
+            <rect width="203" height="173" fill="url(#sgA)"/>
+            <image href="ready/muscle-chest-male.png" x="72" y="0" width="150" height="173" preserveAspectRatio="xMidYMax meet" opacity="0.82" style="filter:grayscale(1) contrast(1.08)"/>
+            <rect width="203" height="173" fill="url(#sgD)"/>
+          </g>
+          <path d="M 0,18 A 18,18 0 0 1 18,0 L 185,0 A 18,18 0 0 1 203,18 L 203,88 A 18,18 0 0 1 185,106 L 113,106 A 18,18 0 0 0 95,124 L 95,155 A 18,18 0 0 1 77,173 L 18,173 A 18,18 0 0 1 0,155 Z" fill="none" stroke="#C2F03C" stroke-width="1.5"/>
+        </svg>
+        <b style="position:absolute;top:11px;left:14px;color:#fff;font-size:16px;font-weight:600;z-index:2">Strength</b>
+        <div style="position:absolute;bottom:12px;left:12px;width:30px;height:30px;border-radius:9px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center;color:#C2F03C;font-size:17px;z-index:2"><i class="ti ti-barbell"></i></div>
+      </div>
+      <!-- Cardio: 1/3, tall — sits cleanly inside Strength's notch, no overlap -->
+      <div class="cat" style="position:absolute;left:210px;top:113px;width:98px;height:195px;border-radius:18px">
+        <img src="ready/muscle-cardio-male.png" alt="" style="position:absolute;right:50%;bottom:0;height:100%;transform:translateX(50%);object-fit:contain;filter:grayscale(1) contrast(1.08);opacity:0.85;z-index:0">
+        <div style="position:absolute;inset:0;background:linear-gradient(155deg,#0A0C12cc 12%,transparent 58%);z-index:1"></div>
+        <b style="z-index:2;font-size:16px">Cardio</b><div class="ico" style="z-index:2"><i class="ti ti-heartbeat"></i></div>
+      </div>
+      <!-- Yoga: 2/3, wide -->
+      <div class="cat" style="position:absolute;left:0;top:182px;width:203px;height:126px;border-radius:18px">
+        <img src="ready/hero-female-2.png" alt="" style="position:absolute;right:14px;bottom:0;height:124px;object-fit:contain;filter:grayscale(1) contrast(1.08);opacity:0.85;z-index:0">
+        <div style="position:absolute;inset:0;background:linear-gradient(108deg,#0A0C12dd 16%,#0A0C1255 48%,transparent 78%);z-index:1"></div>
+        <b style="z-index:2;font-size:16px">Yoga</b><div class="ico" style="z-index:2"><i class="ti ti-yoga"></i></div>
+      </div>
+      <!-- Mobility -->
+      <div class="cat" style="position:absolute;left:0;top:317px;width:149px;height:84px;border-radius:18px">
+        <img src="ready/muscle-back-male.png" alt="" style="position:absolute;right:10px;bottom:0;height:96px;object-fit:contain;filter:grayscale(1) contrast(1.08);opacity:0.78;z-index:0">
+        <div style="position:absolute;inset:0;background:linear-gradient(108deg,#0A0C12dd 20%,transparent 72%);z-index:1"></div>
+        <b style="z-index:2;font-size:15px">Mobility</b><div class="ico" style="z-index:2"><i class="ti ti-stretching"></i></div>
+      </div>
+      <!-- Pilates -->
+      <div class="cat" style="position:absolute;left:159px;top:317px;width:149px;height:84px;border-radius:18px">
+        <img src="ready/muscle-legs-male.png" alt="" style="position:absolute;right:10px;bottom:0;height:96px;object-fit:contain;filter:grayscale(1) contrast(1.08);opacity:0.78;z-index:0">
+        <div style="position:absolute;inset:0;background:linear-gradient(108deg,#0A0C12dd 20%,transparent 72%);z-index:1"></div>
+        <b style="z-index:2;font-size:15px">Pilates</b><div class="ico" style="z-index:2"><i class="ti ti-activity"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- muscle groups carousel -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:24px 18px 12px">
+    <span style="color:var(--tx);font-size:16px;font-weight:600">Target a muscle group</span>
+    <span style="color:var(--mu);font-size:12.5px;display:flex;align-items:center;gap:2px">All<i class="ti ti-chevron-right" style="font-size:15px"></i></span>
+  </div>
+  <div class="mscroll" style="display:flex;gap:12px;padding:0 16px 4px">
+    <div style="min-width:128px;flex-shrink:0;height:164px;border-radius:18px;border:1px solid #262b34;background:#14171d;position:relative;overflow:hidden">
+      <div style="position:absolute;left:50%;top:24px;width:104px;height:104px;transform:translateX(-50%);background:radial-gradient(circle,#C2F03C33,transparent 66%)"></div>
+      <img src="ready/muscle-chest-male.png" style="position:absolute;left:50%;top:9px;height:118px;transform:translateX(-50%);object-fit:contain">
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 13px;background:linear-gradient(0deg,#0c0e13 32%,transparent)">
+        <div style="color:#fff;font-size:14px;font-weight:600;letter-spacing:-0.2px">Chest</div>
+        <div style="color:var(--lm);font-size:11px;font-weight:500;margin-top:1px">24 exercises</div>
+      </div>
+    </div>
+    <div style="min-width:128px;flex-shrink:0;height:164px;border-radius:18px;border:1px solid #262b34;background:#14171d;position:relative;overflow:hidden">
+      <div style="position:absolute;left:50%;top:24px;width:104px;height:104px;transform:translateX(-50%);background:radial-gradient(circle,#C2F03C33,transparent 66%)"></div>
+      <img src="ready/muscle-back-male.png" style="position:absolute;left:50%;top:9px;height:118px;transform:translateX(-50%);object-fit:contain">
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 13px;background:linear-gradient(0deg,#0c0e13 32%,transparent)">
+        <div style="color:#fff;font-size:14px;font-weight:600;letter-spacing:-0.2px">Back</div>
+        <div style="color:var(--lm);font-size:11px;font-weight:500;margin-top:1px">32 exercises</div>
+      </div>
+    </div>
+    <div style="min-width:128px;flex-shrink:0;height:164px;border-radius:18px;border:1px solid #262b34;background:#14171d;position:relative;overflow:hidden">
+      <div style="position:absolute;left:50%;top:24px;width:104px;height:104px;transform:translateX(-50%);background:radial-gradient(circle,#C2F03C33,transparent 66%)"></div>
+      <img src="ready/muscle-shoulders-male.png" style="position:absolute;left:50%;top:9px;height:118px;transform:translateX(-50%);object-fit:contain">
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 13px;background:linear-gradient(0deg,#0c0e13 32%,transparent)">
+        <div style="color:#fff;font-size:14px;font-weight:600;letter-spacing:-0.2px">Shoulders</div>
+        <div style="color:var(--lm);font-size:11px;font-weight:500;margin-top:1px">18 exercises</div>
+      </div>
+    </div>
+    <div style="min-width:128px;flex-shrink:0;height:164px;border-radius:18px;border:1px solid #262b34;background:#14171d;position:relative;overflow:hidden">
+      <div style="position:absolute;left:50%;top:24px;width:104px;height:104px;transform:translateX(-50%);background:radial-gradient(circle,#C2F03C33,transparent 66%)"></div>
+      <img src="ready/muscle-arms-male.png" style="position:absolute;left:50%;top:9px;height:118px;transform:translateX(-50%);object-fit:contain">
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 13px;background:linear-gradient(0deg,#0c0e13 32%,transparent)">
+        <div style="color:#fff;font-size:14px;font-weight:600;letter-spacing:-0.2px">Arms</div>
+        <div style="color:var(--lm);font-size:11px;font-weight:500;margin-top:1px">28 exercises</div>
+      </div>
+    </div>
+    <div style="min-width:128px;flex-shrink:0;height:164px;border-radius:18px;border:1px solid #262b34;background:#14171d;position:relative;overflow:hidden">
+      <div style="position:absolute;left:50%;top:24px;width:104px;height:104px;transform:translateX(-50%);background:radial-gradient(circle,#C2F03C33,transparent 66%)"></div>
+      <img src="ready/muscle-legs-male.png" style="position:absolute;left:50%;top:9px;height:118px;transform:translateX(-50%);object-fit:contain">
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 13px;background:linear-gradient(0deg,#0c0e13 32%,transparent)">
+        <div style="color:#fff;font-size:14px;font-weight:600;letter-spacing:-0.2px">Legs</div>
+        <div style="color:var(--lm);font-size:11px;font-weight:500;margin-top:1px">30 exercises</div>
+      </div>
+    </div>
+    <div style="min-width:128px;flex-shrink:0;height:164px;border-radius:18px;border:1px solid #262b34;background:#14171d;position:relative;overflow:hidden">
+      <div style="position:absolute;left:50%;top:24px;width:104px;height:104px;transform:translateX(-50%);background:radial-gradient(circle,#C2F03C33,transparent 66%)"></div>
+      <img src="ready/muscle-core-male.png" style="position:absolute;left:50%;top:9px;height:118px;transform:translateX(-50%);object-fit:contain">
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 13px;background:linear-gradient(0deg,#0c0e13 32%,transparent)">
+        <div style="color:#fff;font-size:14px;font-weight:600;letter-spacing:-0.2px">Core</div>
+        <div style="color:var(--lm);font-size:11px;font-weight:500;margin-top:1px">22 exercises</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:104px"></div>
+</div>
+
+<div class="ria"><i class="ti ti-message-circle" style="font-size:19px"></i><span style="font-size:10px;font-weight:500">Ria</span></div>
+<div style="position:absolute;bottom:12px;left:12px;right:12px;height:60px;background:#15181F;border:1px solid #2a2f3a;border-radius:26px;box-shadow:0 12px 28px #000b;display:flex;align-items:center;justify-content:space-around;padding:0 16px">
+  <div style="color:#7d828d;display:flex;flex-direction:column;align-items:center;gap:3px"><i class="ti ti-home" style="font-size:23px"></i><span style="font-size:10px">Home</span></div>
+  <div style="color:#7d828d;display:flex;flex-direction:column;align-items:center;gap:3px"><i class="ti ti-tools-kitchen-2" style="font-size:23px"></i><span style="font-size:10px">Meals</span></div>
+  <div style="color:#7d828d;display:flex;flex-direction:column;align-items:center;gap:3px"><i class="ti ti-plus" style="font-size:23px"></i><span style="font-size:10px">Add</span></div>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:3px"><div style="width:48px;height:48px;border-radius:50%;background:var(--lm);color:#13200a;display:flex;align-items:center;justify-content:center;margin-top:-24px;border:4px solid var(--bg);box-shadow:0 6px 15px #0009"><i class="ti ti-barbell" style="font-size:23px"></i></div><span style="font-size:10px;color:var(--lm);font-weight:500">Train</span></div>
+  <div style="color:#7d828d;display:flex;flex-direction:column;align-items:center;gap:3px"><i class="ti ti-user" style="font-size:23px"></i><span style="font-size:10px">You</span></div>
+</div>
+</div>
+</body>
+</html>

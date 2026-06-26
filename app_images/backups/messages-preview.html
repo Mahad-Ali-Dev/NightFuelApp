@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Messages</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .hscroll{overflow-x:auto}.hscroll::-webkit-scrollbar{display:none}
+  .av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;flex-shrink:0;position:relative;color:#fff}
+  .dot{position:absolute;bottom:1px;right:1px;width:12px;height:12px;border-radius:50%;background:var(--lm);border:2px solid var(--bg)}
+  .conv{display:flex;align-items:center;gap:13px;padding:12px 18px}
+  .nm{color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px}
+  .pv{color:var(--mu);font-size:12.5px;font-weight:400;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:188px}
+  .un{color:#cdd2da}
+  .badge{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--lm);color:#13200a;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:5px;margin-left:auto}
+</style>
+</head>
+<body>
+<div class="frame"><div class="scroll">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+  <!-- header -->
+  <div style="display:flex;align-items:center;gap:11px;padding:12px 18px 6px">
+    <i class="ti ti-chevron-left" style="color:var(--tx);font-size:25px"></i>
+    <span style="color:var(--tx);font-size:23px;font-weight:600;letter-spacing:-0.4px;flex:1">Messages</span>
+    <div style="width:40px;height:40px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-pencil" style="color:var(--lm);font-size:20px"></i></div>
+  </div>
+
+  <!-- search -->
+  <div style="padding:8px 16px 4px"><div style="background:var(--cd);border:1px solid var(--bd);border-radius:13px;padding:11px 14px;color:#5a5f6a;font-size:13.5px;display:flex;align-items:center;gap:9px"><i class="ti ti-search" style="font-size:18px"></i>Search messages</div></div>
+
+  <!-- active now -->
+  <div style="color:var(--mu);font-size:11px;font-weight:600;padding:12px 18px 0;text-transform:uppercase;letter-spacing:0.6px">Active now</div>
+  <div class="hscroll" style="display:flex;gap:15px;padding:11px 0 14px 18px">
+    <div style="text-align:center;flex-shrink:0"><div class="av" style="width:54px;height:54px;background:#2a1f2e;border:2px solid var(--lm)">JM<span class="dot"></span></div><div style="color:var(--mu);font-size:11px;font-weight:500;margin-top:5px">Jess</div></div>
+    <div style="text-align:center;flex-shrink:0"><div class="av" style="width:54px;height:54px;background:#15242b;border:2px solid var(--lm)">DK<span class="dot"></span></div><div style="color:var(--mu);font-size:11px;font-weight:500;margin-top:5px">Dan</div></div>
+    <div style="text-align:center;flex-shrink:0"><div class="av" style="width:54px;height:54px;background:#33271a;border:2px solid #2a2f3a">SR</div><div style="color:var(--mu);font-size:11px;font-weight:500;margin-top:5px">Sara</div></div>
+    <div style="text-align:center;flex-shrink:0"><div class="av" style="width:54px;height:54px;background:#241a2b;border:2px solid #2a2f3a">TP</div><div style="color:var(--mu);font-size:11px;font-weight:500;margin-top:5px">Tom</div></div>
+    <div style="text-align:center;flex-shrink:0"><div class="av" style="width:54px;height:54px;background:#1d2a30;border:2px solid #2a2f3a">LC</div><div style="color:var(--mu);font-size:11px;font-weight:500;margin-top:5px">Lia</div></div>
+  </div>
+
+  <!-- conversations -->
+  <div style="border-top:1px solid #1a1e26">
+    <div class="conv">
+      <div style="width:50px;height:50px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#1c2a0e;border:1.5px solid #2e3a16"><img src="logo_app.png" style="width:100%;height:100%;object-fit:cover"></div>
+      <div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:7px"><span class="nm">Ria</span><span style="background:#1c2a0e;color:var(--lm);font-size:9px;font-weight:600;padding:2px 7px;border-radius:6px;letter-spacing:0.3px">COACH</span></div><div class="pv un">Your caffeine cutoff is 02:00 ☕</div></div>
+      <div style="color:var(--lm);font-size:12px;font-weight:500">now</div>
+    </div>
+    <div class="conv">
+      <div class="av" style="width:50px;height:50px;background:#2a1f2e">JM<span class="dot"></span></div>
+      <div style="flex:1;min-width:0"><div class="nm">Jess Miller</div><div class="pv un">Crushed leg day! You training tonight?</div></div>
+      <div style="text-align:right"><div style="color:var(--lm);font-size:12px;font-weight:600">2m</div><div class="badge">2</div></div>
+    </div>
+    <div class="conv">
+      <div class="av" style="width:50px;height:50px;background:#15242b">DK<span class="dot"></span></div>
+      <div style="flex:1;min-width:0"><div class="nm">Dan Kowalski</div><div class="pv">Thanks for the recovery tip 🙏</div></div>
+      <div style="color:var(--mu);font-size:12px">1h</div>
+    </div>
+    <div class="conv">
+      <div style="width:50px;height:50px;border-radius:50%;background:#1c2a0e;color:var(--lm);display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1.5px solid #2e3a16"><i class="ti ti-users-group" style="font-size:23px"></i></div>
+      <div style="flex:1;min-width:0"><div class="nm">Night Shift Crew</div><div class="pv">Tom: who's lifting before the 11pm?</div></div>
+      <div style="text-align:right"><div style="color:var(--lm);font-size:12px;font-weight:600">3h</div><div class="badge">5</div></div>
+    </div>
+    <div class="conv">
+      <div class="av" style="width:50px;height:50px;background:#33271a">SR</div>
+      <div style="flex:1;min-width:0"><div class="nm">Sara Reyes</div><div class="pv">See you at the gym 👋</div></div>
+      <div style="color:var(--mu);font-size:12px">5h</div>
+    </div>
+    <div class="conv">
+      <div class="av" style="width:50px;height:50px;background:#241a2b">TP</div>
+      <div style="flex:1;min-width:0"><div class="nm">Tom Park</div><div class="pv">Shared a recipe with you</div></div>
+      <div style="color:var(--mu);font-size:12px">1d</div>
+    </div>
+    <div class="conv">
+      <div class="av" style="width:50px;height:50px;background:#1d2a30">LC</div>
+      <div style="flex:1;min-width:0"><div class="nm">Lia Chen</div><div class="pv">How do you handle the 4am slump?</div></div>
+      <div style="color:var(--mu);font-size:12px">2d</div>
+    </div>
+  </div>
+  <div style="height:28px"></div>
+</div>
+</div>
+</body>
+</html>

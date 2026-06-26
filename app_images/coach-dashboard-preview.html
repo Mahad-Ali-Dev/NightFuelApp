@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Coach Dashboard</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E;--am:#FFB84D;--rose:#FF7A90}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .av{width:46px;height:46px;border-radius:13px;object-fit:cover;object-position:top center;background:#1b1f29;flex-shrink:0}
+  .crow{display:flex;align-items:center;gap:12px;padding:13px 14px;margin:0 16px 11px;background:var(--cd);border:1px solid var(--bd);border-radius:16px;position:relative;overflow:hidden}
+  .bar{height:5px;border-radius:999px;background:#0e0f14;margin-top:8px;overflow:hidden}
+  .msg{width:38px;height:38px;border-radius:11px;background:#1e222b;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll" style="padding-bottom:96px">
+    <!-- status bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+    <!-- back-chevron header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 2px">
+      <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:24px"></i><span style="color:var(--tx);font-size:21px;font-weight:600;letter-spacing:-0.4px">Dashboard</span></div>
+      <div style="position:relative"><i class="ti ti-bell" style="color:var(--tx);font-size:23px"></i><span style="position:absolute;top:-1px;right:-1px;width:8px;height:8px;border-radius:50%;background:var(--lm);border:1.5px solid var(--bg)"></span></div>
+    </div>
+
+    <!-- KPI hero with coach figure -->
+    <div style="padding:10px 16px 0">
+      <div class="zc" style="position:relative;overflow:hidden;height:166px;background:linear-gradient(150deg,#222a12 0%,#15181F 64%)">
+        <img src="ready/hero-male-2.png" alt="" style="position:absolute;right:-26px;bottom:-4px;height:164px;object-fit:contain;pointer-events:none">
+        <div style="position:relative;padding:16px 18px;max-width:210px">
+          <span style="display:inline-flex;align-items:center;gap:6px;background:var(--lm);color:#13200a;font-size:10px;font-weight:600;padding:4px 9px;border-radius:7px;letter-spacing:0.3px">TUE · GOOD MORNING</span>
+          <div style="display:flex;align-items:flex-end;gap:8px;margin-top:11px">
+            <div style="color:var(--tx);font-size:48px;font-weight:700;line-height:.86;letter-spacing:-1.5px">14</div>
+            <div style="padding-bottom:5px"><div style="color:var(--tx);font-size:13px;font-weight:600;line-height:1.1">active</div><div style="color:var(--mu);font-size:12px;font-weight:400;line-height:1.1">clients</div></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:12px"><i class="ti ti-trending-up" style="color:var(--lm);font-size:16px"></i><span style="color:var(--mu);font-size:12.5px;font-weight:500">9 on an active protocol</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI strip -->
+    <div style="display:flex;gap:11px;padding:12px 16px 0">
+      <div class="zc" style="flex:1;padding:14px 13px">
+        <i class="ti ti-clipboard-text" style="color:var(--am);font-size:21px"></i>
+        <div style="color:var(--tx);font-size:25px;font-weight:600;margin-top:9px;line-height:1;letter-spacing:-0.5px">5</div>
+        <div style="color:var(--mu);font-size:11px;font-weight:500;margin-top:3px">Needs protocol</div>
+      </div>
+      <div class="zc" style="flex:1;padding:14px 13px">
+        <i class="ti ti-user-plus" style="color:var(--lm);font-size:21px"></i>
+        <div style="color:var(--tx);font-size:25px;font-weight:600;margin-top:9px;line-height:1;letter-spacing:-0.5px">3</div>
+        <div style="color:var(--mu);font-size:11px;font-weight:500;margin-top:3px">New this week</div>
+      </div>
+      <div class="zc" style="flex:1;padding:14px 13px">
+        <i class="ti ti-message-2" style="color:#4FC9E8;font-size:21px"></i>
+        <div style="color:var(--tx);font-size:25px;font-weight:600;margin-top:9px;line-height:1;letter-spacing:-0.5px">8</div>
+        <div style="color:var(--mu);font-size:11px;font-weight:500;margin-top:3px">Unread DMs</div>
+      </div>
+    </div>
+
+    <!-- Roster header -->
+    <div style="display:flex;align-items:center;gap:9px;padding:24px 16px 11px"><span style="color:var(--tx);font-size:18px;font-weight:600;letter-spacing:-0.4px">Your roster</span><span style="min-width:26px;height:23px;padding:0 8px;border-radius:20px;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;color:var(--mu);font-size:12px;font-weight:600">14</span></div>
+    <!-- filter chips -->
+    <div style="display:flex;gap:8px;padding:0 16px 14px;overflow-x:auto">
+      <span style="flex-shrink:0;padding:7px 14px;border-radius:20px;background:var(--lm);color:#13200a;font-size:13px;font-weight:600">All 14</span>
+      <span style="flex-shrink:0;padding:7px 14px;border-radius:20px;background:var(--cd);border:1px solid var(--bd);color:var(--mu);font-size:13px;font-weight:500">On track</span>
+      <span style="flex-shrink:0;padding:7px 14px;border-radius:20px;background:var(--cd);border:1px solid var(--bd);color:var(--am);font-size:13px;font-weight:500">At risk · 3</span>
+      <span style="flex-shrink:0;padding:7px 14px;border-radius:20px;background:var(--cd);border:1px solid var(--bd);color:var(--mu);font-size:13px;font-weight:500">New</span>
+    </div>
+
+    <!-- Maya — on track -->
+    <div class="crow">
+      <img class="av" src="ready/hero-female-1.png" alt="">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;justify-content:space-between"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Maya Kowalski</div><span style="color:var(--lm);font-size:12px;font-weight:600">92%</span></div>
+        <div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Cutting · Night shift</div>
+        <div class="bar"><div style="width:92%;height:100%;background:var(--lm)"></div></div>
+      </div>
+      <div class="msg"><i class="ti ti-message-circle" style="color:var(--tx);font-size:18px"></i><span style="position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;border-radius:9px;background:var(--rose);color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--cd)">2</span></div>
+    </div>
+
+    <!-- Jordan — on track -->
+    <div class="crow">
+      <img class="av" src="ready/hero-male-1.png" alt="">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;justify-content:space-between"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Jordan Reyes</div><span style="color:var(--lm);font-size:12px;font-weight:600">88%</span></div>
+        <div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Mass gain · Day shift</div>
+        <div class="bar"><div style="width:88%;height:100%;background:var(--lm)"></div></div>
+      </div>
+      <div class="msg"><i class="ti ti-message-circle" style="color:var(--mu);font-size:18px"></i></div>
+    </div>
+
+    <!-- Tomás — at risk -->
+    <div class="crow">
+      <div style="position:absolute;top:0;left:0;width:3px;height:100%;background:var(--am)"></div>
+      <img class="av" src="ready/hero-male-3.png" alt="">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;justify-content:space-between"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Tomás Nguyen</div><span style="color:var(--am);font-size:12px;font-weight:600">54%</span></div>
+        <div style="display:flex;align-items:center;gap:5px;margin-top:1px"><i class="ti ti-alert-triangle" style="color:var(--am);font-size:13px"></i><span style="color:var(--am);font-size:12px;font-weight:400">3 missed check-ins</span></div>
+        <div class="bar"><div style="width:54%;height:100%;background:var(--am)"></div></div>
+      </div>
+      <div class="msg"><i class="ti ti-message-circle" style="color:var(--tx);font-size:18px"></i><span style="position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;border-radius:9px;background:var(--rose);color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--cd)">1</span></div>
+    </div>
+
+    <!-- Aisha — on track -->
+    <div class="crow">
+      <img class="av" src="ready/hero-female-3.png" alt="">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;justify-content:space-between"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Aisha Haddad</div><span style="color:var(--lm);font-size:12px;font-weight:600">95%</span></div>
+        <div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Endurance · Rotating</div>
+        <div class="bar"><div style="width:95%;height:100%;background:var(--lm)"></div></div>
+      </div>
+      <div class="msg"><i class="ti ti-message-circle" style="color:var(--mu);font-size:18px"></i></div>
+    </div>
+
+    <!-- Liam — new -->
+    <div class="crow">
+      <div style="position:absolute;top:0;left:0;width:3px;height:100%;background:var(--lm)"></div>
+      <img class="av" src="ready/hero-female-2.png" alt="">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;justify-content:space-between"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Liam Carter</div><span style="color:var(--lm);font-size:10px;font-weight:600;padding:2px 8px;border-radius:12px;background:#1e222b">NEW</span></div>
+        <div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Awaiting first protocol</div>
+        <div style="display:flex;align-items:center;gap:5px;margin-top:7px"><i class="ti ti-clipboard-text" style="color:var(--am);font-size:13px"></i><span style="color:var(--mu);font-size:12px;font-weight:400">Tap to build a plan</span></div>
+      </div>
+      <div class="msg"><i class="ti ti-plus" style="color:var(--lm);font-size:18px"></i></div>
+    </div>
+  </div>
+
+  <!-- pinned CTA -->
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;background:linear-gradient(to top,var(--bg) 70%,rgba(10,12,18,0))">
+    <div style="height:50px;border-radius:15px;background:var(--lm);display:flex;align-items:center;justify-content:center;gap:8px;color:#13200a;font-size:15px;font-weight:600"><i class="ti ti-message-2" style="font-size:18px"></i>Message a client</div>
+  </div>
+</div>
+</body>
+</html>

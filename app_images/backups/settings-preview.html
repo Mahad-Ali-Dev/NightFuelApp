@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Settings</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E;--ro:#FF7A90}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  /* grouped row */
+  .row{display:flex;align-items:center;gap:12px;padding:14px 15px;position:relative}
+  .row:not(:last-child){border-bottom:1px solid #1f232b}
+  .row .ic{font-size:19px;color:var(--lm);width:22px;text-align:center;flex-shrink:0}
+  .row .nm{flex:1;color:var(--tx);font-size:14.5px;font-weight:500}
+  .row .vl{color:var(--mu);font-size:13.5px;font-weight:500;display:flex;align-items:center;gap:5px}
+  /* toggle */
+  .sw{width:44px;height:26px;border-radius:16px;position:relative;flex-shrink:0;background:var(--lm)}
+  .sw::after{content:"";position:absolute;top:2px;right:2px;width:22px;height:22px;border-radius:50%;background:#13200a}
+  .lbl{color:var(--mu);font-size:12px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;padding:22px 22px 9px}
+</style>
+</head>
+<body>
+<div class="frame"><div class="scroll" style="padding-bottom:30px">
+  <!-- status bar -->
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+  <!-- back-chevron header -->
+  <div style="display:flex;align-items:center;gap:8px;padding:12px 16px 6px">
+    <i class="ti ti-chevron-left" style="color:var(--tx);font-size:24px"></i>
+    <span style="color:var(--tx);font-size:21px;font-weight:600;letter-spacing:-0.4px">Settings</span>
+  </div>
+
+  <!-- profile card -->
+  <div style="padding:10px 16px 0"><div class="zc"><div style="display:flex;align-items:center;gap:13px;padding:15px 15px">
+    <div style="width:52px;height:52px;border-radius:50%;background:#1c2a0e;border:1.5px solid #2e3a16;color:var(--lm);display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:700">A</div>
+    <div style="flex:1"><div style="color:var(--tx);font-size:16px;font-weight:600;letter-spacing:-0.3px">Alex Carter</div><div style="color:var(--mu);font-size:13px;font-weight:400;margin-top:2px">alex@email.com</div></div>
+    <i class="ti ti-chevron-right" style="color:var(--mu);font-size:18px"></i>
+  </div></div></div>
+
+  <!-- preferences -->
+  <div class="lbl">Preferences</div>
+  <div style="padding:0 16px"><div class="zc" style="overflow:hidden">
+    <div class="row"><i class="ti ti-palette ic"></i><span class="nm">Appearance &amp; theme</span><span class="vl">Dark<i class="ti ti-chevron-right" style="font-size:16px"></i></span></div>
+    <div class="row"><i class="ti ti-sparkles ic"></i><span class="nm">Coach name</span><span class="vl">Ria<i class="ti ti-chevron-right" style="font-size:16px"></i></span></div>
+    <div class="row"><i class="ti ti-ruler-2 ic"></i><span class="nm">Units</span><span class="vl">Metric<i class="ti ti-chevron-right" style="font-size:16px"></i></span></div>
+    <div class="row"><i class="ti ti-bell ic"></i><span class="nm">Reminders</span><div class="sw"></div></div>
+  </div></div>
+
+  <!-- theme swatches -->
+  <div style="padding:11px 16px 0"><div class="zc"><div style="padding:15px 15px">
+    <div style="color:var(--mu);font-size:12px;font-weight:600;letter-spacing:0.3px;margin-bottom:12px">THEME</div>
+    <div style="display:flex;gap:13px">
+      <div style="text-align:center"><div style="width:48px;height:48px;border-radius:13px;background:#0A0C12;border:2px solid var(--lm);display:flex;align-items:center;justify-content:center"><i class="ti ti-check" style="color:var(--lm);font-size:19px"></i></div><div style="color:var(--tx);font-size:11px;font-weight:600;margin-top:6px">Midnight</div></div>
+      <div style="text-align:center"><div style="width:48px;height:48px;border-radius:13px;background:#1F2127;border:1px solid var(--bd)"></div><div style="color:var(--mu);font-size:11px;font-weight:500;margin-top:6px">Slate</div></div>
+      <div style="text-align:center"><div style="width:48px;height:48px;border-radius:13px;background:#F4F6FB;border:1px solid var(--bd)"></div><div style="color:var(--mu);font-size:11px;font-weight:500;margin-top:6px">Light</div></div>
+      <div style="text-align:center"><div style="width:48px;height:48px;border-radius:13px;background:linear-gradient(135deg,#15181F,#243010);border:1px solid var(--bd)"></div><div style="color:var(--mu);font-size:11px;font-weight:500;margin-top:6px">Lime</div></div>
+    </div>
+  </div></div></div>
+
+  <!-- health -->
+  <div class="lbl">Health</div>
+  <div style="padding:0 16px"><div class="zc" style="overflow:hidden">
+    <div class="row"><i class="ti ti-heart ic"></i><span class="nm">Cycle tracking</span><div class="sw"></div></div>
+    <div class="row"><i class="ti ti-activity-heartbeat ic"></i><span class="nm">Connected apps</span><span class="vl">Apple Health<i class="ti ti-chevron-right" style="font-size:16px"></i></span></div>
+  </div></div>
+
+  <!-- account -->
+  <div class="lbl">Account</div>
+  <div style="padding:0 16px"><div class="zc" style="overflow:hidden">
+    <div class="row"><i class="ti ti-crown ic"></i><span class="nm">Subscription</span><span class="vl" style="color:var(--lm);font-weight:600">Free<i class="ti ti-chevron-right" style="font-size:16px"></i></span></div>
+    <div class="row"><i class="ti ti-lock ic"></i><span class="nm">Privacy &amp; data</span><i class="ti ti-chevron-right" style="color:var(--mu);font-size:16px"></i></div>
+    <div class="row"><i class="ti ti-help-circle ic"></i><span class="nm">Help &amp; support</span><i class="ti ti-chevron-right" style="color:var(--mu);font-size:16px"></i></div>
+  </div></div>
+
+  <!-- sign out -->
+  <div style="padding:18px 16px 0"><div class="zc"><div class="row" style="justify-content:center"><span style="color:var(--ro);font-size:14.5px;font-weight:600">Sign out</span></div></div></div>
+  <div style="text-align:center;color:#3c424d;font-size:12px;font-weight:500;padding:18px">Zeitra v1.0.0</div>
+</div>
+</div>
+</body>
+</html>

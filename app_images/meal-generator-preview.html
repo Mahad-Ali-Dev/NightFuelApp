@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Meal generator</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .chip{background:var(--cd);border:1px solid var(--bd);color:var(--tx);font-size:13px;font-weight:500;padding:9px 14px;border-radius:22px;white-space:nowrap}
+  .chip.on{background:var(--lm);border-color:var(--lm);color:#13200a;font-weight:600}
+  .lbl{color:var(--tx);font-size:16px;font-weight:600;letter-spacing:-0.3px;padding:22px 18px 11px}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll" style="padding-bottom:118px">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+    <!-- back-chevron header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 4px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:38px;height:38px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:21px"></i></div>
+        <span style="color:var(--tx);font-size:19px;font-weight:600;letter-spacing:-0.3px">Meal generator</span>
+      </div>
+      <div style="width:38px;height:38px"></div>
+    </div>
+
+    <!-- Ria intro card -->
+    <div style="padding:14px 16px 0"><div style="background:#161d10;border:1px solid #38491b;border-radius:16px;padding:15px;display:flex;gap:13px;align-items:center">
+      <div style="width:46px;height:46px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1.5px solid #2e3a16"><img src="logo_app.png" style="width:100%;height:100%;object-fit:cover"></div>
+      <div style="color:#dfe3ea;font-size:13px;font-weight:400;line-height:1.5">Tell me your craving — I'll build a recipe around your shift, macros &amp; diet.</div>
+    </div></div>
+
+    <!-- craving input -->
+    <div class="lbl">What are you in the mood for?</div>
+    <div style="padding:0 16px"><div class="zc" style="padding:15px 16px;color:var(--mu);font-size:15px;font-weight:400;display:flex;align-items:center;justify-content:space-between">Something with chicken &amp; rice<i class="ti ti-microphone" style="font-size:20px;color:var(--tx)"></i></div></div>
+
+    <!-- style chips -->
+    <div class="lbl">Style</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;padding:0 16px"><span class="chip on">High-protein</span><span class="chip">Quick</span><span class="chip">Comfort</span><span class="chip">Light</span><span class="chip">Budget</span></div>
+
+    <!-- target slider -->
+    <div class="lbl">Target</div>
+    <div style="padding:0 16px"><div class="zc" style="padding:17px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;color:var(--mu);font-size:13px;font-weight:500"><span>Calories</span><span style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.3px">~620 kcal</span></div>
+      <div style="height:6px;background:#1e222b;border-radius:4px;margin-top:12px"><div style="width:58%;height:100%;background:var(--lm);border-radius:4px;position:relative"><span style="position:absolute;right:-8px;top:-6px;width:18px;height:18px;border-radius:50%;background:var(--lm);box-shadow:0 0 0 4px #C2F03C26"></span></div></div>
+      <div style="display:flex;justify-content:space-between;color:var(--mu);font-size:12px;font-weight:500;margin-top:13px"><span>P 45g</span><span>C 55g</span><span>F 18g</span></div>
+    </div></div>
+
+    <!-- ready-in chips -->
+    <div class="lbl">Ready in</div>
+    <div style="display:flex;gap:10px;padding:0 16px"><span class="chip">10 min</span><span class="chip on">20 min</span><span class="chip">30 min+</span></div>
+  </div>
+
+  <!-- sticky CTA -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:14px 16px 26px;background:linear-gradient(180deg,transparent,var(--bg) 30%);z-index:20"><div style="background:var(--lm);color:#13200a;font-size:16px;font-weight:600;padding:17px;border-radius:15px;text-align:center;display:flex;align-items:center;justify-content:center;gap:9px;letter-spacing:-0.2px">Generate recipe<i class="ti ti-sparkles"></i></div></div>
+</div>
+</body>
+</html>

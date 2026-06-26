@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Meal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .mac{flex:1;background:var(--cd);border:1px solid var(--bd);border-radius:16px;padding:14px 8px;text-align:center}
+  .ing{display:flex;align-items:center;gap:13px;padding:13px 0;border-bottom:1px solid var(--bd);color:var(--tx);font-size:14px;font-weight:400}
+  .rnd{width:38px;height:38px;border-radius:50%;background:#0a0c12aa;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid #ffffff1a;display:flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll">
+    <!-- full-bleed photo hero -->
+    <div style="position:relative;height:296px">
+      <img src="ready/meal-pre-shift.png" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+      <div style="position:absolute;inset:0;background:linear-gradient(180deg,#0a0c1266 0%,transparent 30%,#0a0c1255 64%,var(--bg) 100%)"></div>
+
+      <!-- status bar -->
+      <div style="position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:#fff;font-size:11px"><span style="font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+      <!-- back-chevron header -->
+      <div style="position:absolute;top:42px;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:0 16px"><div class="rnd"><i class="ti ti-chevron-left" style="color:#fff;font-size:21px"></i></div><div class="rnd"><i class="ti ti-bookmark" style="color:#fff;font-size:20px"></i></div></div>
+
+      <!-- title overlay -->
+      <div style="position:absolute;bottom:18px;left:18px;right:18px">
+        <div style="display:inline-flex;align-items:center;gap:6px;background:var(--lm);color:#13200a;font-size:10px;font-weight:600;padding:4px 10px;border-radius:8px;margin-bottom:11px;letter-spacing:0.2px"><i class="ti ti-moon-stars" style="font-size:13px"></i>Best pre-shift · 21:00</div>
+        <div style="color:#fff;font-size:27px;font-weight:600;letter-spacing:-0.5px;line-height:1.1">Grilled chicken bowl</div>
+      </div>
+    </div>
+
+    <!-- meta row -->
+    <div style="display:flex;gap:18px;padding:18px 18px 0;color:var(--mu);font-size:14px;font-weight:500">
+      <span style="display:flex;align-items:center;gap:6px"><i class="ti ti-clock" style="font-size:18px"></i>25 min</span>
+      <span style="display:flex;align-items:center;gap:6px"><i class="ti ti-flame" style="color:var(--lm);font-size:18px"></i>540 kcal</span>
+      <span style="display:flex;align-items:center;gap:6px"><i class="ti ti-tools-kitchen-2" style="font-size:18px"></i>Easy</span>
+    </div>
+
+    <!-- macros -->
+    <div style="display:flex;gap:12px;padding:18px 16px 0">
+      <div class="mac"><div style="color:var(--lm);font-size:20px;font-weight:600;letter-spacing:-0.3px">48g</div><div style="color:var(--mu);font-size:12px;font-weight:500;margin-top:3px">Protein</div></div>
+      <div class="mac"><div style="color:var(--tx);font-size:20px;font-weight:600;letter-spacing:-0.3px">52g</div><div style="color:var(--mu);font-size:12px;font-weight:500;margin-top:3px">Carbs</div></div>
+      <div class="mac"><div style="color:var(--tx);font-size:20px;font-weight:600;letter-spacing:-0.3px">14g</div><div style="color:var(--mu);font-size:12px;font-weight:500;margin-top:3px">Fat</div></div>
+    </div>
+
+    <!-- ingredients -->
+    <div style="color:var(--tx);font-size:18px;font-weight:600;letter-spacing:-0.3px;padding:26px 18px 4px">Ingredients</div>
+    <div style="padding:0 18px">
+      <div class="ing"><i class="ti ti-point" style="color:var(--lm);font-size:16px"></i>200g grilled chicken breast</div>
+      <div class="ing"><i class="ti ti-point" style="color:var(--lm);font-size:16px"></i>1 cup brown rice</div>
+      <div class="ing"><i class="ti ti-point" style="color:var(--lm);font-size:16px"></i>Avocado, cherry tomatoes, greens</div>
+      <div class="ing" style="border:none"><i class="ti ti-point" style="color:var(--lm);font-size:16px"></i>Olive oil + lemon dressing</div>
+    </div>
+    <div style="height:108px"></div>
+  </div>
+
+  <!-- sticky action bar -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:14px 16px 26px;background:linear-gradient(180deg,transparent,var(--bg) 30%);display:flex;gap:12px;z-index:20">
+    <div style="width:56px;height:54px;border-radius:15px;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;color:var(--tx);flex-shrink:0"><i class="ti ti-tools-kitchen-2" style="font-size:24px"></i></div>
+    <div style="flex:1;background:var(--lm);color:#13200a;font-size:16px;font-weight:600;border-radius:15px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:-0.2px"><i class="ti ti-plus"></i>Add to today</div>
+  </div>
+</div>
+</body>
+</html>

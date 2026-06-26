@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Leaderboard</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E;--gold:#E8C24A;--silver:#C7CCD6;--bronze:#CB8A52}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0;overflow:hidden;background-size:cover;background-position:center 18%;color:#fff}
+  .seg{flex:1;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px;font-size:13px;font-weight:600}
+  .fbtn{display:flex;align-items:center;justify-content:center;height:32px;padding:0 13px;border-radius:16px;font-size:12px;font-weight:600;gap:4px}
+  .delta{display:inline-flex;align-items:center;gap:1px;font-size:10px;font-weight:600;padding:1px 5px 1px 4px;border-radius:7px}
+</style>
+</head>
+<body>
+<div class="frame"><div class="scroll" style="padding-bottom:96px">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+  <!-- header -->
+  <div style="display:flex;align-items:center;gap:11px;padding:12px 18px 6px">
+    <i class="ti ti-chevron-left" style="color:var(--tx);font-size:25px"></i>
+    <span style="color:var(--tx);font-size:23px;font-weight:600;letter-spacing:-0.4px;flex:1">Leaderboard</span>
+    <div style="width:40px;height:40px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-trophy" style="color:var(--gold);font-size:20px"></i></div>
+  </div>
+
+  <!-- segmented control -->
+  <div style="padding:10px 16px 0"><div style="display:flex;gap:3px;background:var(--cd);border:1px solid var(--bd);border-radius:13px;padding:3px">
+    <div class="seg" style="color:var(--mu)">Week</div>
+    <div class="seg" style="color:var(--mu)">Month</div>
+    <div class="seg" style="background:#1c2a0e;color:var(--lm)">All-Time</div>
+  </div></div>
+
+  <!-- PODIUM -->
+  <div style="display:flex;justify-content:space-around;align-items:flex-end;padding:24px 16px 0">
+
+    <!-- 2nd -->
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;margin-top:24px">
+      <div style="position:relative;width:66px;height:66px">
+        <div class="av" style="width:66px;height:66px;border:2.5px solid var(--silver);background-image:url('ready/hero-female-2.png')"></div>
+        <div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:23px;height:23px;border-radius:50%;background:var(--silver);border:2.5px solid var(--bg);color:#13161c;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">2</div>
+      </div>
+      <div style="color:var(--tx);font-size:13px;font-weight:600;margin-top:14px">Jess M.</div>
+      <div style="color:var(--mu);font-size:14px;font-weight:600;margin-top:1px">3,180</div>
+      <div class="delta" style="background:#1d3a26;color:#3ddc84;margin-top:5px"><i class="ti ti-caret-up" style="font-size:9px"></i>2</div>
+      <div style="align-self:stretch;height:58px;margin:13px 6px 0;border-radius:12px 12px 0 0;background:var(--cd);border:1px solid var(--bd);border-bottom:none;display:flex;align-items:flex-start;justify-content:center;padding-top:11px;color:var(--silver);font-size:18px;font-weight:700">2</div>
+    </div>
+
+    <!-- 1st -->
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+      <i class="ti ti-crown" style="color:var(--gold);font-size:22px;margin-bottom:5px"></i>
+      <div style="position:relative;width:84px;height:84px">
+        <div class="av" style="width:84px;height:84px;border:2.5px solid var(--gold);background-image:url('ready/hero-male-1.png')"></div>
+        <div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:26px;height:26px;border-radius:50%;background:var(--gold);border:2.5px solid var(--bg);color:#3a2a00;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">1</div>
+      </div>
+      <div style="color:var(--tx);font-size:15px;font-weight:700;margin-top:15px">Marcus T.</div>
+      <div style="color:var(--gold);font-size:20px;font-weight:700;margin-top:1px;letter-spacing:-0.4px">4,920</div>
+      <div class="delta" style="background:#332a10;color:var(--gold);margin-top:5px"><i class="ti ti-crown" style="font-size:9px"></i>Holds #1</div>
+      <div style="align-self:stretch;height:80px;margin:13px 6px 0;border-radius:12px 12px 0 0;background:linear-gradient(180deg,#2a2718,var(--cd));border:1px solid var(--bd);border-bottom:none;display:flex;align-items:flex-start;justify-content:center;padding-top:14px;color:var(--gold);font-size:26px;font-weight:700">1</div>
+    </div>
+
+    <!-- 3rd -->
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;margin-top:24px">
+      <div style="position:relative;width:66px;height:66px">
+        <div class="av" style="width:66px;height:66px;border:2.5px solid var(--bronze);background-image:url('ready/hero-female-3.png')"></div>
+        <div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:23px;height:23px;border-radius:50%;background:var(--bronze);border:2.5px solid var(--bg);color:#3a1f08;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">3</div>
+      </div>
+      <div style="color:var(--tx);font-size:13px;font-weight:600;margin-top:14px">Sara R.</div>
+      <div style="color:var(--mu);font-size:14px;font-weight:600;margin-top:1px">2,640</div>
+      <div class="delta" style="background:#3a201d;color:#FF7A6B;margin-top:5px"><i class="ti ti-caret-down" style="font-size:9px"></i>1</div>
+      <div style="align-self:stretch;height:46px;margin:13px 6px 0;border-radius:12px 12px 0 0;background:var(--cd);border:1px solid var(--bd);border-bottom:none;display:flex;align-items:flex-start;justify-content:center;padding-top:9px;color:var(--bronze);font-size:17px;font-weight:700">3</div>
+    </div>
+  </div>
+
+  <!-- The Pack -->
+  <div style="color:var(--mu);font-size:11px;font-weight:600;letter-spacing:0.6px;text-transform:uppercase;padding:26px 18px 10px">The pack</div>
+  <div style="padding:0 16px"><div class="zc">
+    <!-- 4 -->
+    <div style="display:flex;align-items:center;height:62px;padding:0 14px;border-bottom:1px solid #1f232b">
+      <span style="color:var(--mu);font-size:16px;font-weight:600;width:24px;text-align:center">4</span>
+      <div class="av" style="width:40px;height:40px;margin-left:6px;background-image:url('ready/hero-male-2.png')"></div>
+      <div style="flex:1;margin-left:12px"><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--tx);font-size:14px;font-weight:600">Dan Kowalski</span><span class="delta" style="background:#1d3a26;color:#3ddc84"><i class="ti ti-caret-up" style="font-size:8px"></i>3</span></div><div style="color:var(--mu);font-size:12px;margin-top:1px">2,410 XP</div></div>
+      <div class="fbtn" style="background:#1c2a0e;color:var(--lm)"><i class="ti ti-plus" style="font-size:13px"></i>Follow</div>
+    </div>
+    <!-- 5 -->
+    <div style="display:flex;align-items:center;height:62px;padding:0 14px;border-bottom:1px solid #1f232b">
+      <span style="color:var(--mu);font-size:16px;font-weight:600;width:24px;text-align:center">5</span>
+      <div class="av" style="width:40px;height:40px;margin-left:6px;background:#241a2b;font-size:13px">TP</div>
+      <div style="flex:1;margin-left:12px"><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--tx);font-size:14px;font-weight:600">Tom Park</span><span class="delta" style="background:var(--cd);color:var(--mu)">—</span></div><div style="color:var(--mu);font-size:12px;margin-top:1px">2,180 XP</div></div>
+      <div class="fbtn" style="background:var(--cd);border:1px solid var(--bd);color:var(--mu)"><i class="ti ti-check" style="font-size:13px"></i>Following</div>
+    </div>
+    <!-- 6 -->
+    <div style="display:flex;align-items:center;height:62px;padding:0 14px;border-bottom:1px solid #1f232b">
+      <span style="color:var(--mu);font-size:16px;font-weight:600;width:24px;text-align:center">6</span>
+      <div class="av" style="width:40px;height:40px;margin-left:6px;background-image:url('ready/hero-female-1.png')"></div>
+      <div style="flex:1;margin-left:12px"><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--tx);font-size:14px;font-weight:600">Nadia Cole</span><span class="delta" style="background:#1d3a26;color:#3ddc84"><i class="ti ti-caret-up" style="font-size:8px"></i>5</span></div><div style="color:var(--mu);font-size:12px;margin-top:1px">1,990 XP</div></div>
+      <div class="fbtn" style="background:#1c2a0e;color:var(--lm)"><i class="ti ti-plus" style="font-size:13px"></i>Follow</div>
+    </div>
+    <!-- 7 -->
+    <div style="display:flex;align-items:center;height:62px;padding:0 14px">
+      <span style="color:var(--mu);font-size:16px;font-weight:600;width:24px;text-align:center">7</span>
+      <div class="av" style="width:40px;height:40px;margin-left:6px;background:#1d2a30;font-size:13px">LB</div>
+      <div style="flex:1;margin-left:12px"><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--tx);font-size:14px;font-weight:600">Leo Brandt</span><span class="delta" style="background:#3a201d;color:#FF7A6B"><i class="ti ti-caret-down" style="font-size:8px"></i>2</span></div><div style="color:var(--mu);font-size:12px;margin-top:1px">1,720 XP</div></div>
+      <div class="fbtn" style="background:#1c2a0e;color:var(--lm)"><i class="ti ti-plus" style="font-size:13px"></i>Follow</div>
+    </div>
+  </div></div>
+  <div style="height:20px"></div>
+</div>
+
+<!-- sticky My Rank -->
+<div style="position:absolute;bottom:0;left:0;right:0;padding:12px 16px 16px">
+  <div style="position:absolute;top:-22px;left:0;right:0;height:22px;background:linear-gradient(transparent,var(--bg))"></div>
+  <div style="position:relative;background:#1c2a0e;border:1px solid #2e3a16;border-radius:18px;display:flex;align-items:center;height:62px;padding:0 16px">
+    <span style="color:var(--lm);font-size:17px;font-weight:700;width:24px;text-align:center">12</span>
+    <div class="av" style="width:40px;height:40px;margin-left:6px;background:var(--lm);color:#13200a;font-size:15px;font-weight:700">A</div>
+    <div style="flex:1;margin-left:12px"><div style="display:flex;align-items:center;gap:6px"><span style="color:var(--tx);font-size:14px;font-weight:600">Alex (You)</span><span class="delta" style="background:#1d3a26;color:#3ddc84"><i class="ti ti-caret-up" style="font-size:8px"></i>4</span></div><div style="color:#a9c46b;font-size:12px;margin-top:1px">480 XP to next rank</div></div>
+    <span style="color:var(--lm);font-size:17px;font-weight:700;margin-left:10px">1,240</span>
+  </div>
+</div>
+</div>
+</body>
+</html>

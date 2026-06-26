@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Themes</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#070810;font-family:'Saira',-apple-system,sans-serif;color:#F4F6FB;padding:30px 24px 60px}
+  h1{font-size:26px;font-weight:700;letter-spacing:1px}
+  .sub{color:#8B919E;font-size:14px;margin-top:6px;max-width:760px;line-height:1.5}
+  .row{display:flex;flex-wrap:wrap;gap:26px;margin-top:30px}
+  .col{display:flex;flex-direction:column;gap:12px;width:288px}
+  .lbl b{font-size:16px;font-weight:600}
+  .lbl span{color:#8B919E;font-size:12px;margin-left:6px}
+  .pal{display:flex;gap:6px}
+  .pal i{width:22px;height:22px;border-radius:6px;border:1px solid #ffffff18}
+  .mini{width:288px;height:572px;border-radius:34px;border:7px solid #1b1e25;overflow:hidden;position:relative;background:var(--bg)}
+  /* THEMES */
+  .t1{--bg:#0A0C12;--sf:#15181F;--bd:#252A33;--ac:#C2F03C;--ink:#13200a;--tx:#F4F6FB;--mu:#8B919E}
+  .t2{--bg:#110D09;--sf:#1C1610;--bd:#312820;--ac:#FF9A3C;--ink:#2a1502;--tx:#F6F2EB;--mu:#9E9185}
+  .t3{--bg:#0B0B15;--sf:#16161F;--bd:#272636;--ac:#9D7CFF;--ink:#160d2e;--tx:#F1F1FA;--mu:#8C8AA0}
+  .t4{--bg:#F4F7EE;--sf:#FFFFFF;--bd:#E5E9DD;--ac:#5DA425;--ink:#FFFFFF;--tx:#161A1E;--mu:#69707E}
+  .t5{--bg:#F2F5FB;--sf:#FFFFFF;--bd:#E2E7F0;--ac:#5560E6;--ink:#FFFFFF;--tx:#181D27;--mu:#69707E}
+  .t6{--bg:#0A0A0B;--sf:#161618;--bd:#29292E;--ac:#FFFFFF;--ink:#0A0A0B;--tx:#FFFFFF;--mu:#8A8A92}
+  .t7{--bg:#F4F4F6;--sf:#FFFFFF;--bd:#E4E4E9;--ac:#1A1A1E;--ink:#FFFFFF;--tx:#16161A;--mu:#76767E}
+  .t8{--bg:#FBF2F5;--sf:#FFFFFF;--bd:#F2DCE4;--ac:#EC6F9E;--ink:#FFFFFF;--tx:#2A1D24;--mu:#9D8089}
+  .t9{--bg:#140E12;--sf:#1F141A;--bd:#332231;--ac:#FF8FB8;--ink:#2A0D1C;--tx:#F8EEF3;--mu:#A38A95}
+  .sb{display:flex;justify-content:space-between;align-items:center;padding:9px 16px 0;color:var(--mu);font-size:10px}
+  .sb b{color:var(--tx);font-weight:500}
+  .hd{display:flex;justify-content:space-between;align-items:center;padding:10px 16px 4px}
+  .hd .ti-t{color:var(--tx);font-size:19px;font-weight:600}
+  .av{width:30px;height:30px;border-radius:50%;background:var(--ac);color:var(--ink);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600}
+  .card{margin:8px 14px 0;background:var(--sf);border:1px solid var(--bd);border-radius:16px;padding:13px}
+  .tag{background:var(--ac);color:var(--ink);font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:0.5px}
+  .play{width:38px;height:38px;border-radius:50%;background:var(--ac);color:var(--ink);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .st{flex:1;background:var(--sf);border:1px solid var(--bd);border-radius:14px;padding:11px;text-align:center}
+  .cta{margin:13px 14px 0;background:var(--ac);color:var(--ink);font-size:14px;font-weight:600;padding:13px;border-radius:13px;text-align:center}
+  .nav{position:absolute;bottom:11px;left:11px;right:11px;height:52px;background:var(--sf);border:1px solid var(--bd);border-radius:22px;display:flex;align-items:center;justify-content:space-around;padding:0 16px}
+  .fab{width:40px;height:40px;border-radius:50%;background:var(--ac);color:var(--ink);display:flex;align-items:center;justify-content:center;margin-top:-20px;border:3px solid var(--bg)}
+</style>
+</head>
+<body>
+  <h1>ZEITRA — Themes</h1>
+  <div class="sub">9 themes on one token layer (bg · surface · accent · text). Pick your set — the whole app reads these, so switching is instant once built.</div>
+  <div class="row" id="row"></div>
+
+<template id="sample">
+  <div class="sb"><b>9:41</b><span><i class="ti ti-antenna-bars-5"></i> <i class="ti ti-wifi"></i> <i class="ti ti-battery-3"></i></span></div>
+  <div class="hd"><span class="ti-t">Tonight</span><div class="av">A</div></div>
+  <div class="card">
+    <span class="tag">WORKOUT</span>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px"><div><div style="color:var(--tx);font-size:16px;font-weight:600">Night Shift HIIT</div><div style="color:var(--mu);font-size:11px;margin-top:1px">20 min · 240 kcal</div></div><div class="play"><i class="ti ti-player-play-filled" style="font-size:18px"></i></div></div>
+  </div>
+  <div style="display:flex;gap:10px;padding:11px 14px 0">
+    <div class="st"><div style="color:var(--ac);font-size:19px;font-weight:600">12</div><div style="color:var(--mu);font-size:10px">streak</div></div>
+    <div class="st"><div style="color:var(--tx);font-size:19px;font-weight:600">7h</div><div style="color:var(--mu);font-size:10px">sleep</div></div>
+    <div class="st"><div style="color:var(--tx);font-size:19px;font-weight:600">540</div><div style="color:var(--mu);font-size:10px">kcal</div></div>
+  </div>
+  <div class="cta">Start workout</div>
+  <div class="nav">
+    <i class="ti ti-home" style="color:var(--ac);font-size:20px"></i>
+    <i class="ti ti-tools-kitchen-2" style="color:var(--mu);font-size:20px"></i>
+    <div class="fab"><i class="ti ti-plus" style="font-size:20px"></i></div>
+    <i class="ti ti-barbell" style="color:var(--mu);font-size:20px"></i>
+    <i class="ti ti-user" style="color:var(--mu);font-size:20px"></i>
+  </div>
+</template>
+
+<script>
+  var themes=[
+    ['t1','Midnight Lime','dark · default',['#0A0C12','#15181F','#C2F03C','#F4F6FB']],
+    ['t2','Ember','dark · warm',['#110D09','#1C1610','#FF9A3C','#F6F2EB']],
+    ['t3','Aurora','dark · violet',['#0B0B15','#16161F','#9D7CFF','#F1F1FA']],
+    ['t4','Daylight','light · green',['#F4F7EE','#FFFFFF','#5DA425','#161A1E']],
+    ['t5','Mist','light · indigo',['#F2F5FB','#FFFFFF','#5560E6','#181D27']],
+    ['t6','Mono','dark · monochrome',['#0A0A0B','#161618','#FFFFFF','#FFFFFF']],
+    ['t7','Pearl','light · monochrome',['#F4F4F6','#FFFFFF','#1A1A1E','#16161A']],
+    ['t8','Blush','light · pink',['#FBF2F5','#FFFFFF','#EC6F9E','#2A1D24']],
+    ['t9','Rosé','dark · pink',['#140E12','#1F141A','#FF8FB8','#F8EEF3']]
+  ];
+  var row=document.getElementById('row'),tpl=document.getElementById('sample').innerHTML;
+  themes.forEach(function(t){
+    var dots=t[3].map(function(c){return '<i style="background:'+c+'"></i>'}).join('');
+    var col=document.createElement('div');col.className='col';
+    col.innerHTML='<div class="lbl"><b>'+t[1]+'</b><span>'+t[2]+'</span></div><div class="mini '+t[0]+'">'+tpl+'</div><div class="pal">'+dots+'</div>';
+    row.appendChild(col);
+  });
+</script>
+</body>
+</html>

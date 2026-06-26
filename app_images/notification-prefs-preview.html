@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Notification Settings</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E;--rd:#FF7A90}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .pr{display:flex;align-items:center;padding:13px 15px}
+  .ic{font-size:20px;width:24px;text-align:center;flex-shrink:0}
+  .dv{height:1px;background:#1f232b;margin-left:62px}
+  /* toggle: on=lime, off=grey */
+  .sw{width:46px;height:27px;border-radius:16px;position:relative;flex-shrink:0;transition:.2s}
+  .sw.on{background:var(--lm)}.sw.off{background:#2a2f3a}
+  .sw .kn{position:absolute;top:2.5px;width:22px;height:22px;border-radius:50%;transition:.2s}
+  .sw.on .kn{right:2.5px;background:#13200a}.sw.off .kn{left:2.5px;background:#F4F6FB}
+  .lbl{color:var(--mu);font-size:12px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;padding:22px 20px 9px}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll" style="padding-bottom:96px">
+    <!-- status bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+    <!-- back-chevron header with Save -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 6px">
+      <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:24px"></i><span style="color:var(--tx);font-size:21px;font-weight:600;letter-spacing:-0.4px">Notifications</span></div>
+      <span style="color:var(--lm);font-size:15px;font-weight:600">Save</span>
+    </div>
+    <div style="color:var(--mu);font-size:13px;font-weight:400;padding:0 18px 0;line-height:1.45">7 of 9 categories active. Tune what reaches you.</div>
+
+    <!-- critical note -->
+    <div style="padding:14px 16px 0"><div class="zc" style="display:flex;align-items:flex-start;gap:11px;padding:14px 15px">
+      <i class="ti ti-shield-check" style="color:var(--lm);font-size:20px;margin-top:1px"></i>
+      <span style="color:var(--mu);font-size:13px;font-weight:400;line-height:1.45;flex:1">Critical shift &amp; health alerts may still appear even when a category is off.</span>
+    </div></div>
+
+    <!-- Training & health -->
+    <div class="lbl">Training &amp; health</div>
+    <div style="padding:0 16px"><div class="zc" style="overflow:hidden">
+      <div class="pr"><i class="ti ti-barbell ic" style="color:var(--lm)"></i><div style="flex:1;margin:0 12px"><div style="color:var(--tx);font-size:14.5px;font-weight:600;letter-spacing:-0.2px">Workout reminders</div><div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Before scheduled workouts</div></div><div class="sw on"><span class="kn"></span></div></div>
+      <div class="dv"></div>
+      <div class="pr"><i class="ti ti-bowl ic" style="color:var(--lm)"></i><div style="flex:1;margin:0 12px"><div style="color:var(--tx);font-size:14.5px;font-weight:600;letter-spacing:-0.2px">Meal &amp; nutrition</div><div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Add reminders &amp; timing tips</div></div><div class="sw on"><span class="kn"></span></div></div>
+      <div class="dv"></div>
+      <div class="pr"><i class="ti ti-clock ic" style="color:var(--mu)"></i><div style="flex:1;margin:0 12px"><div style="color:var(--tx);font-size:14.5px;font-weight:600;letter-spacing:-0.2px">Shift alerts</div><div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Pre-shift prep &amp; circadian cues</div></div><div class="sw off"><span class="kn"></span></div></div>
+      <div class="dv"></div>
+      <div class="pr"><i class="ti ti-moon ic" style="color:var(--lm)"></i><div style="flex:1;margin:0 12px"><div style="color:var(--tx);font-size:14.5px;font-weight:600;letter-spacing:-0.2px">Sleep reminders</div><div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Wind-down &amp; sleep hygiene</div></div><div class="sw on"><span class="kn"></span></div></div>
+      <div class="dv"></div>
+      <div class="pr"><i class="ti ti-circle-check ic" style="color:var(--lm)"></i><div style="flex:1;margin:0 12px"><div style="color:var(--tx);font-size:14.5px;font-weight:600;letter-spacing:-0.2px">Plan ready</div><div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">When your daily plan is ready</div></div><div class="sw on"><span class="kn"></span></div></div>
+      <div class="dv"></div>
+      <div class="pr"><i class="ti ti-alert-circle ic" style="color:var(--mu)"></i><div style="flex:1;margin:0 12px"><div style="color:var(--tx);font-size:14.5px;font-weight:600;letter-spacing:-0.2px">Adherence alerts</div><div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Gentle nudges when you fall behind</div></div><div class="sw off"><span class="kn"></span></div></div>
+    </div></div>
+
+    <!-- Progress & insights -->
+    <div class="lbl">Progress &amp; insights</div>
+    <div style="padding:0 16px"><div class="zc" style="overflow:hidden">
+      <div class="pr"><i class="ti ti-chart-line ic" style="color:var(--lm)"></i><div style="flex:1;margin:0 12px"><div style="color:var(--tx);font-size:14.5px;font-weight:600;letter-spacing:-0.2px">Weekly report</div><div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Your weekly summary from Ria</div></div><div class="sw on"><span class="kn"></span></div></div>
+      <div class="dv"></div>
+      <div class="pr"><i class="ti ti-flame ic" style="color:var(--lm)"></i><div style="flex:1;margin:0 12px"><div style="color:var(--tx);font-size:14.5px;font-weight:600;letter-spacing:-0.2px">Streak updates</div><div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Milestones &amp; streak-at-risk warnings</div></div><div class="sw on"><span class="kn"></span></div></div>
+    </div></div>
+
+    <!-- Coaching -->
+    <div class="lbl">Coaching</div>
+    <div style="padding:0 16px"><div class="zc" style="overflow:hidden">
+      <div class="pr"><i class="ti ti-message-circle ic" style="color:var(--lm)"></i><div style="flex:1;margin:0 12px"><div style="color:var(--tx);font-size:14.5px;font-weight:600;letter-spacing:-0.2px">Coach messages</div><div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Messages &amp; check-ins from Ria</div></div><div class="sw on"><span class="kn"></span></div></div>
+    </div></div>
+
+    <!-- Quiet hours -->
+    <div class="lbl">Quiet hours</div>
+    <div style="padding:0 16px"><div class="zc" style="overflow:hidden">
+      <div class="pr"><i class="ti ti-moon-stars ic" style="color:var(--lm)"></i><div style="flex:1;margin:0 12px"><div style="color:var(--tx);font-size:14.5px;font-weight:600;letter-spacing:-0.2px">Quiet hours</div><div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Silence non-critical alerts overnight</div></div><div class="sw on"><span class="kn"></span></div></div>
+      <div class="dv"></div>
+      <div class="pr"><div style="width:24px"></div><div style="flex:1;margin:0 12px;color:var(--tx);font-size:14.5px;font-weight:500;letter-spacing:-0.2px">From</div><span style="color:var(--mu);font-size:14.5px;font-weight:500">22:00</span></div>
+      <div class="dv"></div>
+      <div class="pr"><div style="width:24px"></div><div style="flex:1;margin:0 12px;color:var(--tx);font-size:14.5px;font-weight:500;letter-spacing:-0.2px">To</div><span style="color:var(--mu);font-size:14.5px;font-weight:500">07:00</span></div>
+    </div></div>
+
+    <!-- danger zone -->
+    <div style="padding:22px 16px 0"><div class="zc"><div class="pr" style="justify-content:center;gap:9px"><i class="ti ti-bell-off" style="color:var(--rd);font-size:19px"></i><span style="color:var(--rd);font-size:14.5px;font-weight:600">Disable all non-critical alerts</span></div></div></div>
+
+    <div style="display:flex;align-items:center;justify-content:center;gap:6px;padding:18px 24px 0"><span style="color:var(--mu);font-size:12.5px;font-weight:400">Manage system notification permissions</span><i class="ti ti-chevron-right" style="color:var(--mu);font-size:14px"></i></div>
+  </div>
+
+  <!-- pinned Save CTA -->
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:12px 16px 22px;background:linear-gradient(to top,var(--bg) 70%,rgba(10,12,18,0))">
+    <div style="height:50px;border-radius:15px;background:var(--lm);display:flex;align-items:center;justify-content:center;gap:8px;color:#13200a;font-size:15px;font-weight:600"><i class="ti ti-check" style="font-size:18px"></i>Save changes</div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Plan generator</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .chip{background:var(--cd);border:1px solid var(--bd);color:var(--tx);font-size:13px;font-weight:500;padding:10px 15px;border-radius:22px;white-space:nowrap}
+  .chip.on{background:var(--lm);border-color:var(--lm);color:#13200a;font-weight:600}
+  .lbl{color:var(--tx);font-size:16px;font-weight:600;letter-spacing:-0.3px;padding:20px 18px 11px}
+  .eq{background:var(--cd);border:1px solid var(--bd);border-radius:15px;padding:13px 8px;text-align:center}
+  .eq.on{background:#1c2a0e;border-color:var(--lm);box-shadow:0 0 12px #C2F03C33}
+  .eq img{width:44px;height:44px;object-fit:contain}
+  .eq span{display:block;color:var(--tx);font-size:11px;font-weight:500;margin-top:6px}
+  .eq.on span{color:var(--lm);font-weight:600}
+  .day{flex:1;height:46px;border-radius:14px;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;color:var(--tx);font-size:16px;font-weight:600}
+  .day.on{background:var(--lm);border-color:var(--lm);color:#13200a}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll" style="padding-bottom:114px">
+    <!-- status bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+    <!-- back-chevron header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 4px">
+      <div style="width:38px;height:38px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:20px"></i></div>
+      <span style="color:var(--tx);font-size:17px;font-weight:600;letter-spacing:-0.3px">Plan generator</span>
+      <div style="width:38px;height:38px"></div>
+    </div>
+
+    <!-- Ria intro card -->
+    <div style="padding:14px 18px 0"><div class="zc" style="padding:14px;display:flex;gap:13px;align-items:center">
+      <div style="width:46px;height:46px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1.5px solid #2e3a16"><img src="logo_app.png" style="width:100%;height:100%;object-fit:cover"></div>
+      <div style="color:var(--tx);font-size:13px;font-weight:500;line-height:1.5">Let's build your week — I'll fit it to your goal, gear &amp; shift recovery.</div>
+    </div></div>
+
+    <!-- goal chips -->
+    <div class="lbl">Goal</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;padding:0 18px"><span class="chip on">Build muscle</span><span class="chip">Lose fat</span><span class="chip">Endurance</span><span class="chip">Stay toned</span></div>
+
+    <!-- days per week -->
+    <div class="lbl">Days per week</div>
+    <div style="display:flex;gap:10px;padding:0 18px"><div class="day">2</div><div class="day">3</div><div class="day on">4</div><div class="day">5</div><div class="day">6</div></div>
+
+    <!-- equipment grid -->
+    <div class="lbl">Equipment</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:0 18px">
+      <div class="eq on"><img src="ready/equip-dumbbell.png" alt=""><span>Dumbbells</span></div>
+      <div class="eq"><img src="ready/equip-bodyweight.png" alt=""><span>Bodyweight</span></div>
+      <div class="eq"><img src="ready/equip-gym.png" alt=""><span>Full gym</span></div>
+      <div class="eq"><img src="ready/equip-machine.png" alt=""><span>Machines</span></div>
+    </div>
+
+    <!-- time per session -->
+    <div class="lbl">Time per session</div>
+    <div style="display:flex;gap:10px;padding:0 18px"><span class="chip">30 min</span><span class="chip on">45 min</span><span class="chip">60 min</span></div>
+  </div>
+
+  <!-- sticky CTA -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:14px 18px 24px;background:linear-gradient(180deg,transparent,var(--bg) 30%);z-index:20"><div style="background:var(--lm);color:#13200a;font-size:15px;font-weight:600;padding:15px;border-radius:16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:9px;letter-spacing:-0.2px">Generate my plan<i class="ti ti-sparkles" style="font-size:17px"></i></div></div>
+</div>
+</body>
+</html>

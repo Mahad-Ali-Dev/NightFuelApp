@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Track Sleep</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E;--bl:#7C9CFF}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .lbl{font-size:11px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:var(--mu);margin-bottom:9px;display:flex;align-items:center;gap:6px}
+  .field{flex:1;background:#1e222b;border-radius:13px;padding:13px 14px;display:flex;align-items:center;justify-content:space-between}
+  .field .v{color:var(--tx);font-size:15px;font-weight:600}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll" style="padding-bottom:24px">
+    <!-- status bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+    <!-- back-chevron header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 2px">
+      <div style="width:38px;height:38px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:20px"></i></div>
+      <span style="color:var(--tx);font-size:17px;font-weight:600;letter-spacing:-0.3px">Sleep &amp; Recovery</span>
+      <div style="width:38px;height:38px"></div>
+    </div>
+
+    <!-- quality-ring hero -->
+    <div style="padding:14px 18px 0"><div class="zc" style="display:flex;align-items:center;padding:17px">
+      <div style="position:relative;width:116px;height:116px;flex-shrink:0">
+        <svg viewBox="0 0 116 116" style="position:absolute;inset:0;transform:rotate(-90deg)">
+          <circle cx="58" cy="58" r="50" fill="none" stroke="#252a33" stroke-width="8"></circle>
+          <circle cx="58" cy="58" r="50" fill="none" stroke="var(--bl)" stroke-width="8" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="63"></circle>
+        </svg>
+        <div style="position:absolute;inset:16px;display:flex;align-items:center;justify-content:center">
+          <img src="ready/section-sleep.png" alt="" style="width:66px;height:66px;object-fit:contain">
+        </div>
+      </div>
+      <div style="flex:1;padding-left:18px">
+        <div class="lbl" style="margin-bottom:5px">Last night</div>
+        <div style="display:flex;align-items:baseline;gap:7px"><span style="color:var(--tx);font-size:34px;font-weight:600;line-height:0.9;letter-spacing:-1px">8.0</span><span style="color:var(--bl);font-size:14px;font-weight:600">/ 10</span></div>
+        <div style="display:inline-flex;align-items:center;gap:6px;margin-top:9px;padding:5px 11px;border-radius:30px;background:#1e222b"><i class="ti ti-sparkles" style="color:var(--bl);font-size:13px"></i><span style="color:var(--bl);font-size:12px;font-weight:600">Excellent recovery</span></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:10px"><i class="ti ti-clock" style="color:var(--mu);font-size:14px"></i><span style="color:var(--mu);font-size:12px;font-weight:500">8h 00m · in bed 23:00</span></div>
+      </div>
+    </div></div>
+
+    <!-- new sleep entry form -->
+    <div style="padding:16px 18px 0"><div class="zc" style="padding:17px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <span style="color:var(--tx);font-size:17px;font-weight:600;letter-spacing:-0.3px;display:flex;align-items:center;gap:8px"><i class="ti ti-moon-stars" style="color:var(--bl);font-size:19px"></i>New sleep entry</span>
+      </div>
+
+      <span class="lbl"><i class="ti ti-bed" style="font-size:14px"></i>Sleep started</span>
+      <div style="display:flex;gap:10px">
+        <div class="field"><span class="v">Jun 25</span><i class="ti ti-calendar" style="color:var(--bl);font-size:17px"></i></div>
+        <div class="field"><span class="v">23:00</span><i class="ti ti-clock" style="color:var(--bl);font-size:17px"></i></div>
+      </div>
+
+      <span class="lbl" style="margin-top:16px"><i class="ti ti-sunrise" style="font-size:14px"></i>Sleep ended</span>
+      <div style="display:flex;gap:10px">
+        <div class="field"><span class="v">Jun 26</span><i class="ti ti-calendar" style="color:var(--bl);font-size:17px"></i></div>
+        <div class="field"><span class="v">07:00</span><i class="ti ti-clock" style="color:var(--bl);font-size:17px"></i></div>
+      </div>
+
+      <!-- quality slider -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:18px;margin-bottom:11px">
+        <span class="lbl" style="margin:0"><i class="ti ti-star" style="font-size:14px"></i>Sleep quality</span>
+        <span style="display:flex;align-items:center;gap:6px;color:var(--bl);font-size:13px;font-weight:600"><span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--bl);display:flex;align-items:center;justify-content:center;font-size:9px">8</span>Excellent</span>
+      </div>
+      <div style="position:relative;height:8px;border-radius:6px;background:#1e222b">
+        <div style="position:absolute;left:0;top:0;width:80%;height:100%;border-radius:6px;background:var(--bl)"></div>
+        <div style="position:absolute;top:50%;left:calc(80% - 11px);transform:translateY(-50%);width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid var(--bl);box-shadow:0 2px 8px #0008"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:9px"><span style="color:var(--mu);font-size:11px;font-weight:500">Restless</span><span style="color:var(--mu);font-size:11px;font-weight:500">Deep &amp; restorative</span></div>
+
+      <!-- wake-ups stepper -->
+      <span class="lbl" style="margin-top:18px"><i class="ti ti-eye" style="font-size:14px"></i>Night wake-ups</span>
+      <div style="display:flex;align-items:center;justify-content:center;gap:12px">
+        <div style="width:46px;height:46px;border-radius:13px;background:#1e222b;display:flex;align-items:center;justify-content:center"><i class="ti ti-minus" style="color:var(--mu);font-size:18px"></i></div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;min-width:96px;height:46px;border-radius:13px;background:#1e222b;padding:0 18px"><span style="color:var(--tx);font-size:20px;font-weight:600;letter-spacing:-0.3px">1</span></div>
+        <div style="width:46px;height:46px;border-radius:13px;background:#1e222b;display:flex;align-items:center;justify-content:center"><i class="ti ti-plus" style="color:var(--bl);font-size:18px"></i></div>
+      </div>
+
+      <!-- notes -->
+      <span class="lbl" style="margin-top:18px"><i class="ti ti-pencil" style="font-size:14px"></i>Recovery notes</span>
+      <div style="background:#1e222b;border-radius:13px;padding:13px;min-height:62px;color:var(--mu);font-size:13.5px;font-weight:500;line-height:1.5">Used blackout curtains, fell asleep fast. Woke once to drink water.</div>
+
+      <div style="margin-top:20px;height:54px;background:var(--lm);color:#13200a;font-size:15px;font-weight:600;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:-0.2px"><i class="ti ti-device-floppy" style="font-size:19px"></i>Save recovery data</div>
+    </div></div>
+
+    <!-- recovery history -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:24px 18px 12px">
+      <span style="color:var(--tx);font-size:18px;font-weight:600;letter-spacing:-0.3px">Recovery history</span>
+      <i class="ti ti-refresh" style="color:var(--mu);font-size:18px"></i>
+    </div>
+
+    <div style="padding:0 18px"><div class="zc" style="padding:15px;margin-bottom:11px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">
+        <span style="color:var(--tx);font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px"><i class="ti ti-moon" style="color:var(--bl);font-size:16px"></i>Jun 24, 2026</span>
+        <span style="display:flex;align-items:center;gap:5px;background:#1e222b;color:var(--tx);font-size:12px;font-weight:600;padding:4px 10px;border-radius:30px"><i class="ti ti-clock" style="font-size:12px;color:var(--mu)"></i>7h 45m</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding-top:11px;border-top:1px solid var(--bd)">
+        <div style="position:relative;width:46px;height:46px;flex-shrink:0">
+          <svg viewBox="0 0 46 46" style="position:absolute;inset:0;transform:rotate(-90deg)"><circle cx="23" cy="23" r="19" fill="none" stroke="#252a33" stroke-width="5"></circle><circle cx="23" cy="23" r="19" fill="none" stroke="var(--bl)" stroke-width="5" stroke-linecap="round" stroke-dasharray="119.4" stroke-dashoffset="35.8"></circle></svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--bl);font-size:13px;font-weight:600">7</div>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;gap:10px">
+          <div style="text-align:center"><div style="color:var(--mu);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px">Slept</div><div style="color:var(--tx);font-size:13px;font-weight:600;margin-top:1px">11:15p</div></div>
+          <i class="ti ti-arrow-right" style="color:var(--mu);font-size:14px"></i>
+          <div style="text-align:center"><div style="color:var(--mu);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px">Woke</div><div style="color:var(--tx);font-size:13px;font-weight:600;margin-top:1px">07:00a</div></div>
+          <div style="width:1px;height:26px;background:var(--bd);margin:0 2px"></div>
+          <div style="text-align:center"><div style="color:var(--mu);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px">Wakes</div><div style="color:var(--tx);font-size:13px;font-weight:600;margin-top:1px">2×</div></div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;margin-top:11px;padding-top:11px;border-top:1px solid var(--bd)"><i class="ti ti-sun" style="color:var(--mu);font-size:14px"></i><span style="color:var(--mu);font-size:12px;font-weight:500;margin-left:6px;flex:1">Circadian alignment</span><span style="color:var(--bl);font-size:13px;font-weight:600">82%</span></div>
+      <div style="height:5px;border-radius:999px;background:#1e222b;margin-top:8px;overflow:hidden"><div style="width:82%;height:100%;background:var(--bl)"></div></div>
+    </div></div>
+
+    <div style="padding:0 18px"><div class="zc" style="padding:15px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">
+        <span style="color:var(--tx);font-size:14px;font-weight:600;display:flex;align-items:center;gap:7px"><i class="ti ti-moon" style="color:var(--bl);font-size:16px"></i>Jun 23, 2026</span>
+        <span style="display:flex;align-items:center;gap:5px;background:#1e222b;color:var(--tx);font-size:12px;font-weight:600;padding:4px 10px;border-radius:30px"><i class="ti ti-clock" style="font-size:12px;color:var(--mu)"></i>6h 20m</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;padding-top:11px;border-top:1px solid var(--bd)">
+        <div style="position:relative;width:46px;height:46px;flex-shrink:0">
+          <svg viewBox="0 0 46 46" style="position:absolute;inset:0;transform:rotate(-90deg)"><circle cx="23" cy="23" r="19" fill="none" stroke="#252a33" stroke-width="5"></circle><circle cx="23" cy="23" r="19" fill="none" stroke="var(--bl)" stroke-width="5" stroke-linecap="round" stroke-dasharray="119.4" stroke-dashoffset="59.7" opacity="0.5"></circle></svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mu);font-size:13px;font-weight:600">5</div>
+        </div>
+        <div style="flex:1;display:flex;align-items:center;gap:10px">
+          <div style="text-align:center"><div style="color:var(--mu);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px">Slept</div><div style="color:var(--tx);font-size:13px;font-weight:600;margin-top:1px">12:40a</div></div>
+          <i class="ti ti-arrow-right" style="color:var(--mu);font-size:14px"></i>
+          <div style="text-align:center"><div style="color:var(--mu);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px">Woke</div><div style="color:var(--tx);font-size:13px;font-weight:600;margin-top:1px">07:00a</div></div>
+          <div style="width:1px;height:26px;background:var(--bd);margin:0 2px"></div>
+          <div style="text-align:center"><div style="color:var(--mu);font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px">Wakes</div><div style="color:var(--tx);font-size:13px;font-weight:600;margin-top:1px">3×</div></div>
+        </div>
+      </div>
+    </div></div>
+
+    <div style="height:14px"></div>
+  </div>
+</div>
+</body>
+</html>

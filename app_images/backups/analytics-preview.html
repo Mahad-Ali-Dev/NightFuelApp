@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Performance</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .glow{border:1.5px solid var(--lm);box-shadow:0 0 14px #C2F03C44;background:linear-gradient(150deg,#2b303a,#14171e)}
+  .sec{color:var(--tx);font-size:16px;font-weight:600}
+  .st{flex:1;background:var(--cd);border:1px solid var(--bd);border-radius:15px;padding:13px 12px}
+  .nbtn{width:36px;height:36px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll" style="padding-bottom:90px">
+    <!-- status bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+    <!-- back header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 4px">
+      <div style="display:flex;align-items:center;gap:10px"><div class="nbtn"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:18px"></i></div><span style="color:var(--tx);font-size:18px;font-weight:600;letter-spacing:-0.3px">Performance</span></div>
+      <div class="nbtn"><i class="ti ti-refresh" style="color:var(--mu);font-size:17px"></i></div>
+    </div>
+
+    <!-- sub-title -->
+    <div style="padding:10px 18px 0"><span style="color:var(--mu);font-size:13px">This week</span></div>
+
+    <!-- hero ring -->
+    <div style="padding:12px 16px 0"><div class="zc" style="padding:22px 20px 20px;display:flex;flex-direction:column;align-items:center">
+      <div style="position:relative;width:190px;height:190px">
+        <svg viewBox="0 0 190 190" width="190" height="190">
+          <circle cx="95" cy="95" r="82" fill="none" stroke="#252A33" stroke-width="12"/>
+          <circle cx="95" cy="95" r="82" fill="none" stroke="var(--lm)" stroke-width="12" stroke-linecap="round" stroke-dasharray="515" stroke-dashoffset="124" transform="rotate(-90 95 95)"/>
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <span style="color:var(--tx);font-size:58px;font-weight:700;letter-spacing:-1.5px;line-height:0.9">76</span>
+          <span style="color:var(--mu);font-size:11px;font-weight:500;letter-spacing:0.4px;margin-top:4px">OUT OF 100</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:16px">
+        <span style="display:inline-flex;align-items:center;gap:4px;background:#1c2a0e;border:1px solid #2e3a16;padding:5px 11px;border-radius:20px"><i class="ti ti-trending-up" style="color:var(--lm);font-size:13px"></i><span style="color:var(--lm);font-size:13px;font-weight:600">+14 pts</span></span>
+        <span style="color:var(--tx);font-size:13.5px;font-weight:500">On track this week</span>
+      </div>
+    </div></div>
+
+    <!-- stat row -->
+    <div style="display:flex;gap:11px;padding:14px 16px 0">
+      <div class="st"><i class="ti ti-chart-bar" style="color:var(--lm);font-size:20px"></i><div style="color:var(--tx);font-size:19px;font-weight:600;margin-top:7px">72<span style="font-size:13px;color:var(--mu)">%</span></div><div style="color:var(--mu);font-size:11.5px">Avg score</div></div>
+      <div class="st"><i class="ti ti-flame" style="color:var(--lm);font-size:20px"></i><div style="color:var(--tx);font-size:19px;font-weight:600;margin-top:7px">12<span style="font-size:13px;color:var(--mu)">d</span></div><div style="color:var(--mu);font-size:11.5px">Streak</div></div>
+      <div class="st"><i class="ti ti-circle-check" style="color:var(--lm);font-size:20px"></i><div style="color:var(--tx);font-size:19px;font-weight:600;margin-top:7px">6<span style="font-size:13px;color:var(--mu)">/7</span></div><div style="color:var(--mu);font-size:11.5px">Tracked</div></div>
+    </div>
+
+    <!-- score trend -->
+    <div class="sec" style="padding:22px 18px 10px">Score trend</div>
+    <div style="padding:0 16px"><div class="zc" style="padding:16px 15px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="color:var(--mu);font-size:12.5px">Daily 0–100 · last 7 days</div>
+        <div style="display:flex;align-items:center;gap:4px;background:#1c2a0e;border:1px solid #2e3a16;padding:4px 9px;border-radius:20px"><i class="ti ti-arrow-up" style="color:var(--lm);font-size:12px"></i><span style="color:var(--lm);font-size:11px;font-weight:600">14 pts</span></div>
+      </div>
+      <svg viewBox="0 0 290 128" width="100%" height="128" style="margin-top:14px;overflow:visible">
+        <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#C2F03C" stop-opacity="0.18"/><stop offset="100%" stop-color="#C2F03C" stop-opacity="0"/></linearGradient></defs>
+        <line x1="0" y1="24" x2="290" y2="24" stroke="#252A33" stroke-width="1"/>
+        <line x1="0" y1="60" x2="290" y2="60" stroke="#252A33" stroke-width="1"/>
+        <line x1="0" y1="96" x2="290" y2="96" stroke="#252A33" stroke-width="1"/>
+        <path d="M8,86 L54,72 L100,92 L146,52 L192,60 L238,32 L282,28 L282,118 L8,118 Z" fill="url(#ag)"/>
+        <path d="M8,86 L54,72 L100,92 L146,52 L192,60 L238,32 L282,28" fill="none" stroke="#C2F03C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="282" cy="28" r="4.5" fill="#C2F03C" stroke="#15181F" stroke-width="2.5"/>
+      </svg>
+      <div style="display:flex;justify-content:space-between;color:var(--mu);font-size:11px;margin-top:4px"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
+    </div></div>
+
+    <!-- explore -->
+    <div class="sec" style="padding:22px 18px 10px">Explore</div>
+    <div style="padding:0 16px;display:flex;flex-direction:column;gap:11px">
+      <div class="zc" style="display:flex;align-items:center;gap:13px;padding:13px 14px">
+        <div style="width:50px;height:50px;border-radius:13px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-gauge" style="color:var(--lm);font-size:24px"></i></div>
+        <div style="flex:1"><div style="color:var(--tx);font-size:15px;font-weight:600">Body metrics</div><div style="color:var(--mu);font-size:12.5px">82.5 kg · 15.2% body fat</div></div>
+        <i class="ti ti-chevron-right" style="color:var(--mu);font-size:17px"></i>
+      </div>
+      <div class="zc" style="display:flex;align-items:center;gap:13px;padding:13px 14px">
+        <div style="width:50px;height:50px;border-radius:13px;background:#102a31;border:1px solid #1a3a44;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-droplet" style="color:#4FC9E8;font-size:24px"></i></div>
+        <div style="flex:1"><div style="color:var(--tx);font-size:15px;font-weight:600">Hydration</div><div style="color:var(--mu);font-size:12.5px">1850 ml today · 62%</div></div>
+        <i class="ti ti-chevron-right" style="color:var(--mu);font-size:17px"></i>
+      </div>
+      <div class="zc" style="display:flex;align-items:center;gap:13px;padding:13px 14px">
+        <div style="width:50px;height:50px;border-radius:13px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-sparkles" style="color:var(--lm);font-size:24px"></i></div>
+        <div style="flex:1"><div style="color:var(--tx);font-size:15px;font-weight:600">AI reports</div><div style="color:var(--mu);font-size:12.5px">Weekly report card ready</div></div>
+        <i class="ti ti-chevron-right" style="color:var(--mu);font-size:17px"></i>
+      </div>
+      <div class="zc" style="display:flex;align-items:center;gap:13px;padding:13px 14px">
+        <div style="width:50px;height:50px;border-radius:13px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-history" style="color:var(--lm);font-size:24px"></i></div>
+        <div style="flex:1"><div style="color:var(--tx);font-size:15px;font-weight:600">History</div><div style="color:var(--mu);font-size:12.5px">48 sessions tracked</div></div>
+        <i class="ti ti-chevron-right" style="color:var(--mu);font-size:17px"></i>
+      </div>
+    </div>
+
+    <!-- today's targets -->
+    <div class="sec" style="padding:22px 18px 10px">Today's targets</div>
+    <div style="padding:0 16px"><div class="zc" style="padding:6px 15px">
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #1f232b"><i class="ti ti-circle-check" style="color:var(--lm);font-size:22px"></i><div style="flex:1"><div style="color:var(--tx);font-size:14px;font-weight:500">Protein 160g</div><div style="height:5px;border-radius:3px;background:#252A33;margin-top:7px;overflow:hidden"><div style="width:100%;height:100%;background:var(--lm)"></div></div></div></div>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid #1f232b"><i class="ti ti-circle" style="color:#3a3f49;font-size:22px"></i><div style="flex:1"><div style="color:var(--tx);font-size:14px;font-weight:500">Calories 2400</div><div style="height:5px;border-radius:3px;background:#252A33;margin-top:7px;overflow:hidden"><div style="width:74%;height:100%;background:var(--lm)"></div></div></div></div>
+      <div style="display:flex;align-items:center;gap:12px;padding:14px 0"><i class="ti ti-circle-check" style="color:var(--lm);font-size:22px"></i><div style="flex:1"><div style="color:var(--tx);font-size:14px;font-weight:500">Light exposure 30m</div><div style="height:5px;border-radius:3px;background:#252A33;margin-top:7px;overflow:hidden"><div style="width:100%;height:100%;background:var(--lm)"></div></div></div></div>
+    </div></div>
+    <div style="height:20px"></div>
+  </div>
+
+  <!-- pinned CTA -->
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;background:linear-gradient(180deg,rgba(10,12,18,0),var(--bg) 32%)">
+    <div style="background:var(--lm);color:#13200a;height:52px;border-radius:15px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:600"><i class="ti ti-file-text" style="font-size:19px"></i>View full report</div>
+  </div>
+</div>
+</body>
+</html>

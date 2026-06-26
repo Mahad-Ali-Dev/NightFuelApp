@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Train bento — pick a number</title>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#070810;font-family:'Saira',-apple-system,sans-serif;color:#F4F6FB;padding:30px 22px 60px}
+  h1{font-size:25px;font-weight:700}
+  .sub{color:#8B919E;font-size:14px;margin:6px 0 30px;max-width:640px;line-height:1.5}
+  .sub b{color:#C2F03C}
+  .row{display:flex;flex-wrap:wrap;gap:34px}
+  .opt{width:236px}
+  .hd{display:flex;align-items:center;gap:10px;margin-bottom:5px}
+  .n{background:#C2F03C;color:#13200a;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;flex-shrink:0}
+  .hd h2{font-size:16px;font-weight:600;color:#fff}
+  .opt p{color:#8B919E;font-size:12.5px;margin:7px 0 13px;line-height:1.45;min-height:52px}
+  .bento{display:grid;gap:8px;height:308px}
+  .t{border:1.5px solid #C2F03C;box-shadow:0 0 8px #C2F03C33;background:linear-gradient(150deg,#2b303a,#14171e);border-radius:13px;padding:9px 10px;font-size:12.5px;font-weight:600;color:#fff;display:flex;align-items:flex-start}
+  .wrap{position:relative}
+  .wrap .big{position:absolute;inset:0}
+  .wrap .carve{position:absolute;right:0;bottom:0;width:60%;height:47%;background:#070810;padding:8px 0 0 8px;border-radius:15px 0 0 0}
+  .wrap .carve .t{width:100%;height:100%}
+</style>
+</head>
+<body>
+  <h1>Train bento — which layout?</h1>
+  <div class="sub">I keep misreading the drawing, sorry. These are the 4 most likely. <b>Just tell me the number</b> and I'll build that one exactly — or screenshot one of these and scribble a tweak.</div>
+  <div class="row">
+
+    <div class="opt">
+      <div class="hd"><span class="n">1</span><h2>Staggered (current)</h2></div>
+      <p>HIIT &amp; Cardio both tall, offset by one row. Yoga small under HIIT.</p>
+      <div class="bento" style="grid-template-columns:0.85fr 1.15fr;grid-template-rows:1fr 1fr 1fr 1fr">
+        <div class="t" style="grid-column:1;grid-row:1/3">HIIT</div>
+        <div class="t" style="grid-column:2;grid-row:1">Strength</div>
+        <div class="t" style="grid-column:2;grid-row:2/4">Cardio</div>
+        <div class="t" style="grid-column:1;grid-row:3">Yoga</div>
+        <div class="t" style="grid-column:1;grid-row:4">Mobility</div>
+        <div class="t" style="grid-column:2;grid-row:4">Pilates</div>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="hd"><span class="n">2</span><h2>Strength wraps Cardio</h2></div>
+      <p>Strength is a big L‑tile; Cardio is carved into its bottom‑right corner. Yoga full‑width.</p>
+      <div class="bento" style="grid-template-columns:0.85fr 1.15fr;grid-template-rows:1.35fr 1.35fr 1fr 1fr">
+        <div class="t" style="grid-column:1;grid-row:1/3">HIIT</div>
+        <div class="wrap" style="grid-column:2;grid-row:1/3">
+          <div class="t big">Strength</div>
+          <div class="carve"><div class="t">Cardio</div></div>
+        </div>
+        <div class="t" style="grid-column:1/3;grid-row:3">Yoga</div>
+        <div class="t" style="grid-column:1;grid-row:4">Mobility</div>
+        <div class="t" style="grid-column:2;grid-row:4">Pilates</div>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="hd"><span class="n">3</span><h2>Even grid</h2></div>
+      <p>Six equal tiles, a simple 2 columns × 3 rows. Clean and balanced.</p>
+      <div class="bento" style="grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr">
+        <div class="t">HIIT</div><div class="t">Strength</div>
+        <div class="t">Cardio</div><div class="t">Yoga</div>
+        <div class="t">Mobility</div><div class="t">Pilates</div>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div class="hd"><span class="n">4</span><h2>Strength is the big tile</h2></div>
+      <p>Strength tall on the right (2 rows). HIIT &amp; Cardio stacked on the left. Yoga wide.</p>
+      <div class="bento" style="grid-template-columns:0.85fr 1.15fr;grid-template-rows:1fr 1fr 1fr 1fr">
+        <div class="t" style="grid-column:1;grid-row:1">HIIT</div>
+        <div class="t" style="grid-column:2;grid-row:1/3">Strength</div>
+        <div class="t" style="grid-column:1;grid-row:2">Cardio</div>
+        <div class="t" style="grid-column:1/3;grid-row:3">Yoga</div>
+        <div class="t" style="grid-column:1;grid-row:4">Mobility</div>
+        <div class="t" style="grid-column:2;grid-row:4">Pilates</div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
