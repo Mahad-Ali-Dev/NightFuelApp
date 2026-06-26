@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface DataPoint {
     date: string;
@@ -14,6 +14,8 @@ interface StrengthChartProps {
 }
 
 function StrengthChartComponent({ exerciseName, data, unit = 'kg' }: StrengthChartProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     // Derived min/max/range — memoized so we don't re-scan the series on every
     // unrelated re-render. Recomputes only when `data` changes.
     const { maxVal, minVal, range } = useMemo(() => {
@@ -61,7 +63,7 @@ function StrengthChartComponent({ exerciseName, data, unit = 'kg' }: StrengthCha
  */
 export const StrengthChart = React.memo(StrengthChartComponent);
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     container: { backgroundColor: colors.background.secondary, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: colors.border.default },
     title: { color: '#A8CC3C', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
     exercise: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', marginTop: 4, marginBottom: 16 },

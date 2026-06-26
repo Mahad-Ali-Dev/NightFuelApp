@@ -51,19 +51,17 @@ import { useThemeStore } from '@/store/themeStore';
 import Constants from 'expo-constants';
 import { GlassCard, Skeleton } from '@/components/ui';
 import { SettingsRow } from '@/components/SettingsRow';
-import { colors as C, themeVariantList } from '@/theme/colors';
-
-// Brand-accent alias for this screen. Every reference below keys off the single
-// brand token (C.accent.coral === #A8CC3C) under the name `LIME` so no brand
-// emphasis on this screen is named "coral" — the token VALUE is the lime accent,
-// and reading/normalising the literal name "coral" can never break the brand here.
-// (The shared theme is never edited; this is a local, value-identical alias.)
-const LIME = C.accent.coral;
+import { themeVariantList } from '@/theme/colors';
 
 export default function SettingsIndexScreen() {
     const { colors, typography, spacing, borderRadius, scheme } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
+
+    // Brand-accent alias for this screen — the active theme's primary accent
+    // (its value IS the lime brand token in the default theme) under the name
+    // `LIME` so the profile card's restrained brand moment re-tints per theme.
+    const LIME = colors.accent.coral;
 
     const { user } = useAuthStore();
     const { theme, setTheme, nightRead, setNightRead, themeVariant, setThemeVariant } = useThemeStore();
@@ -153,7 +151,7 @@ export default function SettingsIndexScreen() {
                     isSwitch: true,
                     // AI/calm hue: the deep-red night palette is a focus/comfort mode,
                     // visually distinct from the lime brand rows — purple flags it.
-                    tint: C.accent.purple,
+                    tint: colors.accent.purple,
                     subtitle: 'Deep-red palette that preserves your dark-adapted night vision on late shifts.',
                 },
                 {
@@ -175,7 +173,7 @@ export default function SettingsIndexScreen() {
                 { label: 'Terms of Service', icon: 'document-text-outline', url: 'https://zeitra.app/terms' },
             ]
         }
-    ], [subscription?.tier, activeVariant.name]);
+    ], [subscription?.tier, activeVariant.name, colors]);
 
     // Identity, with a branded fallback for the avatar hole (replaces the prior
     // off-brand external random-face service). All reads are the exact data hooks.

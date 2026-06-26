@@ -36,7 +36,6 @@ import { Image } from 'expo-image';
 import { SafeBlurView } from '@/components/SafeBlurView';
 import { GlassCard, CtaButton } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
-import { colors as C } from '@/theme/colors';
 
 // Bundled Quick-add tile art (transparent Zeitra object renders). Bundled via
 // require() so the chooser never depends on an external host (no 404 / rate-limit).
@@ -92,6 +91,8 @@ const ti = StyleSheet.create({
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 function CentreButton({ onPress }: { onPress?: () => void }) {
+    const { colors } = useTheme();
+    const cb = useMemo(() => makeCb(colors), [colors]);
     // Press STATE (0 = released, 1 = pressed) as ground truth; scale is derived.
     const pressed = useSharedValue(0);
 
@@ -125,7 +126,7 @@ function CentreButton({ onPress }: { onPress?: () => void }) {
             >
                 <Animated.View style={[cb.outer, discStyle]}>
                     <LinearGradient
-                        colors={C.gradients.coral}
+                        colors={colors.gradients.coral}
                         style={cb.gradient}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
@@ -141,7 +142,7 @@ function CentreButton({ onPress }: { onPress?: () => void }) {
     );
 }
 
-const cb = StyleSheet.create({
+const makeCb = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     // The tab slot wrapper: centres the disc + caption and lifts the disc above
     // the bar (kept elevated as before via the disc's own shadow).
     touch: {
@@ -155,7 +156,7 @@ const cb = StyleSheet.create({
         height: 58,
         borderRadius: 29,
         // Elevated above the tab bar (matches the prior coral disc elevation).
-        shadowColor: C.accent.coral,
+        shadowColor: colors.accent.coral,
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.45,
         shadowRadius: 12,
@@ -171,7 +172,7 @@ const cb = StyleSheet.create({
         marginTop: 3,
         fontSize: 10,
         fontWeight: '700',
-        color: C.accent.coral,
+        color: colors.accent.coral,
     },
 });
 
@@ -185,13 +186,17 @@ const cb = StyleSheet.create({
 // via the shared close-then-navigate `onSelect`. A lime "Scan a meal" CtaButton
 // and an "or just tell Ria…" line sit beneath the grid.
 
-type QuickLogOption = {
+type QuickLogAccentKey = 'cyan' | 'coral' | 'blue' | 'purple' | 'emerald' | 'pink';
+
+type QuickLogOptionBase = {
     id: 'meal' | 'workout' | 'water' | 'sleep' | 'weight' | 'cycle';
     label: string;
     image: number;
-    accent: string;
+    accentKey: QuickLogAccentKey;
     route: string;
 };
+
+type QuickLogOption = Omit<QuickLogOptionBase, 'accentKey'> & { accent: string };
 
 // Each tile maps onto an EXISTING log destination (no new routes invented):
 //   Meal    → the nutrition tab's primary log-meal flow ((meals)/log-meal, the
@@ -203,14 +208,15 @@ type QuickLogOption = {
 //   Weight  → the performance Body Metrics screen (the Performance hub's
 //             Body Metrics quick-link route).
 //   Cycle   → the performance Cycle screen.
-// `accent` is used only for the per-tile pressed tint + soft border glow.
-const QUICK_LOG_OPTIONS: readonly QuickLogOption[] = [
-    { id: 'meal', label: 'Meal', image: QA_MEAL_IMG, accent: C.accent.cyan, route: '/(meals)/log-meal' },
-    { id: 'workout', label: 'Workout', image: QA_WORKOUT_IMG, accent: C.accent.coral, route: '/(modals)/active-workout' },
-    { id: 'water', label: 'Water', image: QA_WATER_IMG, accent: C.accent.blue, route: '/(performance)/hydration' },
-    { id: 'sleep', label: 'Sleep', image: QA_SLEEP_IMG, accent: C.accent.purple, route: '/(modals)/log-sleep' },
-    { id: 'weight', label: 'Weight', image: QA_WEIGHT_IMG, accent: C.accent.emerald, route: '/(performance)/body-metrics' },
-    { id: 'cycle', label: 'Cycle', image: QA_CYCLE_IMG, accent: C.accent.pink, route: '/(performance)/cycle' },
+// `accent` is used only for the per-tile pressed tint + soft border glow; each
+// tile's accentKey resolves against the active theme inside the sheet.
+const QUICK_LOG_OPTIONS: readonly QuickLogOptionBase[] = [
+    { id: 'meal', label: 'Meal', image: QA_MEAL_IMG, accentKey: 'cyan', route: '/(meals)/log-meal' },
+    { id: 'workout', label: 'Workout', image: QA_WORKOUT_IMG, accentKey: 'coral', route: '/(modals)/active-workout' },
+    { id: 'water', label: 'Water', image: QA_WATER_IMG, accentKey: 'blue', route: '/(performance)/hydration' },
+    { id: 'sleep', label: 'Sleep', image: QA_SLEEP_IMG, accentKey: 'purple', route: '/(modals)/log-sleep' },
+    { id: 'weight', label: 'Weight', image: QA_WEIGHT_IMG, accentKey: 'emerald', route: '/(performance)/body-metrics' },
+    { id: 'cycle', label: 'Cycle', image: QA_CYCLE_IMG, accentKey: 'pink', route: '/(performance)/cycle' },
 ] as const;
 
 function QuickLogSheet({
@@ -224,6 +230,12 @@ function QuickLogSheet({
 }) {
     const { colors, typography } = useTheme();
     const insets = useSafeAreaInsets();
+    // Resolve each tile's accent against the active theme so the per-tile tint /
+    // border glow re-tints when the user switches themes.
+    const options: readonly QuickLogOption[] = useMemo(
+        () => QUICK_LOG_OPTIONS.map((o) => ({ ...o, accent: colors.accent[o.accentKey] })),
+        [colors],
+    );
 
     return (
         <Modal
@@ -274,7 +286,7 @@ function QuickLogSheet({
                         {/* 3×2 grid of object-image tiles — each routes to its existing
                             log destination via the shared close-then-navigate onSelect. */}
                         <View style={qs.grid}>
-                            {QUICK_LOG_OPTIONS.map((opt) => (
+                            {options.map((opt) => (
                                 <Pressable
                                     key={opt.id}
                                     accessibilityRole="button"
@@ -407,10 +419,12 @@ const qs = StyleSheet.create({
 // ─── Ria AI Coach FAB (global — appears on every tab) ────────────────────────
 
 function RiaFAB({ onPress }: { onPress: () => void }) {
+    const { colors } = useTheme();
+    const fab = useMemo(() => makeFab(colors), [colors]);
     return (
         <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Generate with AI" style={fab.container} onPress={onPress} activeOpacity={0.85}>
             <LinearGradient
-                colors={C.gradients.purple}
+                colors={colors.gradients.purple}
                 style={fab.gradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -422,7 +436,7 @@ function RiaFAB({ onPress }: { onPress: () => void }) {
     );
 }
 
-const fab = StyleSheet.create({
+const makeFab = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     container: {
         position: 'absolute',
         // Sits just above the tab bar
@@ -431,7 +445,7 @@ const fab = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
-        shadowColor: C.accent.purple,
+        shadowColor: colors.accent.purple,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.35,
         shadowRadius: 10,
@@ -451,7 +465,7 @@ const fab = StyleSheet.create({
         width: 9,
         height: 9,
         borderRadius: 5,
-        backgroundColor: C.accent.cyan,
+        backgroundColor: colors.accent.cyan,
         borderWidth: 1.5,
         borderColor: '#fff',
     },

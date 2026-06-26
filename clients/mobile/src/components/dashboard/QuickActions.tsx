@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface QuickAction {
     icon: keyof typeof Ionicons.glyphMap;
@@ -22,6 +22,8 @@ const DEFAULT_ACTIONS: QuickAction[] = [
 ];
 
 export function QuickActions({ actions = DEFAULT_ACTIONS }: QuickActionsProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <View style={styles.grid}>
             {actions.map((action) => (
@@ -36,7 +38,7 @@ export function QuickActions({ actions = DEFAULT_ACTIONS }: QuickActionsProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     grid: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 20 },
     item: { alignItems: 'center', flex: 1 },
     iconBg: { width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },

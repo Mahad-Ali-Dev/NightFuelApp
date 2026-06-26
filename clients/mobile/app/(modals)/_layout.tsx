@@ -1,8 +1,9 @@
 import React from 'react';
 import { Stack } from 'expo-router';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme';
 
 export default function ModalsLayout() {
+    const { colors } = useTheme();
     return (
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background.primary } }}>
             <Stack.Screen name="active-workout" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />

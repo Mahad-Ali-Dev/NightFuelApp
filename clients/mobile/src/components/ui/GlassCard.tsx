@@ -47,17 +47,26 @@ export interface GlassCardProps {
   testID?: string;
 }
 
+/** True when a #RRGGBB background reads as a light surface (→ light blur tint). */
+function isLightHex(hex: string): boolean {
+  const h = hex.replace('#', '');
+  if (h.length < 6) return false;
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.55;
+}
+
 export function GlassCard({
   children,
   style,
   intensity = 40,
-  tint = 'dark',
+  tint,
   glow,
   radius,
   testID,
 }: GlassCardProps) {
   const { colors, borderRadius, shadows } = useTheme();
   const r = radius ?? borderRadius['2xl'];
+  const effectiveTint = tint ?? (isLightHex(colors.background.primary) ? 'light' : 'dark');
 
   return (
     <View
@@ -73,7 +82,7 @@ export function GlassCard({
         style,
       ]}
     >
-      <SafeBlurView tint={tint} intensity={intensity} style={{ borderWidth: 0 }}>
+      <SafeBlurView tint={effectiveTint} intensity={intensity} style={{ borderWidth: 0 }}>
         {children}
       </SafeBlurView>
     </View>

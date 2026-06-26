@@ -9,7 +9,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { addComment, likePost, getComments, getPostById, Comment, Post } from '@/api/community';
-import { colors as themeColors } from '@/theme/colors';
 import { safeImageUri } from '@/lib/imageUrl';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -425,7 +424,7 @@ const styles = StyleSheet.create({
     commentItem: { flexDirection: 'row', paddingVertical: 14, borderBottomWidth: 1 },
     commentMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
     emptyComments: { paddingVertical: 16 },
-    inputBar: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, backgroundColor: themeColors.background.primary },
+    inputBar: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1 },
     commentInput: { flex: 1, minHeight: 48, maxHeight: 110, paddingHorizontal: 20, paddingVertical: 12, borderWidth: 1, fontFamily: 'Barlow_400Regular', fontSize: 15 },
     sendBtn: { width: 48, height: 48, borderRadius: 24, marginLeft: 12, overflow: 'hidden' },
     sendBtnGradient: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },

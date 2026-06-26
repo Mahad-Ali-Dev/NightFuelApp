@@ -3,7 +3,7 @@ import { Redirect } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Skeleton } from '@/components/ui';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme';
 import { spacing } from '@/theme/spacing';
 
 /**
@@ -49,11 +49,12 @@ export default function RootIndex() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const user = useAuthStore((s) => s.user);
+  const { colors } = useTheme();
 
   if (isLoading) {
     return (
       <View
-        style={styles.loading}
+        style={[styles.loading, { backgroundColor: colors.background.primary }]}
         accessible
         accessibilityRole="progressbar"
         accessibilityLabel="Loading your account"
@@ -90,7 +91,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xl,
-    backgroundColor: colors.background.primary,
   },
   brandBlock: {
     alignItems: 'center',

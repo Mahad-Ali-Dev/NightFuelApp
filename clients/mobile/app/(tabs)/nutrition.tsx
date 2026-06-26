@@ -26,7 +26,6 @@ import {
 } from '@/components/NutritionCards';
 import { format } from 'date-fns';
 import { withAlpha } from '@/theme/utils';
-import { colors as themeColors } from '@/theme/colors';
 import { TAB_BAR_H } from './_layout';
 
 // Bundled Aurora dark-glass art (no external host → offline-safe, no 404 /
@@ -66,14 +65,10 @@ const MEAL_TYPE_LABEL: Record<string, string> = {
 };
 const mealTypeLabel = (t?: string) => MEAL_TYPE_LABEL[String(t || '').toUpperCase()] || 'Meal';
 
-// Pick a Zeitra accent + icon for a plan meal-slot grid card by its index, so the
-// grid reads as a rotating, on-brand set (lime-led) rather than a flat list.
-const SLOT_ACCENTS = [
-    themeColors.accent.coral,
-    themeColors.accent.cyan,
-    themeColors.accent.purple,
-    themeColors.accent.amber,
-];
+// Icon set for a plan meal-slot grid card by index, so the grid reads as a
+// rotating, on-brand set rather than a flat list. (Colorless — the matching
+// per-index accents are built from the ACTIVE theme inside the component, see
+// `slotAccents`, so they re-tint on a theme switch.)
 const SLOT_ICONS = ['sunny-outline', 'restaurant-outline', 'moon-outline', 'cafe-outline'] as const;
 
 // Coerce any value to a finite number, mapping undefined / null / NaN / ±Infinity
@@ -90,6 +85,13 @@ export default function NutritionHubScreen() {
     const { colors, typography, borderRadius, shadows } = useTheme();
     const insets = useSafeAreaInsets();
     const router = useRouter();
+
+    // Per-index meal-slot accents sourced from the ACTIVE theme so the Daily-Plan
+    // grid cards re-tint on a theme switch (rotating, on-brand, lime-led set).
+    const slotAccents = useMemo(
+        () => [colors.accent.coral, colors.accent.cyan, colors.accent.purple, colors.accent.amber],
+        [colors],
+    );
 
     const todayStr = format(new Date(), 'yyyy-MM-dd');
 
@@ -616,7 +618,7 @@ export default function NutritionHubScreen() {
                                             onPress={() => router.push('/(meals)/fasting' as any)}
                                             activeOpacity={0.85}
                                         >
-                                            <Text style={[typography.caption, { color: themeColors.background.primary, fontWeight: 'bold' }]}>
+                                            <Text style={[typography.caption, { color: colors.background.primary, fontWeight: 'bold' }]}>
                                                 {fasting?.status === 'ACTIVE' ? 'VIEW TIMER' : 'START FAST'}
                                             </Text>
                                         </TouchableOpacity>
@@ -688,7 +690,7 @@ export default function NutritionHubScreen() {
                                     title={m.label || m.name}
                                     time={m.time}
                                     description={m.description}
-                                    accent={SLOT_ACCENTS[i % SLOT_ACCENTS.length]!}
+                                    accent={slotAccents[i % slotAccents.length]!}
                                     icon={SLOT_ICONS[i % SLOT_ICONS.length]!}
                                     accessibilityLabel={`Log ${m.label || m.name}${m.time ? `, ${m.time}` : ''}`}
                                     onPress={() => router.push({ pathname: '/(meals)/log-meal', params: { preset: m.label } })}

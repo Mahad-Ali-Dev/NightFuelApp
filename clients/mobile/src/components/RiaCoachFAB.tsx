@@ -1,14 +1,16 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { TouchableOpacity, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme';
 
 interface RiaCoachFABProps {
     onPress: () => void;
 }
 
 const RiaCoachFABComponent: React.FC<RiaCoachFABProps> = ({ onPress }) => {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <TouchableOpacity
             style={styles.container}
@@ -36,7 +38,7 @@ const RiaCoachFABComponent: React.FC<RiaCoachFABProps> = ({ onPress }) => {
  */
 export const RiaCoachFAB = React.memo(RiaCoachFABComponent);
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     container: {
         position: 'absolute',
         right: 20,

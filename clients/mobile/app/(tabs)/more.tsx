@@ -12,7 +12,7 @@
  * wiring, the honest disabled-row contract, the logout handler, appVersion and
  * every a11y label are preserved exactly.
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking,
 } from 'react-native';
@@ -33,7 +33,6 @@ import { GlassCard } from '@/components/ui';
 import { MoreSettingRow } from '@/components/MoreSettingRow';
 import { ProfileRing } from '@/components/ProfileRing';
 import { withAlpha } from '@/theme/utils';
-import { colors as C } from '@/theme/colors';
 import { getStreak } from '@/api/progress';
 import { TAB_BAR_H } from './_layout';
 
@@ -52,54 +51,64 @@ type SettingItemType = {
     tint?: string;
 };
 
-// Static settings layout — hoisted to module scope so it isn't rebuilt on every
-// render. (The Dark Mode switch state is derived from the theme store at render.)
-const SETTINGS_SECTIONS: { title: string; icon: string; items: SettingItemType[] }[] = [
+// Static settings layout — built per active theme so the per-row `tint` accents
+// re-tint on a theme switch. The structure (labels/icons/routes/switch wiring) is
+// constant; only the token-sourced tints come from the active palette. Built via
+// useMemo(colors) in the component below. (The Dark Mode switch state is derived
+// from the theme store at render.)
+const makeSettingsSections = (
+    colors: ReturnType<typeof useTheme>['colors'],
+): { title: string; icon: string; items: SettingItemType[] }[] => [
     {
         title: 'Account',
         icon: 'person-outline',
         items: [
-            { label: 'My Profile & Preferences', icon: 'person-circle-outline', route: '/(tabs)/profile', tint: C.accent.coral },
-            { label: 'Manage Subscription', icon: 'star-outline', route: '/(settings)/subscription', value: 'Pro Tier', tint: C.accent.coral },
+            { label: 'My Profile & Preferences', icon: 'person-circle-outline', route: '/(tabs)/profile', tint: colors.accent.coral },
+            { label: 'Manage Subscription', icon: 'star-outline', route: '/(settings)/subscription', value: 'Pro Tier', tint: colors.accent.coral },
         ]
     },
     {
         title: 'Insights & Tools',
         icon: 'bulb-outline',
         items: [
-            { label: 'Analytics Dashboard', icon: 'stats-chart-outline', route: '/(tabs)/analytics', tint: C.accent.coral },
-            { label: 'Achievements & Badges', icon: 'trophy-outline', route: '/(community)/achievements', tint: C.accent.coral },
+            { label: 'Analytics Dashboard', icon: 'stats-chart-outline', route: '/(tabs)/analytics', tint: colors.accent.coral },
+            { label: 'Achievements & Badges', icon: 'trophy-outline', route: '/(community)/achievements', tint: colors.accent.coral },
             // AI is the single reserved hue — purple flags the "AI & Coach" surface
             // (matching the theme's purpleDark intent) so lime stays THE brand accent
             // everywhere else.
-            { label: 'AI Workout Planner', icon: 'sparkles-outline', route: '/(exercises)/ai-planner', tint: C.accent.purple },
-            { label: 'Calculators (1RM & Macros)', icon: 'calculator-outline', route: '/(exercises)/calculator', tint: C.accent.coral },
+            { label: 'AI Workout Planner', icon: 'sparkles-outline', route: '/(exercises)/ai-planner', tint: colors.accent.purple },
+            { label: 'Calculators (1RM & Macros)', icon: 'calculator-outline', route: '/(exercises)/calculator', tint: colors.accent.coral },
         ]
     },
     {
         title: 'App Settings',
         icon: 'options-outline',
         items: [
-            { label: 'Notification Settings', icon: 'notifications-outline', route: '/(settings)/notification-preferences', tint: C.accent.coral },
-            { label: 'Notification History', icon: 'list-outline', route: '/(settings)/notifications', tint: C.accent.coral },
-            { label: 'Connected Devices', icon: 'watch-outline', route: '/(settings)/devices', tint: C.accent.coral },
-            { label: 'Dark Mode', icon: 'moon-outline', isSwitch: true, value: true, tint: C.accent.coral },
+            { label: 'Notification Settings', icon: 'notifications-outline', route: '/(settings)/notification-preferences', tint: colors.accent.coral },
+            { label: 'Notification History', icon: 'list-outline', route: '/(settings)/notifications', tint: colors.accent.coral },
+            { label: 'Connected Devices', icon: 'watch-outline', route: '/(settings)/devices', tint: colors.accent.coral },
+            { label: 'Dark Mode', icon: 'moon-outline', isSwitch: true, value: true, tint: colors.accent.coral },
         ]
     },
     {
         title: 'Support',
         icon: 'help-buoy-outline',
         items: [
-            { label: 'Help Center', icon: 'help-circle-outline', url: 'https://zeitra.app/support', tint: C.accent.coral },
-            { label: 'Terms of Service', icon: 'document-text-outline', url: 'https://zeitra.app/terms', tint: C.accent.coral },
+            { label: 'Help Center', icon: 'help-circle-outline', url: 'https://zeitra.app/support', tint: colors.accent.coral },
+            { label: 'Terms of Service', icon: 'document-text-outline', url: 'https://zeitra.app/terms', tint: colors.accent.coral },
         ]
     }
 ];
 
 // Honest hero count — the real number of destinations the hub links to, derived
-// purely from the static section map above (NOT a backend fetch). The other two
-// stat cells carry live, user-meaningful data (day streak + profile completion).
-const TOTAL_DESTINATIONS = SETTINGS_SECTIONS.reduce((n, s) => n + s.items.length, 0);
+// purely from the static section structure (NOT a backend fetch). Counts the
+// items off a colorless probe of the section map so it stays a module constant
+// (the labels/items never change with the theme). The other two stat cells carry
+// live, user-meaningful data (day streak + profile completion).
+const TOTAL_DESTINATIONS = makeSettingsSections({ accent: {} } as any).reduce(
+    (n, s) => n + s.items.length,
+    0,
+);
 
 export default function MoreScreen() {
     const { colors, typography, spacing, borderRadius, shadows } = useTheme();
@@ -108,6 +117,11 @@ export default function MoreScreen() {
 
     const { user } = useAuthStore();
     const { theme, setTheme } = useThemeStore();
+
+    // Per-row settings layout rebuilt from the ACTIVE theme so each row's `tint`
+    // accent re-tints on a theme switch (structure is constant; only the
+    // token-sourced tints change).
+    const settingsSections = useMemo(() => makeSettingsSections(colors), [colors]);
 
     const { data: profile } = useQuery({
         queryKey: ['user-profile'],
@@ -251,7 +265,7 @@ export default function MoreScreen() {
                 </Animated.View>
 
                 {/* Settings Sections */}
-                {SETTINGS_SECTIONS.map((section, idx) => (
+                {settingsSections.map((section, idx) => (
                     <Animated.View
                         key={idx}
                         entering={FadeInDown.delay(90 + idx * 45).springify().damping(18)}
@@ -306,7 +320,7 @@ export default function MoreScreen() {
 
                 {/* Sign-out Button — bespoke coral outline (not a filled CTA). Reads
                     "Sign out" everywhere (visible + a11y), never the word "Log". */}
-                <Animated.View entering={FadeInDown.delay(90 + SETTINGS_SECTIONS.length * 45).springify().damping(18)}>
+                <Animated.View entering={FadeInDown.delay(90 + settingsSections.length * 45).springify().damping(18)}>
                     <TouchableOpacity
                         accessibilityRole="button"
                         accessibilityLabel="Sign out"

@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface PlateBuilderProps {
     items?: Array<{ name: string; portion: string; color: string }>;
@@ -9,6 +9,8 @@ interface PlateBuilderProps {
 }
 
 export function PlateBuilder({ items = [], onBuild }: PlateBuilderProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <View style={styles.container}>
             <Text style={styles.title}>Build Your Plate</Text>
@@ -35,7 +37,7 @@ export function PlateBuilder({ items = [], onBuild }: PlateBuilderProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     container: { backgroundColor: colors.background.secondary, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: colors.border.default },
     title: { color: '#FFFFFF', fontSize: 18, fontWeight: '700', marginBottom: 16 },
     plate: { minHeight: 120, backgroundColor: colors.background.primary, borderRadius: 20, padding: 16, marginBottom: 16 },

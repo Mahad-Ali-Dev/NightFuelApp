@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 import { typography as typo } from '@/theme/typography';
 
 interface RestTimerProps {
@@ -32,6 +32,8 @@ export function formatRestA11yLabel(remaining: number): string {
 }
 
 export function RestTimer({ durationSeconds, isRunning, onFinish, size = 140 }: RestTimerProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     const [remaining, setRemaining] = useState(durationSeconds);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     // Hold the latest onFinish in a ref so the ticking effect does not have to
@@ -119,7 +121,7 @@ export function RestTimer({ durationSeconds, isRunning, onFinish, size = 140 }: 
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     container: { alignItems: 'center', justifyContent: 'center' },
     center: { position: 'absolute', alignItems: 'center' },
     // Big condensed stat numerals (Barlow Condensed via typo.statMedium), matching

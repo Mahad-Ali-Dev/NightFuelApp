@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
 import { CircularProgress } from '@/components/ui/CircularProgress';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface SleepWindowCardProps {
     targetTime: string;
@@ -12,6 +12,8 @@ interface SleepWindowCardProps {
 }
 
 function SleepWindowCardComponent({ targetTime, progress, hint = 'Melatonin rising in 3h' }: SleepWindowCardProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <Card style={styles.card}>
             <View style={styles.header}>
@@ -35,7 +37,7 @@ function SleepWindowCardComponent({ targetTime, progress, hint = 'Melatonin risi
  */
 export const SleepWindowCard = React.memo(SleepWindowCardComponent);
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     card: { flex: 1, backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderWidth: 1, borderRadius: 20, padding: 16 },
     header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
     title: { color: colors.text.primary, fontSize: 16, fontWeight: '600', marginLeft: 8 },

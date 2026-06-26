@@ -6,7 +6,6 @@ import {
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
-import { colors as palette } from '@/theme/colors';
 import { spacing, borderRadius as br } from '@/theme/spacing';
 import { shadows } from '@/theme/shadows';
 import { withAlpha } from '@/theme/utils';
@@ -48,14 +47,21 @@ interface TierUI {
     features: string[];
 }
 
-const TIERS: TierUI[] = [
+/** Which accent key drives each tier's identity colour. Resolved against the
+ *  active theme inside the component so the tier accents re-tint per theme. */
+type TierColorKey = 'secondary' | 'coral' | 'blue' | 'purpleLight';
+
+interface TierBase extends Omit<TierUI, 'color' | 'gradient'> {
+    colorKey: TierColorKey;
+}
+
+const TIER_BASE: TierBase[] = [
     {
         id: 'free',
         name: 'Free',
         fallbackPrice: 'Free',
         period: 'forever',
-        color: palette.text.secondary,
-        gradient: [withAlpha(palette.text.secondary, 0.1), withAlpha(palette.background.primary, 0)],
+        colorKey: 'secondary',
         features: [
             'Basic Workout Logging & 1RM',
             'ExerciseDB Library (Standard)',
@@ -69,8 +75,7 @@ const TIERS: TierUI[] = [
         fallbackPrice: '$9.99',
         period: '/mo',
         productIdMonthly: SUBSCRIPTION_PRODUCT_IDS.PRO_MONTHLY,
-        color: palette.accent.coral,
-        gradient: [withAlpha(palette.accent.coral, 0.12), withAlpha(palette.background.primary, 0)],
+        colorKey: 'coral',
         recommended: true,
         features: [
             'Advanced Analytics & Real-time Insights',
@@ -85,8 +90,7 @@ const TIERS: TierUI[] = [
         fallbackPrice: '$19.99',
         period: '/mo',
         productIdMonthly: SUBSCRIPTION_PRODUCT_IDS.PREMIUM_MONTHLY,
-        color: palette.accent.blue,
-        gradient: [withAlpha(palette.accent.blue, 0.12), withAlpha(palette.background.primary, 0)],
+        colorKey: 'blue',
         features: [
             'Everything in Pro tier',
             'Direct Chat with Professional Coaches',
@@ -100,8 +104,7 @@ const TIERS: TierUI[] = [
         fallbackPrice: '$49.99',
         period: '/mo',
         productIdMonthly: SUBSCRIPTION_PRODUCT_IDS.ENTERPRISE_MONTHLY,
-        color: palette.accent.purpleLight,
-        gradient: [withAlpha(palette.accent.purpleLight, 0.12), withAlpha(palette.background.primary, 0)],
+        colorKey: 'purpleLight',
         features: [
             'Client Management Dashboard (For Coaches)',
             'Global Template Creation',
@@ -111,11 +114,20 @@ const TIERS: TierUI[] = [
     },
 ];
 
-// Definite (never-undefined) handles into TIERS for the hero card + primary
-// CTA. The `!` satisfies `noUncheckedIndexedAccess` — TIERS is a non-empty
-// literal, so index 0 always exists.
-const FREE_TIER: TierUI = TIERS[0]!;
-const PRO_TIER: TierUI = TIERS.find((t) => t.id === 'pro') ?? FREE_TIER;
+/** Resolve a base tier's identity colour + hero gradient against the active theme. */
+function resolveTier(base: TierBase, colors: ReturnType<typeof useTheme>['colors']): TierUI {
+    const color =
+        base.colorKey === 'secondary' ? colors.text.secondary
+            : base.colorKey === 'coral' ? colors.accent.coral
+                : base.colorKey === 'blue' ? colors.accent.blue
+                    : colors.accent.purpleLight;
+    const { colorKey: _omit, ...rest } = base;
+    return {
+        ...rest,
+        color,
+        gradient: [withAlpha(color, base.colorKey === 'secondary' ? 0.1 : 0.12), withAlpha(colors.background.primary, 0)],
+    };
+}
 
 /** Split a localized price ("$9.99", "£19.99", "Free") into a leading symbol,
  *  the dominant numeric value and any trailing fraction so the VALUE can be the
@@ -144,6 +156,11 @@ export function SubscriptionScreenContent() {
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const queryClient = useQueryClient();
+
+    // Tier identity colours + hero gradients follow the active theme.
+    const tiers = React.useMemo(() => TIER_BASE.map((b) => resolveTier(b, colors)), [colors]);
+    const FREE_TIER: TierUI = tiers[0]!;
+    const PRO_TIER: TierUI = tiers.find((t) => t.id === 'pro') ?? FREE_TIER;
 
     const { data: sub, isLoading, isError, refetch } = useQuery({
         queryKey: ['subscription-status'],
@@ -299,7 +316,7 @@ export function SubscriptionScreenContent() {
     };
 
     // Resolve the user's CURRENT plan + its visual identity for the hero card.
-    const activeTier: TierUI = TIERS.find((t) => t.id === activeTierId) ?? FREE_TIER;
+    const activeTier: TierUI = tiers.find((t) => t.id === activeTierId) ?? FREE_TIER;
     const isPaid = activeTierId !== 'free';
     const renewalDate = formatRenewal(sub?.expiresAt);
     const activePrice = priceFor(activeTier);
@@ -513,7 +530,7 @@ export function SubscriptionScreenContent() {
                             snapToInterval={width * 0.75 + 16}
                             decelerationRate="fast"
                         >
-                            {TIERS.map((tier) => {
+                            {tiers.map((tier) => {
                                 const isActive = activeTierId === tier.id;
                                 const isSelected = selectedTier === tier.id;
                                 const displayPrice = priceFor(tier);

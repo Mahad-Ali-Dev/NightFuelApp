@@ -40,7 +40,6 @@ import { getRecent } from '@/api/exercises';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
-import { colors as C } from '@/theme/colors';
 import { withAlpha } from '@/theme/utils';
 import { Skeleton, GlassCard, CtaButton, CircularProgress, ProgressBar } from '@/components/ui';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
@@ -81,8 +80,10 @@ function buildAchievements(args: {
     daysLogged: number;
     adherence: number;
     isNightOwl: boolean;
+    /** Active-theme lime accent — passed in so every tile re-tints on a theme switch. */
+    limeColor: string;
 }): Achievement[] {
-    const { streakDays, daysLogged, adherence, isNightOwl } = args;
+    const { streakDays, daysLogged, adherence, isNightOwl, limeColor } = args;
     const pct = (n: number, target: number) => Math.max(0, Math.min(1, target > 0 ? n / target : 0));
     return [
         {
@@ -90,7 +91,7 @@ function buildAchievements(args: {
             label: '30-day',
             desc: '30 Day Streak',
             icon: 'flame',
-            color: C.accent.lime,
+            color: limeColor,
             progress: pct(streakDays, 30),
             lockedLabel: `${streakDays} / 30 days`,
         },
@@ -101,7 +102,7 @@ function buildAchievements(args: {
             label: 'Night owl',
             desc: 'Night Shift',
             icon: 'moon',
-            color: C.accent.lime,
+            color: limeColor,
             progress: isNightOwl ? 1 : 0,
             lockedLabel: 'Night shift only',
         },
@@ -110,7 +111,7 @@ function buildAchievements(args: {
             label: 'Iron will',
             desc: '50 Days Logged',
             icon: 'barbell',
-            color: C.accent.lime,
+            color: limeColor,
             progress: pct(daysLogged, 50),
             lockedLabel: `${daysLogged} / 50 days`,
         },
@@ -119,7 +120,7 @@ function buildAchievements(args: {
             label: '90% adher.',
             desc: '90% Adherence',
             icon: 'ribbon',
-            color: C.accent.lime,
+            color: limeColor,
             progress: pct(adherence, 90),
             lockedLabel: `${Math.round(adherence)} / 90%`,
         },
@@ -183,6 +184,7 @@ export default function ProfileScreen() {
         daysLogged: statsError ? 0 : daysLogged,
         adherence: statusError ? 0 : ((status as any)?.adherenceScore ?? 0),
         isNightOwl,
+        limeColor: colors.accent.lime,
     });
     const showAchievements = !(streakError && statsError && statusError);
 
@@ -215,7 +217,7 @@ export default function ProfileScreen() {
                     />
                     {/* Horizontal lime wash (kept) — brand tint sweeping in from the left. */}
                     <LinearGradient
-                        colors={[withAlpha(C.accent.lime, 0.18), withAlpha(C.accent.lime, 0.05), 'transparent']}
+                        colors={[withAlpha(colors.accent.lime, 0.18), withAlpha(colors.accent.lime, 0.05), 'transparent']}
                         start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }}
                         style={StyleSheet.absoluteFillObject}
                     />
@@ -234,10 +236,10 @@ export default function ProfileScreen() {
                                 <Ionicons name="settings-outline" size={20} color={colors.text.primary} />
                             </Pressable>
                             <Pressable hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Log out"
-                                style={({ pressed }) => [s.iconBtn, { backgroundColor: withAlpha(C.error, 0.10), borderColor: withAlpha(C.error, 0.18) }, pressed && s.pressed]}
+                                style={({ pressed }) => [s.iconBtn, { backgroundColor: withAlpha(colors.error, 0.10), borderColor: withAlpha(colors.error, 0.18) }, pressed && s.pressed]}
                                 onPress={logout}
                             >
-                                <Ionicons name="log-out-outline" size={20} color={C.error} />
+                                <Ionicons name="log-out-outline" size={20} color={colors.error} />
                             </Pressable>
                         </View>
                     </Animated.View>
@@ -297,12 +299,12 @@ export default function ProfileScreen() {
                             <View style={[s.metaDot, { backgroundColor: colors.text.tertiary }]} />
                             {/* Streak chip — animated gamification accent. */}
                             <View
-                                style={[s.streakChip, { backgroundColor: withAlpha(C.accent.orange, 0.14), borderColor: withAlpha(C.accent.orange, 0.28) }]}
+                                style={[s.streakChip, { backgroundColor: withAlpha(colors.accent.orange, 0.14), borderColor: withAlpha(colors.accent.orange, 0.28) }]}
                                 accessible
                                 accessibilityLabel={streakError ? 'Streak unavailable' : `${streak?.current ?? 0} day streak`}
                             >
-                                <Ionicons name="flame" size={13} color={C.accent.orange} />
-                                <Text style={[s.streakChipTxt, { color: C.accent.orange }]}>
+                                <Ionicons name="flame" size={13} color={colors.accent.orange} />
+                                <Text style={[s.streakChipTxt, { color: colors.accent.orange }]}>
                                     {streakError ? '—' : `${streak?.current ?? 0}d`}
                                 </Text>
                             </View>
@@ -355,7 +357,7 @@ export default function ProfileScreen() {
                             <Pressable
                                 accessibilityRole="button"
                                 accessibilityLabel="Admin Dashboard"
-                                style={({ pressed }) => [s.adminBtn, { backgroundColor: C.error, borderRadius: borderRadius.xl }, pressed && s.pressed]}
+                                style={({ pressed }) => [s.adminBtn, { backgroundColor: colors.error, borderRadius: borderRadius.xl }, pressed && s.pressed]}
                                 onPress={() => router.push('/(admin)' as any)}
                             >
                                 <Ionicons name="shield" size={17} color="#fff" />
@@ -396,19 +398,19 @@ export default function ProfileScreen() {
                     <Animated.View entering={FadeInDown.delay(215).springify().damping(18)} style={s.statusStripWrap}>
                         <GlassCard radius={borderRadius['2xl']} style={s.statusStrip}>
                             <View style={s.statusStripInner}>
-                                <StatCell label="FATIGUE" value={`${(status as any)?.fatigueScore ?? 0}`} unit="%" color={C.warning} isError={statusError} onRetry={refetchStatus} compact />
+                                <StatCell label="FATIGUE" value={`${(status as any)?.fatigueScore ?? 0}`} unit="%" color={colors.warning} isError={statusError} onRetry={refetchStatus} compact />
                                 <View style={[s.heroDivider, { backgroundColor: withAlpha(colors.text.primary, 0.10) }]} />
-                                <StatCell label="ADHERENCE" value={`${(status as any)?.adherenceScore ?? 0}`} unit="%" color={C.success} isError={statusError} onRetry={refetchStatus} compact />
+                                <StatCell label="ADHERENCE" value={`${(status as any)?.adherenceScore ?? 0}`} unit="%" color={colors.success} isError={statusError} onRetry={refetchStatus} compact />
                             </View>
                         </GlassCard>
                     </Animated.View>
 
                     {/* Circadian phase card */}
                     <Animated.View entering={FadeInDown.delay(235).springify().damping(18)} style={{ width: '100%' }}>
-                        <GlassCard glow={withAlpha(C.accent.amber, 0.18)} radius={borderRadius['2xl']} style={s.circCard}>
+                        <GlassCard glow={withAlpha(colors.accent.amber, 0.18)} radius={borderRadius['2xl']} style={s.circCard}>
                             <View style={s.circInner}>
                                 <View style={s.circHeader}>
-                                    <Ionicons name="sunny-outline" size={18} color={C.accent.amber} />
+                                    <Ionicons name="sunny-outline" size={18} color={colors.accent.amber} />
                                     <Text style={[s.circLabel, { color: colors.text.secondary }]}>CIRCADIAN PHASE</Text>
                                 </View>
                                 <Text style={[typography.h2, { color: colors.text.primary, marginTop: 10 }]}>
@@ -424,20 +426,20 @@ export default function ProfileScreen() {
                                         accessibilityRole="button"
                                         accessibilityLabel="Retry loading circadian status"
                                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                        style={({ pressed }) => [s.circBtn, { backgroundColor: withAlpha(C.accent.amber, 0.12), borderColor: withAlpha(C.accent.amber, 0.25) }, pressed && s.pressed]}
+                                        style={({ pressed }) => [s.circBtn, { backgroundColor: withAlpha(colors.accent.amber, 0.12), borderColor: withAlpha(colors.accent.amber, 0.25) }, pressed && s.pressed]}
                                         onPress={() => refetchStatus()}
                                     >
-                                        <Text style={[s.circBtnTxt, { color: C.accent.amber }]}>Retry</Text>
+                                        <Text style={[s.circBtnTxt, { color: colors.accent.amber }]}>Retry</Text>
                                     </Pressable>
                                 ) : (
                                     <Pressable
                                         accessibilityRole="button"
                                         accessibilityLabel="View full schedule"
                                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                                        style={({ pressed }) => [s.circBtn, { backgroundColor: withAlpha(C.accent.amber, 0.12), borderColor: withAlpha(C.accent.amber, 0.25) }, pressed && s.pressed]}
+                                        style={({ pressed }) => [s.circBtn, { backgroundColor: withAlpha(colors.accent.amber, 0.12), borderColor: withAlpha(colors.accent.amber, 0.25) }, pressed && s.pressed]}
                                         onPress={() => router.push('/(tabs)/circadian' as any)}
                                     >
-                                        <Text style={[s.circBtnTxt, { color: C.accent.amber }]}>View Full Schedule →</Text>
+                                        <Text style={[s.circBtnTxt, { color: colors.accent.amber }]}>View Full Schedule →</Text>
                                     </Pressable>
                                 )}
                             </View>
@@ -654,7 +656,7 @@ function ProfileSkeleton() {
             {/* Cover gradient wash */}
             <View style={[s.cover, { paddingTop: insets.top }]}>
                 <LinearGradient
-                    colors={[withAlpha(C.accent.lime, 0.18), withAlpha(C.accent.lime, 0.05), colors.background.primary]}
+                    colors={[withAlpha(colors.accent.lime, 0.18), withAlpha(colors.accent.lime, 0.05), colors.background.primary]}
                     start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }}
                     style={StyleSheet.absoluteFillObject}
                 />

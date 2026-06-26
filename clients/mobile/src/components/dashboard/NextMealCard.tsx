@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface NextMealCardProps {
     label: string;
@@ -14,6 +14,8 @@ interface NextMealCardProps {
 }
 
 function NextMealCardComponent({ label, description, time, macros, onLog, onEdit }: NextMealCardProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <Card style={styles.card}>
             <View style={styles.header}>
@@ -54,7 +56,7 @@ function NextMealCardComponent({ label, description, time, macros, onLog, onEdit
  */
 export const NextMealCard = React.memo(NextMealCardComponent);
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     card: { backgroundColor: colors.background.secondary, borderColor: '#A8CC3C50', borderWidth: 1, borderRadius: 24, padding: 20, marginBottom: 20, borderLeftWidth: 4, borderLeftColor: '#A8CC3C' },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
     headerLabel: { color: '#A8CC3C', fontWeight: '800', letterSpacing: 1, fontSize: 12 },

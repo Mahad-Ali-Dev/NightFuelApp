@@ -1,7 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme';
 import { captureException } from '@/lib/sentry';
 
 interface Props {
@@ -12,6 +12,30 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+}
+
+/**
+ * The default crash fallback UI. Split out into a function component so it can
+ * read the ACTIVE theme via `useTheme()` (the surrounding ErrorBoundary is a
+ * class component and cannot call hooks). Re-tints with the selected theme.
+ */
+function ErrorFallback({ error, onRetry }: { error: Error | null; onRetry: () => void }) {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+
+  return (
+    <View style={styles.container}>
+      <Ionicons name="warning-outline" size={64} color={colors.accent.amber} />
+      <Text style={styles.title}>Something went wrong</Text>
+      <Text style={styles.message}>
+        {__DEV__ ? error?.message : 'An unexpected error occurred. Please try again.'}
+      </Text>
+      <TouchableOpacity style={styles.button} onPress={onRetry} activeOpacity={0.8}>
+        <Ionicons name="refresh" size={18} color="#FFF" />
+        <Text style={styles.buttonText}>Try Again</Text>
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -42,26 +66,14 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
 
-      return (
-        <View style={styles.container}>
-          <Ionicons name="warning-outline" size={64} color={colors.accent.amber} />
-          <Text style={styles.title}>Something went wrong</Text>
-          <Text style={styles.message}>
-            {__DEV__ ? this.state.error?.message : 'An unexpected error occurred. Please try again.'}
-          </Text>
-          <TouchableOpacity style={styles.button} onPress={this.handleRetry} activeOpacity={0.8}>
-            <Ionicons name="refresh" size={18} color="#FFF" />
-            <Text style={styles.buttonText}>Try Again</Text>
-          </TouchableOpacity>
-        </View>
-      );
+      return <ErrorFallback error={this.state.error} onRetry={this.handleRetry} />;
     }
 
     return this.props.children;
   }
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background.primary,

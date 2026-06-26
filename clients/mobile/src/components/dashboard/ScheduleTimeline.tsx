@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface TimelineEvent {
     time: string;
@@ -18,6 +18,8 @@ interface ScheduleTimelineProps {
 }
 
 export function ScheduleTimeline({ events, onViewFull }: ScheduleTimelineProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <View>
             <View style={styles.headerRow}>
@@ -50,7 +52,7 @@ export function ScheduleTimeline({ events, onViewFull }: ScheduleTimelineProps) 
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     heading: { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
     viewFull: { color: '#A8CC3C', fontWeight: '700', fontSize: 12 },

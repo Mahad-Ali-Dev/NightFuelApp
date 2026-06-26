@@ -1,8 +1,9 @@
 import React from 'react';
 import { Stack } from 'expo-router';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 export default function ShiftsLayout() {
+    const { colors } = useTheme();
     return (
         <Stack
             screenOptions={{

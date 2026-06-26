@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface FastingTimerProps {
     isFasting: boolean;
@@ -11,6 +11,8 @@ interface FastingTimerProps {
 }
 
 export function FastingTimer({ isFasting, elapsedMinutes, targetMinutes = 960, onToggle }: FastingTimerProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     const [elapsed, setElapsed] = useState(elapsedMinutes);
 
     useEffect(() => {
@@ -52,7 +54,7 @@ export function FastingTimer({ isFasting, elapsedMinutes, targetMinutes = 960, o
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     container: { backgroundColor: colors.background.secondary, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: colors.border.default, marginBottom: 16 },
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },

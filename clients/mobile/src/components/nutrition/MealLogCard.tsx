@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface MealLogCardProps {
     name: string;
@@ -16,6 +16,8 @@ interface MealLogCardProps {
 }
 
 function MealLogCardComponent({ name, time, calories, protein, carbs, fat, mealType = 'Meal', onPress }: MealLogCardProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <TouchableOpacity activeOpacity={0.8} onPress={onPress}>
             <Card style={styles.card}>
@@ -45,7 +47,7 @@ function MealLogCardComponent({ name, time, calories, protein, carbs, fat, mealT
  */
 export const MealLogCard = React.memo(MealLogCardComponent);
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     card: { padding: 16, marginBottom: 12 },
     row: { flexDirection: 'row', alignItems: 'center' },
     iconBg: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#A8CC3C15', alignItems: 'center', justifyContent: 'center', marginRight: 12 },

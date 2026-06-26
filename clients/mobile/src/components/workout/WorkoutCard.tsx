@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface WorkoutCardProps {
     name: string;
@@ -18,6 +18,8 @@ interface WorkoutCardProps {
 const DIFFICULTY_COLORS = { Beginner: '#00D4AA', Intermediate: '#FFB300', Advanced: '#FF4444' };
 
 function WorkoutCardComponent({ name, muscleGroup, equipment, difficulty, duration, imageUrl, onPress }: WorkoutCardProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <TouchableOpacity activeOpacity={0.8} onPress={onPress}>
             <Card style={styles.card}>
@@ -52,7 +54,7 @@ function WorkoutCardComponent({ name, muscleGroup, equipment, difficulty, durati
  */
 export const WorkoutCard = React.memo(WorkoutCardComponent);
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     card: { padding: 0, overflow: 'hidden', marginBottom: 16, width: '100%' },
     imageBg: { width: '100%', height: 120, borderTopLeftRadius: 20, borderTopRightRadius: 20, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
     image: { width: '100%', height: '100%' },

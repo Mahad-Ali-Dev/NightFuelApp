@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface HydrationWidgetProps {
     currentMl: number;
@@ -11,6 +11,8 @@ interface HydrationWidgetProps {
 }
 
 function HydrationWidgetComponent({ currentMl, targetMl, onAddWater }: HydrationWidgetProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     const currentL = (currentMl / 1000).toFixed(1);
     const targetL = (targetMl / 1000).toFixed(1);
     const pct = Math.min(100, (currentMl / targetMl) * 100);
@@ -40,7 +42,7 @@ function HydrationWidgetComponent({ currentMl, targetMl, onAddWater }: Hydration
  */
 export const HydrationWidget = React.memo(HydrationWidgetComponent);
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     card: { flex: 1, backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderWidth: 1, borderRadius: 20, padding: 16 },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
     title: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },

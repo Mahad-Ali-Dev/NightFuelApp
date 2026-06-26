@@ -1,7 +1,9 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, ListRenderItem, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
+
+type Styles = ReturnType<typeof makeStyles>;
 
 interface FoodItem {
     id: string;
@@ -25,9 +27,11 @@ interface FoodSearchSheetProps {
 const FoodResultRow = React.memo(function FoodResultRow({
     item,
     onSelect,
+    styles,
 }: {
     item: FoodItem;
     onSelect: (food: FoodItem) => void;
+    styles: Styles;
 }) {
     return (
         <TouchableOpacity style={styles.resultRow} onPress={() => onSelect(item)} activeOpacity={0.85}>
@@ -41,6 +45,8 @@ const FoodResultRow = React.memo(function FoodResultRow({
 });
 
 export function FoodSearchSheet({ onSearch, onSelect }: FoodSearchSheetProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<FoodItem[]>([]);
     const [loading, setLoading] = useState(false);
@@ -56,8 +62,8 @@ export function FoodSearchSheet({ onSearch, onSelect }: FoodSearchSheetProps) {
 
     const keyExtractor = useCallback((item: FoodItem) => item.id, []);
     const renderItem = useCallback<ListRenderItem<FoodItem>>(
-        ({ item }) => <FoodResultRow item={item} onSelect={onSelect} />,
-        [onSelect],
+        ({ item }) => <FoodResultRow item={item} onSelect={onSelect} styles={styles} />,
+        [onSelect, styles],
     );
 
     return (
@@ -88,7 +94,7 @@ export function FoodSearchSheet({ onSearch, onSelect }: FoodSearchSheetProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background.primary, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 12 },
     handleBar: { width: 40, height: 4, backgroundColor: colors.border.light, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
     title: { color: '#FFFFFF', fontSize: 22, fontWeight: '700', marginBottom: 16 },

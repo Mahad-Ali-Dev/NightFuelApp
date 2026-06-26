@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 /**
  * One logged set as GROUND TRUTH (state-ground-truth): the raw numbers plus a
@@ -89,6 +89,8 @@ export function SetLogger({
     onEditSet,
     onRemoveSet,
 }: SetLoggerProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     const [reps, setReps] = useState('');
     const [weight, setWeight] = useState('');
     // Lazy initializer seeds the list ONCE from initialSets (react-state-fallback)
@@ -252,7 +254,7 @@ export function SetLogger({
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     container: { backgroundColor: colors.background.secondary, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border.default, marginBottom: 16 },
     exercise: { color: colors.text.primary, fontSize: 18, fontWeight: '700' },
     setCount: { color: colors.text.secondary, fontSize: 13, marginTop: 4, marginBottom: 16 },

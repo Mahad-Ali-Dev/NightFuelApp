@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface CircadianClockProps {
     currentPhase?: string;
@@ -11,6 +11,8 @@ interface CircadianClockProps {
 }
 
 function CircadianClockComponent({ currentPhase = 'Active', alertnessScore = 72, size = 160 }: CircadianClockProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     const radius = (size - 16) / 2;
     const circumference = 2 * Math.PI * radius;
     const progress = alertnessScore / 100;
@@ -43,7 +45,7 @@ function CircadianClockComponent({ currentPhase = 'Active', alertnessScore = 72,
  */
 export const CircadianClock = React.memo(CircadianClockComponent);
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     container: { alignItems: 'center', justifyContent: 'center' },
     center: { position: 'absolute', alignItems: 'center' },
     score: { color: '#FFFFFF', fontSize: 32, fontWeight: '800' },

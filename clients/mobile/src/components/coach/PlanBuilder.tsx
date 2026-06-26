@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface PlanSection {
     title: string;
@@ -23,6 +23,8 @@ const DEFAULT_SECTIONS: PlanSection[] = [
 ];
 
 export function PlanBuilder({ sections = DEFAULT_SECTIONS, onSave, onAddSection }: PlanBuilderProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <View style={styles.container}>
             {sections.map((section, i) => (
@@ -53,7 +55,7 @@ export function PlanBuilder({ sections = DEFAULT_SECTIONS, onSave, onAddSection 
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     container: { padding: 4 },
     sectionCard: { backgroundColor: colors.background.secondary, borderRadius: 16, padding: 16, marginBottom: 12, borderLeftWidth: 4 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },

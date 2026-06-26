@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface AlertBannerProps {
     title: string;
@@ -19,6 +19,7 @@ const SEVERITY = {
 };
 
 function AlertBannerComponent({ title, message, severity = 'high', onDismiss, onAction, actionLabel = 'View' }: AlertBannerProps) {
+    const { colors } = useTheme();
     const s = SEVERITY[severity];
 
     return (

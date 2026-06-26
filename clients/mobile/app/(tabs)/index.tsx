@@ -26,7 +26,7 @@ import {
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
-import { useTheme, colors as palette, typography, spacing, borderRadius } from '@/theme';
+import { useTheme, typography, spacing, borderRadius } from '@/theme';
 import { Skeleton, EmptyState, GlassCard, CtaButton } from '@/components/ui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -109,21 +109,26 @@ const RIA_AVATAR = require('../../assets/images/logo_app.png');
 // routes / labels / icons — only the card presentation changed to the mockup's
 // image-top + title-below style. A short `sub` line was added per card (purely
 // descriptive copy, no new data dependency).
+// `colorKey` indexes the ACTIVE theme's accent palette (resolved in the
+// component via `useMemo` over `colors`) so these accents re-tint on a theme
+// switch. Image requires / routes / icons stay module-static.
 const QUICK_ACTIONS = [
-    { id: 'meal', label: 'Track meal', sub: 'Fuel your shift', icon: 'restaurant', color: palette.accent.cyan, image: QA_MEAL, route: '/(tabs)/nutrition' },
-    { id: 'workout', label: 'Track workout', sub: 'Train now', icon: 'flame', color: palette.accent.coral, image: QA_WORKOUT, route: '/(tabs)/training' },
-    { id: 'sleep', label: 'Track sleep', sub: 'Anchor rest', icon: 'moon', color: palette.accent.purple, image: QA_SLEEP, route: '/(modals)/log-sleep' },
-    { id: 'stats', label: 'Progress', sub: 'Track trends', icon: 'stats-chart', color: palette.accent.blue, image: QA_STATS, route: '/(performance)' },
+    { id: 'meal', label: 'Track meal', sub: 'Fuel your shift', icon: 'restaurant', colorKey: 'cyan', image: QA_MEAL, route: '/(tabs)/nutrition' },
+    { id: 'workout', label: 'Track workout', sub: 'Train now', icon: 'flame', colorKey: 'coral', image: QA_WORKOUT, route: '/(tabs)/training' },
+    { id: 'sleep', label: 'Track sleep', sub: 'Anchor rest', icon: 'moon', colorKey: 'purple', image: QA_SLEEP, route: '/(modals)/log-sleep' },
+    { id: 'stats', label: 'Progress', sub: 'Track trends', icon: 'stats-chart', colorKey: 'blue', image: QA_STATS, route: '/(performance)' },
 ] as const;
 
-// Exercise categories shown as image cards
+// Exercise categories shown as image cards. `accentKey` indexes the active
+// theme accent palette (resolved in `exerciseCategories` over `colors`) so the
+// count-badge accents re-tint on a theme switch.
 const EXERCISE_CATEGORY_META = [
     {
         id: 'gym',
         label: 'Gym Workout',
         fallbackCount: '500+',
         image: CAT_GYM_IMG,
-        accent: palette.accent.coral,
+        accentKey: 'coral',
         filter: 'gym',
     },
     {
@@ -131,7 +136,7 @@ const EXERCISE_CATEGORY_META = [
         label: 'Home Workout',
         fallbackCount: '200+',
         image: CAT_HOME_IMG,
-        accent: palette.accent.cyan,
+        accentKey: 'cyan',
         filter: 'home',
     },
     {
@@ -139,7 +144,7 @@ const EXERCISE_CATEGORY_META = [
         label: 'Cardio',
         fallbackCount: '80+',
         image: CAT_CARDIO_IMG,
-        accent: palette.accent.blue,
+        accentKey: 'blue',
         filter: 'cardio',
     },
     {
@@ -147,19 +152,21 @@ const EXERCISE_CATEGORY_META = [
         label: 'Kegel / Pelvic',
         fallbackCount: '5',
         image: CAT_RECOVERY_IMG,
-        accent: palette.accent.purple,
+        accentKey: 'purple',
         filter: 'kegel',
     },
 ] as const;
 
-// More Features shown as image cards on Home
+// More Features shown as image cards on Home. (The `accent` field is retained
+// as a non-rendered data attribute; it is not read in the JSX below, so it
+// carries no theme dependency.)
 const MORE_FEATURES = [
-    { id: 'shifts', label: 'Shifts', image: HERO_TRAINING, accent: palette.accent.amber, route: '/(shifts)' },
-    { id: 'sleep', label: 'Sleep Tracker', image: QA_SLEEP, accent: palette.accent.purple, route: '/(modals)/log-sleep' },
-    { id: 'community', label: 'Community', image: MUSCLE_SHOULDERS_IMG, accent: palette.accent.blue, route: '/(community)' },
-    { id: 'coaches', label: 'Coaches', image: MUSCLE_ARMS_IMG, accent: palette.accent.coral, route: '/coaches/browse' },
-    { id: 'circadian', label: 'Circadian', image: CAT_RECOVERY_IMG, accent: palette.accent.purpleLight, route: '/(tabs)/circadian' },
-    { id: 'settings', label: 'Settings', image: CAT_HOME_IMG, accent: palette.text.secondary, route: '/(settings)' },
+    { id: 'shifts', label: 'Shifts', image: HERO_TRAINING, route: '/(shifts)' },
+    { id: 'sleep', label: 'Sleep Tracker', image: QA_SLEEP, route: '/(modals)/log-sleep' },
+    { id: 'community', label: 'Community', image: MUSCLE_SHOULDERS_IMG, route: '/(community)' },
+    { id: 'coaches', label: 'Coaches', image: MUSCLE_ARMS_IMG, route: '/coaches/browse' },
+    { id: 'circadian', label: 'Circadian', image: CAT_RECOVERY_IMG, route: '/(tabs)/circadian' },
+    { id: 'settings', label: 'Settings', image: CAT_HOME_IMG, route: '/(settings)' },
 ] as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -200,12 +207,14 @@ function getNextMeal(meals: PlanMeal[]): PlanMeal | null {
     return sorted.find(m => toMinutes(m.time) > nowMin) ?? sorted[0] ?? null;
 }
 
-function getInsight(hour: number) {
-    if (hour >= 22 || hour < 5) return { icon: 'moon' as const, text: 'Melatonin rising. Wind down screens.', color: palette.accent.purple };
-    if (hour >= 5 && hour < 9) return { icon: 'sunny' as const, text: 'Cortisol peak. Delay caffeine 90 min.', color: palette.accent.amber };
-    if (hour >= 14 && hour < 17) return { icon: 'water' as const, text: 'Cortisol dip. Ideal time for protein.', color: palette.accent.cyan };
-    if (hour >= 17 && hour < 22) return { icon: 'flash' as const, text: 'Alertness window closing. Fuel up now.', color: palette.accent.coral };
-    return { icon: 'pulse' as const, text: 'Optimal alertness window. Stay fuelled.', color: palette.accent.blue };
+// `colors` is the ACTIVE theme palette (passed from the component) so the
+// insight glow re-tints on a theme switch.
+function getInsight(hour: number, colors: ReturnType<typeof useTheme>['colors']) {
+    if (hour >= 22 || hour < 5) return { icon: 'moon' as const, text: 'Melatonin rising. Wind down screens.', color: colors.accent.purple };
+    if (hour >= 5 && hour < 9) return { icon: 'sunny' as const, text: 'Cortisol peak. Delay caffeine 90 min.', color: colors.accent.amber };
+    if (hour >= 14 && hour < 17) return { icon: 'water' as const, text: 'Cortisol dip. Ideal time for protein.', color: colors.accent.cyan };
+    if (hour >= 17 && hour < 22) return { icon: 'flash' as const, text: 'Alertness window closing. Fuel up now.', color: colors.accent.coral };
+    return { icon: 'pulse' as const, text: 'Optimal alertness window. Stay fuelled.', color: colors.accent.blue };
 }
 
 // ─── MacroPill ────────────────────────────────────────────────────────────────
@@ -319,6 +328,8 @@ export default function DashboardScreen() {
     const qc = useQueryClient();
     const { user } = useAuthStore();
     const [refreshing, setRefreshing] = useState(false);
+    // Theme-derived styles (re-tint the two color-bearing rules on a switch).
+    const s = useMemo(() => makeStyles(colors), [colors]);
 
     // ── Queries ──
     // Each query exposes isError + refetch so the dashboard can render a uniform
@@ -360,11 +371,19 @@ export default function DashboardScreen() {
     const exerciseCategories = useMemo(() =>
         EXERCISE_CATEGORY_META.map(cat => ({
             ...cat,
+            // Resolve the accent from the ACTIVE theme so the badge re-tints.
+            accent: colors.accent[cat.accentKey],
             count: exerciseCounts?.[cat.filter] != null
                 ? String(exerciseCounts[cat.filter])
                 : cat.fallbackCount,
         })),
-        [exerciseCounts]);
+        [exerciseCounts, colors]);
+
+    // "Picked for your shift" cards with their accents resolved from the active
+    // theme (re-tints on a theme switch).
+    const quickActions = useMemo(() =>
+        QUICK_ACTIONS.map(a => ({ ...a, color: colors.accent[a.colorKey] })),
+        [colors]);
 
     const { mutate: addWater } = useMutation({
         mutationFn: () => logHydration(250),
@@ -389,7 +408,7 @@ export default function DashboardScreen() {
 
     const countdown = useMemo(() => shift?.endTime ? getCountdown(shift.endTime) : null, [shift]);
     const nextMeal = useMemo(() => plan?.meals ? getNextMeal(plan.meals) : null, [plan]);
-    const insight = useMemo(() => getInsight(new Date().getHours()), []);
+    const insight = useMemo(() => getInsight(new Date().getHours(), colors), [colors]);
     const hydPct = useMemo(() => progress
         ? Math.min(((progress.hydrationActual || progress.hydrationMl || 0) / 2500) * 100, 100)
         : 0, [progress]);
@@ -655,7 +674,7 @@ export default function DashboardScreen() {
                         snapToAlignment="start"
                         contentContainerStyle={s.qaCarousel}
                     >
-                        {QUICK_ACTIONS.map(a => (
+                        {quickActions.map(a => (
                             <TouchableOpacity
                                 key={a.id}
                                 onPress={() => router.push(a.route as any)}
@@ -1122,7 +1141,10 @@ export default function DashboardScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const s = StyleSheet.create({
+// Factory so the two color-bearing rules (upNextSkeleton / emptyCard border +
+// background) re-tint from the ACTIVE theme; the component resolves it via
+// `useMemo(() => makeStyles(colors), [colors])`.
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     root: { flex: 1 },
     scroll: { paddingHorizontal: H_PAD },
 
@@ -1169,7 +1191,7 @@ const s = StyleSheet.create({
 
     // NEXT meal hero card
     upNextInner: { padding: 18, paddingTop: 14 },
-    upNextSkeleton: { borderRadius: 24, borderWidth: 1, borderColor: palette.border.default, backgroundColor: withAlpha(palette.background.secondary, 0.5), marginBottom: 18, overflow: 'hidden', padding: 0 },
+    upNextSkeleton: { borderRadius: 24, borderWidth: 1, borderColor: colors.border.default, backgroundColor: withAlpha(colors.background.secondary, 0.5), marginBottom: 18, overflow: 'hidden', padding: 0 },
     mealPhotoWrap: { height: 104, width: '100%', position: 'relative', justifyContent: 'flex-end' },
     upNextTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14 },
     upNextBadge: { position: 'absolute', left: 14, bottom: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
@@ -1194,7 +1216,7 @@ const s = StyleSheet.create({
     addWaterTxt: {},
 
     // Empty / zero-data card (matches glass card rhythm)
-    emptyCard: { borderRadius: 24, borderWidth: 1, borderColor: palette.border.default, backgroundColor: withAlpha(palette.background.secondary, 0.5), marginBottom: 28, overflow: 'hidden' },
+    emptyCard: { borderRadius: 24, borderWidth: 1, borderColor: colors.border.default, backgroundColor: withAlpha(colors.background.secondary, 0.5), marginBottom: 28, overflow: 'hidden' },
 
     // "Picked for your shift" carousel
     qaCarousel: { paddingRight: H_PAD, gap: CARD_GAP },

@@ -14,7 +14,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeContext, resolveThemeColors, typography, spacing, borderRadius, shadows, ColorScheme } from '@/theme';
-import { colors } from '@/theme/colors';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import { setOnSessionExpired } from '@/api/client';
@@ -174,7 +173,7 @@ function RootLayout() {
               <Stack
                 screenOptions={{
                   headerShown: false,
-                  contentStyle: { backgroundColor: colors.background.primary },
+                  contentStyle: { backgroundColor: themeColors.background.primary },
                   animation: 'slide_from_right',
                 }}
               >

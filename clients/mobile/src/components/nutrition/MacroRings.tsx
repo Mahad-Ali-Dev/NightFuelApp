@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface MacroRing {
     label: string;
@@ -18,6 +18,8 @@ interface MacroRingsProps {
 }
 
 function Ring({ label, current, target, color, size = 70 }: MacroRing & { size?: number }) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     const radius = (size - 10) / 2;
     const circumference = 2 * Math.PI * radius;
     const progress = target > 0 ? Math.min(1, current / target) : 0;
@@ -43,6 +45,8 @@ function Ring({ label, current, target, color, size = 70 }: MacroRing & { size?:
 }
 
 export function MacroRings({ protein, carbs, fat, calories }: MacroRingsProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <View style={styles.container}>
             {calories && (
@@ -60,7 +64,7 @@ export function MacroRings({ protein, carbs, fat, calories }: MacroRingsProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     container: { alignItems: 'center' },
     calorieCenter: { alignItems: 'center', marginBottom: 16 },
     calorieValue: { color: '#FFFFFF', fontSize: 36, fontWeight: '800' },

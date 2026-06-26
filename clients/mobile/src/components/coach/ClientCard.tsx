@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
 import { CircularProgress } from '@/components/ui/CircularProgress';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface ClientCardProps {
     name: string;
@@ -17,6 +17,8 @@ interface ClientCardProps {
 }
 
 function ClientCardComponent({ name, avatar, shiftType, adherence, alerts, lastActive, onPress, onChat }: ClientCardProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     const adherenceColor = adherence >= 80 ? '#00D4AA' : adherence >= 60 ? '#FFB300' : '#FF4444';
 
     return (
@@ -60,7 +62,7 @@ function ClientCardComponent({ name, avatar, shiftType, adherence, alerts, lastA
  */
 export const ClientCard = React.memo(ClientCardComponent);
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     card: { padding: 16, marginBottom: 12 },
     row: { flexDirection: 'row', alignItems: 'center' },
     avatarCircle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginRight: 12 },

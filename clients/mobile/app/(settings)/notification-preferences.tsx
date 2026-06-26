@@ -16,7 +16,6 @@ import {
     type NotificationPreferences,
 } from '@/api/notifications';
 import { withAlpha } from '@/theme/utils';
-import { colors as palette } from '@/theme/colors';
 import { spacing, borderRadius as br } from '@/theme/spacing';
 import { EmptyState, Skeleton, GlassCard, CtaButton } from '@/components/ui';
 
@@ -25,23 +24,31 @@ import { EmptyState, Skeleton, GlassCard, CtaButton } from '@/components/ui';
 // Only the boolean keys — quietHoursStart/End are handled separately
 type PrefKey = keyof Omit<NotificationPreferences, 'quietHoursStart' | 'quietHoursEnd'>;
 
-interface PreferenceItem {
+/** Accent key driving each preference row's icon chip — resolved against the
+ *  active theme inside the component so the chips re-tint per theme. */
+type AccentKey = 'cyan' | 'orange' | 'purple' | 'blue' | 'emerald' | 'amber' | 'red';
+
+interface PreferenceItemBase {
     key: PrefKey;
     label: string;
     description: string;
     icon: string;
-    iconColor: string;
+    iconColorKey: AccentKey;
     category: string;
 }
 
-const PREFERENCE_ITEMS: PreferenceItem[] = [
+interface PreferenceItem extends Omit<PreferenceItemBase, 'iconColorKey'> {
+    iconColor: string;
+}
+
+const PREFERENCE_ITEMS: PreferenceItemBase[] = [
     // Training & Health
     {
         key: 'workoutReminderEnabled',
         label: 'Workout Reminders',
         description: 'Get reminded before your scheduled workouts',
         icon: 'barbell-outline',
-        iconColor: palette.accent.cyan,
+        iconColorKey: 'cyan',
         category: 'Training & Health',
     },
     {
@@ -52,7 +59,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         // Functional warm hue — NOT the reserved brand lime (accent.coral). A
         // single non-primary toggle must not borrow "the" accent; orange reads
         // as warmth/food and keeps lime exclusive to the one primary action.
-        iconColor: palette.accent.orange,
+        iconColorKey: 'orange',
         category: 'Training & Health',
     },
     {
@@ -60,7 +67,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Shift Alerts',
         description: 'Pre-shift prep and circadian rhythm notifications',
         icon: 'time-outline',
-        iconColor: palette.accent.purple,
+        iconColorKey: 'purple',
         category: 'Training & Health',
     },
     {
@@ -68,7 +75,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Sleep Reminders',
         description: 'Wind-down and sleep hygiene reminders',
         icon: 'bed-outline',
-        iconColor: palette.accent.blue,
+        iconColorKey: 'blue',
         category: 'Training & Health',
     },
     {
@@ -76,7 +83,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Plan Ready',
         description: 'Notified when your daily workout or meal plan is ready',
         icon: 'checkmark-circle-outline',
-        iconColor: palette.accent.emerald,
+        iconColorKey: 'emerald',
         category: 'Training & Health',
     },
     {
@@ -84,7 +91,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Adherence Alerts',
         description: 'Gentle nudges when you fall behind your nutrition plan',
         icon: 'alert-circle-outline',
-        iconColor: palette.accent.amber,
+        iconColorKey: 'amber',
         category: 'Training & Health',
     },
 
@@ -94,7 +101,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Weekly Report',
         description: 'Your weekly performance summary from Coach Ria',
         icon: 'analytics-outline',
-        iconColor: palette.accent.emerald,
+        iconColorKey: 'emerald',
         category: 'Progress & Insights',
     },
     {
@@ -102,7 +109,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Streak Updates',
         description: 'Stay motivated with streak milestones and warnings',
         icon: 'flame-outline',
-        iconColor: palette.accent.red,
+        iconColorKey: 'red',
         category: 'Progress & Insights',
     },
 
@@ -112,7 +119,7 @@ const PREFERENCE_ITEMS: PreferenceItem[] = [
         label: 'Coach Messages',
         description: 'Messages and check-ins from your AI Coach Ria',
         icon: 'chatbubble-ellipses-outline',
-        iconColor: palette.accent.purple,
+        iconColorKey: 'purple',
         category: 'Coaching',
     },
 ];
@@ -197,15 +204,16 @@ export default function NotificationPreferencesScreen() {
         );
     };
 
-    // Group items by category. PREFERENCE_ITEMS is a module-level constant, so
-    // this grouping is computed once instead of on every render.
+    // Group items by category, resolving each row's icon chip colour against the
+    // active theme so the chips re-tint when the user switches themes.
     const categories = useMemo(
-        () => PREFERENCE_ITEMS.reduce<Record<string, PreferenceItem[]>>((acc, item) => {
+        () => PREFERENCE_ITEMS.reduce<Record<string, PreferenceItem[]>>((acc, base) => {
+            const item: PreferenceItem = { ...base, iconColor: colors.accent[base.iconColorKey] };
             if (!acc[item.category]) acc[item.category] = [];
             acc[item.category]!.push(item);
             return acc;
         }, {}),
-        [],
+        [colors],
     );
 
     const categoryEntries = Object.entries(categories);
@@ -462,8 +470,8 @@ export default function NotificationPreferencesScreen() {
                     <View style={[styles.section, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
                         {/* Toggle to show/hide the time pickers */}
                         <View style={styles.prefRow}>
-                            <View style={[styles.iconBox, { backgroundColor: withAlpha(palette.accent.blue, 0.12) }]}>
-                                <Ionicons name="moon-outline" size={20} color={palette.accent.blue} />
+                            <View style={[styles.iconBox, { backgroundColor: withAlpha(colors.accent.blue, 0.12) }]}>
+                                <Ionicons name="moon-outline" size={20} color={colors.accent.blue} />
                             </View>
                             <View style={{ flex: 1, marginHorizontal: 14 }}>
                                 <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '600' }]}>
@@ -499,9 +507,9 @@ export default function NotificationPreferencesScreen() {
                                 exiting={FadeOut.duration(160)}
                                 style={[styles.quietHoursRow, { borderTopColor: colors.border.default }]}
                             >
-                                <TimeDisplay label="FROM" time={prefs.quietHoursStart} colors={colors} typography={typography} iconColor={palette.accent.blue} onPress={handleEditQuietHours} />
+                                <TimeDisplay label="FROM" time={prefs.quietHoursStart} colors={colors} typography={typography} iconColor={colors.accent.blue} onPress={handleEditQuietHours} />
                                 <Ionicons name="arrow-forward" size={16} color={colors.text.tertiary} />
-                                <TimeDisplay label="TO" time={prefs.quietHoursEnd} colors={colors} typography={typography} iconColor={palette.accent.blue} onPress={handleEditQuietHours} />
+                                <TimeDisplay label="TO" time={prefs.quietHoursEnd} colors={colors} typography={typography} iconColor={colors.accent.blue} onPress={handleEditQuietHours} />
                             </Animated.View>
                         ) : null}
                     </View>

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Text, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme';
 import { useOfflineStore } from '@/store/offlineStore';
 
 let NetInfo: { addEventListener: (cb: (state: { isConnected: boolean | null }) => void) => () => void };
@@ -15,6 +15,7 @@ try {
 
 export function NetworkStatusBar() {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const { isOffline, setOfflineStatus } = useOfflineStore();
   const [slideAnim] = useState(() => new Animated.Value(-50));
 
@@ -39,7 +40,7 @@ export function NetworkStatusBar() {
     <Animated.View
       style={[
         styles.container,
-        { paddingTop: insets.top + 4, transform: [{ translateY: slideAnim }] },
+        { backgroundColor: colors.accent.amber, paddingTop: insets.top + 4, transform: [{ translateY: slideAnim }] },
       ]}
     >
       <Ionicons name="cloud-offline-outline" size={16} color="#FFF" />
@@ -55,7 +56,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 9999,
-    backgroundColor: colors.accent.amber,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

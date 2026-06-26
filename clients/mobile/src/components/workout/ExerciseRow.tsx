@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/theme';
+import { useTheme } from '@/theme';
 
 interface ExerciseRowProps {
     name: string;
@@ -14,6 +14,8 @@ interface ExerciseRowProps {
 }
 
 function ExerciseRowComponent({ name, sets, reps, weight, isCompleted, isActive, onPress }: ExerciseRowProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <TouchableOpacity style={[styles.row, isActive && styles.rowActive]} onPress={onPress} activeOpacity={0.7}>
             <View style={[styles.indicator, isCompleted ? styles.completed : isActive ? styles.active : styles.pending]} />
@@ -36,7 +38,7 @@ function ExerciseRowComponent({ name, sets, reps, weight, isCompleted, isActive,
  */
 export const ExerciseRow = React.memo(ExerciseRowComponent);
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: colors.background.secondary },
     rowActive: { backgroundColor: '#1C212820' },
     indicator: { width: 4, height: 32, borderRadius: 2, marginRight: 14 },
