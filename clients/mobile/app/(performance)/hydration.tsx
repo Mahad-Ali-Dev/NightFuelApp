@@ -64,6 +64,13 @@ export default function HydrationTrackerScreen() {
 
     const isLoading = todayQuery.isLoading;
 
+    // The hydration DATA accent is the semantic water cyan (#4FC9E8, the same hue
+    // the Nutrition hub uses for its Water ring), not the generic success-teal
+    // `accent.cyan`. Sourced from the theme's macro token so the screen stays
+    // hex-free and tracks any variant. The lime `accent.coral` is reserved for the
+    // goal-reached celebration only.
+    const water = colors.macro.water;
+
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             <StatusBar style="light" />
@@ -93,12 +100,12 @@ export default function HydrationTrackerScreen() {
                 <Animated.View entering={FadeInDown.duration(420)} style={styles.centerSection}>
                     <View style={styles.ringWrapper}>
                         {/* Soft halo — celebratory when the goal is reached */}
-                        <View style={[styles.glow, { backgroundColor: goalReached ? colors.accent.coral : colors.accent.cyan, opacity: goalReached ? 0.18 : 0.12 }]} />
-                        <View style={shadows.glow(goalReached ? colors.accent.coral : colors.accent.cyan)}>
-                            <CircularProgress progress={pct} size={236} strokeWidth={16} color={goalReached ? colors.accent.coral : colors.accent.cyan} trackColor={colors.border.default} />
+                        <View style={[styles.glow, { backgroundColor: goalReached ? colors.accent.coral : water, opacity: goalReached ? 0.18 : 0.12 }]} />
+                        <View style={shadows.glow(goalReached ? colors.accent.coral : water)}>
+                            <CircularProgress progress={pct} size={236} strokeWidth={16} color={goalReached ? colors.accent.coral : water} trackColor={colors.border.default} />
                         </View>
                         <View style={styles.ringInner}>
-                            <Ionicons name="water" size={30} color={goalReached ? colors.accent.coral : colors.accent.cyan} />
+                            <Ionicons name="water" size={30} color={goalReached ? colors.accent.coral : water} />
                             {isLoading ? (
                                 <Skeleton width={120} height={56} radius={borderRadius.md} style={{ marginTop: spacing.sm }} />
                             ) : (
@@ -115,9 +122,9 @@ export default function HydrationTrackerScreen() {
                                 OF {target} ML
                             </Text>
                             {/* Percent / milestone pill */}
-                            <View style={[styles.pill, { backgroundColor: withAlpha(goalReached ? colors.accent.coral : colors.accent.cyan, 0.14) }]}>
-                                <Ionicons name={goalReached ? 'checkmark-circle' : 'trending-up'} size={13} color={goalReached ? colors.accent.coral : colors.accent.cyan} />
-                                <Text style={[styles.pillText, { color: goalReached ? colors.accent.coral : colors.accent.cyan }]}>
+                            <View style={[styles.pill, { backgroundColor: withAlpha(goalReached ? colors.accent.coral : water, 0.14) }]}>
+                                <Ionicons name={goalReached ? 'checkmark-circle' : 'trending-up'} size={13} color={goalReached ? colors.accent.coral : water} />
+                                <Text style={[styles.pillText, { color: goalReached ? colors.accent.coral : water }]}>
                                     {goalReached ? 'Goal reached' : `${pctLabel}% of goal`}
                                 </Text>
                             </View>
@@ -135,7 +142,7 @@ export default function HydrationTrackerScreen() {
                             </View>
                             <View style={[styles.statDivider, { backgroundColor: colors.border.default }]} />
                             <View style={styles.statCell}>
-                                <Text style={[styles.statValue, { color: goalReached ? colors.accent.cyan : colors.text.primary }]}>{remaining}</Text>
+                                <Text style={[styles.statValue, { color: goalReached ? water : colors.text.primary }]}>{remaining}</Text>
                                 <Text style={[typography.overline, { color: colors.text.tertiary }]}>LEFT ML</Text>
                             </View>
                             <View style={[styles.statDivider, { backgroundColor: colors.border.default }]} />
@@ -164,8 +171,8 @@ export default function HydrationTrackerScreen() {
                             >
                                 <GlassCard radius={borderRadius.xl} style={styles.presetGlass}>
                                     <View style={styles.presetInner}>
-                                        <View style={[styles.presetIcon, { backgroundColor: withAlpha(colors.accent.cyan, 0.12), borderColor: withAlpha(colors.accent.cyan, 0.22) }]}>
-                                            <Ionicons name="add" size={20} color={colors.accent.cyan} />
+                                        <View style={[styles.presetIcon, { backgroundColor: withAlpha(water, 0.12), borderColor: withAlpha(water, 0.22) }]}>
+                                            <Ionicons name="add" size={20} color={water} />
                                         </View>
                                         <Text style={[styles.presetValue, { color: colors.text.primary }]}>{amount}</Text>
                                         <Text style={[typography.caption, { color: colors.text.tertiary }]}>ml</Text>
@@ -186,8 +193,8 @@ export default function HydrationTrackerScreen() {
                             </View>
                         ) : current === 0 ? (
                             <View style={styles.emptyIntake}>
-                                <View style={[styles.emptyIcon, { backgroundColor: withAlpha(colors.accent.cyan, 0.12) }]}>
-                                    <Ionicons name="water-outline" size={22} color={colors.accent.cyan} />
+                                <View style={[styles.emptyIcon, { backgroundColor: withAlpha(water, 0.12) }]}>
+                                    <Ionicons name="water-outline" size={22} color={water} />
                                 </View>
                                 <Text style={[typography.bodyMedium, { color: colors.text.primary, textAlign: 'center' }]}>No water logged yet</Text>
                                 <Text style={[typography.caption, { color: colors.text.secondary, textAlign: 'center', marginTop: spacing.xxs }]}>
@@ -204,7 +211,7 @@ export default function HydrationTrackerScreen() {
                                                 key={i}
                                                 name={filled ? 'water' : 'water-outline'}
                                                 size={22}
-                                                color={filled ? colors.accent.cyan : withAlpha(colors.text.tertiary, 0.5)}
+                                                color={filled ? water : withAlpha(colors.text.tertiary, 0.5)}
                                                 style={styles.glassIcon}
                                             />
                                         );
@@ -222,8 +229,8 @@ export default function HydrationTrackerScreen() {
                 <Animated.View entering={FadeInDown.duration(420).delay(240)} style={{ paddingHorizontal: spacing.xl, marginTop: spacing['2xl'] }}>
                     <GlassCard radius={borderRadius.xl}>
                         <View style={styles.tipCard}>
-                            <View style={[styles.tipIcon, { backgroundColor: withAlpha(goalReached ? colors.accent.coral : colors.accent.cyan, 0.12) }]}>
-                                <Ionicons name={goalReached ? 'sparkles' : 'bulb-outline'} size={20} color={goalReached ? colors.accent.coral : colors.accent.cyan} />
+                            <View style={[styles.tipIcon, { backgroundColor: withAlpha(goalReached ? colors.accent.coral : water, 0.12) }]}>
+                                <Ionicons name={goalReached ? 'sparkles' : 'bulb-outline'} size={20} color={goalReached ? colors.accent.coral : water} />
                             </View>
                             <Text style={[typography.body, { color: colors.text.primary, marginLeft: spacing.md, flex: 1 }]}>
                                 {goalReached

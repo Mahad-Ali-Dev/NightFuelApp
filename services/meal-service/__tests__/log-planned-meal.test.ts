@@ -134,4 +134,57 @@ describe('meal-service — MealService.logMeal additive planMealId', () => {
             expect(ctx.published[0]!.event.payload.mealType).toBe('DINNER');
         });
     });
+
+    // ── micronutrients persist on the foodItems JSON (scan→log) ──────────────
+    // A meal logged from a scanned product carries per-item micros (validated +
+    // retained by logMealBodySchema). The service stores `foodItems` VERBATIM in
+    // the JSON column, so each item's micros must land in the captured create
+    // `data` untouched and round-trip out via getMealLogs. If the write ever
+    // reconstructs items field-by-field (dropping micros) this goes red.
+    describe('micronutrients on foodItems persist verbatim', () => {
+        // One item with macros + a representative micros bag (g / mg / µg).
+        function itemsWithMicros() {
+            return [
+                {
+                    foodId: 'food-9', name: 'Greek Yogurt', quantity: 1,
+                    calories: 100, protein: 10, carbs: 4, fat: 5,
+                    sodium: 50, calcium: 110, iron: 0.1, vitaminB12: 0.7, fiber: 0,
+                },
+            ];
+        }
+
+        it('persists each item\'s micros in the bare-array foodItems write (no plan link)', async () => {
+            await ctx.service.logMeal('user-1', 'BREAKFAST', itemsWithMicros());
+
+            const persisted = ctx.created[0];
+            expect(Array.isArray(persisted.foodItems)).toBe(true);
+            const item = persisted.foodItems[0];
+            // Macros unchanged…
+            expect(item.calories).toBe(100);
+            // …and the micros survived verbatim (mg / µg / g).
+            expect(item.sodium).toBe(50);
+            expect(item.calcium).toBe(110);
+            expect(item.iron).toBe(0.1);
+            expect(item.vitaminB12).toBe(0.7);
+            expect(item.fiber).toBe(0);
+        });
+
+        it('persists item micros inside the { items } envelope when a plan link is present', async () => {
+            await ctx.service.logMeal('user-1', 'BREAKFAST', itemsWithMicros(), 'plan-meal-xyz');
+
+            const persisted = ctx.created[0];
+            // Envelope path: { items: [...], _planMealId }.
+            expect(persisted.foodItems._planMealId).toBe('plan-meal-xyz');
+            const item = persisted.foodItems.items[0];
+            expect(item.sodium).toBe(50);
+            expect(item.vitaminB12).toBe(0.7);
+        });
+
+        it('totals are computed from macros only — micros never leak into totalCalories', async () => {
+            const result: any = await ctx.service.logMeal('user-1', 'BREAKFAST', itemsWithMicros());
+            // 100 kcal * qty 1 — the sodium/calcium/etc. values are NOT summed in.
+            expect(result.totalCalories).toBe(100);
+            expect(result.totalProtein).toBe(10);
+        });
+    });
 });

@@ -62,6 +62,19 @@ export const colors = {
     inverse: '#0A0C12',
   },
 
+  // Semantic MACRO colors — one stable hue per macronutrient ring/bar so the
+  // Nutrition hub reads Protein·Carbs·Fat·Water at a glance WITHOUT screens
+  // hard-coding hex. These are macro semantics (like success/error), not brand:
+  // Protein = the lime brand wavelength, Carbs = amber, Fat = rose, Water = cyan.
+  // Mirrored across every theme variant + Night Read so `colors.macro.*` is always
+  // present (see MACRO_FIXED / buildVariant below).
+  macro: {
+    protein: '#C2F03C', // lime
+    carbs: '#FFB13C',   // amber
+    fat: '#FF7A90',     // rose
+    water: '#4FC9E8',   // cyan
+  },
+
   // Semantic colors
   success: '#00D4AA',
   error: '#FF4444',
@@ -147,6 +160,9 @@ export type ThemeVariantColors = {
   // ever read these as strings, so widening to `string` is safe.
   accent: Record<keyof typeof colors.accent, string>;
   text: { primary: string; secondary: string; tertiary: string; accent: string; inverse: string };
+  /** Semantic per-macronutrient colors (Protein/Carbs/Fat/Water). Present on every
+   *  variant so `colors.macro.*` never goes missing on a screen. */
+  macro: { protein: string; carbs: string; fat: string; water: string };
   success: string;
   error: string;
   warning: string;
@@ -204,6 +220,15 @@ interface VariantSpec {
  * the variant's accent. success/error/warning/info reuse the existing dark/light
  * semantic bases so a success toast never reads off-brand.
  */
+/**
+ * The fixed (non-protein) macro hues — Carbs / Fat / Water. These are macro
+ * semantics (not brand), so they stay constant across every variant, exactly like
+ * success/error/warning/info. Protein is filled per-variant from the variant's
+ * brand accent so the Protein ring always reads on-brand (lime in midnight-lime,
+ * orange in ember, etc.).
+ */
+const MACRO_FIXED = { carbs: '#FFB13C', fat: '#FF7A90', water: '#4FC9E8' } as const;
+
 function buildVariant(spec: VariantSpec): ThemeVariantColors {
   const { bg, surface, border, accent, ink, text, muted, isDark } = spec;
   // Tertiary surface: nudge the card surface slightly toward (dark) lighter or
@@ -242,6 +267,9 @@ function buildVariant(spec: VariantSpec): ThemeVariantColors {
       accent,
       inverse: ink,
     },
+    // Protein follows the variant's brand accent; Carbs/Fat/Water are the fixed
+    // semantic macro hues (constant across variants, like the semantic colors).
+    macro: { protein: accent, ...MACRO_FIXED },
     ...semantic,
     gradients: {
       lime: [accent, accentDark] as const,
@@ -269,6 +297,7 @@ const midnightLime: ThemeVariantColors = {
   border: colors.border,
   accent: colors.accent,
   text: colors.text,
+  macro: colors.macro,
   success: colors.success,
   error: colors.error,
   warning: colors.warning,

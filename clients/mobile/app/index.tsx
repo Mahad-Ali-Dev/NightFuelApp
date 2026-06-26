@@ -76,7 +76,12 @@ export default function RootIndex() {
     return <Redirect href="/(tabs)" />;
   }
 
-  return <Redirect href="/(auth)/login" />;
+  // Unauthenticated visitors land on the Welcome screen first (the branded
+  // intro + onboarding entry point), NOT straight on the sign-in form. Welcome
+  // itself links onward to /(auth)/login for returning users. The per-field
+  // scoped selectors above are what keep this gate from re-rendering on every
+  // auth-store mutation (the redirect-bounce / focus-loss guard) — unchanged.
+  return <Redirect href="/(auth)/welcome" />;
 }
 
 const styles = StyleSheet.create({

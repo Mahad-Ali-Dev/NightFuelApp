@@ -60,6 +60,17 @@ declare module 'expo-video' {
     contentFit?: 'contain' | 'cover' | 'fill';
     allowsFullscreen?: boolean;
     accessibilityLabel?: string;
+    /**
+     * Fires after the player renders its first frame into the view. We use it to
+     * hide the best-frame poster cover once real playback begins.
+     */
+    onFirstFrameRender?: () => void;
+    /**
+     * Android: when false, suppresses the default ExoPlayer shutter that covers
+     * the view before the first frame — so our own poster cover shows through
+     * (matches iOS behaviour). No effect on iOS.
+     */
+    useExoShutter?: boolean;
     [key: string]: unknown;
   }
 

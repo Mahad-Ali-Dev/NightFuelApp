@@ -82,10 +82,84 @@ export interface Recipe {
   image?: string;
 }
 
+/**
+ * OPTIONAL per-food-item micronutrients + secondary macros. The key set + units
+ * match the /food-search gateway's parseProduct (clients/web/app/api/food-search/
+ * route.ts → FoodNutrition) EXACTLY — which is the shape the barcode scanner
+ * carries — and the meal-service `logMealBodySchema` (MICRO_FIELDS) now retains
+ * them on the logged meal's `foodItems` JSON instead of stripping them:
+ *   • secondary macros fiber/sugar/saturatedFat/transFat       → grams
+ *   • minerals + vitaminC / vitaminB6 / cholesterol             → milligrams (mg)
+ *   • vitaminA / vitaminD / vitaminB12 / folate                 → micrograms (µg)
+ * Every field is optional (a macro-only log carries none), so this never makes a
+ * pre-existing payload invalid.
+ */
+export interface FoodItemMicros {
+  // Secondary macros (g)
+  fiber?: number;
+  sugar?: number;
+  saturatedFat?: number;
+  transFat?: number;
+  // Minerals (mg)
+  sodium?: number;
+  calcium?: number;
+  iron?: number;
+  potassium?: number;
+  magnesium?: number;
+  phosphorus?: number;
+  zinc?: number;
+  // Vitamins (mg / µg) + cholesterol (mg)
+  vitaminC?: number;
+  vitaminA?: number;
+  vitaminD?: number;
+  vitaminB6?: number;
+  vitaminB12?: number;
+  folate?: number;
+  cholesterol?: number;
+}
+
+/**
+ * A food recognized from a PHOTO by the /food-vision gateway. Its shape mirrors
+ * /food-search's parseProduct → FoodNutrition EXACTLY (same keys + units) so the
+ * photo-scan result card reuses the barcode scanner's macro + Micronutrients
+ * panel and threads through the identical addToMeal → log-meal path. The 4
+ * headline macros are required; every micro / secondary macro is optional and
+ * present only when the model could estimate it. Units:
+ *   • macros fiber/sugar/saturatedFat/transFat                  → grams
+ *   • minerals + vitaminC / vitaminB6 / cholesterol             → milligrams (mg)
+ *   • vitaminA / vitaminD / vitaminB12 / folate                 → micrograms (µg)
+ */
+export interface VisionFoodResult extends FoodItemMicros {
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+/**
+ * Outcome of a /food-vision call. On a confident hit `food` is set; otherwise
+ * `error` carries a token the UI maps to a recoverable message (no_food /
+ * low_confidence / rate_limited / timeout / vision_failed …). The gateway
+ * returns its non-result errors as HTTP 200 with `{ error }` (so a missed plate
+ * is not a thrown 5xx), and on a transport/5xx failure we still resolve a
+ * `{ error: 'vision_failed' }` so the camera stays usable.
+ */
+export interface VisionRecognizeResult {
+  food: VisionFoodResult | null;
+  confidence?: number;
+  portionNote?: string;
+  error?: string;
+}
+
 export interface MealLog {
   id: string;
   userId: string;
   mealType: 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
+  // Each logged food carries the 4 headline macros, and — when it was added from
+  // a scanned product that reported them — the OPTIONAL micros/secondary macros
+  // above. The micros persist on the meal-service `foodItems` JSON and round-trip
+  // back out here.
   foodItems: Array<{
     foodId: string;
     name: string;
@@ -94,7 +168,7 @@ export interface MealLog {
     protein: number;
     carbs: number;
     fat: number;
-  }>;
+  } & FoodItemMicros>;
   totalCalories: number;
   totalProtein: number;
   totalCarbs: number;
@@ -174,6 +248,48 @@ export const logMeal = async (payload: { mealType: string; foodItems: any[]; pla
 export const getMealLogs = async (date?: string, limit?: number) => {
   const { data } = await apiClient.get<MealLog[]>('/v1/meals/logs', { params: { date, limit } });
   return data;
+};
+
+/**
+ * Photo food recognition — POST a base64 JPEG data URL to the /food-vision
+ * gateway (the Next.js route that calls the Groq vision model server-side; the
+ * API key NEVER touches the client). The gateway returns the SAME `{ food }`
+ * shape /food-search emits, so the recognized food threads into the shared meal
+ * UI. Mirrors how the barcode scanner calls /food-search (an un-versioned
+ * gateway path, so the /v1 prefix policy doesn't apply).
+ *
+ * Errors are normalized so the caller never has to inspect axios internals:
+ *   • The gateway returns its non-result cases (no food, low confidence, rate
+ *     limit, timeout) as HTTP 200 with `{ error }` — passed straight through.
+ *   • A transport failure or unexpected 5xx resolves `{ error: 'vision_failed' }`
+ *     (or 'timeout' on an axios timeout) instead of throwing, so the photo screen
+ *     can always offer "try again / add manually" and keep the camera usable.
+ * A longer per-request timeout is used because vision inference can be slow.
+ */
+export const recognizeFoodPhoto = async (imageBase64: string): Promise<VisionRecognizeResult> => {
+  try {
+    const { data } = await apiClient.post<VisionRecognizeResult>(
+      '/food-vision',
+      { image: imageBase64 },
+      { timeout: 30_000 },
+    );
+    return {
+      food: data?.food ?? null,
+      confidence: data?.confidence,
+      portionNote: data?.portionNote,
+      error: data?.food ? undefined : (data?.error ?? 'vision_failed'),
+    };
+  } catch (err: any) {
+    const status: number | undefined = err?.response?.status;
+    const serverError: string | undefined = err?.response?.data?.error;
+    const isTimeout = err?.code === 'ECONNABORTED';
+    return {
+      food: null,
+      error:
+        serverError ??
+        (isTimeout ? 'timeout' : status === 429 ? 'rate_limited' : 'vision_failed'),
+    };
+  }
 };
 
 /** Recipes */

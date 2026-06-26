@@ -9,7 +9,9 @@
  * for a springy pressed-scale 0.96. Lime is the 10% accent (ring / icon chips at
  * ~12% / switch tracks); Log Out ("Sign out") is the one destructive action — a
  * centered RED row inside its own glass card, separated at the bottom of the
- * scroll (thumb zone).
+ * scroll (thumb zone). The destructive action reads "Sign out" everywhere — the
+ * visible label, its accessibilityLabel, and the confirmation Alert title/button
+ * (never the word "Log").
  *
  * Lime (the 10% accent) keeps a SINGLE restrained moment on the profile card —
  * the card glow + faint wash; the avatar ring has no separate glow, and section
@@ -100,11 +102,11 @@ export default function SettingsIndexScreen() {
 
     const confirmLogout = () => {
         Alert.alert(
-            'Log Out',
-            'Are you sure you want to log out of Zeitra?',
+            'Sign out',
+            'Are you sure you want to sign out of Zeitra?',
             [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Log Out', style: 'destructive', onPress: performLogout },
+                { text: 'Sign out', style: 'destructive', onPress: performLogout },
             ],
             { cancelable: true },
         );
@@ -376,12 +378,14 @@ export default function SettingsIndexScreen() {
                         <TouchableOpacity
                             activeOpacity={0.85}
                             accessibilityRole="button"
-                            accessibilityLabel="Log Out"
+                            accessibilityLabel="Sign out"
                             style={styles.logoutBtn}
                             onPress={confirmLogout}
                         >
                             <Ionicons name="log-out-outline" size={18} color={colors.accent.red} />
-                            <Text style={[typography.subhead, { color: colors.accent.red, fontWeight: '700', marginLeft: spacing.sm }]} maxFontSizeMultiplier={1.4}>Log Out</Text>
+                            {/* Visible copy, the accessibilityLabel, and the confirm Alert all
+                                follow the naming rule ("Sign out", never "Log"). */}
+                            <Text style={[typography.subhead, { color: colors.accent.red, fontWeight: '700', marginLeft: spacing.sm }]} maxFontSizeMultiplier={1.4}>Sign out</Text>
                         </TouchableOpacity>
                     </GlassCard>
                 </Animated.View>

@@ -364,7 +364,8 @@ describe('CommunityFeedScreen — feed loading / error / empty / populated state
     expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeNull();
 
     // The header title renders in every branch — a sanity check the screen mounted.
-    expect(screen.getByText('Community')).toBeTruthy();
+    // (Crew is the re-skinned header title; "Your night-shift people" is its subtitle.)
+    expect(screen.getByText('Crew')).toBeTruthy();
   });
 
   // ── Test 6: feed ERROR → retryable EmptyState re-invokes refetch ───────────

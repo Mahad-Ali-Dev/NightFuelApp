@@ -142,19 +142,36 @@ export default function BuildPlateScreen() {
                     <Text style={[typography.overline, { color: colors.text.tertiary }]}>BUILD A PLATE</Text>
                     <Text style={[typography.h2, { color: colors.text.primary }]}>Your Meal</Text>
                 </View>
-                <Pressable
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Scan barcode"
-                    onPress={() => router.push('/(modals)/barcode-scanner' as any)}
-                    style={({ pressed }) => [
-                        styles.headerBtn,
-                        { backgroundColor: withAlpha(colors.accent.cyan, 0.12), borderColor: withAlpha(colors.accent.cyan, 0.3) },
-                        pressed && styles.pressedScale,
-                    ]}
-                >
-                    <Ionicons name="scan-outline" size={22} color={colors.accent.cyan} />
-                </Pressable>
+                {/* Two scan entries: a photo "scan a plate" (AI estimate) beside the
+                    barcode scan. Photo uses the lime brand accent, barcode keeps cyan. */}
+                <View style={styles.headerActions}>
+                    <Pressable
+                        hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Scan a plate with a photo"
+                        onPress={() => router.push('/(modals)/food-photo' as any)}
+                        style={({ pressed }) => [
+                            styles.headerBtn,
+                            { backgroundColor: withAlpha(colors.accent.coral, 0.12), borderColor: withAlpha(colors.accent.coral, 0.3) },
+                            pressed && styles.pressedScale,
+                        ]}
+                    >
+                        <Ionicons name="camera-outline" size={22} color={colors.accent.coral} />
+                    </Pressable>
+                    <Pressable
+                        hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Scan barcode"
+                        onPress={() => router.push('/(modals)/barcode-scanner' as any)}
+                        style={({ pressed }) => [
+                            styles.headerBtn,
+                            { backgroundColor: withAlpha(colors.accent.cyan, 0.12), borderColor: withAlpha(colors.accent.cyan, 0.3) },
+                            pressed && styles.pressedScale,
+                        ]}
+                    >
+                        <Ionicons name="scan-outline" size={22} color={colors.accent.cyan} />
+                    </Pressable>
+                </View>
             </View>
 
             <ScrollView contentContainerStyle={{ paddingBottom: 130 }} showsVerticalScrollIndicator={false}>
@@ -392,6 +409,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingTop: 8,
         paddingBottom: 16,
+    },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
     headerBtn: {
         width: 44,

@@ -624,6 +624,35 @@ export function resolveDemoGif(
 }
 
 /**
+ * Derive the best-frame poster (still) URL for a self-hosted MP4 demo clip.
+ *
+ * The VPS batch job writes a best-frame JPG next to every catalog video at an
+ * IDENTICAL path with the extension swapped (`…/<file>.mp4` → `…/<file>.jpg`),
+ * served by the same nginx location. So the poster URL is simply the `videoUrl`
+ * with a CASE-INSENSITIVE trailing `.mp4` (before any `?query`) replaced by
+ * `.jpg`. Used as the pre-play still on the video player and as the preferred
+ * grid/list thumbnail for catalog (video) exercises that lack a real `imageUrl`.
+ *
+ * Returns undefined when there is no `videoUrl`, or when it is not an `.mp4`
+ * (so the caller cleanly falls back to the existing image / placeholder). The
+ * JPG may 404 transiently while the batch is still running — every consumer
+ * wires an `onError` fallback so a missing poster is seamless.
+ */
+export function posterFromVideoUrl(videoUrl?: string | null): string | undefined {
+  if (typeof videoUrl !== 'string') return undefined;
+  const trimmed = videoUrl.trim();
+  if (!trimmed) return undefined;
+  // Split off any ?query / #hash so the `.mp4` we match is the real path suffix,
+  // then re-attach the suffix unchanged (the poster lives at the same query-less
+  // path; a cache-busting query, if any, is preserved verbatim).
+  const suffixIdx = trimmed.search(/[?#]/);
+  const pathPart = suffixIdx === -1 ? trimmed : trimmed.slice(0, suffixIdx);
+  const suffix = suffixIdx === -1 ? '' : trimmed.slice(suffixIdx);
+  if (!/\.mp4$/i.test(pathPart)) return undefined;
+  return pathPart.replace(/\.mp4$/i, '.jpg') + suffix;
+}
+
+/**
  * Return coaching cues for a body part, falling back to GENERAL_TIPS.
  * The second element of the tuple flags whether the generic list was used so the
  * UI can relabel the section header (e.g. "Training Tips" vs "Coach's Tips").

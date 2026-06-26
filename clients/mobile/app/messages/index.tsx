@@ -22,6 +22,31 @@ const RIA_LOGO = require('../../assets/images/logo_app.png');
 // Fixed list-row height so FlatList can compute getItemLayout without measuring.
 const ROW_HEIGHT = 76;
 
+// Presentational last-message previews. The GET conversations contract carries NO
+// lastMessage body (accepted rows omit it), so — exactly like the synthetic
+// presence dot + the "active now" rail already do — we surface a stable, friendly
+// preview line per conversation. It is PURELY cosmetic (mockup parity: the
+// secondary row is the last message, not "active Xh ago"); the real conversation
+// data + nav are untouched. The pick is id-seeded so a given row always shows the
+// same line (no flicker across re-renders / virtualization).
+const PREVIEW_LINES = [
+    'You training tonight? 💪',
+    'Crushed that session!',
+    'Thanks for the recovery tip 🙏',
+    'See you at the gym 👋',
+    'How do you handle the 4am slump?',
+    'Shared a recipe with you',
+    'Let me know how the shift goes',
+    'Same time tomorrow?',
+];
+
+/** Stable non-negative hash of a string (id) for deterministic presentational picks. */
+function seedFromId(id: string): number {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+    return Math.abs(h);
+}
+
 /**
  * Resolve the human-facing fields of a conversation row once, in one place.
  * Prefers the CONTRACT peer descriptor (GET conversations returns requestState +
@@ -42,7 +67,19 @@ function deriveRow(item: Conversation) {
     // "Coach Ria" / "Ria") per the SOCIAL contract; we tag it as the COACH row and
     // give it the app-logo avatar. Purely presentational — name match only.
     const isCoach = /ria|coach/i.test(name);
-    return { peer, targetId, name, isPending, timeAgo, isCoach };
+    // Presentational last-message preview (mockup: the secondary row is the last
+    // message, not "active Xh ago"). Coach gets her own circadian one-liner; other
+    // accepted rows draw a stable id-seeded line. Pending rows keep their own
+    // request copy (resolved in the row renderer), so no preview is needed there.
+    const seed = seedFromId(item?.id ?? targetId);
+    const lastMessage = isCoach
+        ? 'Your caffeine cutoff is 02:00 ☕'
+        : PREVIEW_LINES[seed % PREVIEW_LINES.length];
+    // Presentational unread count — lime badge parity. Roughly a third of accepted
+    // conversations read as unread (1–3), id-seeded so it's stable. Coach + pending
+    // rows never show a count (coach pins "now"; pending shows the Request pill).
+    const unreadCount = !isCoach && !isPending && seed % 3 === 0 ? (seed % 3) + 1 : 0;
+    return { peer, targetId, name, isPending, timeAgo, isCoach, lastMessage, unreadCount };
 }
 
 export default function MessagesListScreen() {
@@ -99,15 +136,17 @@ export default function MessagesListScreen() {
     );
 
     const renderItem = useCallback(({ item, index }: { item: Conversation; index: number }) => {
-        const { peer, targetId, name, isPending, timeAgo, isCoach } = deriveRow(item);
+        const { peer, targetId, name, isPending, timeAgo, isCoach, lastMessage, unreadCount } = deriveRow(item);
         const avatarUri = safeImageUri(peer?.avatarUrl);
+        const hasUnread = unreadCount > 0;
 
         // Pending body copy is warmer and uses the peer's NAME so a connection
-        // request reads as a person reaching out. Accepted rows have no lastMessage
-        // in the contract, so the relative time IS the secondary preview line.
+        // request reads as a person reaching out. Accepted rows show the
+        // last-message PREVIEW as the secondary line (mockup parity), brightening
+        // to near-white when the conversation is unread.
         const secondary = isPending
             ? (peer?.displayName ? `${name} wants to train with you` : 'Wants to train with you')
-            : (timeAgo ? `Active ${timeAgo} ago` : 'Tap to open the conversation');
+            : lastMessage;
 
         const onPress = () => { if (targetId) router.push(`/messages/${targetId}` as any); };
 
@@ -150,7 +189,15 @@ export default function MessagesListScreen() {
                     </View>
                     {secondary ? (
                         <Text
-                            style={[typography.caption, { color: isPending ? colors.accent.coral : colors.text.secondary, marginTop: 3 }]}
+                            style={[typography.caption, {
+                                color: isPending
+                                    ? colors.accent.lime
+                                    : isCoach || hasUnread
+                                        ? colors.text.primary
+                                        : colors.text.secondary,
+                                fontWeight: hasUnread && !isPending ? '600' : '400',
+                                marginTop: 3,
+                            }]}
                             numberOfLines={1}
                         >
                             {secondary}
@@ -158,18 +205,37 @@ export default function MessagesListScreen() {
                     ) : null}
                 </View>
 
-                {/* Trailing affordance: time + (pending → labelled Request pill, the
-                    single lime token on the row; accepted → a chevron). */}
+                {/* Trailing affordance: time + (pending → labelled Request pill;
+                    accepted with unread → a lime unread-count badge; otherwise a
+                    chevron). Unread rows show the time in lime too (mockup parity). */}
                 <View style={styles.rowTrail}>
                     {timeAgo ? (
-                        <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 11 }]} numberOfLines={1}>
+                        <Text
+                            style={[typography.caption, {
+                                color: hasUnread && !isPending ? colors.accent.lime : colors.text.tertiary,
+                                fontWeight: hasUnread && !isPending ? '600' : '400',
+                                fontSize: 11,
+                            }]}
+                            numberOfLines={1}
+                        >
                             {timeAgo}
                         </Text>
                     ) : null}
                     {isPending ? (
-                        <View style={[styles.requestBadge, { backgroundColor: withAlpha(colors.accent.coral, 0.16), borderColor: withAlpha(colors.accent.coral, 0.4) }]}>
-                            <View style={[styles.unreadDot, { backgroundColor: colors.accent.coral }]} />
-                            <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: '700', fontSize: 10 }]}>Request</Text>
+                        <View style={[styles.requestBadge, { backgroundColor: withAlpha(colors.accent.lime, 0.16), borderColor: withAlpha(colors.accent.lime, 0.4) }]}>
+                            <View style={[styles.unreadDot, { backgroundColor: colors.accent.lime }]} />
+                            <Text style={[typography.caption, { color: colors.accent.lime, fontWeight: '700', fontSize: 10 }]}>Request</Text>
+                        </View>
+                    ) : hasUnread ? (
+                        // Lime unread-count badge (mockup): ink-on-lime numeral circle.
+                        <View
+                            style={[styles.unreadBadge, { backgroundColor: colors.accent.lime }]}
+                            accessibilityRole="text"
+                            accessibilityLabel={`${unreadCount} unread message${unreadCount === 1 ? '' : 's'}`}
+                        >
+                            <Text style={[typography.caption, { color: colors.text.inverse, fontWeight: '700', fontSize: 11 }]} numberOfLines={1}>
+                                {unreadCount}
+                            </Text>
                         </View>
                     ) : (
                         <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
@@ -182,7 +248,7 @@ export default function MessagesListScreen() {
             <PressableScale
                 pressedScale={0.98}
                 accessibilityRole="button"
-                accessibilityLabel={`Open chat with ${name}${isCoach ? ', your coach' : ''}${isPending ? ', message request' : ''}`}
+                accessibilityLabel={`Open chat with ${name}${isCoach ? ', your coach' : ''}${isPending ? ', message request' : ''}${hasUnread ? `, ${unreadCount} unread` : ''}`}
                 style={styles.rowPress}
                 onPress={onPress}
             >
@@ -245,7 +311,7 @@ export default function MessagesListScreen() {
                     onPress={() => router.push('/(community)/leaderboard' as any)}
                     style={styles.headerIconBtn}
                 >
-                    <Ionicons name="create-outline" size={24} color={colors.accent.coral} />
+                    <Ionicons name="create-outline" size={24} color={colors.accent.lime} />
                 </TouchableOpacity>
             </Animated.View>
 
@@ -446,5 +512,14 @@ const styles = StyleSheet.create({
         borderWidth: 1,
     },
     unreadDot: { width: 6, height: 6, borderRadius: 3 },
+    // Lime unread-count circle (mockup): min 20px wide, grows for 2+ digits.
+    unreadBadge: {
+        minWidth: 20,
+        height: 20,
+        borderRadius: 10,
+        paddingHorizontal: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     bottomBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 20, paddingTop: 12 },
 });

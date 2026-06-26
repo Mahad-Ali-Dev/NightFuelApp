@@ -593,6 +593,16 @@ export default function AICoachScreen() {
         });
     }, [sttAvailable, quota.exhausted, mutation.isPending, isStreaming, listenState, voice]);
 
+    /**
+     * "Add this meal" — open the existing add-meal flow when the user taps the
+     * inline chip under one of Ria's meal suggestions. Routes to the SAME
+     * /(meals)/log-meal surface the Nutrition hub uses for its add-meal actions,
+     * so the chip plugs into the real flow (no new screen, no fabricated data).
+     */
+    const handleAddMeal = useCallback(() => {
+        router.push('/(meals)/log-meal' as any);
+    }, [router]);
+
     /** Toggle "Ria speaks replies". Turning it OFF also silences any current speech. */
     const handleToggleSpeak = useCallback(() => {
         setSpeakReplies((prev) => {
@@ -796,7 +806,7 @@ export default function AICoachScreen() {
                         whose inner Message refs are unchanged, so React's keyed
                         reconciliation still skips unchanged bubbles. */}
                     {renderedMessages.map((msg) => (
-                        <MessageBubble key={msg.id} msg={msg} colors={colors} typography={typography} />
+                        <MessageBubble key={msg.id} msg={msg} colors={colors} typography={typography} onAddMeal={handleAddMeal} />
                     ))}
 
                     {/* Typing indicator (hidden once live tokens are streaming) —
@@ -1266,13 +1276,56 @@ function openLink(href: string): void {
     Linking.openURL(href).catch(() => undefined);
 }
 
+// Clock-time matcher (hoisted — built once, never per render). Matches a 1–2
+// digit hour, a colon, and a 2-digit minute as a whole token (e.g. "23:00",
+// "9:41", "02:00"), with word boundaries so it never bites into a longer
+// number run. Global so split() emits the matched times as their own pieces.
+const TIME_RE = /\b\d{1,2}:\d{2}\b/g;
+
 /**
- * Map linkify() spans to nested <Text>. Plain spans render as text; link spans
- * render as an underlined, accent-coloured <Text> with an onPress. A stable
- * key per index keeps reconciliation cheap. Falsy/empty values are never
- * rendered bare (rendering-no-falsy-and) — every value lands inside <Text>.
+ * Render one plain-text fragment with clock times (e.g. "23:00", "02:00") lifted
+ * into a lime, bold <Text> so a shift-worker's protocol times pop in Ria's
+ * advice (mockup parity). Pure presentation: the surrounding prose is untouched
+ * and the bubble's combined a11y label still reads the RAW msg.text (so screen
+ * readers hear the times in context). Returns a single string when the fragment
+ * has no time (cheap, and keeps `getByText(plainText)` matching a lone Text node).
  */
-function renderLinkifiedSpans(spans: LinkifySpan[], linkColor: string): React.ReactNode {
+function renderTimeHighlighted(text: string, keyPrefix: string, timeColor: string): React.ReactNode {
+    // Fast path: no time token → return the raw string so a time-free bubble
+    // still renders as ONE matchable text node (test + perf friendly).
+    TIME_RE.lastIndex = 0;
+    if (!TIME_RE.test(text)) return text;
+
+    // split() with a capturing group keeps the delimiters (the times) in the
+    // output array, alternating prose / time / prose / time / …
+    const parts = text.split(/(\b\d{1,2}:\d{2}\b)/g);
+    return parts.map((part, i) => {
+        if (part === '') return null; // never render an empty string bare
+        // Odd indices are the captured time tokens → lime + bold.
+        const isTime = i % 2 === 1;
+        return isTime ? (
+            <Text key={`${keyPrefix}-tm-${i}`} style={{ color: timeColor, fontWeight: '700' }}>
+                {part}
+            </Text>
+        ) : (
+            <Text key={`${keyPrefix}-tx-${i}`}>{part}</Text>
+        );
+    });
+}
+
+/**
+ * Map linkify() spans to nested <Text>. Plain spans render as text (with clock
+ * times lifted to lime via renderTimeHighlighted); link spans render as an
+ * underlined, accent-coloured <Text> with an onPress. A stable key per index
+ * keeps reconciliation cheap. Falsy/empty values are never rendered bare
+ * (rendering-no-falsy-and) — every value lands inside <Text>.
+ *
+ * `timeColor` is the lime highlight applied ONLY to plain prose; a URL is never
+ * re-coloured (linkify already owns the link colour), and because time-splitting
+ * runs over the already-linkified TEXT spans, a URL like "https://x.com:8080" is
+ * inside a link span and so is left fully intact.
+ */
+function renderLinkifiedSpans(spans: LinkifySpan[], linkColor: string, timeColor: string): React.ReactNode {
     return spans.map((span, i) => {
         if (span.type === 'link') {
             return (
@@ -1286,18 +1339,80 @@ function renderLinkifiedSpans(spans: LinkifySpan[], linkColor: string): React.Re
                 </Text>
             );
         }
-        // Plain text span — rendered as a nested <Text> so it sits legally inside
-        // the parent <Text> alongside any link spans.
-        return <Text key={`t-${i}`}>{span.value}</Text>;
+        // Plain text span — rendered as nested <Text> (sits legally inside the
+        // parent <Text>) with clock times highlighted in lime.
+        return <Text key={`t-${i}`}>{renderTimeHighlighted(span.value, `t-${i}`, timeColor)}</Text>;
     });
 }
 
-const MessageBubble = React.memo(function MessageBubble({ msg, colors, typography }: { msg: Message; colors: any; typography: any }) {
+// Meal-suggestion detector (hoisted). True only when a Ria reply is clearly
+// recommending FOOD to eat — it must mention an eating verb/meal word AND a
+// concrete food/macro signal, so generic advice ("get some morning light",
+// "a reply") never trips it. Drives the inline "Add this meal" chip below the
+// bubble (mockup). Pure + cheap; runs once per Ria bubble in render.
+const MEAL_VERB_RE = /\b(eat|meal|snack|bowl|breakfast|lunch|dinner|pre-?(?:shift|workout)|post-?(?:shift|workout))\b/i;
+const MEAL_FOOD_RE = /\b(kcal|cal(?:orie)?s?|protein|carbs?|chicken|rice|oats|eggs?|salad|shake|yog[hu]rt|banana|nuts?)\b/i;
+
+function isMealSuggestion(text: string): boolean {
+    if (!text) return false;
+    return MEAL_VERB_RE.test(text) && MEAL_FOOD_RE.test(text);
+}
+
+// ── "Add this meal" action chip (inline, under a Ria meal suggestion) ─────────────
+//
+// A lime-tinted, ink-glyph pill that takes the user to the add-meal flow when Ria
+// suggests something to eat (mockup). NOT a CtaButton/coral-gradient fill (this is
+// a contextual inline affordance, not the screen's primary CTA — and the
+// inline-CTA guard reserves the gradient for CtaButton); it's the screen's
+// established tinted-View + GestureDetector press idiom, animating only transform
+// scale + opacity (GPU-only). `onPress` is a stable callback from the parent.
+
+function AddMealChip({ colors, typography, onPress }: { colors: any; typography: any; onPress: () => void }) {
+    const pressed = useSharedValue(0);
+    const tap = Gesture.Tap()
+        .onBegin(() => { pressed.set(withTiming(1, { duration: 90 })); })
+        .onFinalize(() => { pressed.set(withTiming(0, { duration: 120 })); })
+        .onEnd(() => { runOnJS(onPress)(); });
+    const animStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: interpolate(pressed.get(), [0, 1], [1, 0.96]) }],
+        opacity: interpolate(pressed.get(), [0, 1], [1, 0.85]),
+    }));
+    return (
+        <View style={styles.addMealRow}>
+            <GestureDetector gesture={tap}>
+                <Reanimated.View
+                    accessibilityRole="button"
+                    accessibilityLabel="Add this meal"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={[styles.addMealChip, {
+                        borderColor: withAlpha(colors.accent.lime, 0.5),
+                        backgroundColor: withAlpha(colors.accent.lime, 0.16),
+                    }, animStyle]}
+                >
+                    <Ionicons name="add-circle-outline" size={16} color={colors.accent.limeLight} />
+                    <Text
+                        style={[typography.caption, { color: colors.accent.limeLight, fontWeight: '700', fontSize: 12.5 }]}
+                        maxFontSizeMultiplier={1.3}
+                    >
+                        Add this meal
+                    </Text>
+                </Reanimated.View>
+            </GestureDetector>
+        </View>
+    );
+}
+
+const MessageBubble = React.memo(function MessageBubble({ msg, colors, typography, onAddMeal }: { msg: Message; colors: any; typography: any; onAddMeal: () => void }) {
     const isAI = msg.sender === 'ai';
     // Link colour is the brand lime on both bubbles (the mockup emphasises inline
     // detail in lime); the brighter lime reads cleanly on the dark Ria glass and
     // on the user's lime-tint surface alike.
     const linkColor = isAI ? colors.accent.lime : colors.accent.limeLight;
+    // Clock-time highlight: lime ONLY in Ria's (AI) bubbles so protocol times
+    // ("23:00", "02:00") pop against the dark glass (mockup). The user bubble is
+    // already a lime-on-lime tint, so re-colouring its times would be invisible —
+    // we pass its own text colour there (a visual no-op) to keep the prose uniform.
+    const timeColor = isAI ? colors.accent.lime : colors.accent.limeLight;
     // Compute the spans once so we can both render them and detect tappable links.
     const spans = linkify(msg.text);
     const hasLinks = spans.some((s) => s.type === 'link');
@@ -1312,12 +1427,19 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
     const rowAccessibilityProps = hasLinks
         ? {}
         : { accessible: true, accessibilityRole: 'text' as const, accessibilityLabel: `${isAI ? 'Ria' : 'You'}: ${msg.text}` };
-    return (
+    // Show the inline "Add this meal" chip under a SETTLED Ria bubble that is
+    // clearly suggesting food (not while it's still streaming). Presentational
+    // affordance only — it never alters the bubble itself or its a11y label.
+    const showAddMeal = isAI && !msg.streaming && isMealSuggestion(msg.text);
+    const row = (
         <Reanimated.View
             entering={FadeInDown.springify().damping(20).mass(0.6)}
             style={[
                 styles.messageRow,
                 isAI ? { justifyContent: 'flex-start' } : { justifyContent: 'flex-end' },
+                // Drop the row's own bottom gap when the chip follows it so the chip
+                // hugs the bubble (the row+chip column owns the spacing instead).
+                showAddMeal ? { marginBottom: 0 } : null,
             ]}
             {...rowAccessibilityProps}
             accessibilityLiveRegion={msg.streaming ? 'polite' : 'none'}
@@ -1353,7 +1475,7 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
                     fontSize: 14,
                     lineHeight: 21,
                 }]}>
-                    {renderLinkifiedSpans(spans, linkColor)}
+                    {renderLinkifiedSpans(spans, linkColor, timeColor)}
                     {msg.streaming ? <StreamingCursor color={colors.accent.lime} /> : null}
                 </Text>
                 <View style={[styles.bubbleMeta, { justifyContent: isAI ? 'flex-start' : 'flex-end' }]}>
@@ -1371,6 +1493,18 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
                 </View>
             </View>
         </Reanimated.View>
+    );
+
+    // No chip → the bubble row is returned exactly as before (zero structural
+    // change for the common case). With a chip, the row + chip share a column
+    // wrapper (no a11y props on it, so the row stays the single labelled node and
+    // the bubble count is unchanged).
+    if (!showAddMeal) return row;
+    return (
+        <View style={styles.bubbleGroup}>
+            {row}
+            <AddMealChip colors={colors} typography={typography} onPress={onAddMeal} />
+        </View>
     );
 });
 
@@ -1567,6 +1701,21 @@ const styles = StyleSheet.create({
     // Tight tail corners (5px) — the messaging-bubble shape from the mockup.
     aiBubble: { borderBottomLeftRadius: 5 },
     userBubble: { borderBottomRightRadius: 5 },
+    // Column wrapper holding a Ria bubble row + its inline "Add this meal" chip.
+    // Owns the bottom gap the row normally carries (the row drops it when chipped).
+    bubbleGroup: { marginBottom: 14 },
+    // Chip row sits under the bubble, indented past the Ria avatar (mockup parity).
+    addMealRow: { flexDirection: 'row', paddingLeft: 34, marginTop: 7 },
+    // Lime-tinted, ink-glyph pill (NOT a coral CTA fill) — inline contextual action.
+    addMealChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 12,
+        borderWidth: 1,
+    },
     // "Thinking" row (no live text yet) — a Ria avatar + her dark-glass bubble
     // carrying the dots, flattened bottom-left tail corner like a real Ria bubble.
     thinkingRow: {

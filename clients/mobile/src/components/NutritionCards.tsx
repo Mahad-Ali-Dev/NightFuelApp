@@ -20,8 +20,8 @@
  * View with `width:'<n>%'` + `height:'100%'` (the macro-bar probe's signature) —
  * only MacroTile's bar carries that, exactly as before.
  */
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, Dimensions, ScrollView, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,6 +44,8 @@ export const GRID_CARD_W = (width - 52) / 2;
 export const RECIPE_CARD_W = 188;
 /** "Recipes for tonight" carousel card width (taller, art-led tiles). */
 export const TONIGHT_CARD_W = 156;
+/** "Browse by food group" carousel card width. */
+export const FOOD_GROUP_CARD_W = 124;
 
 const finite = (n: unknown): number =>
   typeof n === 'number' && Number.isFinite(n) ? n : 0;
@@ -503,6 +505,181 @@ export function MacroRingStrip({ rings }: { rings: MacroRing[] }) {
   );
 }
 
+/**
+ * "Today's macros" card — the macro RING strip wrapped in a GlassCard with a
+ * header row (title + kcal total) from the mockup. The rings themselves are the
+ * SAME `MacroRingStrip` (so the calorie ring stays the LAST CircularProgress in
+ * the screen tree — this strip's four rings render before it). The kcal header is
+ * plain text the screen computes from the real consumed/target reads.
+ */
+export interface MacroRingsCardProps {
+  rings: MacroRing[];
+  /** Consumed kcal (already rounded by the screen). */
+  consumedKcal: number;
+  /** Target kcal. */
+  targetKcal: number;
+}
+
+export function MacroRingsCard({ rings, consumedKcal, targetKcal }: MacroRingsCardProps) {
+  const { colors, typography, borderRadius } = useTheme();
+  return (
+    <Animated.View entering={FadeInDown.delay(55).duration(420)}>
+      <GlassCard radius={borderRadius.xl} style={st.macroRingsCard}>
+        <View style={st.macroRingsHead}>
+          <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>Today's macros</Text>
+          <Text style={[typography.caption, { color: colors.text.secondary }]}>
+            <Text style={{ color: colors.text.primary, fontWeight: '700' }}>{consumedKcal.toLocaleString()}</Text>
+            {` / ${targetKcal.toLocaleString()} kcal`}
+          </Text>
+        </View>
+        <MacroRingStrip rings={rings} />
+      </GlassCard>
+    </Animated.View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* "Next meal" swipeable SLIDER (paged NextMealHero + dots)             */
+/* ------------------------------------------------------------------ */
+
+export interface NextMealSlide extends NextMealHeroProps {
+  /** Stable key for the slide (e.g. plan meal id / index). */
+  key: string;
+}
+
+/**
+ * A horizontally-paged slider of `NextMealHero` cards with pagination dots. Each
+ * page is the SAME hero card (so its CtaButton + a11y are preserved); the screen
+ * owns the meal data + per-slide onPress. A single slide still renders (dots are
+ * hidden for one). Pure UI — no data/query here. Uses a paging ScrollView (RN
+ * core) + Reanimated entrance; no new deps.
+ */
+export function NextMealSlider({ slides }: { slides: NextMealSlide[] }) {
+  const { colors } = useTheme();
+  const [page, setPage] = useState(0);
+  const widthRef = useRef(0);
+
+  const onLayout = useCallback((e: { nativeEvent: { layout: { width: number } } }) => {
+    widthRef.current = e.nativeEvent.layout.width;
+  }, []);
+
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const w = widthRef.current || e.nativeEvent.layoutMeasurement.width || 1;
+    const next = Math.round(e.nativeEvent.contentOffset.x / w);
+    setPage((prev) => (prev === next ? prev : next));
+  }, []);
+
+  if (slides.length === 0) return null;
+
+  // A single meal needs no pager chrome — render the bare hero (identical to the
+  // pre-slider behaviour) so we don't add an empty dot row. Destructure `key` out
+  // of the slide before spreading (React keys must not be spread into JSX).
+  if (slides.length === 1) {
+    const { key: _k, ...heroProps } = slides[0]!;
+    return <NextMealHero {...heroProps} />;
+  }
+
+  return (
+    <Animated.View entering={FadeInDown.delay(40).duration(420)} onLayout={onLayout}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        accessibilityRole="adjustable"
+        accessibilityLabel="Upcoming meals"
+      >
+        {slides.map(({ key, ...heroProps }) => (
+          <View key={key} style={[st.slidePage, { width: widthRef.current || Dimensions.get('window').width - 40 }]}>
+            <NextMealHero {...heroProps} />
+          </View>
+        ))}
+      </ScrollView>
+      <View style={st.dotsRow} accessibilityLabel={`Meal ${page + 1} of ${slides.length}`}>
+        {slides.map((s, i) => (
+          <View
+            key={s.key}
+            style={[
+              st.dot,
+              i === page
+                ? { width: 18, backgroundColor: colors.accent.lime }
+                : { width: 6, backgroundColor: colors.border.light },
+            ]}
+          />
+        ))}
+      </View>
+    </Animated.View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* "Browse by food group" CAROUSEL                                     */
+/* ------------------------------------------------------------------ */
+
+export interface FoodGroupCardData {
+  key: string;
+  title: string;
+  /** e.g. "86 recipes" — already formatted by the screen. */
+  countLabel: string;
+  img: any;
+  onPress?: () => void;
+}
+
+/** One food-group tile: a centred transparent food render over a scrim + count. */
+function FoodGroupCard({ data, index }: { data: FoodGroupCardData; index: number }) {
+  const { colors, typography, borderRadius } = useTheme();
+  return (
+    <Animated.View entering={FadeInDown.delay(90 + index * 45).springify().damping(18)}>
+      <PressableScale
+        onPress={data.onPress}
+        accessibilityLabel={`${data.title}, ${data.countLabel}`}
+        accessibilityHint="Browse recipes in this food group"
+      >
+        <View
+          style={[
+            st.foodGroupCard,
+            { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl },
+          ]}
+        >
+          <Image source={data.img} style={st.foodGroupImg} contentFit="contain" cachePolicy="memory-disk" transition={200} />
+          <LinearGradient
+            colors={['transparent', withAlpha(colors.background.secondary, 0.0), colors.background.secondary]}
+            locations={[0, 0.45, 1]}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={st.foodGroupBody}>
+            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700', fontSize: 14 }]} numberOfLines={1}>
+              {data.title}
+            </Text>
+            <Text style={[typography.caption, { color: colors.accent.lime, fontWeight: '600', fontSize: 11, marginTop: 1 }]} numberOfLines={1}>
+              {data.countLabel}
+            </Text>
+          </View>
+        </View>
+      </PressableScale>
+    </Animated.View>
+  );
+}
+
+/** Horizontal carousel of food-group discovery tiles (Protein/Vegetables/…). */
+export function FoodGroupCarousel({ groups }: { groups: FoodGroupCardData[] }) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      decelerationRate="fast"
+      snapToInterval={FOOD_GROUP_CARD_W + 12}
+      snapToAlignment="start"
+      contentContainerStyle={{ paddingHorizontal: 20, gap: 12, paddingBottom: 4 }}
+    >
+      {groups.map((g, i) => (
+        <FoodGroupCard key={g.key} data={g} index={i} />
+      ))}
+    </ScrollView>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* "Explore meals" BENTO grid                                          */
 /* ------------------------------------------------------------------ */
@@ -665,6 +842,20 @@ const st = StyleSheet.create({
   // ── Macro ring strip ────────────────────────────────────────────────────
   ringStrip: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-start', marginTop: 2 },
   ringItem: { alignItems: 'center' },
+
+  // ── "Today's macros" card (header + ring strip) ─────────────────────────
+  macroRingsCard: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16 },
+  macroRingsHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 13 },
+
+  // ── Next-meal slider ─────────────────────────────────────────────────────
+  slidePage: { paddingRight: 0 },
+  dotsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, paddingTop: 11 },
+  dot: { height: 6, borderRadius: 6 },
+
+  // ── "Browse by food group" carousel ─────────────────────────────────────
+  foodGroupCard: { width: FOOD_GROUP_CARD_W, height: 152, borderWidth: 1, overflow: 'hidden' },
+  foodGroupImg: { position: 'absolute', left: 0, right: 0, top: 16, height: 94 },
+  foodGroupBody: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 13, paddingVertical: 10 },
 
   // ── Explore bento (tall feature on the right + stacked left tiles) ───────
   bentoWrap: { flexDirection: 'row', gap: 10 },

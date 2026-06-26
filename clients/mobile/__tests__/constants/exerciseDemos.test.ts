@@ -24,6 +24,7 @@ import {
   resolveDemoGif,
   demoCoverage,
   fedbSlugFromImageUrl,
+  posterFromVideoUrl,
   DEMO_FALLBACK,
 } from '@/constants/exerciseDemos';
 
@@ -602,5 +603,83 @@ describe('DEMO_FALLBACK ↔ backend DEMO_URLS — key-for-key identical', () => 
     const onlyInBackend = backendKeys.filter((k) => !mobileKeys.includes(k));
     expect({ onlyInMobile, onlyInBackend }).toEqual({ onlyInMobile: [], onlyInBackend: [] });
     expect(mobileKeys).toEqual(backendKeys);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// posterFromVideoUrl — derive the best-frame poster JPG from a clip's videoUrl.
+//
+// The VPS batch writes a best-frame JPG next to every catalog video at an
+// IDENTICAL path with the extension swapped (`…/<file>.mp4` → `…/<file>.jpg`),
+// served by the same nginx location. So the poster URL is the videoUrl with a
+// case-insensitive trailing `.mp4` (before any ?query) replaced by `.jpg`. This
+// pins the exact transform every poster consumer (video cover + grid thumb)
+// relies on, including the no-op cases that must return undefined so callers
+// cleanly fall back to the existing image/placeholder.
+// ---------------------------------------------------------------------------
+describe('posterFromVideoUrl', () => {
+  const VIDEO_BASE = 'https://api.zeitra.app/m/abc123/chest/Male/Barbell';
+
+  test('a normal .mp4 → the same path with .jpg', () => {
+    expect(posterFromVideoUrl(`${VIDEO_BASE}/Barbell_Bench_Press.mp4`)).toBe(
+      `${VIDEO_BASE}/Barbell_Bench_Press.jpg`,
+    );
+  });
+
+  test('the poster path is byte-for-byte the video path with only the extension swapped', () => {
+    const video = `${VIDEO_BASE}/Some_Clip.mp4`;
+    const poster = posterFromVideoUrl(video);
+    expect(poster).toBe(video.replace(/\.mp4$/, '.jpg'));
+    // Same directory, same filename stem — only the trailing 3 chars differ.
+    expect(poster!.slice(0, -4)).toBe(video.slice(0, -4));
+  });
+
+  test('matches a trailing .mp4 case-insensitively (.MP4 / .Mp4)', () => {
+    expect(posterFromVideoUrl(`${VIDEO_BASE}/Clip.MP4`)).toBe(`${VIDEO_BASE}/Clip.jpg`);
+    expect(posterFromVideoUrl(`${VIDEO_BASE}/Clip.Mp4`)).toBe(`${VIDEO_BASE}/Clip.jpg`);
+  });
+
+  test('swaps .mp4 BEFORE a ?query and preserves the query verbatim', () => {
+    expect(posterFromVideoUrl(`${VIDEO_BASE}/Clip.mp4?v=2&t=cachebust`)).toBe(
+      `${VIDEO_BASE}/Clip.jpg?v=2&t=cachebust`,
+    );
+  });
+
+  test('swaps .mp4 before a #hash and preserves the hash', () => {
+    expect(posterFromVideoUrl(`${VIDEO_BASE}/Clip.mp4#frag`)).toBe(`${VIDEO_BASE}/Clip.jpg#frag`);
+  });
+
+  test('trims surrounding whitespace before deriving', () => {
+    expect(posterFromVideoUrl(`   ${VIDEO_BASE}/Clip.mp4   `)).toBe(`${VIDEO_BASE}/Clip.jpg`);
+  });
+
+  test('only the FINAL .mp4 path segment is treated as the extension (an .mp4 mid-path is left alone)', () => {
+    // A directory literally named "...mp4" must not be rewritten — only the file
+    // extension at the very end of the path qualifies.
+    expect(posterFromVideoUrl(`https://cdn.example.com/movie.mp4/poster.png`)).toBeUndefined();
+    expect(posterFromVideoUrl(`https://cdn.example.com/a.mp4/b.mp4`)).toBe(
+      `https://cdn.example.com/a.mp4/b.jpg`,
+    );
+  });
+
+  test('a non-mp4 video URL → undefined (caller keeps the existing image)', () => {
+    expect(posterFromVideoUrl(`${VIDEO_BASE}/Clip.mov`)).toBeUndefined();
+    expect(posterFromVideoUrl(`${VIDEO_BASE}/Clip.webm`)).toBeUndefined();
+    expect(posterFromVideoUrl('https://cdn.example.com/exercise-hero.jpg')).toBeUndefined();
+    // ".mp4" appearing only in a query string is NOT a video path extension.
+    expect(posterFromVideoUrl('https://cdn.example.com/play?file=clip.mp4')).toBeUndefined();
+  });
+
+  test('undefined / null / empty / whitespace input → undefined', () => {
+    expect(posterFromVideoUrl(undefined)).toBeUndefined();
+    expect(posterFromVideoUrl(null)).toBeUndefined();
+    expect(posterFromVideoUrl('')).toBeUndefined();
+    expect(posterFromVideoUrl('    ')).toBeUndefined();
+  });
+
+  test('a non-string input → undefined (defensive against untyped callers)', () => {
+    // Library items are `any` at the call site, so guard the non-string path.
+    expect(posterFromVideoUrl(123 as unknown as string)).toBeUndefined();
+    expect(posterFromVideoUrl({} as unknown as string)).toBeUndefined();
   });
 });

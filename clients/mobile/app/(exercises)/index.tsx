@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { searchLibrary } from '@/api/exercises';
+import { posterFromVideoUrl } from '@/constants/exerciseDemos';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
 import { shadows } from '@/theme/shadows';
@@ -108,15 +109,24 @@ export default function ExerciseLibraryScreen() {
             ?? CATEGORY_FALLBACK.gym;
         // Real wger image -> remote { uri }; otherwise the bundled module.
         // expo-image's `source` accepts both a require-number and a { uri }.
-        const imgSrc = item.imageUrl ? { uri: item.imageUrl } : fallbackImg;
+        const imageSrc = item.imageUrl ? { uri: item.imageUrl } : fallbackImg;
+        // Prefer the catalog clip's best-frame poster JPG (videoUrl `.mp4`→`.jpg`)
+        // when this is a video exercise — catalog items frequently have a null /
+        // weak imageUrl, so the poster is a sharper, on-brand thumbnail. Order:
+        // poster JPG → imageUrl → bundled placeholder. The poster may 404 while
+        // the batch is still generating it, so the card falls back via onError to
+        // `fallbackSource` (the imageUrl/placeholder) seamlessly.
+        const poster = posterFromVideoUrl(item.videoUrl);
+        const imgSrc = poster ? { uri: poster } : imageSrc;
         // Browse-time demo affordance: derived purely from the already-fetched
         // library item (no extra request). Shown when the backend supplied a
         // demo video / GIF for this exercise.
-        const hasDemo = !!(item.demoGifUrl || item.demoUrl);
+        const hasDemo = !!(item.demoGifUrl || item.demoUrl || item.videoUrl);
         return (
             <ExerciseGridCard
                 item={item}
                 imageSource={imgSrc}
+                fallbackSource={imageSrc}
                 hasDemo={hasDemo}
                 style={styles.exCardTouch}
                 delay={Math.min(index, 9) * 45}

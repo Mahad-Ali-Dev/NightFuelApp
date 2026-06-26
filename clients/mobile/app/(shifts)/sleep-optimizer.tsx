@@ -357,8 +357,11 @@ export default function SleepOptimizerScreen() {
 
                                         <View style={styles.heroRight}>
                                             {badge ? (
-                                                <View style={[styles.qualityBadge, { backgroundColor: withAlpha(colors.accent.lime, 0.14), borderColor: withAlpha(colors.accent.lime, 0.4) }]}>
-                                                    <Text style={[typography.captionMedium, { color: colors.accent.lime }]}>{badge}</Text>
+                                                // Calm-blue verdict badge — sleep's restful secondary accent
+                                                // (matching the mockup's blue "Good" pill), so the recovery
+                                                // verdict reads calm rather than the energetic brand lime.
+                                                <View style={[styles.qualityBadge, { backgroundColor: withAlpha(colors.accent.blue, 0.14), borderColor: withAlpha(colors.accent.blue, 0.4) }]}>
+                                                    <Text style={[typography.captionMedium, { color: colors.accent.blue }]}>{badge}</Text>
                                                 </View>
                                             ) : null}
                                             {analytics?.qualityScore != null ? (
@@ -458,14 +461,17 @@ export default function SleepOptimizerScreen() {
                         to general guidance — never a fabricated time. */}
                     {!shiftLoading && anchorSleep ? (
                         <Animated.View entering={enter(3)}>
-                            <GlassCard style={[styles.tipCard, { borderColor: withAlpha(colors.accent.lime, 0.3) }]}>
-                                <View style={[styles.tipIcon, { backgroundColor: withAlpha(colors.accent.lime, 0.14), borderColor: withAlpha(colors.accent.lime, 0.3) }]}>
-                                    <Ionicons name="moon" size={20} color={colors.accent.lime} />
+                            {/* Calm-blue shift-window tip — sleep's restful secondary
+                                accent (the mockup's blue moon-stars card), so this
+                                rest-guidance card reads calm rather than brand-lime. */}
+                            <GlassCard style={[styles.tipCard, { borderColor: withAlpha(colors.accent.blue, 0.3) }]}>
+                                <View style={[styles.tipIcon, { backgroundColor: withAlpha(colors.accent.blue, 0.14), borderColor: withAlpha(colors.accent.blue, 0.3) }]}>
+                                    <Ionicons name="moon" size={20} color={colors.accent.blue} />
                                 </View>
                                 <View style={styles.heroFlexShrink}>
                                     <Text style={[typography.subhead, { color: colors.text.primary }]}>Your shift sleep window</Text>
                                     <Text style={[typography.bodySm, styles.tipBody, { color: colors.text.secondary }]}>
-                                        Aim for <Text style={{ color: colors.accent.lime, fontWeight: '700' }}>{anchorSleepWindow}</Text> after your shift. Keep the room dark and cool — that 4h core block anchors your clock through the rotation.
+                                        Aim for <Text style={{ color: colors.accent.blue, fontWeight: '700' }}>{anchorSleepWindow}</Text> after your shift. Keep the room dark and cool — that 4h core block anchors your clock through the rotation.
                                     </Text>
                                 </View>
                             </GlassCard>

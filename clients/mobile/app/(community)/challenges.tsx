@@ -63,10 +63,10 @@ export default function ChallengesScreen() {
             queryClient.invalidateQueries({ queryKey: ['community-challenges'] });
             setProgressInputs(prev => ({ ...prev, [id]: '' }));
             setExpandedId(null);
-            Alert.alert('Progress Logged! 🔥', 'Keep it up — your effort counts toward the leaderboard.');
+            Alert.alert('Progress saved! 🔥', 'Keep it up — your effort counts toward the leaderboard.');
         },
         onError: (err: any) => {
-            Alert.alert('Error', err.message || 'Failed to log progress');
+            Alert.alert('Error', err.message || 'Failed to save progress');
         },
     });
 
@@ -146,7 +146,7 @@ export default function ChallengesScreen() {
                         <EmptyState
                             icon="trophy-outline"
                             title="No active challenges"
-                            subtitle="There are no community challenges running right now. Check back soon to compete, log progress, and earn XP."
+                            subtitle="There are no community challenges running right now. Check back soon to compete, track progress, and earn XP."
                         />
                     ) : (
                         <>
@@ -388,7 +388,7 @@ function ChallengeCard({
                         {isJoined ? (
                             <TouchableOpacity
                                 accessibilityRole="button"
-                                accessibilityLabel={isExpanded ? 'Cancel logging progress' : 'Log progress'}
+                                accessibilityLabel={isExpanded ? 'Cancel tracking progress' : 'Track progress'}
                                 accessibilityState={{ expanded: isExpanded }}
                                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                 style={[
@@ -407,7 +407,7 @@ function ChallengeCard({
                                     color={colors.accent.coral}
                                 />
                                 <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: 'bold', marginLeft: 6 }]}>
-                                    {isExpanded ? 'CANCEL' : 'LOG PROGRESS'}
+                                    {isExpanded ? 'CANCEL' : 'TRACK PROGRESS'}
                                 </Text>
                             </TouchableOpacity>
                         ) : (
@@ -450,7 +450,7 @@ function ChallengeCard({
                                 returnKeyType="done"
                                 onSubmitEditing={onSubmitProgress}
                             />
-                            <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Log progress"
+                            <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Track progress"
                                 style={[styles.submitBtn, { backgroundColor: colors.accent.coral }]}
                                 onPress={onSubmitProgress}
                                 disabled={progressPending}

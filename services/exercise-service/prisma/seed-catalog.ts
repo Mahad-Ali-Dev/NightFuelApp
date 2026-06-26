@@ -34,6 +34,9 @@ interface Entry {
   id?: string; name?: string; gender?: string; bodypart?: string; equipment?: string;
   movement?: string; level?: string; primary?: string; secondary?: string;
   description?: string; instructions?: string[]; flag?: string; folder?: string; files?: string;
+  // Optional still/tutorial image a catalog may supply. Absent today (the demo
+  // is the MP4), but when present it must be preserved through the upsert.
+  imageUrl?: string; demoUrl?: string;
 }
 
 // Muscle-folder slug -> body-part key (must match the app's BODY_PART_LABELS /
@@ -139,8 +142,18 @@ async function main() {
         .split(',').map((s) => s.trim()).filter(Boolean);
       const map = MUSCLE_MAP[slug] ?? { bodyPart: base.bodypart?.toLowerCase() || slug, category: 'gym' as const };
 
-      const row = {
-        name: (base.name as string).trim(),
+      const name = (base.name as string).trim();
+
+      // Image fields the catalog can supply. Today the catalogs ship no still/
+      // tutorial image (the demo is the MP4 in `videoUrl`), so these are null —
+      // but if a catalog ever adds one we want to honour it.
+      const imageUrl = base.imageUrl?.trim() || null;
+      const demoUrl = base.demoUrl?.trim() || null;
+
+      // Video metadata + catalog enrichment we ALWAYS (re)write. On a name
+      // collision with a library-seeded row, this layers the video + metadata
+      // onto the EXISTING row.
+      const meta = {
         muscleGroup: base.primary || map.bodyPart,
         equipment: base.equipment || null,
         instructions,
@@ -150,13 +163,28 @@ async function main() {
         secondaryMuscles,
         gender,
         videoUrl: videoUrlFor(slug, base),
-        imageUrl: null as string | null,
-        demoUrl: null as string | null,
       };
+
+      // On UPDATE we deliberately OMIT imageUrl/demoUrl unless the catalog
+      // actually provides one. A library row carries a real FEDB `imageUrl`;
+      // overwriting it with null would destroy the row's only visual — and since
+      // `videoUrl` is itself null until EXERCISE_VIDEO_CDN_BASE is set, the
+      // exercise would render "demo coming soon" with no image at all. Spreading
+      // the image keys only when non-null leaves any existing image untouched.
+      const update = {
+        ...meta,
+        ...(imageUrl ? { imageUrl } : {}),
+        ...(demoUrl ? { demoUrl } : {}),
+      };
+
+      // On CREATE (brand-new catalog row, no pre-existing image) writing null is
+      // fine — the client falls back to the FEDB-slug image for those.
+      const create = { name, ...meta, imageUrl, demoUrl };
+
       await prisma.libraryExercise.upsert({
-        where: { name: row.name },
-        update: row,
-        create: row,
+        where: { name },
+        update,
+        create,
       });
       upserts++;
     }

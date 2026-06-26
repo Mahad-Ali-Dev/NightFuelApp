@@ -18,7 +18,9 @@
  *     Redirect and no loading container.
  *   - Test C (authenticated, onboarding incomplete): preserves the existing
  *     onboarding redirect (behaviour unchanged by the spinner-debt fix).
- *   - Test D (unauthenticated): the screen emits the (auth)/login Redirect.
+ *   - Test D (unauthenticated): the screen emits the (auth)/welcome Redirect —
+ *     unauthenticated visitors now land on the branded Welcome screen first
+ *     (which links onward to /(auth)/login), NOT straight on the sign-in form.
  *
  * Why no ThemeContext provider / why @/components/ui is mocked: app/index.tsx
  * reads its palette directly from `@/theme/colors` (a plain const object, no
@@ -156,15 +158,20 @@ describe('RootIndex (auth gate) — honest, a11y-complete loading + redirect pat
     expect(screen.queryByRole('progressbar')).toBeNull();
   });
 
-  // ── Test D: not loading + unauthenticated → (auth)/login Redirect ──────────
-  test('unauthenticated: redirects to (auth)/login and shows no loading container', () => {
+  // ── Test D: not loading + unauthenticated → (auth)/welcome Redirect ────────
+  // Unauthenticated visitors now land on the branded Welcome screen first (the
+  // intro + onboarding entry point); Welcome links onward to /(auth)/login for
+  // returning users. The redirect target genuinely changed from login → welcome.
+  test('unauthenticated: redirects to (auth)/welcome and shows no loading container', () => {
     mockAuth.isLoading = false;
     mockAuth.isAuthenticated = false;
     mockAuth.user = null;
 
     render(<RootIndex />);
 
-    expect(screen.getByText('redirect:/(auth)/login')).toBeTruthy();
+    expect(screen.getByText('redirect:/(auth)/welcome')).toBeTruthy();
+    // The pre-Welcome target must no longer be emitted from the gate.
+    expect(screen.queryByText('redirect:/(auth)/login')).toBeNull();
     expect(screen.queryByRole('progressbar')).toBeNull();
     expect(screen.root.findAllByType(ActivityIndicator)).toHaveLength(0);
   });

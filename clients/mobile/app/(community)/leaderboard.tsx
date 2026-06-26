@@ -322,8 +322,8 @@ export default function LeaderboardScreen() {
                 <EmptyState
                     icon="podium-outline"
                     title="No rankings yet"
-                    subtitle="Earn XP by logging workouts, sleep, and challenge progress to climb the leaderboard."
-                    actionLabel="Log a workout"
+                    subtitle="Earn XP by tracking workouts, sleep, and challenge progress to climb the leaderboard."
+                    actionLabel="Track a workout"
                     onAction={() => router.push('/(tabs)/training' as any)}
                     style={styles.stateFill}
                 />

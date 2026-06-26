@@ -26,8 +26,8 @@
  * EmptyState as the no-shift branch (no crash, no windows).
  *
  * A final test pins the hero + primary action (loaded state): the Sleep-Quality
- * hero GlassCard renders ("Sleep Quality Score" / "QUALITY" / the resolved score
- * + summary), and pressing the screen's only primary button — "Log Rest Block",
+ * hero GlassCard renders ("Last night" / the verdict badge / the resolved score),
+ * and pressing the screen's only primary button — "Log Rest Block",
  * a PURPLE (colors.gradients.purple) gradient, deliberately NOT a coral CtaButton
  * — fires the UNCHANGED `onPress={() => logMutation.mutate()}` exactly once. (The
  * purple button is left verbatim: recoloring it coral / wrapping it in CtaButton
@@ -397,14 +397,15 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
 
     renderScreen();
 
-    // The hero Sleep-Quality GlassCard mounted: its "Sleep Quality Score"
-    // overline, the "QUALITY" ring caption, and the resolved score (80) all
-    // render (the CircularProgress ring inside is decorative; the score TEXT is
-    // the stable marker). The summary copy from analytics renders too.
-    expect(screen.getByText('Sleep Quality Score')).toBeTruthy();
-    expect(screen.getByText('QUALITY')).toBeTruthy();
+    // The hero "Last night" recovery GlassCard mounted: its "Last night"
+    // overline, the lime verdict badge mapped from the recovery qualityScore
+    // (80 → "Good"), the resolved score (80, a standalone Text inside the
+    // "Score 80/100" line), and the "8h target" legend all render — the stable
+    // markers proving the hero subtree is in the tree in the loaded state.
+    expect(screen.getByText('Last night')).toBeTruthy();
+    expect(screen.getByText('Good')).toBeTruthy();
     expect(screen.getByText('80')).toBeTruthy();
-    expect(screen.getByText('Looking good.')).toBeTruthy();
+    expect(screen.getByText('8h target')).toBeTruthy();
 
     // The primary action — queried by its (stable) accessibilityLabel "Log rest
     // block" — and its visible "Log Rest Block" label both present (isPending is
@@ -457,8 +458,12 @@ describe('SleepOptimizerScreen — Light Timing card', () => {
     expect(screen.getByText('Recovery sleep')).toBeTruthy();
     // …and the row prints the window from computeAnchorSleep's actual instants.
     // Matched CONTAINS-both-endpoints (windowMatcher) so a separator/whitespace
-    // copy tweak can't regress this while a wrong/NaN instant still would.
-    expect(screen.getByText(windowMatcher(anchor))).toBeTruthy();
+    // copy tweak can't regress this while a wrong/NaN instant still would. The
+    // redesign surfaces this SAME anchor window in two places — the "Your shift
+    // sleep window" tip card up top AND this "Recovery sleep" timeline row — so we
+    // match getAllByText (≥1), mirroring the melatonin assertion above; a wrong/NaN
+    // instant would drop BOTH and still fail.
+    expect(screen.getAllByText(windowMatcher(anchor)).length).toBeGreaterThanOrEqual(1);
     // The DECOY phantom analytics window must NOT appear — proving the row no
     // longer reads `analytics?.anchorSleepWindow` (the contract-drift bug).
     expect(screen.queryByText(/DECOY/)).toBeNull();

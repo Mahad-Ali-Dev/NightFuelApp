@@ -290,9 +290,9 @@ export default function FoodEncyclopediaScreen() {
                                     );
                                 })()}
                                 <CtaButton
-                                    label="LOG MEAL"
+                                    label="TRACK MEAL"
                                     size="lg"
-                                    accessibilityLabel="Log meal"
+                                    accessibilityLabel="Track meal"
                                     loading={logM.isPending}
                                     onPress={()=>logM.mutate(servingModal)}
                                     style={[s.logBtnWrap,{marginTop:24}]}

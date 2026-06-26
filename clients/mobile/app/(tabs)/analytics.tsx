@@ -351,8 +351,8 @@ export default function AnalyticsScreen() {
                             style={styles.emptyChart}
                             icon="bar-chart-outline"
                             title="No data yet"
-                            subtitle="Log sleep and activity to unlock your weekly correlation chart."
-                            actionLabel="Log Sleep"
+                            subtitle="Track sleep and activity to unlock your weekly correlation chart."
+                            actionLabel="Add sleep"
                             onAction={() => router.push('/(modals)/log-sleep' as any)}
                         />
                     ) : (

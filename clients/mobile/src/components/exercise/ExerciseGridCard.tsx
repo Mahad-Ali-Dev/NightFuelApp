@@ -35,8 +35,20 @@ const LEVEL_COLORS: Record<string, string> = {
 
 export interface ExerciseGridCardProps {
   item: any;
-  /** Resolved thumbnail source (remote { uri } or a bundled require-number). */
+  /**
+   * Resolved thumbnail source (remote { uri } or a bundled require-number).
+   * For catalog (video) exercises this is the best-frame poster JPG derived from
+   * the clip's `videoUrl`; that JPG can 404 transiently while the batch job is
+   * still generating it, so pass {@link fallbackSource} to recover seamlessly.
+   */
   imageSource: any;
+  /**
+   * Source to swap in if {@link imageSource} fails to load (e.g. a poster JPG
+   * that 404s before the batch finishes). Typically the exercise's own imageUrl
+   * source or the bundled category placeholder. When omitted, a failed
+   * `imageSource` simply renders expo-image's empty state (no crash).
+   */
+  fallbackSource?: any;
   /** True when the backend supplied a demo gif/video for this exercise. */
   hasDemo: boolean;
   onPress: () => void;
@@ -49,6 +61,7 @@ export interface ExerciseGridCardProps {
 export function ExerciseGridCard({
   item,
   imageSource,
+  fallbackSource,
   hasDemo,
   onPress,
   style,
@@ -58,6 +71,16 @@ export function ExerciseGridCard({
 
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  // Swap to the fallback once the primary thumbnail 404s/errors (a poster JPG
+  // that the batch hasn't produced yet). `errored` latches so we don't ping-pong
+  // if the fallback also misbehaves. No fallback supplied → keep the primary
+  // source and let expo-image render its own empty state.
+  const [errored, setErrored] = React.useState(false);
+  const resolvedSource = errored && fallbackSource != null ? fallbackSource : imageSource;
+  const onImageError = React.useCallback(() => {
+    if (fallbackSource != null) setErrored(true);
+  }, [fallbackSource]);
 
   const level = (item.difficulty ?? '').trim().toLowerCase();
   const levelColor = LEVEL_COLORS[level] ?? colors.accent.coral;
@@ -76,11 +99,12 @@ export function ExerciseGridCard({
         <GlassCard radius={20}>
           <View style={styles.imageWrap}>
             <Image
-              source={imageSource}
+              source={resolvedSource}
               style={styles.image}
               contentFit="cover"
               cachePolicy="memory-disk"
               transition={300}
+              onError={onImageError}
             />
             <LinearGradient
               colors={['transparent', 'rgba(0,0,0,0.65)']}

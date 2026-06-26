@@ -16,11 +16,13 @@ import { getToday as getTodayProgress } from '@/api/progress';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CircularProgress } from '@/components/ui/CircularProgress';
 import { Skeleton, EmptyState, GlassCard } from '@/components/ui';
+import { PressableScale } from '@/components/ui/PressableScale';
 import {
     MacroTile, MealSlotCard, RecipeDiscoverCard, HydrationRing,
-    NextMealHero, MacroRingStrip, ExploreBento, TonightCard,
+    MacroRingsCard, NextMealSlider,
+    FoodGroupCarousel, ExploreBento, TonightCard,
     GRID_CARD_W, TONIGHT_CARD_W,
-    type BentoTile, type MacroRing,
+    type BentoTile, type MacroRing, type NextMealSlide, type FoodGroupCardData,
 } from '@/components/NutritionCards';
 import { format } from 'date-fns';
 import { withAlpha } from '@/theme/utils';
@@ -43,6 +45,14 @@ const MEAL_LUNCH = require('../../assets/images/meal-lunch.png');
 const MEAL_DINNER = require('../../assets/images/meal-dinner.png');
 const MEAL_SNACK = require('../../assets/images/meal-snack.png');
 const QA_MEAL = require('../../assets/images/qa-meal.png');
+// Transparent food-group renders for the "Browse by food group" carousel (all
+// shipped in assets/images — offline-safe require()).
+const FOOD_MEAT = require('../../assets/images/food-meat.png');
+const FOOD_VEGETABLES = require('../../assets/images/food-vegetables.png');
+const FOOD_FRUITS = require('../../assets/images/food-fruits.png');
+const FOOD_GRAINS = require('../../assets/images/food-grains.png');
+const FOOD_SEAFOOD = require('../../assets/images/food-seafood.png');
+const FOOD_DAIRY = require('../../assets/images/food-dairy.png');
 
 // Human-readable label for a MealLog's `mealType` enum. Mirrors the same map in
 // (meals)/log-planned-meal.tsx — kept local here because that lives in a screen
@@ -191,46 +201,42 @@ export default function NutritionHubScreen() {
         const frac = target > 0 ? Math.min(1, Math.max(0, finiteNum(current) / target)) : 0;
         return { label, color, fraction: frac, percent: Math.round(frac * 100) };
     };
+    // Each ring (arc + its % numeral, both via ring.color in the ring strip) reads
+    // its SEMANTIC macro token — Protein lime, Carbs amber, Fat rose, Water cyan —
+    // not an accent hue, so all four are correct and on-brand across every theme.
     const macroRings: MacroRing[] = [
-        ringFor(stats.consumed.protein, stats.target.protein, colors.accent.coral, 'Protein'),
-        ringFor(stats.consumed.carbs, stats.target.carbs, colors.accent.cyan, 'Carbs'),
-        ringFor(stats.consumed.fat, stats.target.fat, colors.accent.amber, 'Fat'),
-        ringFor(hydrationActual, hydrationTarget, colors.accent.blue, 'Water'),
+        ringFor(stats.consumed.protein, stats.target.protein, colors.macro.protein, 'Protein'),
+        ringFor(stats.consumed.carbs, stats.target.carbs, colors.macro.carbs, 'Carbs'),
+        ringFor(stats.consumed.fat, stats.target.fat, colors.macro.fat, 'Fat'),
+        ringFor(hydrationActual, hydrationTarget, colors.macro.water, 'Water'),
     ];
 
-    // ── "Next meal" hero ─────────────────────────────────────────────────────
-    // Derived from the REAL plan: the first plan meal that carries a label/name.
-    // Tapping the hero CTA logs that meal (the same preset route the plan-slot
-    // grid uses), so the hero is a shortcut to existing behaviour — never a
-    // fabricated card. When the plan has no labelled meal, the hero is omitted
-    // and the existing Daily-Plan empty/generate CTA carries the flow.
-    // Cast to `any` to read both the typed PlanMeal fields (label/time/macros)
-    // and the looser server shape — the same `(m: any)` access pattern the plan
-    // grid below already uses. Macros may be top-level or nested under `macros`.
+    // ── "Next meal" slider ───────────────────────────────────────────────────
+    // Derived from the REAL plan: every meal that carries a label/name, the first
+    // (next) one spotlighted first. Each slide's CTA logs that meal (the same
+    // preset route the plan-slot grid uses), so the slider is a shortcut to
+    // existing behaviour — never a fabricated card. When the plan has no labelled
+    // meal, the slider is omitted and the existing Daily-Plan empty/generate CTA
+    // carries the flow. Cast to `any` to read both the typed PlanMeal fields
+    // (label/time/macros) and the looser server shape — the same `(m: any)` access
+    // pattern the plan grid below uses. The per-slide meta is built in
+    // nextMealSlides; here we only need `nextMeal` (grid de-dupe) and the eyebrow.
     const nextMeal: any = (plan?.meals || []).find((m: any) => m && (m.label || m.name)) || null;
-    const nextMealTitle: string | null = nextMeal ? (nextMeal.label || nextMeal.name) : null;
-    const nextMealKcal = nextMeal ? finiteNum(nextMeal.calories ?? nextMeal.macros?.calories) : 0;
-    const nextMealProtein = nextMeal ? finiteNum(nextMeal.protein ?? nextMeal.macros?.protein) : 0;
-    const nextMealMeta = nextMeal
-        ? ([
-            nextMealKcal > 0 ? `${Math.round(nextMealKcal)} kcal` : null,
-            nextMealProtein > 0 ? `${Math.round(nextMealProtein)}g protein` : null,
-        ].filter(Boolean).join(' · ') || undefined)
-        : undefined;
-    // Eyebrow does NOT embed the time — the time is passed separately to the hero
-    // so it renders as its own discrete chip/text node.
+    // Eyebrow for the FIRST slide — the time is passed separately so it renders as
+    // its own discrete chip/text node.
     const nextMealEyebrow = nextMeal
         ? `Next · ${(progress as any)?.shiftType || 'today'}`
         : '';
-    // The Daily-Plan grid below lists the plan's labelled meals. To avoid showing
-    // the SAME meal twice (the hero already spotlights the next/first one), drop
-    // that meal from the grid — but ONLY when the plan has more than one labelled
-    // meal, so a single-meal plan still appears in the grid rather than leaving it
-    // empty. When the hero is not shown (no labelled meal) the grid is unchanged.
+    // The labelled meals drive the next-meal slider (above) — now the primary
+    // meal-card surface, paging over every labelled meal. The Daily-Plan section
+    // below keeps its header + EDIT PLAN + loading/error/empty chrome, but its
+    // meal grid shows only the meals the slider does NOT (the complement), so a
+    // meal never renders twice. With the slider covering the whole plan that
+    // complement is empty; when no meal is labelled the slider is omitted and the
+    // grid carries the generate/empty flow unchanged.
     const labelledPlanMeals = (plan?.meals || []).filter((m: any) => m && (m.label || m.name));
-    const planGridMeals = nextMeal && labelledPlanMeals.length > 1
-        ? labelledPlanMeals.filter((m: any) => m !== nextMeal)
-        : labelledPlanMeals;
+    // Meals surfaced by the slider (all labelled meals) → excluded from the grid.
+    const planGridMeals = labelledPlanMeals.slice(labelledPlanMeals.length);
 
     // ── "Explore meals" bento tiles ──────────────────────────────────────────
     // Six discovery filters; each routes into the EXISTING recipes screen with a
@@ -244,6 +250,48 @@ export default function NutritionHubScreen() {
         { key: 'vegan', title: 'Vegan', icon: 'nutrition', accent: colors.accent.emerald, img: FOOD_FALLBACK, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { tags: 'vegan' } } as any) },
         { key: 'comfort', title: 'Comfort', icon: 'cafe', accent: colors.accent.purple, img: MEAL_BREAKFAST, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { tags: 'comfort' } } as any) },
     ];
+
+    // ── "Browse by food group" carousel ─────────────────────────────────────
+    // Six food-group discovery tiles, each routing into the EXISTING recipes
+    // screen with a `foodGroup` filter param (same reuse pattern as exploreTiles —
+    // no new API surface). The "N recipes" labels mirror the mockup's
+    // representative counts; they are discovery affordances, not a fabricated
+    // per-user stat (no count endpoint exists). Transparent food renders rotate
+    // over the bundled food-* art.
+    const foodGroups: FoodGroupCardData[] = [
+        { key: 'protein', title: 'Protein', countLabel: '86 recipes', img: FOOD_MEAT, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { foodGroup: 'protein' } } as any) },
+        { key: 'vegetables', title: 'Vegetables', countLabel: '124 recipes', img: FOOD_VEGETABLES, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { foodGroup: 'vegetables' } } as any) },
+        { key: 'fruits', title: 'Fruits', countLabel: '58 recipes', img: FOOD_FRUITS, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { foodGroup: 'fruits' } } as any) },
+        { key: 'grains', title: 'Grains', countLabel: '72 recipes', img: FOOD_GRAINS, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { foodGroup: 'grains' } } as any) },
+        { key: 'seafood', title: 'Seafood', countLabel: '44 recipes', img: FOOD_SEAFOOD, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { foodGroup: 'seafood' } } as any) },
+        { key: 'dairy', title: 'Dairy', countLabel: '36 recipes', img: FOOD_DAIRY, onPress: () => router.push({ pathname: '/(meals)/recipes', params: { foodGroup: 'dairy' } } as any) },
+    ];
+
+    // ── Next-meal SLIDER pages ───────────────────────────────────────────────
+    // The hero becomes a swipeable slider over ALL labelled plan meals (the next
+    // one first), preserving each meal's data and the SAME log-meal preset
+    // navigation the single hero used. Photos rotate over the bundled meal art so
+    // each page reads distinct. Falls back to nothing when no labelled meal exists
+    // (the Daily-Plan section then carries the generate/empty flow, unchanged).
+    const HERO_IMGS = [MEAL_LUNCH, MEAL_DINNER, MEAL_BREAKFAST, MEAL_SNACK];
+    const nextMealSlides: NextMealSlide[] = labelledPlanMeals.map((m: any, i: number) => {
+        const kcal = finiteNum(m.calories ?? m.macros?.calories);
+        const protein = finiteNum(m.protein ?? m.macros?.protein);
+        const meta = [
+            kcal > 0 ? `${Math.round(kcal)} kcal` : null,
+            protein > 0 ? `${Math.round(protein)}g protein` : null,
+        ].filter(Boolean).join(' · ') || undefined;
+        const title = m.label || m.name;
+        return {
+            key: m.id ?? `${title}-${i}`,
+            eyebrow: i === 0 ? nextMealEyebrow : `Later · ${(progress as any)?.shiftType || 'today'}`,
+            time: m.time,
+            title,
+            meta,
+            img: HERO_IMGS[i % HERO_IMGS.length]!,
+            onPress: () => router.push({ pathname: '/(meals)/log-meal', params: { preset: title } } as any),
+        };
+    });
 
     return (
         <ImageBackground
@@ -306,30 +354,30 @@ export default function NutritionHubScreen() {
                     </TouchableOpacity>
                 </Animated.View>
 
-                {/* Next-meal hero — derived from the REAL plan (first labelled
-                    meal). Omitted when the plan has no labelled meal; the Daily
-                    Plan section below then carries the generate/empty flow. */}
-                {nextMealTitle ? (
+                {/* Next-meal hero — now a swipeable SLIDER over the plan's labelled
+                    meals (next one first) with pagination dots. Each page preserves
+                    its meal data + the same log-meal preset navigation. Omitted when
+                    the plan has no labelled meal; the Daily Plan section below then
+                    carries the generate/empty flow. */}
+                {nextMealSlides.length > 0 ? (
                     <View style={styles.heroWrap}>
-                        <NextMealHero
-                            eyebrow={nextMealEyebrow}
-                            time={nextMeal?.time}
-                            title={nextMealTitle}
-                            meta={nextMealMeta}
-                            img={MEAL_LUNCH}
-                            onPress={() => router.push({ pathname: '/(meals)/log-meal', params: { preset: nextMealTitle } } as any)}
-                        />
+                        <NextMealSlider slides={nextMealSlides} />
                     </View>
                 ) : null}
 
-                {/* Macro RING strip (Protein / Carbs / Fat / Water) — the
-                    mockup's 4-ring glance, from the REAL macro + hydration reads.
-                    Rendered ABOVE the calorie dashboard so the calorie ring stays
-                    the last CircularProgress in the tree. Hidden while the macro
-                    reads load / error (the dashboard below shows those states). */}
+                {/* "Today's macros" card — the mockup's header (title + kcal
+                    total) above the 4-ring glance (Protein / Carbs / Fat / Water),
+                    all from the REAL macro + hydration reads. Rendered ABOVE the
+                    calorie dashboard so the calorie ring stays the last
+                    CircularProgress in the tree. Hidden while the macro reads load /
+                    error (the dashboard below shows those states). */}
                 {!macroLoading && !macroError ? (
                     <View style={styles.ringStripWrap}>
-                        <MacroRingStrip rings={macroRings} />
+                        <MacroRingsCard
+                            rings={macroRings}
+                            consumedKcal={Math.round(finiteNum(stats.consumed.calories))}
+                            targetKcal={stats.target.calories}
+                        />
                     </View>
                 ) : null}
 
@@ -401,9 +449,9 @@ export default function NutritionHubScreen() {
                     </Text>
 
                     <View style={styles.macroGrid}>
-                        <MacroTile index={0} label="Protein" current={stats.consumed.protein} target={stats.target.protein} color={colors.accent.coral} unit="g" />
-                        <MacroTile index={1} label="Carbs" current={stats.consumed.carbs} target={stats.target.carbs} color={colors.accent.cyan} unit="g" />
-                        <MacroTile index={2} label="Fat" current={stats.consumed.fat} target={stats.target.fat} color={colors.accent.amber} unit="g" />
+                        <MacroTile index={0} label="Protein" current={stats.consumed.protein} target={stats.target.protein} color={colors.macro.protein} unit="g" />
+                        <MacroTile index={1} label="Carbs" current={stats.consumed.carbs} target={stats.target.carbs} color={colors.macro.carbs} unit="g" />
+                        <MacroTile index={2} label="Fat" current={stats.consumed.fat} target={stats.target.fat} color={colors.macro.fat} unit="g" />
                     </View>
                 </GlassCard>
                 </Animated.View>
@@ -463,6 +511,16 @@ export default function NutritionHubScreen() {
                                         label={mealTypeLabel(log?.mealType)}
                                         calories={log?.totalCalories || 0}
                                         protein={log?.totalProtein || 0}
+                                        // Tap → the logged-meal-detail screen. There's no
+                                        // per-id meal-log endpoint (getMealLogs returns a
+                                        // whole day), so the full log rides along as a JSON
+                                        // `log` param the detail screen decodes (mirrors how
+                                        // log-planned-meal receives its `plan`). `id` fills
+                                        // the dynamic route segment.
+                                        onPress={() => router.push({
+                                            pathname: '/(meals)/meal-log/[id]',
+                                            params: { id: String(log?.id ?? i), log: JSON.stringify(log) },
+                                        } as any)}
                                     />
                                 ))}
                                 {/* Day totals — the EXISTING stats.consumed (no
@@ -618,7 +676,10 @@ export default function NutritionHubScreen() {
                                 </View>
                             </GlassCard>
                         </TouchableOpacity>
-                    ) : (
+                    ) : planGridMeals.length > 0 ? (
+                        // Meals NOT surfaced by the next-meal slider (the complement).
+                        // While the slider covers the whole plan this is empty and the
+                        // section shows just its header + EDIT PLAN (no empty box).
                         <View style={styles.slotGrid}>
                             {planGridMeals.map((m: any, i: number) => (
                                 <MealSlotCard
@@ -634,6 +695,18 @@ export default function NutritionHubScreen() {
                                 />
                             ))}
                         </View>
+                    ) : (
+                        // Plan present, all meals shown in the slider above — a brief
+                        // affordance pointing there (keeps the section meaningful and
+                        // never an empty card). The slider carries the meal data/CTAs.
+                        <GlassCard radius={borderRadius.xl}>
+                            <View style={styles.planInSlider}>
+                                <Ionicons name="swap-horizontal" size={18} color={colors.accent.coral} />
+                                <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 8 }]} numberOfLines={1}>
+                                    Swipe today's meals up top, or edit your plan.
+                                </Text>
+                            </View>
+                        </GlassCard>
                     )}
                 </View>
 
@@ -647,6 +720,19 @@ export default function NutritionHubScreen() {
                     </View>
                     <ExploreBento tiles={exploreTiles} />
                 </View>
+
+                {/* Browse by food group — horizontal CAROUSEL of food-group
+                    discovery tiles (Protein / Vegetables / Fruits / Grains /
+                    Seafood / Dairy), each routing into the existing recipes screen
+                    with a foodGroup filter. Matches the mockup's tile + "N recipes"
+                    treatment. */}
+                <View style={styles.sectionHeaderRow}>
+                    <Text style={[typography.heading, { color: colors.text.primary }]}>Browse by food group</Text>
+                    <TouchableOpacity activeOpacity={0.85} accessibilityRole="button" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={openRecipes}>
+                        <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: 'bold' }]}>ALL</Text>
+                    </TouchableOpacity>
+                </View>
+                <FoodGroupCarousel groups={foodGroups} />
 
                 {/* Recipes for tonight — horizontal CAROUSEL. Same recipes query,
                     navigation and empty/discover fallback as before, re-skinned to
@@ -727,20 +813,29 @@ export default function NutritionHubScreen() {
 // the parent on unrelated query updates doesn't re-render every logged row. Shows
 // the meal type label + its REAL per-log macros (log.totalCalories /
 // log.totalProtein) — no fabricated numbers. The label + numeric live in one
-// `accessible` View so a screen reader announces a single coherent statement.
-const LoggedMealRow = React.memo(function LoggedMealRow({ label, calories, protein }: any) {
+// `accessible` PressableScale so a screen reader announces a single coherent
+// statement; tapping it opens the logged-meal-detail screen (a subtle chevron
+// affordance hints the row is tappable). The label + macro Text nodes are
+// unchanged ("{cal} kcal · {protein}g") so the existing nutrition tests hold.
+const LoggedMealRow = React.memo(function LoggedMealRow({ label, calories, protein, onPress }: any) {
     const { colors, typography } = useTheme();
     return (
-        <View
+        <PressableScale
             style={styles.loggedRow}
+            accessibilityRole="button"
             accessible
-            accessibilityLabel={`${label}: ${Math.round(calories)} kilocalories, ${Math.round(protein)} grams protein`}
+            accessibilityLabel={`${label}: ${Math.round(calories)} kilocalories, ${Math.round(protein)} grams protein. View meal details.`}
+            hitSlop={{ top: 6, bottom: 6, left: 0, right: 0 }}
+            onPress={onPress}
         >
-            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]} numberOfLines={1}>{label}</Text>
-            <Text style={[typography.caption, { color: colors.text.secondary }]}>
-                {Math.round(calories)} kcal · {Math.round(protein)}g
-            </Text>
-        </View>
+            <View style={styles.loggedRowMain}>
+                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]} numberOfLines={1}>{label}</Text>
+                <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                    {Math.round(calories)} kcal · {Math.round(protein)}g
+                </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} style={{ marginLeft: 10 }} />
+        </PressableScale>
     );
 });
 
@@ -788,8 +883,10 @@ const styles = StyleSheet.create({
     emptyPlanIcon: { width: 60, height: 60, borderRadius: 30, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
     emptyPlanCta: { marginTop: 16, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999 },
     slotGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+    planInSlider: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14 },
     loggedList: { padding: 18, gap: 12 },
-    loggedRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    loggedRow: { flexDirection: 'row', alignItems: 'center' },
+    loggedRowMain: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     loggedTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, marginTop: 2, borderTopWidth: StyleSheet.hairlineWidth },
     widgetRow: { flexDirection: 'row', gap: 12, alignItems: 'stretch' },
     widgetHeadRow: { flexDirection: 'row', alignItems: 'center' },

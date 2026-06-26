@@ -71,7 +71,11 @@ export default function LogSleepModal() {
     const [quality, setQuality] = useState(7);
     const [disturbances, setDisturbances] = useState(0);
     const [notes, setNotes] = useState('');
-    const [showForm, setShowForm] = useState(false);
+    // The new-entry form is OPEN by default now (mockup: log-sleep-preview.html
+    // shows it expanded with no "expand" affordance). The collapse control + the
+    // collapsed "Add new" card are kept so the flow is unchanged — only the
+    // initial state flips to visible.
+    const [showForm, setShowForm] = useState(true);
     // Inline field-level error copy — same shape and lifecycle as the
     // log-shift modal. Populated by the client-side validator before we POST
     // and by the server-error adapter on a Zod 400 from the API.
@@ -82,6 +86,14 @@ export default function LogSleepModal() {
         queryKey: ['sleep-sessions'],
         queryFn: () => listSessions(15),
     });
+
+    // Most-recent saved session — drives the "Last night" quality-ring hero
+    // (mockup: log-sleep-preview.html). Real data only; the hero is hidden when
+    // there are no saved sessions yet.
+    const latestSession = sessions.length > 0 ? sessions[0] : null;
+    const latestDur = latestSession
+        ? (latestSession.durationMins ?? (latestSession.endTime ? differenceInMinutes(parseISO(latestSession.endTime), parseISO(latestSession.startTime)) : null))
+        : null;
 
     // ── Save mutation ──────────────────────────────────────────────────────────
     const mutation = useMutation({
@@ -272,20 +284,56 @@ export default function LogSleepModal() {
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                 <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 40 }}>
 
+                    {/* ── "Last night" quality hero (mockup: log-sleep-preview.html) ──
+                        A calm-blue quality dial for the most recent saved session:
+                        the score /10, a recovery-quality pill, and the duration.
+                        Real data only — hidden until at least one session exists.
+                        The dial is a pure-View ring (no svg dependency added). */}
+                    {latestSession ? (
+                        <View style={[styles.hero, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                            <View style={[styles.heroRing, { borderColor: withAlpha(colors.accent.blue, 0.25) }]}>
+                                <View style={[styles.heroRingInner, { borderColor: colors.accent.blue }]}>
+                                    <Ionicons name="moon" size={30} color={colors.accent.blue} />
+                                </View>
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 18 }}>
+                                <Text style={[typography.overline, { color: colors.text.secondary }]}>LAST NIGHT</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 4 }}>
+                                    <Text style={[typography.statMedium, { color: colors.text.primary, fontSize: 34, lineHeight: 36 }]}>
+                                        {latestSession.quality != null ? latestSession.quality.toFixed(1) : '—'}
+                                    </Text>
+                                    <Text style={[typography.subhead, { color: colors.accent.blue, marginLeft: 6 }]}>/ 10</Text>
+                                </View>
+                                <View style={[styles.heroPill, { backgroundColor: colors.background.tertiary }]}>
+                                    <Ionicons name="sparkles" size={12} color={colors.accent.blue} />
+                                    <Text style={[typography.caption, { color: colors.accent.blue, fontWeight: '600', marginLeft: 6 }]}>
+                                        {qualityLabel(latestSession.quality).replace(/^[^\s]+\s/, '')} recovery
+                                    </Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                                    <Ionicons name="time-outline" size={13} color={colors.text.tertiary} />
+                                    <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6 }]}>
+                                        {formatDuration(latestDur)} · in bed {format(parseISO(latestSession.startTime), 'HH:mm')}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+                    ) : null}
+
                     {/* ── Add New Button ─────────────────────────────────────── */}
                     {!showForm && (
                         <TouchableOpacity
                             accessibilityRole="button"
-                            accessibilityLabel="Log new sleep"
-                            style={[styles.addButton, { backgroundColor: withAlpha(colors.accent.cyan, 0.12), borderColor: withAlpha(colors.accent.cyan, 0.25) }, shadows.glow(colors.accent.cyan)]}
+                            accessibilityLabel="Add sleep entry"
+                            style={[styles.addButton, { backgroundColor: withAlpha(colors.accent.blue, 0.12), borderColor: withAlpha(colors.accent.blue, 0.25) }, shadows.glow(colors.accent.blue)]}
                             onPress={() => setShowForm(true)}
                             activeOpacity={0.7}
                         >
-                            <View style={[styles.addIconCircle, { backgroundColor: withAlpha(colors.accent.cyan, 0.2) }]}>
-                                <Ionicons name="add" size={24} color={colors.accent.cyan} />
+                            <View style={[styles.addIconCircle, { backgroundColor: withAlpha(colors.accent.blue, 0.2) }]}>
+                                <Ionicons name="add" size={24} color={colors.accent.blue} />
                             </View>
                             <View style={{ flex: 1, marginLeft: 14 }}>
-                                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 15 }]}>Log New Sleep</Text>
+                                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 15 }]}>Add sleep entry</Text>
                                 <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>
                                     Track your recovery for circadian optimization
                                 </Text>
@@ -299,8 +347,8 @@ export default function LogSleepModal() {
                         <View style={[styles.formContainer, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
                             {/* Form header */}
                             <View style={styles.formHeader}>
-                                <Text style={[typography.heading, { color: colors.accent.cyan, fontSize: 16 }]}>
-                                    <Ionicons name="moon" size={16} color={colors.accent.cyan} /> New Sleep Entry
+                                <Text style={[typography.heading, { color: colors.accent.blue, fontSize: 16 }]}>
+                                    <Ionicons name="moon" size={16} color={colors.accent.blue} /> New sleep entry
                                 </Text>
                                 <TouchableOpacity activeOpacity={0.85} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Clear" onPress={() => setShowForm(false)}>
                                     <Ionicons name="close-circle" size={24} color={colors.text.tertiary} />
@@ -401,32 +449,45 @@ export default function LogSleepModal() {
                                 </Text>
                             ) : null}
 
-                            {/* Quality */}
-                            <Text style={[styles.fieldLabel, typography.caption, { color: colors.text.secondary, marginTop: 16 }]}>
-                                SLEEP QUALITY: <Text style={{ color: qualityColor(quality, colors), fontWeight: '700' }}>{quality}/10</Text> {qualityLabel(quality)}
-                            </Text>
-                            <View style={[styles.qualityRow, { borderColor: withAlpha(colors.text.primary, 0.05), backgroundColor: withAlpha(colors.text.primary, 0.02) }]}>
-                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                                    <TouchableOpacity
-                                        key={num}
-                                        activeOpacity={0.85}
-                                        accessibilityRole="button"
-                                        accessibilityLabel={`Sleep quality ${num} out of 10`}
-                                        accessibilityState={{ selected: quality === num }}
-                                        style={[
-                                            styles.qualityBtn,
-                                            { backgroundColor: quality >= num ? qualityColor(quality, colors) : colors.background.primary },
-                                        ]}
-                                        onPress={() => {
-                                            setQuality(num);
-                                            clearFieldError('quality');
-                                        }}
-                                    />
-                                ))}
+                            {/* Quality — a slider-style track (mockup: log-sleep-preview.html).
+                                The filled portion + thumb read as a continuous slider; 10
+                                invisible tap segments overlaid keep the existing setQuality
+                                handler working on tap (no slider dependency added). */}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, marginBottom: 11 }}>
+                                <Text style={[styles.fieldLabel, typography.caption, { color: colors.text.secondary, marginBottom: 0 }]}>SLEEP QUALITY</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    <View style={[styles.qualityBadge, { borderColor: qualityColor(quality, colors) }]}>
+                                        <Text style={[typography.caption, { color: qualityColor(quality, colors), fontSize: 9, fontWeight: '700' }]}>{quality}</Text>
+                                    </View>
+                                    <Text style={[typography.caption, { color: qualityColor(quality, colors), fontWeight: '600' }]}>{qualityLabel(quality)}</Text>
+                                </View>
                             </View>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                                <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>Poor</Text>
-                                <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>Deep</Text>
+                            <View style={styles.qualityTrackWrap}>
+                                <View style={[styles.qualityTrack, { backgroundColor: colors.background.primary }]}>
+                                    <View style={[styles.qualityFill, { width: `${(quality / 10) * 100}%`, backgroundColor: qualityColor(quality, colors) }]} />
+                                    <View style={[styles.qualityThumb, { left: `${(quality / 10) * 100}%`, borderColor: qualityColor(quality, colors), backgroundColor: colors.text.primary }]} />
+                                </View>
+                                {/* Invisible tap segments — preserve the 1–10 setQuality handler. */}
+                                <View style={styles.qualitySegments} pointerEvents="box-none">
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                                        <TouchableOpacity
+                                            key={num}
+                                            activeOpacity={0.85}
+                                            accessibilityRole="button"
+                                            accessibilityLabel={`Sleep quality ${num} out of 10`}
+                                            accessibilityState={{ selected: quality === num }}
+                                            style={styles.qualitySegment}
+                                            onPress={() => {
+                                                setQuality(num);
+                                                clearFieldError('quality');
+                                            }}
+                                        />
+                                    ))}
+                                </View>
+                            </View>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 9 }}>
+                                <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 11 }]}>Restless</Text>
+                                <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 11 }]}>Deep & restorative</Text>
                             </View>
                             {fieldErrors.quality ? (
                                 <Text accessibilityRole="alert" style={{ color: colors.accent.red, marginTop: 4, fontSize: 12 }}>
@@ -444,7 +505,7 @@ export default function LogSleepModal() {
                                         clearFieldError('disturbances');
                                     }}
                                 >
-                                    <Ionicons name="remove" size={20} color={colors.accent.coral} />
+                                    <Ionicons name="remove" size={20} color={colors.text.secondary} />
                                 </TouchableOpacity>
                                 <View style={[styles.disturbanceDisplay, { backgroundColor: colors.background.primary, borderColor: colors.border.default }]}>
                                     <Ionicons name="alert-circle-outline" size={16} color={disturbances > 0 ? colors.accent.amber : colors.text.tertiary} />
@@ -459,7 +520,7 @@ export default function LogSleepModal() {
                                         clearFieldError('disturbances');
                                     }}
                                 >
-                                    <Ionicons name="add" size={20} color={colors.accent.cyan} />
+                                    <Ionicons name="add" size={20} color={colors.accent.blue} />
                                 </TouchableOpacity>
                             </View>
                             {fieldErrors.disturbances ? (
@@ -547,8 +608,8 @@ export default function LogSleepModal() {
                         <EmptyState
                             icon="moon-outline"
                             title="No sleep data yet"
-                            subtitle="Log your first sleep to start tracking recovery."
-                            actionLabel="Log New Sleep"
+                            subtitle="Add your first sleep entry to start tracking recovery."
+                            actionLabel="Add sleep entry"
                             onAction={() => setShowForm(true)}
                         />
                     ) : (
@@ -613,20 +674,79 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
     },
-    qualityRow: {
+    // "Last night" quality hero
+    hero: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
-        height: 36,
+        padding: 17,
+        borderRadius: 16,
         borderWidth: 1,
-        borderRadius: 8,
-        padding: 3,
+        marginBottom: 16,
     },
-    qualityBtn: {
+    heroRing: {
+        width: 92,
+        height: 92,
+        borderRadius: 46,
+        borderWidth: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    heroRingInner: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    heroPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        paddingHorizontal: 11,
+        paddingVertical: 5,
+        borderRadius: 30,
+        marginTop: 9,
+    },
+    // Quality slider
+    qualityBadge: {
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        borderWidth: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    qualityTrackWrap: {
+        position: 'relative',
+        justifyContent: 'center',
+    },
+    qualityTrack: {
+        height: 8,
+        borderRadius: 6,
+        overflow: 'visible',
+    },
+    qualityFill: {
+        height: '100%',
+        borderRadius: 6,
+    },
+    qualityThumb: {
+        position: 'absolute',
+        top: '50%',
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: 3,
+        marginLeft: -11,
+        marginTop: -11,
+    },
+    qualitySegments: {
+        ...StyleSheet.absoluteFillObject,
+        flexDirection: 'row',
+    },
+    qualitySegment: {
         flex: 1,
         height: '100%',
-        borderRadius: 4,
-        marginHorizontal: 1.5,
     },
     // Disturbances
     disturbanceRow: {

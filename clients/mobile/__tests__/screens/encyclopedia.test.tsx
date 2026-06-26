@@ -288,9 +288,9 @@ describe('FoodEncyclopediaScreen — food browser', () => {
     fireEvent.changeText(screen.getByPlaceholderText('Search food encyclopedia...'), 'chick');
     fireEvent.press(screen.getByLabelText('Grilled Chicken'));
 
-    // The modal's primary CTA (a11y label "Log meal") fires the mutation with the
+    // The modal's primary CTA (a11y label "Track meal") fires the mutation with the
     // pressed FoodItem (default qty '1', default mealType BREAKFAST).
-    fireEvent.press(screen.getByLabelText('Log meal'));
+    fireEvent.press(screen.getByLabelText('Track meal'));
     expect(mockMutate).toHaveBeenCalledTimes(1);
     expect(mockMutate.mock.calls[0]![0]).toMatchObject({ id: 'f1', name: 'Grilled Chicken' });
 

@@ -50,6 +50,11 @@ import { TAB_BAR_H } from './_layout';
 const H_PAD = 20;
 const CARD_GAP = 12;
 
+// Faded model-photo cover behind the level ring (mockup's "you-preview" hero).
+// RN has no CSS grayscale filter, so we read it as a cover via a low-opacity
+// image + the existing dark gradient scrim rather than a desaturate pass.
+const COVER_HERO = require('../../assets/images/hero-male-1.png');
+
 // ─── Achievements (DERIVED from real signals) ────────────────────────────────
 // No fabricated gamification: every tile is computed from live query data
 // (streak.current, stats.daysLogged, status scores, shiftType). Not-yet-earned
@@ -191,8 +196,26 @@ export default function ProfileScreen() {
             >
                 {/* ══ COVER + HEADER ══════════════════════════════════════════ */}
                 <View style={[s.cover, { paddingTop: insets.top }]}>
+                    {/* Faded model-photo cover (mockup) — low-opacity image anchored
+                        right, read as a cover via the dark gradient scrims layered on
+                        top (RN has no CSS grayscale, so opacity + scrim stand in). */}
+                    <Image
+                        source={COVER_HERO}
+                        style={s.coverPhoto}
+                        contentFit="cover"
+                        contentPosition="top"
+                        cachePolicy="memory-disk"
+                        transition={200}
+                        accessibilityLabel=""
+                    />
+                    {/* Vertical scrim → fade the photo into the page bg toward the avatar. */}
                     <LinearGradient
-                        colors={[withAlpha(C.accent.lime, 0.18), withAlpha(C.accent.lime, 0.05), colors.background.primary]}
+                        colors={['rgba(10,12,18,0.30)', 'rgba(10,12,18,0.80)', colors.background.primary]}
+                        style={StyleSheet.absoluteFillObject}
+                    />
+                    {/* Horizontal lime wash (kept) — brand tint sweeping in from the left. */}
+                    <LinearGradient
+                        colors={[withAlpha(C.accent.lime, 0.18), withAlpha(C.accent.lime, 0.05), 'transparent']}
                         start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }}
                         style={StyleSheet.absoluteFillObject}
                     />
@@ -697,6 +720,9 @@ const s = StyleSheet.create({
 
     // Cover header
     cover: { height: 130, width: '100%' },
+    // Faded model-photo cover — anchored to the right half, low opacity so the
+    // dark + lime scrims layered above read it as an atmospheric cover (mockup).
+    coverPhoto: { position: 'absolute', top: 0, bottom: 0, right: 0, width: '62%', opacity: 0.5 },
     navHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: H_PAD, height: 52 },
     navRight: { flexDirection: 'row', gap: 10 },
     iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },

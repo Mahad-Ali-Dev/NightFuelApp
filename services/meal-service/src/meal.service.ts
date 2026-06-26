@@ -261,6 +261,13 @@ export class MealService {
         // the stored shape is byte-identical for the common ad-hoc case) and
         // only switch to the `{ items, _planMealId }` envelope when a link is
         // present.
+        //
+        // MICRONUTRIENTS: each item in `foodItems` is persisted VERBATIM here, so
+        // any OPTIONAL micro / secondary-macro fields the route forwarded (now
+        // RETAINED rather than stripped by logMealBodySchema — see schemas.ts
+        // MICRO_FIELDS) land in this JSON column untouched and round-trip back out
+        // via getMealLogs. No per-micro handling is needed at the write: the array
+        // is the source of truth and we never reconstruct items field-by-field.
         const storedFoodItems = planMealId
             ? { items: foodItems, _planMealId: planMealId }
             : foodItems;

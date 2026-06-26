@@ -198,7 +198,7 @@ describe('LogMealScreen — numeric guard + honest empty/error states', () => {
 
     // Logging the (coerced) item forwards a payload whose macros are finite — the
     // guard turned every NaN into 0, so logMeal never sees a fabricated number.
-    const cta = screen.getByRole('button', { name: 'Log meal' });
+    const cta = screen.getByRole('button', { name: 'Track meal' });
     fireEvent.press(cta);
     expect(mockMutate).toHaveBeenCalledTimes(1);
 
@@ -245,7 +245,7 @@ describe('LogMealScreen — numeric guard + honest empty/error states', () => {
     expect(screen.queryByText('-0.5x')).toBeNull();
 
     // Logging now still produces a positive, finite quantity (0.5) — never 0/neg.
-    fireEvent.press(screen.getByRole('button', { name: 'Log meal' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Track meal' }));
     expect(mockMutate).toHaveBeenCalledTimes(1);
     const payload = mockMutate.mock.calls[0]![0] as { foodItems: Array<{ quantity: number; calories: number }> };
     expect(payload.foodItems[0]!.quantity).toBe(0.5);
@@ -259,7 +259,7 @@ describe('LogMealScreen — numeric guard + honest empty/error states', () => {
 
     renderScreen();
 
-    const cta = screen.getByRole('button', { name: 'Log meal' });
+    const cta = screen.getByRole('button', { name: 'Track meal' });
     fireEvent.press(cta);
 
     // Fired exactly once.
@@ -299,7 +299,7 @@ describe('LogMealScreen — numeric guard + honest empty/error states', () => {
     expect(screen.queryByText('Your Plate')).toBeNull();
 
     // The footer CTA is present (disabled) — pressing it must NOT log anything.
-    const cta = screen.getByRole('button', { name: 'Log meal' });
+    const cta = screen.getByRole('button', { name: 'Track meal' });
     fireEvent.press(cta);
     expect(mockMutate).not.toHaveBeenCalled();
   });

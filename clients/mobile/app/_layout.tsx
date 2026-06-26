@@ -9,6 +9,7 @@ import { Alert, useColorScheme } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, Barlow_400Regular, Barlow_500Medium, Barlow_600SemiBold, Barlow_700Bold } from '@expo-google-fonts/barlow';
 import { BarlowCondensed_600SemiBold, BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold } from '@expo-google-fonts/barlow-condensed';
+import { Saira_400Regular, Saira_500Medium, Saira_600SemiBold, Saira_700Bold } from '@expo-google-fonts/saira';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -47,13 +48,15 @@ const queryClient = new QueryClient({
   },
 });
 
-// Hold the native splash until our brand fonts (Barlow / Barlow Condensed) load,
-// so the very first frame renders in-brand with no system-font flash.
+// Hold the native splash until our brand fonts (Saira — the brand face — plus
+// Barlow / Barlow Condensed) load, so the very first frame renders in-brand with
+// no system-font flash.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayout() {
   const systemScheme = useColorScheme();
   const [fontsLoaded] = useFonts({
+    Saira_400Regular, Saira_500Medium, Saira_600SemiBold, Saira_700Bold,
     Barlow_400Regular, Barlow_500Medium, Barlow_600SemiBold, Barlow_700Bold,
     BarlowCondensed_600SemiBold, BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold,
   });

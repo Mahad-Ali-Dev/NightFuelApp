@@ -434,8 +434,11 @@ export default function NotificationPreferencesScreen() {
                                                     accessibilityState={{ checked: prefs[item.key] as boolean }}
                                                     value={prefs[item.key] as boolean}
                                                     onValueChange={() => toggle(item.key)}
-                                                    trackColor={{ false: colors.border.default, true: withAlpha(item.iconColor, 0.4) }}
-                                                    thumbColor={prefs[item.key] ? item.iconColor : colors.text.tertiary}
+                                                    // Toggles render LIME when on (mockup + wave spec): the brand
+                                                    // accent owns the "on" state. The per-category iconColor still
+                                                    // tints the leading icon chip; only the track adopts lime.
+                                                    trackColor={{ false: colors.border.default, true: colors.accent.coral }}
+                                                    thumbColor={colors.text.primary}
                                                     ios_backgroundColor={colors.background.tertiary}
                                                 />
                                             </View>
@@ -476,8 +479,10 @@ export default function NotificationPreferencesScreen() {
                                 accessibilityState={{ checked: quietHoursExpanded }}
                                 value={quietHoursExpanded}
                                 onValueChange={setQuietHoursExpanded}
-                                trackColor={{ false: colors.border.default, true: withAlpha(palette.accent.blue, 0.4) }}
-                                thumbColor={quietHoursExpanded ? palette.accent.blue : colors.text.tertiary}
+                                // Lime "on" track (mockup + wave spec) — consistent with every
+                                // other toggle on this screen; the blue stays on the icon chip.
+                                trackColor={{ false: colors.border.default, true: colors.accent.coral }}
+                                thumbColor={colors.text.primary}
                                 ios_backgroundColor={colors.background.tertiary}
                             />
                         </View>

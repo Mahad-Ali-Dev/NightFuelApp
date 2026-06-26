@@ -46,7 +46,7 @@
 // ── jest.mock hoisting block (runs ABOVE the imports) ────────────────────────
 
 // `useAuthStore` is read as a hook (`{ user }`) AND statically via
-// `useAuthStore.getState().logout()` in the Log Out handler. Provide both shapes;
+// `useAuthStore.getState().logout()` in the Sign out handler. Provide both shapes;
 // the `mock`-prefixed holder satisfies babel-plugin-jest-hoist's closure rule.
 const mockLogout = jest.fn(async () => undefined);
 jest.mock('@/store/authStore', () => {
@@ -306,12 +306,12 @@ describe('More tab — every settings row is functional or honestly disabled', (
     it('does not leak a bare no-op tappable row: the count of interactive press targets equals the wired rows (9 nav + 2 link), each with a real handler', () => {
         renderScreen();
 
-        // The Log Out control is also a 'button'; exclude it so we count only the
+        // The Sign out control is also a 'button'; exclude it so we count only the
         // grouped settings rows. Every remaining button is a NAV_ROW, every link is
         // a LINK_ROW — i.e. there is no extra, unaccounted, dead tappable row.
         const settingButtons = screen
             .queryAllByRole('button')
-            .filter((b) => b.props.accessibilityLabel !== 'Log Out');
+            .filter((b) => b.props.accessibilityLabel !== 'Sign out');
         const links = screen.queryAllByRole('link');
 
         const buttonLabels = settingButtons.map((b) => b.props.accessibilityLabel).sort();

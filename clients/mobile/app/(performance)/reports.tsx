@@ -339,7 +339,13 @@ export default function AIReportsScreen() {
 
                     {activeReport && (() => {
                         const score = safeScore(activeReport.score);
-                        const scoreColor = score >= 80 ? colors.accent.cyan : score >= 60 ? colors.accent.amber : colors.accent.red;
+                        // Hero score band — the brand lime owns any positive week (the
+                        // "real progress" 60+ band and up, matching the mockup's lime
+                        // score ring), so amber stays reserved for a genuine caution
+                        // (a weak 40–59 week) and red for a poor one. `accent.coral`
+                        // resolves to lime post-rebrand. This keeps amber "only on
+                        // warnings", never on a respectable score.
+                        const scoreColor = score >= 60 ? colors.accent.coral : score >= 40 ? colors.accent.amber : colors.accent.red;
                         const aff = affirmationFor(score);
                         const highlightCount = activeReport.highlights?.length ?? 0;
                         const improveCount = activeReport.improvements?.length ?? 0;

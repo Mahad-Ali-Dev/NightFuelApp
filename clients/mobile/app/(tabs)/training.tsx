@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ImageBackground } from 'react-native';
 import { Image } from 'expo-image';
 import { TAB_BAR_H } from './_layout';
 import { useRouter } from 'expo-router';
@@ -12,21 +12,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { getRoutines, getActiveSession, Routine } from '@/api/exercises';
-import { Skeleton, EmptyState, GlassCard, CtaButton } from '@/components/ui';
+import { Skeleton, EmptyState, CtaButton } from '@/components/ui';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StatCard, CategoryCard, MuscleCard, RoutineCard, CAROUSEL_CARD_W, MUSCLE_CARD_W } from '@/components/TrainingCards';
-const { width } = Dimensions.get('window');
+import { StatCard, MuscleCard, RoutineCard, WodCarousel, BentoBrowse, CAROUSEL_CARD_W, MUSCLE_CARD_W } from '@/components/TrainingCards';
 // Bundled Aurora dark-glass art (no external host → offline-safe, no 404 /
 // rate-limit). '@/*' resolves to ./src, so assets are required by relative path
 // — same module-scope require pattern as (exercises)/index.tsx.
 const HERO_TRAINING = require('../../assets/images/hero-training.png');
 const CAT_GYM_IMG = require('../../assets/images/cat-gym.png');
-const CAT_HOME_IMG = require('../../assets/images/cat-home.png');
-const CAT_CARDIO_IMG = require('../../assets/images/cat-cardio.png');
-const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
 const QA_WORKOUT_IMG = require('../../assets/images/qa-workout.png');
 const MUSCLE_CHEST_IMG = require('../../assets/images/muscle-chest.png');
 const MUSCLE_BACK_IMG = require('../../assets/images/muscle-back.png');
+// Grayscale-figure tiles for the interlocking "Browse by style" bento. The
+// mockup pairs each style with a body figure: HIIT/Yoga use the hero figures,
+// Strength/Cardio/Mobility/Pilates use the muscle-<group>-male renders (already
+// near-monochrome lime art on transparent backgrounds). Bundled → offline-safe;
+// '@/*' resolves to ./src so we require by relative path.
+const HERO_FEMALE_1 = require('../../assets/images/hero-female-1.png');
+const HERO_FEMALE_2 = require('../../assets/images/hero-female-2.png');
+const MUSCLE_CARDIO_M = require('../../assets/images/muscle-cardio-male.png');
 // Gender-neutral muscle-group tiles (male art per the "Workouts grid" mockup;
 // the muscle browser itself swaps to female art from the profile). Bundled →
 // offline-safe; '@/*' resolves to ./src so we require by relative path.
@@ -36,34 +40,41 @@ const MUSCLE_SHOULDERS_M = require('../../assets/images/muscle-shoulders-male.pn
 const MUSCLE_ARMS_M = require('../../assets/images/muscle-arms-male.png');
 const MUSCLE_CORE_M = require('../../assets/images/muscle-core-male.png');
 const MUSCLE_LEGS_M = require('../../assets/images/muscle-legs-male.png');
-// Workout-category bento tiles. `route` keeps the EXISTING deep-links into the
-// exercise library (?category=…); `icon` + `color` drive the lime-glow card.
-// Colors are the exact Aurora accent hex values from '@/theme/colors' (module
-// scope can't read the useTheme() hook). `span` lays the bento out 2-up with a
-// tall lead tile, matching the mockup's interlocking grid design language.
-const CATS = [
-    { id:'gym', title:'Strength', icon:'barbell', img:CAT_GYM_IMG, route:'/(exercises)?category=gym', color:'#A8CC3C', span:'lead' as const },
-    { id:'cardio', title:'Cardio', icon:'heart', img:CAT_CARDIO_IMG, route:'/(exercises)?category=cardio', color:'#00D4AA', span:'half' as const },
-    { id:'home', title:'Home', icon:'home', img:CAT_HOME_IMG, route:'/(exercises)?category=home', color:'#10B981', span:'half' as const },
-    { id:'recover', title:'Recovery', icon:'leaf', img:CAT_RECOVERY_IMG, route:'/(exercises)?category=kegel', color:'#7C4DFF', span:'full' as const },
+// "Browse by style" bento tiles. `route` keeps the EXISTING deep-links into the
+// exercise library (?category=…) so every tile's navigation is preserved; the
+// six styles map onto the real catalog categories (gym/cardio/home/kegel) the
+// library understands. Order is the mockup's interlocking z-order:
+//   [0] HIIT (tall TL) · [1] Strength (L-shape) · [2] Cardio (nests in notch)
+//   [3] Yoga (wide) · [4] Mobility · [5] Pilates.
+const STYLES = [
+    { id:'hiit',     title:'HIIT',     icon:'flame' as const,    img:HERO_FEMALE_1,  route:'/(exercises)?category=cardio' },
+    { id:'strength', title:'Strength', icon:'barbell' as const,  img:MUSCLE_CHEST_M, route:'/(exercises)?category=gym' },
+    { id:'cardio',   title:'Cardio',   icon:'heart' as const,    img:MUSCLE_CARDIO_M, route:'/(exercises)?category=cardio' },
+    { id:'yoga',     title:'Yoga',     icon:'body' as const,     img:HERO_FEMALE_2,  route:'/(exercises)?category=home' },
+    { id:'mobility', title:'Mobility', icon:'accessibility' as const, img:MUSCLE_BACK_M, route:'/(exercises)?category=home' },
+    { id:'pilates',  title:'Pilates',  icon:'pulse' as const,    img:MUSCLE_LEGS_M,  route:'/(exercises)?category=kegel' },
 ];
 // Muscle-group carousel — each card deep-links into the real Muscle Map browser
 // (/(exercises)/muscles), preserving navigation while adding a fast entry point.
+// `count` is the indicative per-group exercise count shown in lime (mockup).
 const MUSCLES = [
-    { id:'chest', label:'Chest', img:MUSCLE_CHEST_M },
-    { id:'back', label:'Back', img:MUSCLE_BACK_M },
-    { id:'shoulders', label:'Shoulders', img:MUSCLE_SHOULDERS_M },
-    { id:'arms', label:'Arms', img:MUSCLE_ARMS_M },
-    { id:'core', label:'Core', img:MUSCLE_CORE_M },
-    { id:'legs', label:'Legs', img:MUSCLE_LEGS_M },
+    { id:'chest', label:'Chest', img:MUSCLE_CHEST_M, count:24 },
+    { id:'back', label:'Back', img:MUSCLE_BACK_M, count:32 },
+    { id:'shoulders', label:'Shoulders', img:MUSCLE_SHOULDERS_M, count:18 },
+    { id:'arms', label:'Arms', img:MUSCLE_ARMS_M, count:28 },
+    { id:'core', label:'Core', img:MUSCLE_CORE_M, count:22 },
+    { id:'legs', label:'Legs', img:MUSCLE_LEGS_M, count:30 },
 ];
-// Bento tile widths — derived once from the window width (20px page padding
-// both sides, 12px inter-tile gutter). The lead tile takes the larger column
-// and the stacked half-tiles share the remainder; the full tile spans the row.
-const BENTO_GUTTER = 12;
-const BENTO_FULL_W = width - 40;
-const BENTO_LEAD_W = Math.round((BENTO_FULL_W - BENTO_GUTTER) * 0.46);
-const BENTO_HALF_W = BENTO_FULL_W - BENTO_GUTTER - BENTO_LEAD_W;
+// Workout-of-the-Day carousel pages. There is no WOD API yet, so these are
+// curated entries; every card's "Start workout" routes through the SAME
+// onboarding entry the single hero used (start handler preserved). Figures are
+// the bundled muscle/hero renders.
+const WODS = [
+    { id:'wod-fullbody', title:'Full Body Blast', meta:'45 min · 8 exercises', img:MUSCLE_CHEST_M },
+    { id:'wod-upper',    title:'Upper Power',      meta:'38 min · 7 exercises', img:MUSCLE_BACK_M },
+    { id:'wod-lower',    title:'Leg Day',          meta:'42 min · 6 exercises', img:MUSCLE_LEGS_M },
+    { id:'wod-core',     title:'Core Crusher',     meta:'25 min · 9 exercises', img:MUSCLE_CORE_M },
+];
 // Static routine-card artwork (constant — hoisted out of render to avoid
 // re-allocating this array on every routine row). Bundled, rotated by index%4.
 const ROUTINE_IMGS = [
@@ -128,33 +139,10 @@ export default function TrainingHubScreen() {
                     ) : (
                         <Animated.View entering={FadeInDown.delay(80).springify().damping(18)}>
                         <View style={s.secHd}><Text style={[typography.overline,{color:colors.text.secondary}]}>Workout of the Day</Text></View>
-                        <TouchableOpacity activeOpacity={0.9} accessibilityRole="button" accessibilityLabel="Start new session" style={{marginHorizontal:20,marginBottom:14}} onPress={()=>router.push('/training/onboarding' as any)}>
-                            <GlassCard glow={colors.accent.coral} radius={18} style={{borderColor:colors.border.light}}>
-                                <View style={s.wodCard}>
-                                    <Image source={HERO_TRAINING} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
-                                    <LinearGradient colors={['rgba(8,10,16,0.35)','rgba(8,10,16,0.62)','rgba(8,10,16,0.92)']} start={{x:0,y:0}} end={{x:0,y:1}} style={StyleSheet.absoluteFillObject} />
-                                    {/* Center play affordance */}
-                                    <View style={s.wodPlayWrap} pointerEvents="none">
-                                        <View style={s.wodPlay}><Ionicons name="play" size={23} color="#FFF" /></View>
-                                    </View>
-                                    {/* Bottom-left title + duration */}
-                                    <View style={s.wodMeta}>
-                                        <Text style={[typography.h2,{color:'#FFF',fontWeight:'800'}]}>Start New Session</Text>
-                                        <Text style={[typography.body,{color:'rgba(255,255,255,0.78)',marginTop:2}]}>Pick a routine or go freestyle</Text>
-                                    </View>
-                                    {/* Bottom-right Start pill (lime) */}
-                                    <View style={[s.wodStart,shadows.glow(colors.accent.coral)]}>
-                                        <Text maxFontSizeMultiplier={1.3} style={[s.wodStartTxt,{color:colors.text.inverse}]}>Start</Text>
-                                    </View>
-                                </View>
-                            </GlassCard>
-                        </TouchableOpacity>
-                        {/* Page dots */}
-                        <View style={s.dotsRow}>
-                            {[0,1,2,3].map((d)=>(
-                                <View key={d} style={d===0?[s.dotActive,{backgroundColor:colors.accent.coral}]:[s.dot,{backgroundColor:colors.border.light}]} />
-                            ))}
-                        </View>
+                        {/* Swipeable WOD carousel — pager + dots + lime Start-workout pill.
+                            Every card's start handler is the SAME onboarding push the
+                            single hero used, so the start flow is preserved. */}
+                        <WodCarousel items={WODS} onStart={()=>router.push('/training/onboarding' as any)} />
                         </Animated.View>
                     )}
                     <Animated.View entering={FadeInDown.delay(120).duration(420)} style={s.statRow}>
@@ -162,59 +150,29 @@ export default function TrainingHubScreen() {
                         <StatCard index={1} label="Exercises" value={totalExercises} icon="barbell-outline" accent={colors.accent.cyan} />
                         <StatCard index={2} label="Weekly Sets" value={totalSets} icon="flame-outline" accent={colors.accent.purple} />
                     </Animated.View>
-                    <View style={s.secHd}><Text style={[typography.heading,{color:colors.text.primary,fontSize:18}]}>Workouts</Text></View>
-                    <View style={s.bentoGrid}>
-                        {/* Top row: tall lead tile + a stacked pair of half tiles */}
-                        <View style={s.bentoLead}>
-                            <CategoryCard
-                                index={0}
-                                title={CATS[0]!.title}
-                                img={CATS[0]!.img}
-                                icon={CATS[0]!.icon as any}
-                                accent={CATS[0]!.color}
-                                cardWidth={BENTO_LEAD_W}
-                                height={172}
-                                accessibilityLabel={`${CATS[0]!.title} workouts`}
-                                onPress={()=>router.push(CATS[0]!.route as any)}
-                            />
-                        </View>
-                        <View style={s.bentoStack}>
-                            {[CATS[1]!,CATS[2]!].map((cat,i)=>(
-                                <CategoryCard
-                                    key={cat.id}
-                                    index={i+1}
-                                    title={cat.title}
-                                    img={cat.img}
-                                    icon={cat.icon as any}
-                                    accent={cat.color}
-                                    cardWidth={BENTO_HALF_W}
-                                    height={80}
-                                    accessibilityLabel={`${cat.title} workouts`}
-                                    onPress={()=>router.push(cat.route as any)}
-                                />
-                            ))}
-                        </View>
-                        {/* Full-width tile */}
-                        <CategoryCard
-                            index={3}
-                            title={CATS[3]!.title}
-                            img={CATS[3]!.img}
-                            icon={CATS[3]!.icon as any}
-                            accent={CATS[3]!.color}
-                            cardWidth={BENTO_FULL_W}
-                            height={88}
-                            accessibilityLabel={`${CATS[3]!.title} workouts`}
-                            onPress={()=>router.push(CATS[3]!.route as any)}
+                    <View style={s.secHd}><Text style={[typography.heading,{color:colors.text.primary,fontSize:18}]}>Browse by style</Text></View>
+                    {/* Interlocking L-shape bento — each tile keeps its real
+                        deep-link into the exercise library (nav preserved). */}
+                    <View style={s.bentoWrap}>
+                        <BentoBrowse
+                            items={STYLES.map((c)=>({
+                                id:c.id,
+                                title:c.title,
+                                icon:c.icon,
+                                img:c.img,
+                                onPress:()=>router.push(c.route as any),
+                            }))}
                         />
                     </View>
-                    <View style={s.secHd}><Text style={[typography.heading,{color:colors.text.primary,fontSize:18}]}>Muscle groups</Text><TouchableOpacity activeOpacity={0.85} accessibilityRole="button" hitSlop={{top:8,bottom:8,left:8,right:8}} onPress={()=>router.push('/(exercises)/muscles' as any)}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold'}]}>VIEW ALL</Text></TouchableOpacity></View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={MUSCLE_CARD_W+11} snapToAlignment="start" contentContainerStyle={{paddingHorizontal:20,gap:11,paddingBottom:8}}>
+                    <View style={s.secHd}><Text style={[typography.heading,{color:colors.text.primary,fontSize:18}]}>Target a muscle group</Text><TouchableOpacity activeOpacity={0.85} accessibilityRole="button" hitSlop={{top:8,bottom:8,left:8,right:8}} onPress={()=>router.push('/(exercises)/muscles' as any)}><Text style={[typography.caption,{color:colors.accent.coral,fontWeight:'bold'}]}>VIEW ALL</Text></TouchableOpacity></View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} decelerationRate="fast" snapToInterval={MUSCLE_CARD_W+12} snapToAlignment="start" contentContainerStyle={{paddingHorizontal:20,gap:12,paddingBottom:8}}>
                         {MUSCLES.map((m,idx)=>(
                             <MuscleCard
                                 key={m.id}
                                 index={idx}
                                 label={m.label}
                                 img={m.img}
+                                count={m.count}
                                 accessibilityLabel={`${m.label} exercises`}
                                 onPress={()=>router.push('/(exercises)/muscles' as any)}
                             />
@@ -329,24 +287,11 @@ const s = StyleSheet.create({
     switcher:{flexDirection:'row',borderRadius:14,padding:4}, swBtn:{flex:1,paddingVertical:10,borderRadius:10,alignItems:'center'},
     activeWrap:{borderRadius:24,overflow:'hidden'}, activeCard:{padding:20}, activeRow:{flexDirection:'row',alignItems:'center'},
     activeIcon:{width:40,height:40,borderRadius:20,backgroundColor:'#FFF',alignItems:'center',justifyContent:'center'},
-    // "Workout of the Day" hero (inside GlassCard): full-bleed art + scrim, a
-    // center play disc, bottom-left meta, bottom-right lime Start pill.
-    wodCard:{height:150,overflow:'hidden'},
-    wodPlayWrap:{...StyleSheet.absoluteFillObject,alignItems:'center',justifyContent:'center'},
-    wodPlay:{width:52,height:52,borderRadius:26,backgroundColor:'rgba(255,255,255,0.12)',borderWidth:1.5,borderColor:'#FFF',alignItems:'center',justifyContent:'center'},
-    wodMeta:{position:'absolute',left:14,bottom:13,right:96},
-    wodStart:{position:'absolute',right:14,bottom:15,backgroundColor:'#A8CC3C',paddingHorizontal:19,paddingVertical:9,borderRadius:11},
-    wodStartTxt:{fontSize:13,fontWeight:'800',letterSpacing:0.3},
-    dotsRow:{flexDirection:'row',justifyContent:'center',alignItems:'center',gap:6,marginBottom:22},
-    dot:{width:6,height:6,borderRadius:3},
-    dotActive:{width:18,height:6,borderRadius:3},
     secHd:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',paddingHorizontal:20,marginBottom:16,marginTop:8},
     statRow:{flexDirection:'row',gap:10,paddingHorizontal:20,marginBottom:24},
-    // Bento grid: a top row (tall lead tile + a stacked half-tile pair) then a
-    // full-width tile beneath. Wraps so the lead + stack sit side by side.
-    bentoGrid:{flexDirection:'row',flexWrap:'wrap',paddingHorizontal:20,gap:12,marginBottom:24},
-    bentoLead:{},
-    bentoStack:{flex:1,justifyContent:'space-between',gap:12},
+    // Interlocking "Browse by style" bento (the BentoBrowse canvas is self-sized
+    // and self-centred; this wrapper just owns the vertical rhythm).
+    bentoWrap:{marginBottom:24},
     emptyR:{width:CAROUSEL_CARD_W,height:168,alignItems:'center',justifyContent:'center',padding:16},
     emptyRIcon:{width:48,height:48,borderRadius:24,borderWidth:1,alignItems:'center',justifyContent:'center'},
     planCard:{height:220,borderRadius:20,overflow:'hidden'}, planImg:{width:'100%',height:220,position:'absolute'},

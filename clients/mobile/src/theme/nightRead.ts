@@ -67,6 +67,17 @@ export const nightReadColors = {
     inverse: '#0A0000',
   },
 
+  // Macro colors — present for shape parity with colors.ts `macro`. Per this
+  // variant's single-wavelength rule every macro hue collapses to the dim-red
+  // family (no green/amber/cyan wavelength bright enough to disrupt sleep), so
+  // the rings stay legible as dim-red arcs at 3am.
+  macro: {
+    protein: '#8C1A1A',
+    carbs: '#5C2A0F',
+    fat: '#A02020',
+    water: '#5C2A2A',
+  },
+
   // Semantic colors — all red-family so a success toast doesn't flash green
   success: '#8C1A1A',
   error: '#8C1A1A',

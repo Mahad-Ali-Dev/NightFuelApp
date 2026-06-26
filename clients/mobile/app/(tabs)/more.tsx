@@ -304,11 +304,12 @@ export default function MoreScreen() {
                     </Animated.View>
                 ))}
 
-                {/* Logout Button — bespoke coral outline (not a filled CTA) */}
+                {/* Sign-out Button — bespoke coral outline (not a filled CTA). Reads
+                    "Sign out" everywhere (visible + a11y), never the word "Log". */}
                 <Animated.View entering={FadeInDown.delay(90 + SETTINGS_SECTIONS.length * 45).springify().damping(18)}>
                     <TouchableOpacity
                         accessibilityRole="button"
-                        accessibilityLabel="Log Out"
+                        accessibilityLabel="Sign out"
                         style={[styles.logoutBtn, { borderColor: withAlpha(colors.accent.coral, 0.40), backgroundColor: withAlpha(colors.accent.coral, 0.08), borderRadius: borderRadius.lg, marginHorizontal: spacing.md }]}
                         onPress={async () => {
                             await useAuthStore.getState().logout();
@@ -317,7 +318,7 @@ export default function MoreScreen() {
                         activeOpacity={0.8}
                     >
                         <Ionicons name="log-out-outline" size={18} color={colors.accent.coral} />
-                        <Text style={[typography.subhead, { color: colors.accent.coral, fontWeight: '700', marginLeft: spacing.sm }]} maxFontSizeMultiplier={1.4}>Log Out</Text>
+                        <Text style={[typography.subhead, { color: colors.accent.coral, fontWeight: '700', marginLeft: spacing.sm }]} maxFontSizeMultiplier={1.4}>Sign out</Text>
                     </TouchableOpacity>
                 </Animated.View>
 

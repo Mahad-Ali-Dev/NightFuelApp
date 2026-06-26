@@ -10,6 +10,7 @@ export default function ModalsLayout() {
             <Stack.Screen name="build-plate" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="premium" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
             <Stack.Screen name="barcode-scanner" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="food-photo" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
         </Stack>
     );
 }

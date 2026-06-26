@@ -302,8 +302,10 @@ describe('a11y guard — log-shift screen controls (rendered)', () => {
 });
 
 // ── log-sleep screen: render-based guard on the audited controls ─────────────────
-// The form (quality/disturbances/notes/date-time/save) is gated behind the
-// "Log new sleep" entry button, so we press it first to reveal those controls.
+// The new-entry form (quality/disturbances/notes/date-time/save) is OPEN by
+// default now, so those controls render on mount — no entry button to press
+// first. The collapsed "Add sleep entry" card is only shown after the form is
+// cleared, so the entry-button guard collapses the form first to reveal it.
 
 describe('a11y guard — log-sleep screen controls (rendered)', () => {
   // Empty saved-sessions list so the screen renders the entry button (and not a
@@ -323,15 +325,19 @@ describe('a11y guard — log-sleep screen controls (rendered)', () => {
     expect(close.props.accessibilityRole).toBe('button');
   });
 
-  test('the "Log new sleep" entry button is a labelled button', () => {
+  test('the "Add sleep entry" entry button is a labelled button', () => {
     renderWithTheme(<LogSleepModal />);
-    const entry = screen.getByLabelText('Log new sleep');
+    // The new-entry form is OPEN by default, so the collapsed entry card is not
+    // mounted on first render. Collapse the form (the "Clear" control) to reveal
+    // the entry button, then assert its current label + role.
+    fireEvent.press(screen.getByLabelText('Clear'));
+    const entry = screen.getByLabelText('Add sleep entry');
     expect(entry.props.accessibilityRole).toBe('button');
   });
 
-  test('opening the form reveals the save control with its label + busy state (idle → "Save recovery data")', () => {
+  test('the open form exposes the save control with its label + busy state (idle → "Save recovery data")', () => {
+    // The new-entry form is OPEN by default, so its controls render immediately.
     renderWithTheme(<LogSleepModal />);
-    fireEvent.press(screen.getByLabelText('Log new sleep'));
 
     const save = screen.getByLabelText('Save recovery data');
     expect(save.props.accessibilityRole).toBe('button');
@@ -342,7 +348,6 @@ describe('a11y guard — log-sleep screen controls (rendered)', () => {
   test('the save control flips to "Saving recovery data" + busy state while the mutation is pending', () => {
     mockMutationState.isPending = true;
     renderWithTheme(<LogSleepModal />);
-    fireEvent.press(screen.getByLabelText('Log new sleep'));
 
     const saving = screen.getByLabelText('Saving recovery data');
     expect(saving.props.accessibilityRole).toBe('button');
@@ -352,7 +357,6 @@ describe('a11y guard — log-sleep screen controls (rendered)', () => {
 
   test('the sleep-quality rating buttons are labelled with their value and expose selected state', () => {
     renderWithTheme(<LogSleepModal />);
-    fireEvent.press(screen.getByLabelText('Log new sleep'));
 
     // Default quality is 7 → that rating reads as selected, an unselected one not.
     const seven = screen.getByLabelText('Sleep quality 7 out of 10');
@@ -372,7 +376,6 @@ describe('a11y guard — log-sleep screen controls (rendered)', () => {
 
   test('the disturbance steppers are labelled buttons', () => {
     renderWithTheme(<LogSleepModal />);
-    fireEvent.press(screen.getByLabelText('Log new sleep'));
 
     const decrease = screen.getByLabelText('Decrease');
     expect(decrease.props.accessibilityRole).toBe('button');
@@ -382,13 +385,11 @@ describe('a11y guard — log-sleep screen controls (rendered)', () => {
 
   test('the recovery-notes input is labelled', () => {
     renderWithTheme(<LogSleepModal />);
-    fireEvent.press(screen.getByLabelText('Log new sleep'));
     expect(screen.getByLabelText('Recovery notes')).toBeTruthy();
   });
 
   test('the sleep date/time fields pass explicit, value-bearing labels (button role + picker hint)', () => {
     renderWithTheme(<LogSleepModal />);
-    fireEvent.press(screen.getByLabelText('Log new sleep'));
 
     // Default state: startDay/endDay = today, startTime 23:00, endTime 07:00.
     // We assert the label PREFIX + role/hint without pinning the date string, so

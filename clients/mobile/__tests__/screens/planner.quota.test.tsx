@@ -162,8 +162,8 @@ function renderScreen() {
 // The empty-state generate CTA is the entry point (getPlanByDate → null = no
 // plan). Wait for it, then press it to kick off a generation.
 async function pressGenerate() {
-  await waitFor(() => expect(screen.getByText('GENERATE AI PLAN')).toBeTruthy());
-  fireEvent.press(screen.getByText('GENERATE AI PLAN'));
+  await waitFor(() => expect(screen.getByText('Generate recipe')).toBeTruthy());
+  fireEvent.press(screen.getByText('Generate recipe'));
 }
 
 let alertSpy: jest.SpyInstance;
@@ -317,7 +317,7 @@ describe('MealPlannerScreen — daily-AI-limit upgrade state', () => {
     // still-present empty-state CTA): a 500 → the error card REPLACES the upgrade
     // card; the upgrade card is cleared (runGenerate resets both, onError sets one).
     mockGenerate.mockRejectedValueOnce({ response: { status: 500, data: { message: 'Boom' } } });
-    fireEvent.press(screen.getByText('GENERATE AI PLAN'));
+    fireEvent.press(screen.getByText('Generate recipe'));
 
     await waitFor(() => expect(screen.getByText('Generation Failed')).toBeTruthy());
     expect(screen.queryByText('Daily AI limit reached')).toBeNull();
@@ -372,7 +372,7 @@ describe('MealPlannerScreen — loaded-plan summary GlassCard', () => {
 
     // The empty-state generate CTA is gone (a plan is loaded), and neither failure
     // card is present on the clean loaded path.
-    expect(screen.queryByText('GENERATE AI PLAN')).toBeNull();
+    expect(screen.queryByText('Generate recipe')).toBeNull();
     expect(screen.queryByText('Daily AI limit reached')).toBeNull();
     expect(screen.queryByText('Generation Failed')).toBeNull();
   });

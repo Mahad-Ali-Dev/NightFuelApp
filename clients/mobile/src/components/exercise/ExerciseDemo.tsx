@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 import { getExerciseVideoComponent } from '@/lib/exerciseVideo';
+import { posterFromVideoUrl } from '@/constants/exerciseDemos';
 
 const HEIGHT = 320;
 // How long each frame is held before cross-fading to the next. Slow enough that
@@ -72,6 +73,17 @@ export function ExerciseDemo({ frames, gifUrl, videoUrl, imageUrl, fallback, tut
     return getExerciseVideoComponent();
   }, [videoUrl]);
   const videoUri = typeof videoUrl === 'string' ? videoUrl.trim() : '';
+  // Best-frame poster (still) for the clip: the videoUrl with `.mp4` → `.jpg`.
+  // Shown by the player BEFORE the first frame renders, then hidden. Falls back
+  // to the exercise's own header image when the clip isn't an .mp4 (so there's
+  // always a still rather than a black box during load). The poster JPG may 404
+  // transiently while the batch runs — the player drops the cover on its onError.
+  const videoPoster = useMemo<string | undefined>(() => {
+    const derived = posterFromVideoUrl(videoUrl);
+    if (derived) return derived;
+    const img = typeof imageUrl === 'string' ? imageUrl.trim() : '';
+    return img.length > 0 ? img : undefined;
+  }, [videoUrl, imageUrl]);
 
   // Normalise the demo source into an ordered, de-duped, non-empty frame list.
   const demoFrames = useMemo<string[]>(() => {
@@ -189,7 +201,7 @@ export function ExerciseDemo({ frames, gifUrl, videoUrl, imageUrl, fallback, tut
   if (VideoPlayer && videoUri) {
     return (
       <View style={styles.wrap} accessibilityLabel="Exercise demo">
-        <VideoPlayer uri={videoUri} style={styles.media} accessibilityLabel="Exercise demo video" />
+        <VideoPlayer uri={videoUri} poster={videoPoster ?? null} style={styles.media} accessibilityLabel="Exercise demo video" />
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.7)', colors.background.primary]}
           style={StyleSheet.absoluteFillObject}

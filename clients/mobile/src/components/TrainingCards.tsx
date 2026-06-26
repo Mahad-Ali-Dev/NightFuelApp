@@ -17,11 +17,28 @@
  * No new dependencies: only react-native-reanimated (already installed) and the
  * shared theme tokens via useTheme().
  */
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, Dimensions } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  Dimensions,
+  FlatList,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, {
+  Path,
+  Defs,
+  ClipPath,
+  Image as SvgImage,
+  LinearGradient as SvgLinearGradient,
+  Stop,
+} from 'react-native-svg';
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
@@ -30,6 +47,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/utils';
+import { CtaButton } from '@/components/ui';
 
 const { width } = Dimensions.get('window');
 /** Two-column grid card width (20px page padding both sides, 12px gutter). */
@@ -38,6 +56,8 @@ export const GRID_CARD_W = (width - 52) / 2;
 export const CAROUSEL_CARD_W = 200;
 /** Muscle-group carousel card width — wide rounded photo cards. */
 export const MUSCLE_CARD_W = 152;
+/** Page padding the Training hub uses on the left + right (matches screen). */
+const PAGE_PAD = 20;
 
 /**
  * Small shared press-scale wrapper. Wraps a Pressable in an Animated.View so we
@@ -197,18 +217,52 @@ export interface MuscleCardProps {
   onPress: () => void;
   index?: number;
   accessibilityLabel?: string;
+  /** Exercise count shown in lime under the label (mockup's "N exercises"). */
+  count?: number;
 }
 
-/** A wide rounded muscle-group card: full-bleed muscle art + scrim + label. */
-export function MuscleCard({ label, img, onPress, index = 0, accessibilityLabel }: MuscleCardProps) {
+/**
+ * A muscle-group card matching the "Target a muscle group" mockup: a centred,
+ * spotlit `muscle-<group>-male` figure (a soft lime radial glow behind it), and
+ * a bottom gradient footer carrying the muscle label + a lime "N exercises"
+ * count. The figure is contain-fit (not cropped) so the full body model reads.
+ */
+export function MuscleCard({ label, img, onPress, index = 0, accessibilityLabel, count }: MuscleCardProps) {
   const { colors, typography, borderRadius } = useTheme();
   return (
     <Animated.View entering={FadeInDown.delay(120 + index * 50).springify().damping(18)}>
-      <PressableScale onPress={onPress} accessibilityLabel={accessibilityLabel ?? `${label} exercises`}>
-        <View style={[st.muscleCard, { borderRadius: borderRadius.lg, borderColor: colors.border.default }]}>
-          <Image source={img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
-          <LinearGradient colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.85)']} style={StyleSheet.absoluteFillObject} />
-          <Text style={[typography.subhead, st.muscleLabel]} numberOfLines={1}>{label}</Text>
+      <PressableScale
+        onPress={onPress}
+        accessibilityLabel={accessibilityLabel ?? `${label} exercises`}
+      >
+        <View
+          style={[
+            st.muscleCard,
+            { borderRadius: borderRadius.xl, borderColor: colors.border.default, backgroundColor: colors.background.secondary },
+          ]}
+        >
+          {/* Lime spotlight behind the figure */}
+          <View style={st.muscleSpot} pointerEvents="none">
+            <LinearGradient
+              colors={[withAlpha(colors.accent.lime, 0.22), 'transparent']}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={st.muscleSpotFill}
+            />
+          </View>
+          <Image source={img} style={st.muscleFigure} contentFit="contain" cachePolicy="memory-disk" transition={200} />
+          {/* Bottom footer: label + lime count */}
+          <LinearGradient
+            colors={['transparent', withAlpha(colors.background.primary, 0.96)]}
+            style={st.muscleFooter}
+          >
+            <Text style={[typography.subhead, st.muscleLabel]} numberOfLines={1}>{label}</Text>
+            {typeof count === 'number' ? (
+              <Text style={[typography.caption, { color: colors.accent.lime, fontWeight: '600', marginTop: 1 }]} numberOfLines={1}>
+                {count} exercises
+              </Text>
+            ) : null}
+          </LinearGradient>
         </View>
       </PressableScale>
     </Animated.View>
@@ -260,7 +314,399 @@ export function RoutineCard({ title, tag, exerciseCount, img, accent, index, onP
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* WOD swipeable CAROUSEL (pager + dots + Start-workout CtaButton)     */
+/* ------------------------------------------------------------------ */
+
+export interface WodItem {
+  id: string;
+  title: string;
+  /** e.g. "45 min · 8 exercises" */
+  meta: string;
+  /** Full-bleed figure art (a muscle-<group>-male tile reads best). */
+  img: any;
+}
+
+export interface WodCarouselProps {
+  items: WodItem[];
+  /** Fired by the lime "Start workout" pill (and the card body). Same handler. */
+  onStart: () => void;
+}
+
+/** Width of one WOD page = the full content column (page-padded both sides). */
+const WOD_PAGE_W = width - PAGE_PAD * 2;
+
+/**
+ * A horizontally-paging WOD hero carousel. Each page is a full-bleed graphite
+ * card (the figure bleeds off the right, a left→right scrim keeps the copy
+ * legible) carrying a lime "WORKOUT OF THE DAY" eyebrow, the workout title, a
+ * "45 min · 8 exercises" meta line and a lime `CtaButton` "Start workout" pill
+ * (play icon). Pagination dots beneath track the active page; the active dot is
+ * an elongated lime pill. The pager snaps page-to-page. `onStart` is the SAME
+ * handler for every card body + pill, so the screen's start flow is preserved.
+ */
+export function WodCarousel({ items, onStart }: WodCarouselProps) {
+  const { colors, typography, borderRadius, shadows } = useTheme();
+  const [page, setPage] = useState(0);
+
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const i = Math.round(e.nativeEvent.contentOffset.x / WOD_PAGE_W);
+    setPage((prev) => (prev === i ? prev : i));
+  }, []);
+
+  return (
+    <View>
+      <FlatList
+        data={items}
+        keyExtractor={(it) => it.id}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        decelerationRate="fast"
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingHorizontal: PAGE_PAD }}
+        renderItem={({ item, index }) => (
+          <Animated.View entering={FadeInDown.delay(80 + index * 40).springify().damping(18)} style={{ width: WOD_PAGE_W }}>
+            <PressableScale onPress={onStart} accessibilityLabel={`${item.title}, ${item.meta}. Start workout`} scaleTo={0.985}>
+              <View style={[st.wodCard, shadows.glow(colors.accent.lime), { borderRadius: borderRadius.xl, borderColor: colors.border.light, backgroundColor: colors.background.tertiary }]}>
+                <Image source={item.img} style={st.wodFigure} contentFit="contain" cachePolicy="memory-disk" transition={200} />
+                <LinearGradient
+                  colors={[withAlpha(colors.background.secondary, 0.96), withAlpha(colors.background.secondary, 0.2), 'transparent']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFillObject}
+                />
+                <View style={st.wodInner}>
+                  <View style={[st.wodEyebrow, { backgroundColor: colors.accent.lime }]}>
+                    <Text style={[st.wodEyebrowTxt, { color: colors.text.inverse }]} maxFontSizeMultiplier={1.2}>WORKOUT OF THE DAY</Text>
+                  </View>
+                  <Text style={[typography.h2, { color: '#FFF', fontWeight: '700', marginTop: 8 }]} numberOfLines={1}>{item.title}</Text>
+                  <View style={st.wodMetaRow}>
+                    <Ionicons name="time-outline" size={13} color={colors.accent.lime} />
+                    <Text style={[typography.caption, { color: 'rgba(255,255,255,0.82)', marginLeft: 5 }]} numberOfLines={1}>{item.meta}</Text>
+                  </View>
+                  <CtaButton
+                    label="Start workout"
+                    icon="play"
+                    size="sm"
+                    onPress={onStart}
+                    accessibilityLabel={`Start ${item.title}`}
+                    style={st.wodCta}
+                  />
+                </View>
+              </View>
+            </PressableScale>
+          </Animated.View>
+        )}
+      />
+      {/* Pagination dots */}
+      <View style={st.dotsRow}>
+        {items.map((it, i) => (
+          <View
+            key={it.id}
+            style={i === page
+              ? [st.dotActive, { backgroundColor: colors.accent.lime }]
+              : [st.dot, { backgroundColor: colors.border.light }]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Interlocking L-shape BENTO ("Browse by style")                      */
+/* ------------------------------------------------------------------ */
+
+export interface BentoItem {
+  id: string;
+  title: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  img: any;
+  onPress: () => void;
+}
+
+export interface BentoBrowseProps {
+  /**
+   * Exactly six style tiles, in the mockup's z-order:
+   *   [0] HIIT (tall, top-left), [1] Strength (L-shape), [2] Cardio (nests in
+   *   the notch), [3] Yoga (wide), [4] Mobility, [5] Pilates.
+   * Each keeps its own onPress (preserved nav).
+   */
+  items: BentoItem[];
+}
+
+// ── Bento geometry ──────────────────────────────────────────────────────────
+// The mockup lays the bento out in a 308-wide content column; we scale every
+// fixed coordinate by (our content width / 308) so the interlock holds at any
+// device width. Derived ONCE at module scope.
+const BENTO_REF_W = 308; // mockup content column width
+const BENTO_SCALE = WOD_PAGE_W / BENTO_REF_W;
+const bs = (n: number) => Math.round(n * BENTO_SCALE);
+// Reference (mockup px) → scaled device px for each tile + the L-shape notch.
+const BENTO = {
+  totalH: bs(401),
+  // HIIT — tall, top-left
+  hiit: { left: bs(0), top: bs(0), w: bs(96), h: bs(173) },
+  // Strength — the L-shaped SVG card (occupies the top-right block minus the notch)
+  strength: { left: bs(105), top: bs(0), w: bs(203), h: bs(173) },
+  // Cardio — nests cleanly in Strength's bottom-right notch (zero overlap)
+  cardio: { left: bs(210), top: bs(113), w: bs(98), h: bs(195) },
+  // Yoga — wide (2/3) below HIIT
+  yoga: { left: bs(0), top: bs(182), w: bs(203), h: bs(126) },
+  // Mobility + Pilates — equal pair at the bottom
+  mobility: { left: bs(0), top: bs(317), w: bs(149), h: bs(84) },
+  pilates: { left: bs(159), top: bs(317), w: bs(149), h: bs(84) },
+};
+const BENTO_R = 18; // corner + notch radius
+// The Strength L-shape outline (rounded outer corners + a rounded inner notch at
+// the bottom-right, into which Cardio nests). Coordinates are in the strength
+// tile's own w×h space, scaled from the mockup's exact path.
+function strengthPath(w: number, h: number): string {
+  const r = BENTO_R;
+  // The bottom-right notch (where Cardio nests), proportioned EXACTLY from the
+  // mockup's 203×173 clipPath: the inner vertical WALL sits at x=95/203≈0.468·w
+  // and the right side cuts in at the SHELF y=106/173≈0.613·h. The shelf's top
+  // corner is one radius (r) to the right of the wall (mockup 113−95 = 18 = r),
+  // joined by a concave quarter-round — so Cardio (placed just right of the wall
+  // and just below the shelf) sits cleanly inside with zero overlap.
+  const notchX = Math.round(w * 0.468); // inner vertical wall x
+  const notchY = Math.round(h * 0.613); // shelf y (notch depth from the top)
+  return [
+    `M 0,${r}`,
+    `A ${r},${r} 0 0 1 ${r},0`,
+    `L ${w - r},0`,
+    `A ${r},${r} 0 0 1 ${w},${r}`,
+    `L ${w},${notchY - r}`,
+    `A ${r},${r} 0 0 1 ${w - r},${notchY}`,
+    `L ${notchX + r},${notchY}`,
+    `A ${r},${r} 0 0 0 ${notchX},${notchY + r}`,
+    `L ${notchX},${h - r}`,
+    `A ${r},${r} 0 0 1 ${notchX - r},${h}`,
+    `L ${r},${h}`,
+    `A ${r},${r} 0 0 1 0,${h - r}`,
+    `Z`,
+  ].join(' ');
+}
+
+/** A simple lime icon chip (bottom-left of a bento tile). */
+function BentoIcon({ icon, color, ink, border }: { icon: keyof typeof Ionicons.glyphMap; color: string; ink: string; border: string }) {
+  return (
+    <View style={[st.bentoIco, { backgroundColor: ink, borderColor: border }]}>
+      <Ionicons name={icon} size={17} color={color} />
+    </View>
+  );
+}
+
+/** A grayscale-photo rectangular bento tile (HIIT/Cardio/Yoga/Mobility/Pilates). */
+function BentoRect({
+  item,
+  w,
+  h,
+  left,
+  top,
+  big = true,
+}: {
+  item: BentoItem;
+  w: number;
+  h: number;
+  left: number;
+  top: number;
+  big?: boolean;
+}) {
+  const { colors, typography } = useTheme();
+  const iconInk = withAlpha(colors.accent.limeDark, 0.18);
+  const iconBorder = withAlpha(colors.accent.lime, 0.32);
+  return (
+    <View style={[st.bentoAbs, { left, top, width: w, height: h }]}>
+      <PressableScale onPress={item.onPress} accessibilityLabel={`${item.title} workouts`} style={StyleSheet.absoluteFill}>
+        <View style={[st.bentoRect, { borderColor: colors.accent.lime }, colorGlow(colors.accent.lime)]}>
+          <Image source={item.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+          <LinearGradient
+            colors={[withAlpha(colors.background.primary, 0.8), withAlpha(colors.background.primary, 0.18), 'transparent']}
+            start={{ x: 0.15, y: 0.9 }}
+            end={{ x: 0.85, y: 0.1 }}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <Text style={[typography.heading, st.bentoTitle, { fontSize: big ? 16 : 15 }]} numberOfLines={1}>{item.title}</Text>
+          <View style={st.bentoIconWrap}>
+            <BentoIcon icon={item.icon} color={colors.accent.lime} ink={iconInk} border={iconBorder} />
+          </View>
+        </View>
+      </PressableScale>
+    </View>
+  );
+}
+
+/**
+ * The interlocking "Browse by style" bento. Renders six grayscale-photo cards in
+ * the mockup's locking layout — HIIT tall top-left, a TRUE L-shaped Strength card
+ * (rounded outer corners + a rounded inner notch drawn with react-native-svg),
+ * Cardio nesting cleanly inside that notch with zero overlap, a wide Yoga card,
+ * and an equal Mobility/Pilates pair at the bottom. Each tile keeps its own
+ * onPress (nav preserved). The whole thing is an absolutely-positioned canvas of
+ * fixed (scaled) coordinates so the interlock geometry is exact.
+ */
+export function BentoBrowse({ items }: BentoBrowseProps) {
+  const [hiit, strength, cardio, yoga, mobility, pilates] = items;
+
+  return (
+    <Animated.View entering={FadeInDown.delay(160).springify().damping(18)} style={[st.bentoCanvas, { height: BENTO.totalH }]}>
+      {hiit ? <BentoRect item={hiit} {...BENTO.hiit} /> : null}
+      {strength ? <StrengthCard item={strength} {...BENTO.strength} /> : null}
+      {cardio ? <BentoRect item={cardio} {...BENTO.cardio} /> : null}
+      {yoga ? <BentoRect item={yoga} {...BENTO.yoga} /> : null}
+      {mobility ? <BentoRect item={mobility} {...BENTO.mobility} big={false} /> : null}
+      {pilates ? <BentoRect item={pilates} {...BENTO.pilates} big={false} /> : null}
+    </Animated.View>
+  );
+}
+
+/**
+ * The Strength tile — a TRUE L-shaped card. The whole surface (background fill,
+ * the figure, the scrim and the lime outline) is drawn in ONE react-native-svg
+ * canvas so the concave notch is exact: the figure is an SVG <Image> CLIPPED to
+ * the L path (so it never spills into the notch where Cardio nests), the scrim
+ * is the same path filled with a gradient, and the outline strokes the path on
+ * top. The title + lime icon chip are RN overlays (crisp text, outside the clip).
+ * Preserves `item.onPress` (nav). The `muscle-<group>-male` figures are already
+ * near-monochrome lime renders on transparent backgrounds, so no grayscale CSS
+ * filter is needed (react-native-svg has none).
+ */
+function StrengthCard({
+  item,
+  w,
+  h,
+  left,
+  top,
+}: {
+  item: BentoItem;
+  w: number;
+  h: number;
+  left: number;
+  top: number;
+}) {
+  const { colors, typography } = useTheme();
+  const d = strengthPath(w, h);
+  const iconInk = withAlpha(colors.accent.limeDark, 0.18);
+  const iconBorder = withAlpha(colors.accent.lime, 0.32);
+  // Figure box: right-anchored, full height, ~74% wide (mirrors the mockup's
+  // x=72 / width=150 in a 203-wide tile). Clipped to the L so the notch stays empty.
+  const figW = Math.round(w * 0.74);
+  const figX = w - figW;
+  return (
+    <View style={[st.bentoAbs, { left, top, width: w, height: h }]}>
+      <PressableScale onPress={item.onPress} accessibilityLabel={`${item.title} workouts`} style={StyleSheet.absoluteFill}>
+        <View style={[StyleSheet.absoluteFill, colorGlow(colors.accent.lime)]}>
+          <Svg width={w} height={h} style={StyleSheet.absoluteFill}>
+            <Defs>
+              <ClipPath id="strengthClip">
+                <Path d={d} />
+              </ClipPath>
+              <SvgLinearGradient id="strengthScrim" x1="0.15" y1="0.9" x2="0.85" y2="0.1">
+                <Stop offset="0" stopColor={colors.background.primary} stopOpacity={0.8} />
+                <Stop offset="0.55" stopColor={colors.background.primary} stopOpacity={0.12} />
+                <Stop offset="1" stopColor={colors.background.primary} stopOpacity={0} />
+              </SvgLinearGradient>
+            </Defs>
+            {/* Everything below is clipped to the L silhouette */}
+            <Path d={d} fill={colors.background.tertiary} />
+            <SvgImage
+              href={item.img}
+              x={figX}
+              y={0}
+              width={figW}
+              height={h}
+              preserveAspectRatio="xMidYMax meet"
+              opacity={0.85}
+              clipPath="url(#strengthClip)"
+            />
+            <Path d={d} fill="url(#strengthScrim)" />
+            {/* Lime outline tracing the L */}
+            <Path d={d} fill="none" stroke={colors.accent.lime} strokeWidth={1.5} />
+          </Svg>
+          {/* Title + icon overlays (crisp, outside the SVG clip) */}
+          <Text style={[typography.heading, st.strengthTitle]} numberOfLines={1}>{item.title}</Text>
+          <View style={st.strengthIcon}>
+            <BentoIcon icon={item.icon} color={colors.accent.lime} ink={iconInk} border={iconBorder} />
+          </View>
+        </View>
+      </PressableScale>
+    </View>
+  );
+}
+
+/** Soft lime halo shadow for the bento cards (matches `shadows.glow`). */
+function colorGlow(color: string) {
+  return {
+    shadowColor: color,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 9,
+    elevation: 4,
+  };
+}
+
 const st = StyleSheet.create({
+  // ── WOD carousel ──────────────────────────────────────────────────────────
+  wodCard: {
+    height: 150,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  wodFigure: { position: 'absolute', right: -bs(24), bottom: 0, top: 0, width: '58%' },
+  wodInner: { flex: 1, padding: 15, alignItems: 'flex-start' },
+  wodEyebrow: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 8 },
+  wodEyebrowTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+  wodMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  wodCta: { marginTop: 'auto', alignSelf: 'flex-start', borderRadius: 22, paddingHorizontal: 18 },
+  dotsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 11 },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  dotActive: { width: 18, height: 6, borderRadius: 3 },
+  // ── Bento ("Browse by style") ─────────────────────────────────────────────
+  bentoCanvas: { position: 'relative', width: WOD_PAGE_W, alignSelf: 'center' },
+  bentoAbs: { position: 'absolute' },
+  bentoRect: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: BENTO_R,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+  },
+  bentoTitle: {
+    position: 'absolute',
+    top: 11,
+    left: 13,
+    right: 13,
+    color: '#FFF',
+    fontWeight: '700',
+    textShadowColor: '#000',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 5,
+    zIndex: 1,
+  },
+  bentoIconWrap: { position: 'absolute', bottom: 10, left: 12, zIndex: 1 },
+  bentoIco: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  strengthTitle: {
+    position: 'absolute',
+    top: 11,
+    left: 14,
+    right: 14,
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+    textShadowColor: '#000',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 5,
+  },
+  strengthIcon: { position: 'absolute', bottom: 12, left: 12 },
   statCard: {
     flex: 1,
     borderWidth: 1,
@@ -296,24 +742,30 @@ const st = StyleSheet.create({
     zIndex: 1,
   },
   catIcon: { position: 'absolute', bottom: 11, left: 13, zIndex: 1 },
-  // Muscle-group carousel card.
+  // Muscle-group carousel card — spotlit centred figure + footer (mockup).
   muscleCard: {
     width: MUSCLE_CARD_W,
-    height: 132,
+    height: 164,
     overflow: 'hidden',
     borderWidth: 1,
   },
-  muscleLabel: {
+  muscleSpot: { position: 'absolute', top: 18, left: 0, right: 0, height: 116, alignItems: 'center' },
+  muscleSpotFill: { width: 116, height: 116, borderRadius: 58 },
+  muscleFigure: { position: 'absolute', top: 8, left: 0, right: 0, height: 124 },
+  muscleFooter: {
     position: 'absolute',
-    bottom: 10,
-    left: 12,
-    right: 12,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 13,
+    paddingTop: 18,
+    paddingBottom: 11,
+  },
+  muscleLabel: {
     color: '#FFF',
     fontSize: 14,
     fontWeight: '600',
-    textShadowColor: '#000',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    letterSpacing: -0.2,
   },
   routCard: {
     height: 168,

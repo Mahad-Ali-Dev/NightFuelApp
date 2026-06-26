@@ -103,9 +103,9 @@ describe('LogShiftModal', () => {
     mockOnSuccess.current = null;
   });
 
-  test('renders the form (Log Shift header + Save Shift CTA)', () => {
+  test('renders the form (Add shift header + Save Shift CTA)', () => {
     expect(() => renderScreen()).not.toThrow();
-    expect(screen.getByText('Log Shift')).toBeTruthy();
+    expect(screen.getByText('Add shift')).toBeTruthy();
     expect(screen.getByText('Save Shift')).toBeTruthy();
   });
 

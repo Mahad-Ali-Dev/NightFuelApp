@@ -190,7 +190,7 @@ describe('LogMealScreen', () => {
     expect(screen.getByText('Build your plate')).toBeTruthy();
 
     // Footer CTA is present but disabled (plate is empty) — pressing it is a no-op.
-    const cta = screen.getByRole('button', { name: 'Log meal' });
+    const cta = screen.getByRole('button', { name: 'Track meal' });
     fireEvent.press(cta);
     expect(mockMutate).not.toHaveBeenCalled();
   });
@@ -246,7 +246,7 @@ describe('LogMealScreen', () => {
 
     renderScreen();
 
-    const cta = screen.getByRole('button', { name: 'Log meal' });
+    const cta = screen.getByRole('button', { name: 'Track meal' });
     fireEvent.press(cta);
 
     // The CTA fires the mutation (handleLog → logM.mutate) with the built payload.
@@ -267,6 +267,71 @@ describe('LogMealScreen', () => {
     mockMutationFn.current!(payload as any);
     expect(mockLogMeal).toHaveBeenCalledTimes(1);
     expect(mockLogMeal.mock.calls[0]![0]).toBe(payload);
+  });
+
+  // ── Test F: a scanned item threads its micros into the logged payload ─────
+  // The barcode scanner forwards a scanned product's per-100g micros as a JSON
+  // `barcodeMicros` deep-link param. The screen parses it onto the prefilled
+  // plate item and, on Track, spreads those micros into the foodItems payload —
+  // so a scanned product's micros reach the backend instead of being dropped.
+  // Macros stay qty-scaled; the per-100g micros are forwarded as-is (not *qty).
+  test('barcode micros: a barcodeMicros param threads the scanned micros into the logged payload', () => {
+    mockParams.current = {
+      barcodeName: 'Greek Yogurt',
+      barcodeCalories: '100',
+      barcodeProtein: '10',
+      barcodeCarbs: '4',
+      barcodeFat: '5',
+      // present-only per-100g micros, exactly as barcode-scanner serializes them
+      barcodeMicros: JSON.stringify({ sodium: 120, calcium: 80, iron: 2.5, vitaminB12: 0.8, fiber: 4.2 }),
+    };
+
+    renderScreen();
+
+    // The scanned product prefilled the plate.
+    expect(screen.getByText('Greek Yogurt')).toBeTruthy();
+
+    const cta = screen.getByRole('button', { name: 'Track meal' });
+    fireEvent.press(cta);
+
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    const payload = mockMutate.mock.calls[0]![0] as {
+      mealType: string;
+      foodItems: Array<Record<string, number | string>>;
+    };
+    const item = payload.foodItems[0]!;
+    // Macros are present (qty 1, so unchanged here)…
+    expect(item.name).toBe('Greek Yogurt');
+    expect(item.calories).toBe(100);
+    // …and every scanned micro rode along into the payload, verbatim.
+    expect(item.sodium).toBe(120);
+    expect(item.calcium).toBe(80);
+    expect(item.iron).toBe(2.5);
+    expect(item.vitaminB12).toBe(0.8);
+    expect(item.fiber).toBe(4.2);
+  });
+
+  // ── Test G: a macro-only scan logs NO micro keys (additive, no leakage) ───
+  test('barcode micros: a scan with no barcodeMicros logs a clean macro-only item', () => {
+    mockParams.current = {
+      barcodeName: 'Toast',
+      barcodeCalories: '90',
+      barcodeProtein: '3',
+      barcodeCarbs: '17',
+      barcodeFat: '1',
+      // no barcodeMicros param
+    };
+
+    renderScreen();
+    fireEvent.press(screen.getByRole('button', { name: 'Track meal' }));
+
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    const payload = mockMutate.mock.calls[0]![0] as { foodItems: Array<Record<string, unknown>> };
+    const item = payload.foodItems[0]!;
+    expect(item.calories).toBe(90);
+    // No micro keys leaked onto a macro-only logged item.
+    expect(item).not.toHaveProperty('sodium');
+    expect(item).not.toHaveProperty('iron');
   });
 
   // ── Test E: a successful log refreshes BOTH progress rings ────────────────

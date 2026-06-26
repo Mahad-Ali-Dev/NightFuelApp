@@ -259,16 +259,16 @@ describe('RecipesScreen — Ria\'s Kitchen browser', () => {
     expect(screen.getByText('Instructions')).toBeTruthy();
   });
 
-  // ── LOG AS MEAL: CtaButton routes to /(meals)/log-meal with the recipe id ──
-  test('"LOG AS MEAL" CtaButton pushes to /(meals)/log-meal with the recipe id as recipeId', () => {
+  // ── ADD TO TODAY: CtaButton routes to /(meals)/log-meal with the recipe id ─
+  test('"Add to today" CtaButton pushes to /(meals)/log-meal with the recipe id as recipeId', () => {
     mockRecipes.data = RECIPES;
     mockDetail.data = DETAIL;
 
     renderScreen();
 
-    // Open the detail modal, then press the CTA (a11y label "Log as meal").
+    // Open the detail modal, then press the CTA (a11y label "Add to today").
     fireEvent.press(screen.getByLabelText('Salmon Power Bowl'));
-    fireEvent.press(screen.getByLabelText('Log as meal'));
+    fireEvent.press(screen.getByLabelText('Add to today'));
 
     expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush).toHaveBeenCalledWith({

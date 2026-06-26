@@ -7,7 +7,7 @@ import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { logMeal, searchFoods, getFoodById, getRecipe, FoodItem } from '@/api/meals';
+import { logMeal, searchFoods, getFoodById, getRecipe, FoodItem, FoodItemMicros } from '@/api/meals';
 import { getToday as getTodayProgress } from '@/api/progress';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
@@ -25,7 +25,39 @@ const MT = [
     { id:'DINNER', label:'Dinner', img:require('../../assets/images/meal-dinner.png') },
     { id:'SNACK', label:'Snack', img:require('../../assets/images/meal-snack.png') },
 ];
-type PlateItem = {name:string;calories:number;protein:number;carbs:number;fat:number;qty:number};
+// A plate item carries the 4 headline macros + an OPTIONAL `micros` bag. The bag
+// is populated ONLY for an item added from a scanned barcode that reported micros
+// (keys/units match the backend FoodItemMicros / parseProduct exactly); search-
+// and recipe-added items leave it undefined. Per-100g micros are NOT scaled by
+// quantity here — they describe the food's composition and are forwarded as-is,
+// mirroring how the backend stores per-item nutrition.
+type PlateItem = {name:string;calories:number;protein:number;carbs:number;fat:number;qty:number;micros?:FoodItemMicros};
+// The micro keys we accept off a `barcodeMicros` param, matched EXACTLY to the
+// backend FoodItemMicros / parseProduct vocabulary. Anything outside this set in
+// the (untrusted) JSON param is ignored, and only finite numbers are kept — so a
+// corrupt param can never inject a junk key or a NaN into the log payload.
+const MICRO_KEYS: readonly (keyof FoodItemMicros)[] = [
+    'fiber','sugar','saturatedFat','transFat',
+    'sodium','calcium','iron','potassium','magnesium','phosphorus','zinc',
+    'vitaminC','vitaminA','vitaminD','vitaminB6','vitaminB12','folate','cholesterol',
+];
+// Parse the JSON `barcodeMicros` deep-link param into a clean FoodItemMicros bag:
+// only known keys with finite numeric values survive. Returns undefined for a
+// missing / malformed / empty param, so a macro-only scan threads through with no
+// micros (and pre-existing macro-only logging is completely unaffected).
+const parseBarcodeMicros = (raw?: string): FoodItemMicros | undefined => {
+    if (!raw) return undefined;
+    let obj: unknown;
+    try { obj = JSON.parse(raw); } catch { return undefined; }
+    if (!obj || typeof obj !== 'object') return undefined;
+    const src = obj as Record<string, unknown>;
+    const out: FoodItemMicros = {};
+    for (const key of MICRO_KEYS) {
+        const v = src[key as string];
+        if (typeof v === 'number' && Number.isFinite(v)) out[key] = v as number;
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+};
 // Plate quantity is button-driven (+/- 0.5, floored at 0.5) but a barcode
 // prefill or a corrupted param could still seed a non-finite/non-positive qty
 // that would multiply through into fabricated macros and the log payload.
@@ -58,6 +90,11 @@ export default function LogMealScreen() {
         barcodeProtein?: string;
         barcodeCarbs?: string;
         barcodeFat?: string;
+        // JSON-encoded per-100g micros/secondary-macros for a scanned product
+        // (present-only; omitted when the product reports none). Parsed by
+        // parseBarcodeMicros and attached to the prefilled plate item so the
+        // scan's micros reach the log payload.
+        barcodeMicros?: string;
     }>();
     const [mealType, setMealType] = useState('BREAKFAST');
     const [sq, setSq] = useState('');
@@ -113,9 +150,13 @@ export default function LogMealScreen() {
         }
     },[foodQ.data,recipeQ.data]);
 
-    // Pre-populate from barcode-scanner (Open Food Facts resolved product)
+    // Pre-populate from barcode-scanner (Open Food Facts resolved product). Also
+    // carries the scanned product's per-100g micros (parsed from the JSON
+    // `barcodeMicros` param) onto the plate item so they flow into the log
+    // payload; undefined for a macro-only scan.
     React.useEffect(()=>{
         if(params.barcodeName && plate.length===0){
+            const micros = parseBarcodeMicros(params.barcodeMicros);
             setPlate([{
                 name:     params.barcodeName,
                 calories: safeNum(Number(params.barcodeCalories ?? 0)),
@@ -123,6 +164,7 @@ export default function LogMealScreen() {
                 carbs:    safeNum(Number(params.barcodeCarbs    ?? 0)),
                 fat:      safeNum(Number(params.barcodeFat      ?? 0)),
                 qty:      1,
+                ...(micros ? { micros } : {}),
             }]);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,9 +177,15 @@ export default function LogMealScreen() {
         // whose qty isn't a finite number > 0 (no fabricated entry), then coerce each
         // macro finite before multiplying. If nothing usable remains, don't fire the
         // mutation at all (no silent empty/garbage log).
+        // Spread the OPTIONAL per-item `micros` bag (present only for a scanned
+        // item) AFTER the macros so a scanned product's micros are forwarded to
+        // the backend `foodItems` JSON. Per-100g micros are NOT multiplied by qty
+        // (they describe composition, not the logged amount); the macros remain
+        // qty-scaled exactly as before. Items with no micros send the unchanged
+        // macro-only shape.
         const foodItems = plate
             .filter(i=>i.name && isUsableQty(i.qty))
-            .map(i=>({name:i.name,quantity:i.qty,calories:safeNum(i.calories)*i.qty,protein:safeNum(i.protein)*i.qty,carbs:safeNum(i.carbs)*i.qty,fat:safeNum(i.fat)*i.qty}));
+            .map(i=>({name:i.name,quantity:i.qty,calories:safeNum(i.calories)*i.qty,protein:safeNum(i.protein)*i.qty,carbs:safeNum(i.carbs)*i.qty,fat:safeNum(i.fat)*i.qty,...(i.micros ?? {})}));
         if(foodItems.length===0) return;
         logM.mutate({ mealType, foodItems });
     };
@@ -146,8 +194,8 @@ export default function LogMealScreen() {
             <StatusBar style="light" />
             <View style={[s.header,{paddingTop:insets.top+16,borderBottomColor:colors.border.default}]}>
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={()=>router.back()} style={[s.iconBtn,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Ionicons name="arrow-back" size={22} color={colors.text.primary} /></TouchableOpacity>
-                <Text style={[typography.h2,{color:colors.text.primary}]}>Log Meal</Text>
-                <View style={{width:40}} />
+                <Text style={[typography.h2,{color:colors.text.primary}]}>Add meal</Text>
+                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Scan barcode" onPress={()=>router.push('/(modals)/barcode-scanner' as any)} style={[s.iconBtn,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Ionicons name="camera-outline" size={20} color={colors.accent.coral} /></TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{paddingBottom:140}} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <Animated.View entering={FadeInDown.duration(360).springify()}>
@@ -261,10 +309,10 @@ export default function LogMealScreen() {
             </ScrollView>
             <LinearGradient colors={['rgba(10,12,18,0)','rgba(10,12,18,0.96)']} style={[s.footer,{paddingBottom:Math.max(insets.bottom,20)}]} pointerEvents="box-none">
                 <CtaButton
-                    label="LOG MEAL"
+                    label="Track meal"
                     icon="checkmark-circle"
                     size="lg"
-                    accessibilityLabel="Log meal"
+                    accessibilityLabel="Track meal"
                     loading={logM.isPending}
                     disabled={plate.length===0}
                     onPress={handleLog}

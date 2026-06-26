@@ -142,6 +142,45 @@ export default function LogShiftModal() {
     // small, reassuring "next day" chip so tired users trust the entry.
     const overnight = isOvernightShift(startTime, endTime);
 
+    // ── 24h schedule timeline hero (mockup: log-shift-preview.html) ──────────
+    // Pure-derivation visual built from the live form state: parse HH:MM into a
+    // 0–24 hour fraction, compute the shift duration (rolling the end past
+    // midnight for an overnight), and place the lime "work window" on a neutral
+    // 24h band. Everything here is presentational — no new handler/state/query.
+    const parseHour = (t: string): number => {
+        const parts = (t || '').split(':');
+        const h = parseInt(parts[0] ?? '', 10);
+        const m = parseInt(parts[1] ?? '', 10);
+        if (!Number.isFinite(h)) return 0;
+        return Math.max(0, Math.min(24, h + (Number.isFinite(m) ? m / 60 : 0)));
+    };
+    const startHour = parseHour(startTime);
+    const endHourRaw = parseHour(endTime);
+    // Roll the end past midnight for an overnight so the duration is positive.
+    const endHour = overnight ? endHourRaw + 24 : endHourRaw;
+    const durationHours = Math.max(0, endHour - startHour);
+    // Human duration label, e.g. "12h" or "8h 30m".
+    const durH = Math.floor(durationHours);
+    const durM = Math.round((durationHours - durH) * 60);
+    const durationLabel = durM > 0 ? `${durH}h ${durM}m` : `${durH}h`;
+    // The hero title reflects the selected ground truth.
+    const heroTitle = isDayOff
+        ? 'Rest day'
+        : overnight
+            ? 'Overnight shift'
+            : 'Scheduled shift';
+    // Friendly date label ("Thu, Jun 26"); falls back to the raw value if unparseable.
+    const heroDate = (() => {
+        const d = new Date(`${shiftDate}T00:00:00`);
+        return Number.isNaN(d.getTime()) ? shiftDate : format(d, 'EEE, MMM d');
+    })();
+    // Work-window band geometry: left offset + width as % of the 24h track.
+    // For an overnight the window wraps, so we render it as two segments
+    // (start→24h and 0→end). clamp keeps everything inside the track.
+    const clampPct = (n: number) => Math.max(0, Math.min(100, n));
+    const startPct = clampPct((startHour / 24) * 100);
+    const endPct = clampPct((endHourRaw / 24) * 100);
+
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
             <StatusBar style="light" />
@@ -163,7 +202,7 @@ export default function LogShiftModal() {
                 >
                     <Ionicons name="close" size={22} color={colors.text.primary} />
                 </TouchableOpacity>
-                <Text style={[typography.h3, { color: colors.text.primary }]}>Log Shift</Text>
+                <Text style={[typography.h3, { color: colors.text.primary }]}>Add shift</Text>
                 {/* Quiet header Save — the lime CTA in the thumb zone is the primary
                     action; this stays as a low-emphasis text affordance. Handler,
                     disabled/busy state and a11y contract are preserved exactly. */}
@@ -200,10 +239,85 @@ export default function LogShiftModal() {
                 >
                     <Animated.Text
                         entering={FadeInDown.duration(360)}
-                        style={[typography.body, { color: colors.text.secondary, marginBottom: spacing['2xl'], lineHeight: 22 }]}
+                        style={[typography.body, { color: colors.text.secondary, marginBottom: spacing.xl, lineHeight: 22 }]}
                     >
                         Enter your upcoming or completed shift to align circadian recommendations.
                     </Animated.Text>
+
+                    {/* ── 24h schedule timeline hero (mockup: log-shift-preview.html) ──
+                        A live preview of the entered shift: date + derived title +
+                        duration pill, a neutral 24h band with the lime work window,
+                        clock-in/out blocks, and the "Zeitra will shift your meals,
+                        light & sleep targets" footer. Pure-derivation (reads the
+                        form state); no new handler/query. Built from plain Views so
+                        it adds no native dependency. */}
+                    <Animated.View entering={FadeInDown.duration(360)} style={[styles.heroCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                        <View style={styles.heroBody}>
+                            <View style={styles.heroTopRow}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={[typography.overline, { color: colors.text.tertiary, fontSize: 10 }]}>{heroDate}</Text>
+                                    <Text style={[typography.h3, { color: colors.text.primary, marginTop: 2 }]} numberOfLines={1}>{heroTitle}</Text>
+                                </View>
+                                {!isDayOff ? (
+                                    <View style={[styles.heroDurPill, { backgroundColor: withAlpha(colors.accent.coral, 0.14), borderColor: withAlpha(colors.accent.coral, 0.3) }]}>
+                                        <Ionicons name={overnight ? 'moon' : 'sunny'} size={13} color={colors.accent.coral} />
+                                        <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: '700', marginLeft: 5 }]}>{durationLabel}</Text>
+                                    </View>
+                                ) : (
+                                    <View style={[styles.heroDurPill, { backgroundColor: withAlpha(colors.accent.cyan, 0.14), borderColor: withAlpha(colors.accent.cyan, 0.3) }]}>
+                                        <Ionicons name="bed" size={13} color={colors.accent.cyan} />
+                                        <Text style={[typography.caption, { color: colors.accent.cyan, fontWeight: '700', marginLeft: 5 }]}>Off</Text>
+                                    </View>
+                                )}
+                            </View>
+
+                            {/* 24h band — neutral track, lime work window (wraps for overnight). */}
+                            <View style={[styles.heroBand, { backgroundColor: colors.background.tertiary }]}>
+                                {!isDayOff ? (
+                                    overnight ? (
+                                        <>
+                                            <View style={[styles.heroWindow, { left: `${startPct}%`, right: 0, backgroundColor: colors.accent.coral }]} />
+                                            <View style={[styles.heroWindow, { left: 0, width: `${endPct}%`, backgroundColor: colors.accent.coral }]} />
+                                        </>
+                                    ) : (
+                                        <View style={[styles.heroWindow, { left: `${startPct}%`, width: `${clampPct(endPct - startPct)}%`, backgroundColor: colors.accent.coral }]} />
+                                    )
+                                ) : null}
+                            </View>
+                            <View style={styles.heroTicks}>
+                                {['00', '06', '12', '18', '24'].map((t) => (
+                                    <Text key={t} style={[typography.caption, { color: colors.text.tertiary, fontSize: 9 }]}>{t}</Text>
+                                ))}
+                            </View>
+
+                            {/* Clock in / out blocks */}
+                            <View style={styles.heroClockRow}>
+                                <View style={[styles.heroClock, { backgroundColor: colors.background.tertiary }]}>
+                                    <Ionicons name="play" size={15} color={colors.accent.coral} />
+                                    <View style={{ marginLeft: 8 }}>
+                                        <Text style={[typography.overline, { color: colors.text.tertiary, fontSize: 9 }]}>CLOCK IN</Text>
+                                        <Text style={[typography.subhead, { color: colors.text.primary, fontSize: 15 }]}>{startTime}</Text>
+                                    </View>
+                                </View>
+                                <Ionicons name="arrow-forward" size={15} color={colors.text.tertiary} />
+                                <View style={[styles.heroClock, { backgroundColor: colors.background.tertiary }]}>
+                                    <Ionicons name="stop" size={15} color={colors.text.tertiary} />
+                                    <View style={{ marginLeft: 8 }}>
+                                        <Text style={[typography.overline, { color: colors.text.tertiary, fontSize: 9 }]}>CLOCK OUT</Text>
+                                        <Text style={[typography.subhead, { color: colors.text.primary, fontSize: 15 }]}>
+                                            {endTime}{overnight ? <Text style={[typography.caption, { color: colors.text.tertiary }]}> +1</Text> : null}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                        </View>
+                        <View style={[styles.heroFooter, { borderTopColor: colors.border.default }]}>
+                            <Ionicons name="bulb-outline" size={15} color={colors.accent.coral} />
+                            <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 8, flex: 1, lineHeight: 16 }]}>
+                                Zeitra will shift your meals, light & sleep targets to match.
+                            </Text>
+                        </View>
+                    </Animated.View>
 
                     {/* ── Schedule ─────────────────────────────────────────── */}
                     <Animated.View entering={FadeInDown.delay(40).duration(360)}>
@@ -465,6 +579,68 @@ const styles = StyleSheet.create({
     },
     row: {
         flexDirection: 'row',
+    },
+    // 24h schedule timeline hero
+    heroCard: {
+        borderRadius: br.xl,
+        borderWidth: 1,
+        overflow: 'hidden',
+        marginBottom: space['2xl'],
+    },
+    heroBody: {
+        padding: space.lg,
+    },
+    heroTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    heroDurPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 11,
+        paddingVertical: 5,
+        borderRadius: 999,
+        borderWidth: 1,
+    },
+    heroBand: {
+        position: 'relative',
+        height: 30,
+        borderRadius: 9,
+        overflow: 'hidden',
+        marginTop: space.lg,
+    },
+    heroWindow: {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        opacity: 0.9,
+    },
+    heroTicks: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 7,
+    },
+    heroClockRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginTop: space.lg,
+    },
+    heroClock: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: br.lg,
+    },
+    heroFooter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: space.lg,
+        paddingVertical: 11,
+        borderTopWidth: 1,
     },
     overnightChip: {
         flexDirection: 'row',

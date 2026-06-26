@@ -143,4 +143,77 @@ describe('meal-service schemas — logMealBodySchema bounded input validation', 
         });
         expect(result.success).toBe(false);
     });
+
+    // ── OPTIONAL micronutrients + secondary macros (scan→log) ────────────────
+    // These lock the additive `MICRO_FIELDS` on a logged food item: every micro
+    // is OPTIONAL (macro-only logs stay valid), a present micro is RETAINED by
+    // the schema (the old closed object STRIPPED unknown keys — so a scanned
+    // product's micros were discarded before the DB write; this is the bug being
+    // fixed), and absurd values are still bounded. Keys + units mirror the
+    // /food-search gateway's parseProduct exactly.
+    describe('optional micronutrients / secondary macros on a food item', () => {
+        // A representative scanned product's micros (per 100g): a mix of g, mg, µg.
+        const MICROS = {
+            fiber: 4.2, sugar: 1.1, saturatedFat: 0.6, transFat: 0,
+            sodium: 120, calcium: 80, iron: 2.5, potassium: 300,
+            magnesium: 45, phosphorus: 90, zinc: 1.2,
+            vitaminC: 6, vitaminA: 150, vitaminD: 1.2, vitaminB6: 0.3,
+            vitaminB12: 0.8, folate: 40, cholesterol: 5,
+        };
+
+        it('still accepts a macro-only item (no micros) — additive, nothing required', () => {
+            const result = logMealBodySchema.safeParse(bodyWith(baseItem()));
+            expect(result.success).toBe(true);
+        });
+
+        it('accepts an item carrying the full micros set', () => {
+            const result = logMealBodySchema.safeParse(bodyWith(baseItem(MICROS)));
+            expect(result.success).toBe(true);
+        });
+
+        it('RETAINS the micros on the parsed output (no longer stripped before the DB write)', () => {
+            const result = logMealBodySchema.safeParse(bodyWith(baseItem(MICROS)));
+            expect(result.success).toBe(true);
+            if (!result.success) return;
+            const item = result.data.foodItems[0] as Record<string, unknown>;
+            // Spot-check one of each unit class survived parsing verbatim.
+            expect(item.iron).toBe(2.5);       // mg
+            expect(item.vitaminB12).toBe(0.8); // µg
+            expect(item.fiber).toBe(4.2);      // g (secondary macro)
+            expect(item.sodium).toBe(120);     // mg
+            // And the whole declared vocabulary round-trips.
+            for (const [k, v] of Object.entries(MICROS)) {
+                expect(item[k]).toBe(v);
+            }
+        });
+
+        it('accepts a partial micros set (a product reporting only a few)', () => {
+            const result = logMealBodySchema.safeParse(bodyWith(baseItem({ sodium: 200, vitaminC: 12 })));
+            expect(result.success).toBe(true);
+            if (!result.success) return;
+            const item = result.data.foodItems[0] as Record<string, unknown>;
+            expect(item.sodium).toBe(200);
+            expect(item.vitaminC).toBe(12);
+            // Unreported micros are simply absent (not null).
+            expect(item).not.toHaveProperty('iron');
+        });
+
+        it('rejects a negative micro (min 0 preserved)', () => {
+            const result = logMealBodySchema.safeParse(bodyWith(baseItem({ sodium: -1 })));
+            expect(result.success).toBe(false);
+        });
+
+        it('rejects an absurd micro above the 1,000,000 cap', () => {
+            const result = logMealBodySchema.safeParse(bodyWith(baseItem({ sodium: 1_000_001 })));
+            expect(result.success).toBe(false);
+        });
+
+        it('STILL strips an unknown (non-vocabulary) key — only the declared micros are kept', () => {
+            const result = logMealBodySchema.safeParse(bodyWith(baseItem({ notARealMicro: 5 } as any)));
+            expect(result.success).toBe(true);
+            if (!result.success) return;
+            const item = result.data.foodItems[0] as Record<string, unknown>;
+            expect(item).not.toHaveProperty('notARealMicro');
+        });
+    });
 });

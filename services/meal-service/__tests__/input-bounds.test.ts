@@ -471,6 +471,51 @@ describe('meal-service input bounds (valid token, schema-lock)', () => {
         });
     });
 
+    // ── POST /log — OPTIONAL micronutrients reach the service through the route ─
+    // End-to-end through the real route + zod: a scanned product's per-item micros
+    // (keys/units mirror parseProduct) are OPTIONAL, pass validation (201), and —
+    // crucially — are RETAINED by logMealBodySchema so the service receives them
+    // (the closed object used to strip them before the DB write). The negative
+    // case proves a single out-of-bound micro still 400s and short-circuits.
+    describe('POST /log foodItems micronutrients (optional, retained, bounded)', () => {
+        const MICROS = {
+            sodium: 120, calcium: 80, iron: 2.5, vitaminB12: 0.8, folate: 40, fiber: 4.2,
+        };
+        function logBodyWithMicros(extra: Record<string, unknown> = {}) {
+            return {
+                mealType: 'BREAKFAST',
+                foodItems: [{ name: 'Greek Yogurt', quantity: 1, calories: 100, protein: 10, carbs: 4, fat: 5, ...MICROS, ...extra }],
+            };
+        }
+
+        it('a meal with micros -> 201 and the micros reach logMeal unchanged', async () => {
+            const res = await app.inject({ method: 'POST', url: '/log', headers: AUTH, payload: logBodyWithMicros() });
+            expect(res.statusCode).toBe(201);
+            expect(svc.logMeal).toHaveBeenCalledTimes(1);
+            // logMeal(userId, mealType, foodItems, planMealId?, idemKey?) — assert
+            // the forwarded foodItems[0] still carries every micro (not stripped).
+            const forwardedItems = svc.logMeal.mock.calls[0]![2] as Array<Record<string, unknown>>;
+            expect(forwardedItems[0]).toMatchObject(MICROS);
+        });
+
+        it('a macro-only meal still -> 201 (micros are optional)', async () => {
+            const res = await app.inject({
+                method: 'POST',
+                url: '/log',
+                headers: AUTH,
+                payload: { mealType: 'BREAKFAST', foodItems: [{ name: 'Toast', quantity: 1, calories: 90, protein: 3, carbs: 17, fat: 1 }] },
+            });
+            expect(res.statusCode).toBe(201);
+            expect(svc.logMeal).toHaveBeenCalledTimes(1);
+        });
+
+        it('a negative micro -> 400 and logMeal NOT called', async () => {
+            const res = await app.inject({ method: 'POST', url: '/log', headers: AUTH, payload: logBodyWithMicros({ sodium: -1 }) });
+            expect(res.statusCode).toBe(400);
+            expect(svc.logMeal).not.toHaveBeenCalled();
+        });
+    });
+
     // ── 401 sanity: a 400 above is from the schema, not auth ─────────────────
     it('no token -> 401 (proves the bounds tests above pass because of a VALID token)', async () => {
         const res = await app.inject({ method: 'POST', url: '/recipes', payload: baseRecipe() });

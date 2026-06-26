@@ -114,6 +114,21 @@ export default function WorkoutHistoryScreen() {
     const history = (historyQuery.data ?? []) as any[];
     const heatmap = heatmapQuery.data ?? { activeDays: 0, heatmapData: [] };
 
+    // ── Day streak ───────────────────────────────────────────────────────────
+    // Real trailing streak derived straight off the heatmap grid: count back from
+    // the most recent day while each day has activity (count > 0). Honest — zero
+    // when the latest day is empty; never a fabricated figure. Mirrors the
+    // mockup's flame "day streak" chip (history-preview.html).
+    const dayStreak = useMemo(() => {
+        const cells = Array.isArray(heatmap.heatmapData) ? heatmap.heatmapData : [];
+        let streak = 0;
+        for (let i = cells.length - 1; i >= 0; i--) {
+            if ((cells[i]?.count ?? 0) > 0) streak++;
+            else break;
+        }
+        return streak;
+    }, [heatmap.heatmapData]);
+
     // ── Summary Stats ───────────────────────────────────────────────────────
     // Zeitra is lime/ink monochrome with ONE accent — every stat renders in the
     // brand lime (differentiated by icon only), never a purple/cyan/amber trio.
@@ -148,6 +163,19 @@ export default function WorkoutHistoryScreen() {
             });
     }, [history]);
 
+    // ── Volume trend delta ───────────────────────────────────────────────────
+    // Percent change between the first and last point of the (oldest→newest)
+    // trend series, for the lime "▲ N%" pill on the Volume Trend card header
+    // (mockup: history-preview.html). Null when there's too little data or the
+    // baseline is zero — the pill is hidden in that case rather than show ∞/NaN.
+    const trendDelta = useMemo<number | null>(() => {
+        if (trendData.length < 2) return null;
+        const first = trendData[0]!.value;
+        const last = trendData[trendData.length - 1]!.value;
+        if (!first || first <= 0) return null;
+        return Math.round(((last - first) / first) * 100);
+    }, [trendData]);
+
     const onRefresh = () => {
         historyQuery.refetch();
         heatmapQuery.refetch();
@@ -169,6 +197,73 @@ export default function WorkoutHistoryScreen() {
                 refreshControl={<RefreshControl refreshing={historyQuery.isFetching} onRefresh={onRefresh} tintColor={colors.accent.coral} />}
                 contentContainerStyle={{ paddingBottom: 100 + insets.bottom }}
             >
+                {/* Consistency hero — big active-days numeral + flame day-streak,
+                    with the activity heatmap merged in beneath (mockup:
+                    history-preview.html). The heatmap grid + Less/More legend that
+                    used to sit lower now live here so the screen opens on the
+                    "how consistent am I" beat. */}
+                <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.xl }}>
+                    <View style={[styles.card, { backgroundColor: colors.background.secondary, borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}>
+                        <View style={styles.consistencyHeader}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={[typography.overline, { color: colors.text.secondary }]}>CONSISTENCY · LAST 5 WEEKS</Text>
+                                <View style={styles.activeDaysRow}>
+                                    <Text style={[typography.statLarge, { color: colors.text.primary, fontSize: 44, lineHeight: 46 }]}>
+                                        {heatmap.activeDays || 0}
+                                    </Text>
+                                    <Text style={[typography.bodySm, { color: colors.text.secondary, marginLeft: 8 }]}>active days</Text>
+                                </View>
+                            </View>
+                            <View style={{ alignItems: 'flex-end' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                    <Ionicons name="flame" size={18} color={colors.accent.coral} />
+                                    <Text style={[typography.statSmall, { color: colors.text.primary, fontSize: 24 }]}>{dayStreak}</Text>
+                                </View>
+                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}>Day streak</Text>
+                            </View>
+                        </View>
+
+                        {heatmapQuery.isLoading ? (
+                            <View style={[styles.heatmapGrid, { marginTop: 18 }]}>
+                                {Array.from({ length: 35 }).map((_, i) => (
+                                    <Skeleton key={i} width={14} height={14} radius={3} />
+                                ))}
+                            </View>
+                        ) : !Array.isArray(heatmap.heatmapData) || heatmap.heatmapData.length === 0 ? (
+                            <View style={[styles.heatmapEmpty, { marginTop: 18 }]}>
+                                <View style={styles.heatmapGrid}>
+                                    {Array.from({ length: 35 }).map((_, i) => (
+                                        <View key={i} style={[styles.heatmapCell, { backgroundColor: colors.background.tertiary, borderRadius: 3 }]} />
+                                    ))}
+                                </View>
+                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 12 }]}>
+                                    No activity yet — your training days will light up here.
+                                </Text>
+                            </View>
+                        ) : (
+                            <View style={[styles.heatmapGrid, { marginTop: 18 }]}>
+                                {heatmap.heatmapData.slice(-35).map((day: any, i: number) => (
+                                    <View
+                                        key={i}
+                                        style={[styles.heatmapCell, {
+                                            backgroundColor: day.count > 3 ? colors.accent.coral : day.count > 1 ? withAlpha(colors.accent.coral, 0.6) : day.count > 0 ? withAlpha(colors.accent.coral, 0.3) : colors.background.tertiary,
+                                            borderRadius: 3,
+                                        }]}
+                                    />
+                                ))}
+                            </View>
+                        )}
+                        <View style={styles.heatmapLegend}>
+                            <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>Less</Text>
+                            <View style={[styles.heatmapCell, { backgroundColor: colors.background.tertiary, width: 10, height: 10 }]} />
+                            <View style={[styles.heatmapCell, { backgroundColor: withAlpha(colors.accent.coral, 0.3), width: 10, height: 10 }]} />
+                            <View style={[styles.heatmapCell, { backgroundColor: withAlpha(colors.accent.coral, 0.6), width: 10, height: 10 }]} />
+                            <View style={[styles.heatmapCell, { backgroundColor: colors.accent.coral, width: 10, height: 10 }]} />
+                            <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>More</Text>
+                        </View>
+                    </View>
+                </View>
+
                 {/* Stats Grid — hero numbers in big condensed lime, monochrome */}
                 <View style={styles.statsGrid}>
                     {stats.map((s, i) => (
@@ -196,8 +291,22 @@ export default function WorkoutHistoryScreen() {
                 <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.xl }}>
                     <View style={[styles.card, { backgroundColor: colors.background.secondary, borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}>
                         <View style={styles.cardHeader}>
-                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>Volume Trend</Text>
-                            <Ionicons name="trending-up" size={18} color={colors.accent.coral} />
+                            <View style={{ flex: 1 }}>
+                                <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>Volume Trend</Text>
+                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 1 }]}>Recent tonnage · last 12 sessions</Text>
+                            </View>
+                            {/* Lime ▲/▼ delta pill — real first→last % change; hidden when
+                                there's too little data (mockup: history-preview.html). */}
+                            {trendDelta != null ? (
+                                <View style={[styles.trendPill, { backgroundColor: withAlpha(colors.accent.coral, trendDelta >= 0 ? 0.14 : 0.0), borderColor: withAlpha(colors.accent.coral, 0.35) }]}>
+                                    <Ionicons name={trendDelta >= 0 ? 'arrow-up' : 'arrow-down'} size={12} color={colors.accent.coral} />
+                                    <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: '700', marginLeft: 3 }]}>
+                                        {Math.abs(trendDelta)}%
+                                    </Text>
+                                </View>
+                            ) : (
+                                <Ionicons name="trending-up" size={18} color={colors.accent.coral} />
+                            )}
                         </View>
 
                         {historyQuery.isLoading ? (
@@ -238,58 +347,9 @@ export default function WorkoutHistoryScreen() {
                     </View>
                 </View>
 
-                {/* Heatmap Section — GitHub-style grid, ramped in brand lime */}
-                <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.xl }}>
-                    <View style={[styles.card, { backgroundColor: colors.background.secondary, borderRadius: borderRadius['2xl'], borderColor: colors.border.default }]}>
-                        <View style={styles.cardHeader}>
-                            <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: 'bold' }]}>Activity Heatmap</Text>
-                            <Text style={[typography.caption, { color: colors.accent.coral }]}>{heatmap.activeDays} Active Days</Text>
-                        </View>
-
-                        {heatmapQuery.isLoading ? (
-                            <View style={styles.heatmapGrid}>
-                                {Array.from({ length: 35 }).map((_, i) => (
-                                    <Skeleton key={i} width={14} height={14} radius={3} />
-                                ))}
-                            </View>
-                        ) : !Array.isArray(heatmap.heatmapData) || heatmap.heatmapData.length === 0 ? (
-                            <View style={styles.heatmapEmpty}>
-                                <View style={styles.heatmapGrid}>
-                                    {Array.from({ length: 35 }).map((_, i) => (
-                                        <View key={i} style={[styles.heatmapCell, { backgroundColor: colors.background.tertiary, borderRadius: 3 }]} />
-                                    ))}
-                                </View>
-                                <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 12 }]}>
-                                    No activity yet — your training days will light up here.
-                                </Text>
-                            </View>
-                        ) : (
-                            <View style={styles.heatmapGrid}>
-                                {heatmap.heatmapData.slice(-35).map((day: any, i: number) => (
-                                    <View
-                                        key={i}
-                                        style={[styles.heatmapCell, {
-                                            backgroundColor: day.count > 3 ? colors.accent.coral : day.count > 1 ? withAlpha(colors.accent.coral, 0.6) : day.count > 0 ? withAlpha(colors.accent.coral, 0.3) : colors.background.tertiary,
-                                            borderRadius: 3,
-                                        }]}
-                                    />
-                                ))}
-                            </View>
-                        )}
-                        <View style={styles.heatmapLegend}>
-                            <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>Less</Text>
-                            <View style={[styles.heatmapCell, { backgroundColor: colors.background.tertiary, width: 10, height: 10 }]} />
-                            <View style={[styles.heatmapCell, { backgroundColor: withAlpha(colors.accent.coral, 0.3), width: 10, height: 10 }]} />
-                            <View style={[styles.heatmapCell, { backgroundColor: withAlpha(colors.accent.coral, 0.6), width: 10, height: 10 }]} />
-                            <View style={[styles.heatmapCell, { backgroundColor: colors.accent.coral, width: 10, height: 10 }]} />
-                            <Text style={[typography.caption, { color: colors.text.secondary, fontSize: 10 }]}>More</Text>
-                        </View>
-                    </View>
-                </View>
-
                 {/* Workout List */}
                 <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing['2xl'] }}>
-                    <Text style={[typography.heading, { color: colors.text.primary, marginBottom: spacing.md }]}>Workout Logs</Text>
+                    <Text style={[typography.heading, { color: colors.text.primary, marginBottom: spacing.md }]}>Recent sessions</Text>
 
                     {historyQuery.isLoading ? (
                         <View>
@@ -347,6 +407,9 @@ const styles = StyleSheet.create({
     statIcon: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
     card: { padding: 20, borderWidth: 1 },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    consistencyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    activeDaysRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 6 },
+    trendPill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999, borderWidth: 1 },
     emptyChart: { height: 140, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
     heatmapGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, justifyContent: 'center' },
     heatmapCell: { width: 14, height: 14 },

@@ -1,19 +1,22 @@
 /**
  * Dashboard — Zeitra home screen.
- * Restyled to the "home-preview" mockup (greeting + avatar + shift chip · a
- * TONIGHT'S-SESSION hero with a muscle-model motif + readiness ring · a "Next ·
- * pre-shift meal" hero card · a "Picked for your shift" horizontal carousel · an
- * asymmetric BENTO grid — training-tall + sleep/water/steps/calories tiles with
- * done-checks · the circadian training-window bar · the full circadian section
- * stack (next shift / transition / light / anchor sleep / "your rhythm tonight"
- * timeline / sleep+hydration+caffeine) · EXPLORE + MORE grids · heatmap · 24h
- * schedule · weekly recap · a Coach Ria insight card). Reanimated staggered
- * FadeInDown entrance.
+ * Restyled to the "home-preview" mockup (greeting + avatar + shift chip + a lime
+ * notification dot · a TONIGHT'S-FOCUS swipeable WOD carousel with pagination
+ * dots (the shared WodCarousel) · a "Next · pre-shift meal" hero card · a "Picked
+ * for your shift" horizontal carousel · an asymmetric BENTO grid — training-tall
+ * (Push day · 45 min) + sleep/water/steps/calories tiles with done-checks · the
+ * circadian training-window bar · the full circadian section stack (next shift /
+ * transition / light / anchor sleep / "your rhythm tonight" timeline /
+ * sleep+hydration+caffeine) · EXPLORE + MORE grids · heatmap · 24h schedule ·
+ * weekly recap · a Coach Ria insight card with Ria's avatar). Reanimated
+ * staggered FadeInDown entrance.
  *
  * VISUAL re-skin ONLY — every data hook, query, navigation call, handler, prop,
  * route and testID is preserved from the prior revision (the screen still drives
- * the same shift countdown, next meal, hydration logging, readiness roll-up,
- * circadian timeline and quick actions). No shared ui/* or theme/* file changed.
+ * the same shift countdown — now folded into the WOD hero's meta — next meal,
+ * hydration logging, circadian timeline and quick actions; the WOD carousel's
+ * Start preserves the prior hero's START → Training nav). No shared ui/* or
+ * theme/* file changed.
  */
 import React, { useState, useMemo, useCallback } from 'react';
 import {
@@ -44,7 +47,8 @@ import LightPlanCard from '@/components/home/LightPlanCard';
 import AnchorSleepCard from '@/components/home/AnchorSleepCard';
 import TodayCircadianTimeline from '@/components/home/TodayCircadianTimeline';
 import { CaffeineTimerTile } from '@/components/home/CaffeineTimerTile';
-import { ReadinessRing, StatCard, TrainingWindowBar } from '@/components/home/HomeHeroExtras';
+import { TrainingWindowBar } from '@/components/home/HomeHeroExtras';
+import { WodCarousel, type WodItem } from '@/components/TrainingCards';
 import { TAB_BAR_H } from './_layout';
 
 const { width } = Dimensions.get('window');
@@ -90,6 +94,9 @@ const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
 const MUSCLE_SHOULDERS_IMG = require('../../assets/images/muscle-shoulders.png');
 const MUSCLE_ARMS_IMG = require('../../assets/images/muscle-arms.png');
 const MEAL_BREAKFAST_IMG = require('../../assets/images/meal-breakfast.png');
+// Ria's avatar for the Coach-insight card (the mockup floats the app mark in a
+// lime-ringed circle next to a "Coach Ria" sparkles eyebrow).
+const RIA_AVATAR = require('../../assets/images/logo_app.png');
 
 // Primary "Log Meal" CTA is the shared <CtaButton> (Aurora lime fill via the
 // `gradients.coralCta` token, lime glow, ink label) — the screen-local
@@ -103,9 +110,9 @@ const MEAL_BREAKFAST_IMG = require('../../assets/images/meal-breakfast.png');
 // image-top + title-below style. A short `sub` line was added per card (purely
 // descriptive copy, no new data dependency).
 const QUICK_ACTIONS = [
-    { id: 'meal', label: 'Log Meal', sub: 'Fuel your shift', icon: 'restaurant', color: palette.accent.cyan, image: QA_MEAL, route: '/(tabs)/nutrition' },
-    { id: 'workout', label: 'Log Workout', sub: 'Train now', icon: 'flame', color: palette.accent.coral, image: QA_WORKOUT, route: '/(tabs)/training' },
-    { id: 'sleep', label: 'Log Sleep', sub: 'Anchor rest', icon: 'moon', color: palette.accent.purple, image: QA_SLEEP, route: '/(modals)/log-sleep' },
+    { id: 'meal', label: 'Track meal', sub: 'Fuel your shift', icon: 'restaurant', color: palette.accent.cyan, image: QA_MEAL, route: '/(tabs)/nutrition' },
+    { id: 'workout', label: 'Track workout', sub: 'Train now', icon: 'flame', color: palette.accent.coral, image: QA_WORKOUT, route: '/(tabs)/training' },
+    { id: 'sleep', label: 'Track sleep', sub: 'Anchor rest', icon: 'moon', color: palette.accent.purple, image: QA_SLEEP, route: '/(modals)/log-sleep' },
     { id: 'stats', label: 'Progress', sub: 'Track trends', icon: 'stats-chart', color: palette.accent.blue, image: QA_STATS, route: '/(performance)' },
 ] as const;
 
@@ -403,16 +410,6 @@ export default function DashboardScreen() {
     // First name for a warmer hero greeting; falls back to the full displayName.
     const firstName = useMemo(() => String(displayName).split(' ')[0] || displayName, [displayName]);
 
-    // Readiness ring (0–100): a composite of today's hydration progress and meal
-    // adherence — both already on `progress`. No new query; purely a visual roll-
-    // up of signals the dashboard already shows.
-    const readiness = useMemo(() => {
-        if (!progress) return 0;
-        const hyd = hydPct; // 0–100
-        const adh = progress.isAdherent ? 100 : Math.min((progress.mealsLogged ?? 0) * 25, 75);
-        return Math.round(hyd * 0.5 + adh * 0.5);
-    }, [progress, hydPct]);
-
     // Bento / stat values from existing `progress` fields.
     const hydL = progress ? ((progress.hydrationActual || progress.hydrationMl || 0) / 1000).toFixed(1) : '0.0';
     const kcal = progress ? String(Math.round(progress.caloriesActual || 0)) : '0';
@@ -442,7 +439,6 @@ export default function DashboardScreen() {
     // other section (UP NEXT meal, hydration mini, etc.) similarly handles its
     // own loading/error/empty branches. This keeps the layout stable while any
     // single query is in flight and lets each section surface its own retry.
-    const heroColor = countdown ? colors.accent.coral : colors.accent.cyan;
     // Shift chip sub-label ("Night · 3h in" in the mockup) — only the elapsed
     // portion is computed, and only when the active shift exposes a parseable
     // startTime; otherwise we show just the shift type.
@@ -455,6 +451,26 @@ export default function DashboardScreen() {
         if (min < 60) return `${min}m in`;
         return `${Math.floor(min / 60)}h in`;
     }, [shift]);
+
+    // ── WOD hero carousel pages (mockup's swipeable "Tonight's focus" slider) ──
+    // Three shift-tuned focus pages, each a full-bleed muscle-model card with a
+    // "min · exercises" meta line. The FIRST page folds in the live shift
+    // countdown when one is active (so the previous hero's countdown signal is
+    // preserved, not dropped), otherwise reads as a rest-mode prompt. Purely
+    // presentational copy — no new data dependency. `onStart` (below) preserves
+    // the old hero's START handler → the Training tab.
+    const wodItems = useMemo<WodItem[]>(() => [
+        {
+            id: 'wod-upper',
+            title: countdown ? 'Upper body strength' : 'Recovery focus',
+            meta: countdown
+                ? `Shift ends in ${countdown} · chest & arms`
+                : 'No active shift · restore & rebuild',
+            img: HERO_MUSCLE,
+        },
+        { id: 'wod-shoulders', title: 'Shoulders & delts', meta: '35 min · 6 exercises', img: MUSCLE_SHOULDERS_IMG },
+        { id: 'wod-arms', title: 'Arms & grip', meta: '30 min · 7 exercises', img: MUSCLE_ARMS_IMG },
+    ], [countdown]);
 
     return (
         <ImageBackground
@@ -511,12 +527,14 @@ export default function DashboardScreen() {
                                     </Text>
                                 </View>
                             )}
-                            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Notifications"
+                            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Notifications, new"
                                 activeOpacity={0.75}
                                 style={[s.iconBtn, { backgroundColor: withAlpha(colors.text.primary, 0.06) }]}
                                 onPress={() => router.push('/(settings)/notifications' as any)}
                             >
                                 <Ionicons name="notifications-outline" size={20} color={colors.text.primary} />
+                                {/* Lime unread dot (mockup) — ringed with the page bg so it reads as a pip. */}
+                                <View style={[s.bellDot, { backgroundColor: colors.accent.lime, borderColor: colors.background.primary }]} />
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -536,80 +554,17 @@ export default function DashboardScreen() {
                     </View>
                 </Animated.View>
 
-                {/* ══ TONIGHT'S SESSION HERO (muscle-model motif) ═════════════ */}
-                <Animated.View entering={FadeInDown.delay(80).duration(460)}>
-                    <TouchableOpacity
-                        onPress={() => router.push('/(shifts)' as any)}
-                        activeOpacity={0.88}
-                        accessibilityRole="button"
-                        accessibilityLabel={countdown ? `Your shift ends in ${countdown}` : 'No active shift, rest mode'}
-                        style={s.heroPress}
-                    >
-                        <GlassCard
-                            intensity={40}
-                            radius={24}
-                            glow={heroColor}
-                            style={{ borderColor: withAlpha(heroColor, 0.25) }}
-                        >
-                            {/* Muscle-model artwork bleeds in from the right, masked
-                                by the brand gradient so the copy stays legible. */}
-                            <Image
-                                source={HERO_MUSCLE}
-                                style={s.heroArt}
-                                contentFit="cover"
-                                contentPosition="top"
-                                cachePolicy="memory-disk"
-                                transition={200}
-                            />
-                            <LinearGradient
-                                colors={[withAlpha(heroColor, 0.16), withAlpha(heroColor, 0.02)]}
-                                style={StyleSheet.absoluteFillObject}
-                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                            />
-                            <LinearGradient
-                                colors={['rgba(10,12,18,0.05)', 'rgba(10,12,18,0.55)', colors.background.primary]}
-                                start={{ x: 1, y: 0 }} end={{ x: 0, y: 0 }}
-                                style={StyleSheet.absoluteFillObject}
-                            />
-                            <View style={s.heroInner}>
-                                {/* Left: label · countdown · START */}
-                                <View style={s.heroLeft}>
-                                    <View style={[s.heroTag, { backgroundColor: withAlpha(heroColor, 0.14) }]}>
-                                        <View style={[s.heroTagDot, { backgroundColor: heroColor }]} />
-                                        <Text style={[typography.overline, { color: heroColor }]}>
-                                            {countdown ? "TONIGHT'S SESSION" : 'REST MODE'}
-                                        </Text>
-                                    </View>
-                                    <Text
-                                        style={[typography.statLarge, s.heroVal, { color: colors.text.primary }]}
-                                        numberOfLines={1}
-                                        adjustsFontSizeToFit
-                                        maxFontSizeMultiplier={STAT_MAX_SCALE}
-                                    >
-                                        {countdown ?? 'Recover'}
-                                    </Text>
-                                    <Text style={[typography.bodySm, s.heroSub, { color: colors.text.secondary }]} numberOfLines={1}>
-                                        {countdown ? 'until your shift ends' : 'No active shift — restore & rebuild'}
-                                    </Text>
-                                    <View style={s.heroCtaRow}>
-                                        <CtaButton
-                                            size="md"
-                                            icon="play"
-                                            label="START"
-                                            onPress={() => router.push('/(tabs)/training' as any)}
-                                            accessibilityLabel="Start training session"
-                                            style={s.heroCta}
-                                        />
-                                    </View>
-                                </View>
-                                {/* Right: readiness ring */}
-                                <View style={s.heroRingWrap}>
-                                    <ReadinessRing percent={readiness} size={94} color={heroColor} label="READY" />
-                                </View>
-                            </View>
-                        </GlassCard>
-                    </TouchableOpacity>
-                </Animated.View>
+                {/* ══ TONIGHT'S FOCUS — WOD swipe carousel + pagination dots ══ */
+                /* Full-bleed: WodCarousel owns its own page padding + paging width,
+                 * so we cancel the ScrollView's H_PAD with a negative margin and let
+                 * the pager run edge-to-edge. `onStart` preserves the prior hero's
+                 * START handler (→ the Training tab). */}
+                <View style={s.wodWrap}>
+                    <WodCarousel
+                        items={wodItems}
+                        onStart={() => router.push('/(tabs)/training' as any)}
+                    />
+                </View>
 
                 {/* ══ NEXT · PRE-SHIFT MEAL (hero meal card) ══════════════════ */}
                 {planError ? (
@@ -762,7 +717,10 @@ export default function DashboardScreen() {
                             </View>
                             <View style={s.bentoTallMeta}>
                                 <Text style={[typography.caption, { color: colors.text.secondary }]}>Today · training</Text>
-                                <Text style={[typography.h3, s.bentoTallTitle, { color: colors.text.primary }]}>Push day</Text>
+                                <Text style={[typography.h3, s.bentoTallTitle, { color: colors.text.primary }]} numberOfLines={1}>
+                                    Push day
+                                    <Text style={[typography.caption, { color: colors.text.secondary }]}> · 45 min</Text>
+                                </Text>
                                 <CtaButton
                                     size="sm"
                                     icon="play"
@@ -1131,11 +1089,22 @@ export default function DashboardScreen() {
                 <Animated.View entering={FadeInDown.delay(130).duration(460)}>
                     <GlassCard intensity={40} radius={20} style={s.riaCard} glow={insight.color}>
                         <View style={s.riaInner}>
-                            <View style={[s.riaIcon, { backgroundColor: withAlpha(insight.color, 0.16) }]}>
-                                <Ionicons name="sparkles" size={18} color={insight.color} />
+                            {/* Ria avatar — the app mark in a lime-ringed circle (mockup). */}
+                            <View style={[s.riaAvatarRing, { borderColor: withAlpha(colors.accent.lime, 0.4) }]}>
+                                <Image
+                                    source={RIA_AVATAR}
+                                    style={s.riaAvatar}
+                                    contentFit="cover"
+                                    cachePolicy="memory-disk"
+                                    transition={200}
+                                    accessibilityLabel="Coach Ria"
+                                />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={[typography.captionMedium, s.riaName, { color: colors.text.primary }]}>Coach Ria</Text>
+                                <View style={s.riaNameRow}>
+                                    <Ionicons name="sparkles" size={13} color={colors.accent.lime} />
+                                    <Text style={[typography.captionMedium, s.riaName, { color: colors.accent.lime }]}>Coach Ria</Text>
+                                </View>
                                 <Text style={[typography.bodySm, s.riaTxt, { color: colors.text.secondary }]}>{insight.text}</Text>
                             </View>
                         </View>
@@ -1168,6 +1137,7 @@ const s = StyleSheet.create({
     shiftBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, maxWidth: 150 },
     shiftTxt: { fontSize: 12, fontWeight: '700' },
     iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+    bellDot: { position: 'absolute', top: 8, right: 9, width: 9, height: 9, borderRadius: 5, borderWidth: 1.5 },
 
     // Sub-header (date + momentum chip)
     subHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2, marginBottom: 20 },
@@ -1175,26 +1145,16 @@ const s = StyleSheet.create({
     momentumChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
     momentumTxt: { fontWeight: '800', letterSpacing: 0.6 },
 
-    // Hero
-    // Press wrapper owns only the outer spacing now; the GlassCard owns the
-    // radius/hairline/glow and the heroInner View owns the row layout + padding.
-    heroPress: { marginBottom: 16 },
-    // Muscle-model art bleeds in from the right half of the hero card.
-    heroArt: { position: 'absolute', top: 0, bottom: 0, right: 0, width: '62%' },
-    heroInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 22, gap: 16 },
-    heroLeft: { flex: 1 },
-    heroTag: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, alignSelf: 'flex-start', marginBottom: 12 },
-    heroTagDot: { width: 6, height: 6, borderRadius: 3 },
-    heroVal: { marginBottom: 2 },
-    heroSub: { marginBottom: 16 },
-    heroCtaRow: { flexDirection: 'row' },
-    heroCta: { alignSelf: 'flex-start', paddingHorizontal: 28 },
-    heroRingWrap: { alignItems: 'center', justifyContent: 'center' },
+    // WOD hero carousel — full-bleed: cancel the ScrollView's H_PAD so the pager
+    // (which owns its own page padding + paging width) runs edge-to-edge.
+    wodWrap: { marginHorizontal: -H_PAD, marginBottom: 16 },
 
     // Coach Ria insight card
     riaCard: { marginBottom: 20 },
     riaInner: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, padding: 14 },
-    riaIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+    riaAvatarRing: { width: 38, height: 38, borderRadius: 19, borderWidth: 1.5, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+    riaAvatar: { width: '100%', height: '100%' },
+    riaNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
     riaName: { fontWeight: '700' },
     riaTxt: { marginTop: 3 },
 

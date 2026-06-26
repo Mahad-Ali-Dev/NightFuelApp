@@ -123,11 +123,11 @@ function renderScreen() {
     );
 }
 
-// Resolve the single Log Out row by its accessibility role + label. Two other
-// nodes carry a 'Log Out'-ish label space (none do here), so we pin role+label.
+// Resolve the single Sign out row by its accessibility role + label. Two other
+// nodes carry a 'Sign out'-ish label space (none do here), so we pin role+label.
 function getLogoutRow() {
     return screen
-        .getAllByLabelText('Log Out')
+        .getAllByLabelText('Sign out')
         .find((n) => n.props.accessibilityRole === 'button')!;
 }
 
@@ -155,13 +155,13 @@ afterEach(() => {
 });
 
 describe('Settings screen — Log Out confirmation gate', () => {
-    it('exposes the Log Out control by its accessibility role + label', () => {
+    it('exposes the Sign out control by its accessibility role + label', () => {
         renderScreen();
 
         const row = getLogoutRow();
         expect(row).toBeTruthy();
         expect(row.props.accessibilityRole).toBe('button');
-        expect(row.props.accessibilityLabel).toBe('Log Out');
+        expect(row.props.accessibilityLabel).toBe('Sign out');
     });
 
     it('does NOT call logout immediately on press — it surfaces a confirm prompt', () => {
@@ -176,7 +176,7 @@ describe('Settings screen — Log Out confirmation gate', () => {
         // A confirmation prompt was raised instead.
         expect(Alert.alert).toHaveBeenCalledTimes(1);
         const [title, message, buttons] = (Alert.alert as jest.Mock).mock.calls[0];
-        expect(String(title)).toMatch(/log out/i);
+        expect(String(title)).toMatch(/sign out/i);
         expect(String(message)).toMatch(/\?$/); // it asks a question
         expect(Array.isArray(buttons)).toBe(true);
 
