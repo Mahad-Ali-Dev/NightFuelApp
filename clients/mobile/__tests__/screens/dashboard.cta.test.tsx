@@ -38,6 +38,14 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn(), replace: jest.fn() }),
 }));
 
+// _layout pulls in AsyncStorage (the Ria FAB) — mock it to the constant the screen
+// reads. RecipeRail is its own self-fetching unit; stub it out here.
+jest.mock('../../app/(tabs)/_layout', () => ({ TAB_BAR_H: 64 }));
+jest.mock('@/components/nutrition/RecipeRail', () => ({ RecipeRail: () => null }));
+// CoachHomeCard pulls in the persisted coach store (AsyncStorage) — stub it like
+// RecipeRail so the dashboard suite doesn't need the native module.
+jest.mock('@/components/coach/CoachHomeCard', () => ({ CoachHomeCard: () => null }));
+
 // The single meal that drives the UP NEXT card. getNextMeal() returns the first
 // meal whose time is in the future, else falls back to the first sorted meal —
 // so ANY one meal with a valid time makes `nextMeal` non-null and renders the
@@ -111,7 +119,7 @@ jest.mock('@tanstack/react-query', () => ({
 // never actually invoked; they only satisfy the import graph.
 jest.mock('@/api/shifts', () => ({ getCurrent: jest.fn() }));
 jest.mock('@/api/plans', () => ({ getToday: jest.fn() }));
-jest.mock('@/api/progress', () => ({ getToday: jest.fn(), logHydration: jest.fn() }));
+jest.mock('@/api/progress', () => ({ getToday: jest.fn(), logHydration: jest.fn(), getStreak: jest.fn() }));
 jest.mock('@/api/exercises', () => ({ searchLibrary: jest.fn() }));
 
 // Auth store: a stable user so the header (greeting + initials) renders happily.
@@ -197,42 +205,36 @@ function renderScreen() {
 }
 
 /**
- * Resolve the dashboard's PRIMARY "Log Meal" CtaButton (NOT the QUICK ACTIONS
- * tile that shares the name). It carries the stable
- * testID="dashboard-up-next-log-meal-cta" (CtaButton forwards `testID` verbatim
- * to its root Pressable), which uniquely identifies the primary CTA without any
- * glyph / icon-name matching.
+ * Resolve the next-meal card's primary "Add" control. In the rebuilt home the
+ * UP NEXT/CtaButton was replaced by a compact lime "Add" pill on the meal card,
+ * carrying accessibilityLabel="Add {meal.label}", which uniquely identifies it.
  */
-function getPrimaryLogMealCta() {
-  return screen.getByTestId('dashboard-up-next-log-meal-cta');
+function getAddButton() {
+  return screen.getByLabelText('Add Power Breakfast');
 }
 
-describe('Dashboard — primary "Log Meal" CTA', () => {
+describe('Dashboard — next-meal "Add" CTA', () => {
   beforeEach(() => {
     mockPush.mockClear();
   });
 
-  test('the UP NEXT card renders the primary "Log Meal" CtaButton', () => {
+  test('the next-meal card renders the meal + the "Add" control', () => {
     renderScreen();
 
-    // The UP NEXT meal card is present. "UP NEXT" is unique to that card's
-    // badge; the meal name "Power Breakfast" also appears in the 24H SCHEDULE
-    // timeline (same plan meal), so we assert it via getAllByText (>=1) rather
-    // than pinning a single occurrence.
-    expect(screen.getByText('UP NEXT')).toBeTruthy();
-    expect(screen.getAllByText('Power Breakfast').length).toBeGreaterThanOrEqual(1);
+    // The next-meal card is present: its eyebrow + the meal name (now shown once
+    // — the old 24H SCHEDULE that duplicated it was removed in the rebuild).
+    expect(screen.getByText('Next · pre-shift meal')).toBeTruthy();
+    expect(screen.getByText('Power Breakfast')).toBeTruthy();
 
-    // …and the primary CTA resolves uniquely (stable testID on the CtaButton).
-    const cta = getPrimaryLogMealCta();
-    expect(cta).toBeTruthy();
-    expect(String(cta.props.accessibilityLabel)).toBe('Log Meal');
+    // …and the primary CTA resolves uniquely via its accessibility label.
+    const add = getAddButton();
+    expect(add).toBeTruthy();
   });
 
-  test('pressing the primary "Log Meal" CTA pushes /(tabs)/nutrition with NO stray param', () => {
+  test('pressing "Add" pushes /(tabs)/nutrition with NO stray param', () => {
     renderScreen();
 
-    const cta = getPrimaryLogMealCta();
-    fireEvent.press(cta);
+    fireEvent.press(getAddButton());
 
     // Navigates to the nutrition tab…
     expect(mockPush).toHaveBeenCalledTimes(1);

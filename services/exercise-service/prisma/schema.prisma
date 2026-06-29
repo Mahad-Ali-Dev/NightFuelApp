@@ -65,6 +65,10 @@ model LibraryExercise {
   // to the animated image-frame loop / demoUrl tutorial link. Both imageUrl/
   // demoUrl predate this column, so legacy rows (no MP4) stay valid.
   videoUrl         String?  @map("video_url")
+  // Female demo clip — set when the catalog has a separate Female-gendered video.
+  // The player picks this for Female users and falls back to videoUrl (the
+  // Male/canonical clip) otherwise. Additive + nullable: legacy rows stay valid.
+  videoUrlFemale   String?  @map("video_url_female")
   difficulty       String?  @default("intermediate")
   bodyPart         String?  @map("body_part")
   category         String?  // "gym" | "home" | "cardio" | "kegel"
@@ -141,4 +145,16 @@ model ExerciseLog {
 
   @@index([sessionId])
   @@map("exercise_logs")
+}
+
+// Per-user AI Coach plan blob (the generated challenge + progress) so the plan
+// survives reinstalls + syncs across devices. One row per user; `data` is the
+// serialized CoachPlan the mobile coachStore persists. Additive table — boot-time
+// `prisma db push` creates it without touching existing exercise data.
+model CoachPlan {
+  userId    String   @id @map("user_id")
+  data      Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("coach_plans")
 }

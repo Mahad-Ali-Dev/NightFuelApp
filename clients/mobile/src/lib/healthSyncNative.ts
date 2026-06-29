@@ -106,18 +106,6 @@ let connected = false;
 // iOS — HealthKit (@kingstinct/react-native-healthkit)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** READ-ONLY HealthKit identifiers we request. No SHARE/WRITE types (per Apple-review). */
-const HK_READ_QUANTITY: HKQuantityTypeIdentifier[] = [
-  HKQuantityTypeIdentifier.stepCount,
-  HKQuantityTypeIdentifier.heartRate,
-  HKQuantityTypeIdentifier.restingHeartRate,
-  HKQuantityTypeIdentifier.heartRateVariabilitySDNN,
-  HKQuantityTypeIdentifier.activeEnergyBurned,
-];
-const HK_READ_CATEGORY: HKCategoryTypeIdentifier[] = [
-  HKCategoryTypeIdentifier.sleepAnalysis,
-];
-
 function buildIosAdapter(): HealthSyncAdapter | null {
   // Availability probe: HealthKit only exists on iOS, and only on a build that
   // bundled the native module. A non-function isHealthDataAvailable means the
@@ -133,6 +121,24 @@ function buildIosAdapter(): HealthSyncAdapter | null {
     }
   })();
   if (!available) return null;
+
+  // READ-ONLY HealthKit identifiers (no SHARE/WRITE types, per Apple review).
+  // Built HERE — NOT at module scope: the native enums are `undefined` until the
+  // HealthKit native module is present, so reading `HKQuantityTypeIdentifier.stepCount`
+  // at module-eval (Android / Expo Go, where it's undefined) threw
+  // "Cannot read property 'stepCount' of undefined" at require time and crashed the
+  // Connected-Devices screen. Behind the availability guard they're only touched on
+  // a real iOS build where the enums exist.
+  const HK_READ_QUANTITY: HKQuantityTypeIdentifier[] = [
+    HKQuantityTypeIdentifier.stepCount,
+    HKQuantityTypeIdentifier.heartRate,
+    HKQuantityTypeIdentifier.restingHeartRate,
+    HKQuantityTypeIdentifier.heartRateVariabilitySDNN,
+    HKQuantityTypeIdentifier.activeEnergyBurned,
+  ];
+  const HK_READ_CATEGORY: HKCategoryTypeIdentifier[] = [
+    HKCategoryTypeIdentifier.sleepAnalysis,
+  ];
 
   async function connect(): Promise<HealthSyncResult> {
     try {

@@ -1,91 +1,57 @@
 /**
  * profile.errorStates.test.tsx
  *
- * Screen-level honest-state coverage for the Profile tab —
- * `app/(tabs)/profile.tsx`.
+ * Honest-state coverage for the rebuilt You/Profile tab — `app/(tabs)/profile.tsx`.
  *
- * The Profile tab drives one PRIMARY query (['my-profile'] via getMyProfile,
- * gates the skeleton) plus THREE secondary queries whose failures used to be
- * masked as a healthy zeroed brand-new user:
+ * The 1:1 mockup rebuild dropped the old circadian-phase card, cycle tracker,
+ * fatigue/adherence pills and the per-pill "Unavailable / Retry" affordance. What
+ * REMAINS load-bearing is the honest-state contract on the stat row + level badge:
+ * a FAILED secondary fetch must render '—' (Streak / Days) and "LVL —", NEVER the
+ * misleading '0' / 'LVL 1' a genuinely-zeroed brand-new user would show. A real
+ * zeroed user (queries succeed with zeros) still shows '0' / 'LVL 1'.
  *
- *   - ['my-status']            → FATIGUE / ADHERENCE pills + the CIRCADIAN PHASE card
- *   - ['profile-weekly-stats'] → the "Level N" line
- *   - ['profile-streak']       → the STREAK pill
- *
- * This suite pins the two findings the hardening item fixes:
- *
- *  (F4 — honest-state) When a secondary query is in its ERROR state the render
- *  must NOT coalesce to the misleading '0%' / '0d' / 'Level 1' a healthy zeroed
- *  new user would show. Instead the affected stat pills render '—' + an
- *  "Unavailable" / Retry affordance whose press calls that query's refetch, and
- *  the Level line reads "Level —". Distinct from a GENUINELY zeroed new user
- *  (all queries succeed with zeros) — which still shows '0%' / '0d' / 'Level 1'.
- *
- *  (F7 — contract-drift) When status resolves WITHOUT a circadianPhase (no
- *  service returns that field), the CIRCADIAN PHASE card renders the honest
- *  '—' empty fallback — NOT a fabricated 'WAKE'.
- *
- * Mock conventions mirror the sibling `dashboard.errorStates.test.tsx`
- * (per-queryKey useQuery stub with distinct refetch spies) and
- * `subscription.test.tsx` (real @/components/ui barrel + SafeBlurView
- * passthrough so GlassCard / CtaButton mount on the jest renderer). No live-DB
- * / network: react-query is fully stubbed, so the api modules never touch axios.
+ * Harness mirrors the sibling dashboard/nutrition suites: a per-queryKey useQuery
+ * stub the tests drive, with the api/native modules stubbed so nothing touches
+ * axios or native code.
  */
 
 // ── jest.mock hoisting block (runs ABOVE the imports) ────────────────────────
-
-// Per-query controlled state. Each test mutates these holders BEFORE render()
-// (the factory reads them at call-time). refetch spies are asserted on press.
 type QState = { data: any; isLoading: boolean; isError: boolean };
-const mockProfile: QState = { data: { displayName: 'Test User', occupation: 'Member' }, isLoading: false, isError: false };
+const mockProfile: QState = { data: { displayName: 'Test User' }, isLoading: false, isError: false };
 const mockStatus: QState = { data: undefined, isLoading: false, isError: false };
 const mockStats: QState = { data: undefined, isLoading: false, isError: false };
 const mockStreak: QState = { data: undefined, isLoading: false, isError: false };
 
-const mockRefetchStatus = jest.fn();
-const mockRefetchStats = jest.fn();
-const mockRefetchStreak = jest.fn();
-
 jest.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
     const key = queryKey[0];
-    if (key === 'my-profile') {
-      return { data: mockProfile.data, isLoading: mockProfile.isLoading, isError: mockProfile.isError, refetch: jest.fn() };
-    }
-    if (key === 'my-status') {
-      return { data: mockStatus.data, isLoading: mockStatus.isLoading, isError: mockStatus.isError, refetch: mockRefetchStatus };
-    }
-    if (key === 'profile-weekly-stats') {
-      return { data: mockStats.data, isLoading: mockStats.isLoading, isError: mockStats.isError, refetch: mockRefetchStats };
-    }
-    if (key === 'profile-streak') {
-      return { data: mockStreak.data, isLoading: mockStreak.isLoading, isError: mockStreak.isError, refetch: mockRefetchStreak };
-    }
+    if (key === 'my-profile') return { data: mockProfile.data, isLoading: mockProfile.isLoading, isError: mockProfile.isError, refetch: jest.fn() };
+    if (key === 'my-status') return { data: mockStatus.data, isLoading: mockStatus.isLoading, isError: mockStatus.isError, refetch: jest.fn() };
+    if (key === 'profile-weekly-stats') return { data: mockStats.data, isLoading: mockStats.isLoading, isError: mockStats.isError, refetch: jest.fn() };
+    if (key === 'profile-streak') return { data: mockStreak.data, isLoading: mockStreak.isLoading, isError: mockStreak.isError, refetch: jest.fn() };
     return { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
   },
 }));
 
-// The api modules the screen statically imports — stub to plain jest.fns so
-// axios (via @/api/client) never loads. useQuery is fully stubbed above, so
-// these are never actually invoked; they only satisfy the import graph.
 jest.mock('@/api/profile', () => ({ getMyProfile: jest.fn(), getStatus: jest.fn() }));
 jest.mock('@/api/progress', () => ({ getWeeklyStats: jest.fn(), getStreak: jest.fn() }));
+jest.mock('@/api/exercises', () => ({ getRecent: jest.fn(() => Promise.resolve([])) }));
+// profile.tsx imports TAB_BAR_H from (tabs)/_layout, which pulls in the Ria FAB +
+// AsyncStorage at module load — unmocked, that throws and the suite fails to even
+// load (same fix the dashboard tests already carry). Stub the constant.
+jest.mock('../../app/(tabs)/_layout', () => ({ TAB_BAR_H: 64 }));
 
-// Auth hook — benign user; logout is an inert spy.
 jest.mock('@/hooks/useAuth', () => ({
-  useAuth: () => ({ user: { name: 'Test User', role: 'USER' }, logout: jest.fn() }),
+  useAuth: () => ({ user: { name: 'Test User', role: 'user', shiftType: 'night' }, logout: jest.fn() }),
 }));
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
 }));
 
-// Decorative glyphs → plain <Text> surfacing the icon name (mirrors the suite).
 jest.mock('@expo/vector-icons', () => {
   const { Text: RNText } = require('react-native');
-  return {
-    Ionicons: ({ name }: { name?: string }) => <RNText>{`icon:${name ?? ''}`}</RNText>,
-  };
+  return { Ionicons: ({ name }: { name?: string }) => <RNText>{`icon:${name ?? ''}`}</RNText> };
 });
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -97,23 +63,16 @@ jest.mock('expo-image', () => {
   return { Image: (props: any) => <RN.View {...props} /> };
 });
 
-// expo-linear-gradient ships a native module — passthrough so the cover wash
-// and CtaButton gradient mount on the jest renderer.
 jest.mock('expo-linear-gradient', () => {
   const RN = require('react-native');
   return { LinearGradient: (props: any) => <RN.View {...props} /> };
 });
 
-// GlassCard wraps a SafeBlurView (expo-blur native). Passthrough so GlassCard /
-// the stat pills mount cleanly regardless of the Android<12 blur fallback.
-jest.mock('@/components/SafeBlurView', () => {
-  const RN = require('react-native');
-  return { SafeBlurView: ({ children, ...props }: any) => <RN.View {...props}>{children}</RN.View> };
-});
+jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
 import React from 'react';
-import { render, fireEvent, screen } from '@testing-library/react-native';
+import { render, screen } from '@testing-library/react-native';
 import {
   ThemeContext,
   getThemeColors,
@@ -134,130 +93,61 @@ function renderScreen() {
   );
 }
 
-describe('ProfileScreen — honest secondary-query state (F4 + F7)', () => {
+describe('ProfileScreen — honest stat-row + level state', () => {
   beforeEach(() => {
-    mockProfile.data = { displayName: 'Test User', occupation: 'Member' };
-    mockProfile.isLoading = false;
-    mockProfile.isError = false;
-
-    mockStatus.data = undefined;
-    mockStatus.isLoading = false;
-    mockStatus.isError = false;
-
-    mockStats.data = undefined;
-    mockStats.isLoading = false;
-    mockStats.isError = false;
-
-    mockStreak.data = undefined;
-    mockStreak.isLoading = false;
-    mockStreak.isError = false;
-
-    mockRefetchStatus.mockClear();
-    mockRefetchStats.mockClear();
-    mockRefetchStreak.mockClear();
+    mockProfile.data = { displayName: 'Test User' };
+    mockProfile.isLoading = false; mockProfile.isError = false;
+    mockStatus.data = undefined; mockStatus.isLoading = false; mockStatus.isError = false;
+    mockStats.data = undefined; mockStats.isLoading = false; mockStats.isError = false;
+    mockStreak.data = undefined; mockStreak.isLoading = false; mockStreak.isError = false;
   });
 
-  // ── F4 — errored secondary queries render honest '—' / Retry, NOT zeros ────
-  test('all three secondary queries errored → honest indicators, NOT "0%"/"0d"/"Level 1"', () => {
-    mockStatus.isError = true;
+  test('renders the core scaffold (name, sections, menu) without crashing', () => {
+    expect(() => renderScreen()).not.toThrow();
+    expect(screen.getByText('Test User')).toBeTruthy();
+    expect(screen.getByText('Achievements')).toBeTruthy();
+    expect(screen.getByText('Consistency')).toBeTruthy();
+    expect(screen.getByText('Appearance & theme')).toBeTruthy();
+    expect(screen.getByText('Notifications')).toBeTruthy();
+    expect(screen.getByText('Account & settings')).toBeTruthy();
+  });
+
+  test('errored stats + streak → honest "—" (Streak / Days) + "LVL —", NOT "0" / "LVL 1"', () => {
     mockStats.isError = true;
     mockStreak.isError = true;
-
     renderScreen();
 
-    // The misleading healthy-zeroed values must NOT appear when the fetch FAILED.
-    // (The stat value + '%' unit render as split <Text> nodes; a healthy zero
-    // would surface a literal '0' value — assert it's absent from the pills.)
-    expect(screen.queryByLabelText('FATIGUE 0%')).toBeNull();
-    expect(screen.queryByLabelText('ADHERENCE 0%')).toBeNull();
-    expect(screen.queryByText('0d')).toBeNull();
-    expect(screen.queryByLabelText('Level 1')).toBeNull();
-
-    // Instead each affected pill surfaces the honest '—' + "Unavailable" + Retry.
-    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2); // FATIGUE + ADHERENCE + STREAK pills
-    expect(screen.getAllByText('Unavailable').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText('Retry').length).toBeGreaterThanOrEqual(2);
-
-    // The level badge reads honestly as "LVL —" (a11y "Level unavailable"),
-    // not "LVL 1".
+    // Honest dashes, not fake zeros.
+    expect(screen.getByLabelText('Streak, —')).toBeTruthy();
+    expect(screen.getByLabelText('Days, —')).toBeTruthy();
     expect(screen.getByText('LVL —')).toBeTruthy();
     expect(screen.getByLabelText('Level unavailable')).toBeTruthy();
+    // The misleading healthy-zeroed values must be ABSENT.
+    expect(screen.queryByText('LVL 1')).toBeNull();
+    expect(screen.queryByLabelText('Streak, 0')).toBeNull();
   });
 
-  test('pressing a stat pill Retry calls that query\'s refetch (and only that one)', () => {
-    mockStatus.isError = true; // FATIGUE + ADHERENCE pills (both refetch status)
-    mockStreak.isError = true; // STREAK pill (refetch streak)
-
-    renderScreen();
-
-    // The STREAK pill's retry affordance — its a11y label names the stat.
-    const streakRetry = screen.getByLabelText('STREAK unavailable, tap to retry');
-    fireEvent.press(streakRetry);
-    expect(mockRefetchStreak).toHaveBeenCalledTimes(1);
-    expect(mockRefetchStats).not.toHaveBeenCalled();
-  });
-
-  // ── F4 — a GENUINELY zeroed new user (queries OK) still shows zeros ─────────
-  test('genuinely zeroed new user (queries succeed) shows "0%"/"0d"/"Level 1", NOT the error state', () => {
-    mockStatus.data = { fatigueScore: 0, adherenceScore: 0, lastUpdated: '' };
+  test('genuinely zeroed user (queries succeed with zeros) shows "0" / "LVL 1"', () => {
     mockStats.data = { daysLogged: 0 };
-    mockStreak.data = { current: 0, longest: 0, lastActiveDate: '' };
-
+    mockStreak.data = { current: 0, longest: 0 };
     renderScreen();
 
-    // Honest zeroed state — distinct from the error state above. The FATIGUE +
-    // ADHERENCE pills render value '0' + '%' as split nodes; assert via their
-    // combined accessible labels.
-    expect(screen.getByLabelText('FATIGUE 0%')).toBeTruthy();
-    expect(screen.getByLabelText('ADHERENCE 0%')).toBeTruthy();
-    expect(screen.getByText('0d')).toBeTruthy();
+    expect(screen.getByLabelText('Streak, 0')).toBeTruthy();
+    expect(screen.getByLabelText('Days, 0')).toBeTruthy();
     expect(screen.getByText('LVL 1')).toBeTruthy();
     expect(screen.getByLabelText('Level 1')).toBeTruthy();
-    // …and the error affordances are absent.
-    expect(screen.queryByText('Unavailable')).toBeNull();
-    expect(screen.queryByText('Retry')).toBeNull();
+    // No error dashes in the stat row.
+    expect(screen.queryByLabelText('Streak, —')).toBeNull();
+    expect(screen.queryByText('LVL —')).toBeNull();
   });
 
-  // ── F7 — absent circadianPhase renders the honest '—', NOT a fabricated 'WAKE' ─
-  test('status resolves without circadianPhase → CIRCADIAN PHASE card shows "—", not "WAKE"', () => {
-    // The shape getStatus() now returns when the backend omits the field
-    // (circadianPhase undefined — no `?? 'WAKE'` fabrication).
-    mockStatus.data = { fatigueScore: 12, adherenceScore: 80, lastUpdated: '' };
-
+  test('real data → level + streak derive correctly (42 days logged → LVL 7)', () => {
+    mockStats.data = { daysLogged: 42 };
+    mockStreak.data = { current: 12, longest: 30 };
     renderScreen();
 
-    expect(screen.getByText('CIRCADIAN PHASE')).toBeTruthy();
-    // The card must NOT show the fabricated 'WAKE' that was hard-stuck for all.
-    expect(screen.queryByText('WAKE')).toBeNull();
-    // The honest empty fallback renders instead.
-    expect(screen.getByText('—')).toBeTruthy();
-  });
-});
-
-// F29 fix: the cycle-tracker entry (card + "View Cycle Tracker" link) must gate on
-// the actual profile fields, NOT status.cyclePhase — the server returns 'UNKNOWN'
-// (never null) for any status row, so a cyclePhase-based gate leaked the cycle UI
-// to males / opted-out users.
-describe('ProfileScreen — cycle tracker entry is FEMALE + opt-in gated', () => {
-  test('non-female / non-tracking user (cyclePhase "UNKNOWN") sees NO cycle tracker link', () => {
-    mockProfile.data = { displayName: 'T', biologicalSex: 'MALE', cycleTrackingEnabled: false };
-    mockStatus.data = { cyclePhase: 'UNKNOWN' }; // server returns UNKNOWN, not null
-    mockStats.data = undefined;
-    mockStreak.data = undefined;
-
-    renderScreen();
-
-    expect(screen.queryByText(/View Cycle Tracker/i)).toBeNull();
-  });
-
-  test('female + tracking-enabled user sees the cycle tracker link', () => {
-    mockProfile.data = { displayName: 'T', biologicalSex: 'FEMALE', cycleTrackingEnabled: true };
-    mockStatus.data = { cyclePhase: 'FOLLICULAR' };
-    mockStats.data = undefined;
-    mockStreak.data = undefined;
-
-    renderScreen();
-
-    expect(screen.queryByText(/View Cycle Tracker/i)).toBeTruthy();
+    expect(screen.getByText('LVL 7')).toBeTruthy(); // floor(42/7)+1
+    expect(screen.getByLabelText('Streak, 12')).toBeTruthy();
+    expect(screen.getByLabelText('Days, 42')).toBeTruthy();
   });
 });

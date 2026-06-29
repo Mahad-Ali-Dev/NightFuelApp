@@ -1,60 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
     FadeInDown,
     useSharedValue,
     useAnimatedStyle,
     withTiming,
 } from 'react-native-reanimated';
-import { useTheme } from '@/theme';
-import { CtaButton, GlassCard } from '@/components/ui';
-import { withAlpha } from '@/theme/utils';
-import { GoalRecommendationRail, type GoalRailItem } from '@/components/GoalRecommendationRail';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { typography } from '@/theme';
+import { useThemedPalette, type ThemedPalette } from '@/theme/useThemedPalette';
+import { CtaButton } from '@/components/ui';
 import { useOnboardingStore } from '@/store/onboardingStore';
 import { FitnessGoal } from '@/types/enums';
-import { Ionicons } from '@expo/vector-icons';
 
-// Reanimated-driven Pressable so each goal row's press feedback rides a spring
-// (transform only) — matching the rest of the onboarding card language.
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-// Each goal carries the mockup row anatomy: an emoji glyph (icon-square), a
-// title and a one-line "time range"-style sub-label. The Ionicons `icon` is
-// retained for the recommendation rail (which still renders medallion glyphs).
-const GOALS = [
-    { value: FitnessGoal.FAT_LOSS, label: 'Fat Loss', emoji: '⚖️', icon: 'flame', description: 'Lose weight and body fat' },
-    { value: FitnessGoal.MUSCLE_GAIN, label: 'Muscle Gain', emoji: '💪', icon: 'barbell', description: 'Build size and strength' },
-    { value: FitnessGoal.MAINTENANCE, label: 'Maintenance', emoji: '🔁', icon: 'body', description: 'Maintain current weight' },
-    { value: FitnessGoal.ENDURANCE, label: 'Endurance', emoji: '🔋', icon: 'walk', description: 'Improve stamina and performance' },
-    { value: FitnessGoal.GENERAL_HEALTH, label: 'General Health', emoji: '❤️', icon: 'heart', description: 'Optimal well-being' },
-];
+// Design palette is now theme-derived via useThemedPalette() inside each
+// component; styles read it through the makeStyles(D) factory below, so this
+// onboarding step recolors with the selected theme.
 
-// "Popular with shift workers" recommended-goals rail. A curated subset of the
-// same GOALS entries (identical `value`s) so tapping a rail card drives the very
-// same selection state as the list — the chosen goal can be set from either.
-const RECOMMENDED_GOAL_VALUES: FitnessGoal[] = [
-    FitnessGoal.FAT_LOSS,
-    FitnessGoal.GENERAL_HEALTH,
-    FitnessGoal.MUSCLE_GAIN,
+// Single-select primary goal. The friendly labels stay mapped to the real
+// FitnessGoal enum the onboarding store persists (no data-model change), each
+// with an emoji glyph standing in for the mockup's goal-*.png tile art.
+const GOALS = [
+    { value: FitnessGoal.MUSCLE_GAIN, label: 'Build muscle', emoji: '💪', description: 'Build size and strength' },
+    { value: FitnessGoal.ENDURANCE, label: 'More energy on shift', emoji: '🔋', description: 'Improve stamina and stay sharp' },
+    { value: FitnessGoal.FAT_LOSS, label: 'Lose fat', emoji: '⚖️', description: 'Lose weight and body fat' },
+    { value: FitnessGoal.GENERAL_HEALTH, label: 'Stay consistent', emoji: '❤️', description: 'Optimal day-to-day well-being' },
+    { value: FitnessGoal.MAINTENANCE, label: 'Maintain weight', emoji: '🔁', description: 'Hold your current shape' },
 ];
-const RECOMMENDED_GOALS: GoalRailItem[] = RECOMMENDED_GOAL_VALUES
-    .map((v) => GOALS.find((g) => g.value === v))
-    .filter((g): g is (typeof GOALS)[number] => g != null)
-    .map((g) => ({ ...g, icon: g.icon as keyof typeof Ionicons.glyphMap }));
 
 export default function GoalsScreen() {
-    const { colors, typography, spacing } = useTheme();
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const { data, updateData } = useOnboardingStore();
+    const D = useThemedPalette();
+    const styles = useMemo(() => makeStyles(D), [D]);
 
     const [goal, setGoal] = useState<FitnessGoal | null>(data.fitnessGoal);
 
-    // Single tap-to-toggle handler shared by BOTH the recommended rail and the
-    // list so selecting / clearing a goal behaves identically from either
-    // surface. Re-tapping the active goal clears it (CTA disables) — the
-    // "Tap again to clear" hint below makes that affordance discoverable.
     const handleSelect = (value: FitnessGoal) => {
         setGoal((current) => (current === value ? null : value));
     };
@@ -67,54 +55,25 @@ export default function GoalsScreen() {
     };
 
     return (
-        <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+        <View style={[styles.container, { backgroundColor: D.bg }]}>
             <StatusBar style="light" />
             <ScrollView
-                contentContainerStyle={{ paddingTop: spacing.xl, paddingBottom: spacing['2xl'] }}
+                contentContainerStyle={{ paddingTop: insets.top + 14, paddingBottom: 130 }}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Big heading — the mockup's "When do you usually work?" hero.
-                    The authoritative "STEP X OF N" progress bar lives in the
-                    onboarding layout header, so the screen leads straight with
-                    the question + supporting line. */}
-                <Animated.View
-                    entering={FadeInDown.duration(420)}
-                    style={{ paddingHorizontal: spacing.xl, marginBottom: spacing.xl }}
-                >
-                    <Text style={[typography.display, { color: colors.text.primary }]}>
-                        What's your <Text style={{ color: colors.accent.coral }}>primary goal</Text>?
-                    </Text>
-                    <Text style={[typography.body, { color: colors.text.secondary, marginTop: spacing.sm }]}>
-                        We'll shape your meals, training and recovery around the objective that matters most to you.
-                    </Text>
+                {/* Heading — the mockup's "What brings you to Zeitra?" hero. The
+                    STEP X OF N progress bar lives in the onboarding layout header. */}
+                <Animated.View entering={FadeInDown.duration(420)} style={styles.head}>
+                    <Text style={styles.title}>What brings you{'\n'}to Zeitra?</Text>
+                    <Text style={styles.sub}>Pick the goal that matters most — we'll shape your plan around it.</Text>
                 </Animated.View>
 
-                {/* Recommended-goals carousel — a horizontal snapping rail that
-                    drives the SAME selection state as the list below. */}
-                <GoalRecommendationRail
-                    title="POPULAR WITH SHIFT WORKERS"
-                    items={RECOMMENDED_GOALS}
-                    selectedValue={goal}
-                    onSelect={(value) => handleSelect(value as FitnessGoal)}
-                    edgePadding={spacing.xl}
-                />
-
-                <View style={{ paddingHorizontal: spacing.xl, marginBottom: spacing.sm }}>
-                    <Text style={[typography.overline, { color: colors.text.tertiary }]}>
-                        ALL GOALS
-                    </Text>
-                </View>
-
-                <View style={{ paddingHorizontal: spacing.xl }}>
+                <View style={styles.list}>
                     {GOALS.map((option, index) => (
-                        <Animated.View
-                            key={option.value}
-                            entering={FadeInDown.delay(120 + index * 60).duration(420)}
-                        >
+                        <Animated.View key={option.value} entering={FadeInDown.delay(80 + index * 55).duration(420)}>
                             <SelectRow
                                 emoji={option.emoji}
                                 label={option.label}
-                                sublabel={option.description}
                                 selected={goal === option.value}
                                 accessibilityLabel={`${option.label}. ${option.description}`}
                                 onPress={() => handleSelect(option.value as FitnessGoal)}
@@ -122,199 +81,83 @@ export default function GoalsScreen() {
                         </Animated.View>
                     ))}
                 </View>
-
-                {/* Toggle-off affordance hint — surfaces that tapping the active
-                    row clears it, so the CTA greying out isn't a surprise. */}
-                {goal != null && (
-                    <Animated.View
-                        entering={FadeInDown.duration(280)}
-                        style={[styles.clearHintRow, { paddingHorizontal: spacing.xl, marginTop: spacing.md }]}
-                    >
-                        <Ionicons name="information-circle-outline" size={14} color={colors.text.tertiary} />
-                        <Text style={[typography.caption, { color: colors.text.tertiary }]}>
-                            Tap your selected goal again to clear it.
-                        </Text>
-                    </Animated.View>
-                )}
             </ScrollView>
 
-            <View
-                style={[
-                    styles.footer,
-                    {
-                        paddingTop: spacing.lg,
-                        paddingHorizontal: spacing.xl,
-                        paddingBottom: spacing['2xl'],
-                        borderTopColor: withAlpha(colors.text.primary, 0.06),
-                        backgroundColor: colors.background.primary,
-                    },
-                ]}
-            >
-                <CtaButton
-                    label="Continue"
-                    icon="arrow-forward"
-                    size="lg"
-                    onPress={handleNext}
-                    disabled={!goal}
-                />
-            </View>
+            {/* Bottom CTA over a fade-to-bg scrim (mockup). */}
+            <LinearGradient colors={['transparent', D.bg]} locations={[0, 0.32]} style={[styles.footer, { paddingBottom: insets.bottom + 18 }]}>
+                <CtaButton label="Continue" icon="arrow-forward" size="lg" flat onPress={handleNext} disabled={!goal} />
+            </LinearGradient>
         </View>
     );
 }
 
-// ── SelectRow ────────────────────────────────────────────────────────────────
-// The mockup's full-width selectable row: a frosted GlassCard with a rounded-
-// square emoji tile on the left, a title + one-line sub-label in the middle, and
-// (when selected) a lime check medallion on the right. Selected = lime hairline
-// ring + soft glow + lime-filled emoji tile; colour is never the only signal
-// (the check badge + bolder title shift too). Pure presentation — forwards
-// press + a11y so the screen keeps every handler.
+// ── SelectRow — flat opaque list item; selected = lime hairline + glow +
+//    graphite gradient + lime check medallion (mockup .opt / .sel / .ck). ──
 function SelectRow({
     emoji,
     label,
-    sublabel,
     selected,
     onPress,
     accessibilityLabel,
 }: {
     emoji: string;
     label: string;
-    sublabel?: string;
     selected: boolean;
     onPress: () => void;
     accessibilityLabel?: string;
 }) {
-    const { colors, typography, spacing, borderRadius, shadows } = useTheme();
+    const D = useThemedPalette();
+    const styles = useMemo(() => makeStyles(D), [D]);
     const scale = useSharedValue(1);
     const pressStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
     return (
         <AnimatedPressable
             onPress={onPress}
-            onPressIn={() => {
-                scale.value = withTiming(0.97, { duration: 110 });
-            }}
-            onPressOut={() => {
-                scale.value = withTiming(1, { duration: 140 });
-            }}
+            onPressIn={() => { scale.value = withTiming(0.98, { duration: 110 }); }}
+            onPressOut={() => { scale.value = withTiming(1, { duration: 140 }); }}
             accessibilityRole="button"
             accessibilityState={{ selected }}
             accessibilityLabel={accessibilityLabel ?? label}
             style={[styles.rowWrap, pressStyle]}
         >
-            <GlassCard
-                radius={borderRadius.xl}
-                glow={selected ? colors.accent.coral : undefined}
-                style={[
-                    styles.rowCard,
-                    {
-                        // Constant border width (1.5) — only the colour changes on
-                        // select, so a neighbour row never reflows by 0.5px.
-                        borderColor: selected ? colors.accent.coral : withAlpha(colors.text.primary, 0.1),
-                        borderWidth: 1.5,
-                    },
-                ]}
-            >
-                <View style={[styles.rowBody, { padding: spacing.lg }]}>
-                    <View
-                        style={[
-                            styles.emojiTile,
-                            {
-                                backgroundColor: selected
-                                    ? withAlpha(colors.accent.coral, 0.22)
-                                    : colors.background.tertiary,
-                                borderColor: selected
-                                    ? withAlpha(colors.accent.coral, 0.4)
-                                    : withAlpha(colors.text.primary, 0.06),
-                            },
-                        ]}
-                    >
-                        <Text style={styles.emojiGlyph} maxFontSizeMultiplier={1.2}>
-                            {emoji}
-                        </Text>
-                    </View>
-
-                    <View style={styles.rowText}>
-                        <Text
-                            style={[
-                                typography.subhead,
-                                { color: selected ? colors.text.primary : colors.text.primary },
-                            ]}
-                            numberOfLines={1}
-                        >
-                            {label}
-                        </Text>
-                        {sublabel ? (
-                            <Text
-                                style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}
-                                numberOfLines={1}
-                            >
-                                {sublabel}
-                            </Text>
-                        ) : null}
-                    </View>
-
-                    {selected ? (
-                        <View style={[styles.checkMedallion, { backgroundColor: colors.accent.coral }, shadows.glow(colors.accent.coral)]}>
-                            <Ionicons name="checkmark" size={15} color={colors.text.inverse} />
-                        </View>
-                    ) : (
-                        <View style={[styles.emptyDot, { borderColor: colors.border.light }]} />
-                    )}
+            <View style={[styles.row, selected ? styles.rowSel : styles.rowFlat]}>
+                {selected && (
+                    <LinearGradient colors={[D.selA, D.selB]} start={{ x: 0, y: 0 }} end={{ x: 0.8, y: 1 }} style={StyleSheet.absoluteFillObject} />
+                )}
+                <View style={styles.tile}>
+                    <Text style={styles.emoji} maxFontSizeMultiplier={1.2}>{emoji}</Text>
                 </View>
-            </GlassCard>
+                <Text style={styles.rowLabel} numberOfLines={1}>{label}</Text>
+                {selected ? (
+                    <View style={styles.check}><Ionicons name="checkmark" size={16} color={D.ink} /></View>
+                ) : (
+                    <View style={styles.empty} />
+                )}
+            </View>
         </AnimatedPressable>
     );
 }
 
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
+const makeStyles = (D: ThemedPalette) => StyleSheet.create({
+    container: { flex: 1 },
+    head: { paddingHorizontal: 20, marginBottom: 4 },
+    title: [typography.display, { color: D.text, fontSize: 27, fontWeight: '700', lineHeight: 31, letterSpacing: -0.6 }] as any,
+    sub: [typography.body, { color: D.muted, fontSize: 15, lineHeight: 22, marginTop: 10 }] as any,
+    list: { paddingHorizontal: 20, marginTop: 14 },
+
+    rowWrap: { marginTop: 12 },
+    row: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 15, overflow: 'hidden' },
+    rowFlat: { backgroundColor: D.card, borderWidth: 1, borderColor: D.border },
+    rowSel: {
+        backgroundColor: D.card, borderWidth: 1.5, borderColor: D.lime,
+        shadowColor: D.lime, shadowOpacity: 0.27, shadowRadius: 14, shadowOffset: { width: 0, height: 0 }, elevation: 5,
     },
-    rowWrap: {
-        marginBottom: 13,
-    },
-    rowCard: {
-        // Row, not square — the mockup's compact list item.
-    },
-    rowBody: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-    },
-    emojiTile: {
-        width: 46,
-        height: 46,
-        borderRadius: 14,
-        borderWidth: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    emojiGlyph: {
-        fontSize: 23,
-    },
-    rowText: {
-        flex: 1,
-    },
-    checkMedallion: {
-        width: 26,
-        height: 26,
-        borderRadius: 13,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    emptyDot: {
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        borderWidth: 1.5,
-    },
-    clearHintRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    footer: {
-        borderTopWidth: 1,
-    },
+    tile: { width: 46, height: 46, borderRadius: 13, backgroundColor: D.tile, alignItems: 'center', justifyContent: 'center' },
+    emoji: { fontSize: 23 },
+    rowLabel: [typography.subhead, { flex: 1, color: D.text, fontSize: 16, fontWeight: '600', letterSpacing: -0.2 }] as any,
+    check: { width: 26, height: 26, borderRadius: 13, backgroundColor: D.lime, alignItems: 'center', justifyContent: 'center' },
+    empty: { width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, borderColor: D.emptyBd },
+
+    footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 18, paddingHorizontal: 20 },
 });

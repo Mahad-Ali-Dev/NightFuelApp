@@ -185,29 +185,34 @@ describe('ExerciseLibraryScreen — render-state coverage', () => {
     expect(mockPush).toHaveBeenCalledWith('/(exercises)/ex-1');
   });
 
-  // ── (b) BROWSE branch — category cards render + drive a category filter ────
-  it('with no filter active, renders the category cards and tapping one drives a category filter', () => {
-    // No category param and no library data → `showBrowse` is true → the browse
-    // ScrollView with the category cards renders.
+  // ── (b) STEPPED FLOW — gender gate → category cards → category filter ──────
+  it('opens on the gender gate, then after picking a gender renders the category cards, and tapping one drives a category filter', () => {
+    // No category param + no library data → not deep-linked → Step 1 gate shows.
     renderScreen();
 
-    // The browse header copy and the category catalog tiles render.
+    // STEP 1: the gender gate is shown FIRST; the category browse is NOT yet.
+    expect(screen.getByText('Who are you training?')).toBeTruthy();
+    expect(screen.getByLabelText('Male exercises')).toBeTruthy();
+    expect(screen.getByLabelText('Female exercises')).toBeTruthy();
+    expect(screen.queryByText('Browse by category')).toBeNull();
+
+    // Pick a gender → STEP 2: the category browse renders.
+    fireEvent.press(screen.getByLabelText('Male exercises'));
+
     expect(screen.getByText('Browse by category')).toBeTruthy();
     expect(screen.getByText('Gym')).toBeTruthy();
     expect(screen.getByText('Home')).toBeTruthy();
     expect(screen.getByText('Cardio')).toBeTruthy();
     expect(screen.getByText('Recovery')).toBeTruthy();
 
-    // A muscle chip labelled "Chest" renders. The Zeitra redesign surfaces the
-    // muscle filter in TWO places (the top snapping chip carousel AND the
-    // "Browse by Muscle" grid), so assert at least one rather than exactly one.
+    // A muscle chip labelled "Chest" renders (top carousel + "Browse by Muscle"
+    // grid surface it in two places — assert at least one).
     expect(screen.getAllByText('Chest').length).toBeGreaterThan(0);
 
-    // Tapping the Gym category drives the screen into a category filter: the
-    // clear/back "GYM EXERCISES" affordance appears (state branch unchanged).
+    // STEP 3: tapping Gym drives a category filter — the "GYM EXERCISES" back
+    // affordance appears and the browse copy is gone.
     fireEvent.press(screen.getByLabelText('Gym exercises'));
     expect(screen.getByText('GYM EXERCISES')).toBeTruthy();
-    // …and the browse copy is gone now that a filter is active.
     expect(screen.queryByText('Browse by category')).toBeNull();
   });
 });

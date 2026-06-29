@@ -88,7 +88,7 @@ export function ExerciseGridCard({
   const showEquip = item.equipment && item.equipment !== 'body weight';
 
   return (
-    <Animated.View entering={FadeInDown.delay(delay).springify().damping(18).mass(0.7)} style={[style, animStyle]}>
+    <Animated.View entering={FadeInDown.delay(delay).springify().damping(18).mass(0.7)} style={[style, styles.cardShadow, { backgroundColor: colors.background.secondary }, animStyle]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={item.name}
@@ -173,6 +173,21 @@ export function ExerciseGridCard({
 }
 
 const styles = StyleSheet.create({
+  // Drop shadow so the tile lifts off the dark background (the GlassCard surface
+  // alone reads flat). A pure-black shadow has almost no luminance contrast on
+  // the near-black page (#0A0C12), so the lift comes mostly from a faint light
+  // RIM — that's what actually separates the card from the background — plus a
+  // deeper/softer cast. The wrapper carries the radius (from the caller's style)
+  // + an opaque bg so the shadow casts a clean rounded rect (no overflow:hidden).
+  cardShadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.6,
+    shadowRadius: 18,
+    elevation: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
   imageWrap: { position: 'relative', width: '100%', height: 138 },
   image: { width: '100%', height: 138 },
   levelBadge: {

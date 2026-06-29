@@ -17,7 +17,7 @@
  * No new dependencies: only react-native-reanimated (already installed) and the
  * shared theme tokens via useTheme().
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -55,9 +55,10 @@ export const GRID_CARD_W = (width - 52) / 2;
 /** Carousel routine card width — peeks the next card a touch. */
 export const CAROUSEL_CARD_W = 200;
 /** Muscle-group carousel card width — wide rounded photo cards. */
-export const MUSCLE_CARD_W = 152;
-/** Page padding the Training hub uses on the left + right (matches screen). */
-const PAGE_PAD = 20;
+export const MUSCLE_CARD_W = 128;
+/** Page padding the Train + Meals hubs use on the left + right (16px gutter,
+ *  matching the mockup's `padding:0 16px` content column). */
+const PAGE_PAD = 16;
 
 /**
  * Small shared press-scale wrapper. Wraps a Pressable in an Animated.View so we
@@ -238,7 +239,7 @@ export function MuscleCard({ label, img, onPress, index = 0, accessibilityLabel,
         <View
           style={[
             st.muscleCard,
-            { borderRadius: borderRadius.xl, borderColor: colors.border.default, backgroundColor: colors.background.secondary },
+            { borderRadius: 18, borderColor: colors.border.default, backgroundColor: colors.background.secondary },
           ]}
         >
           {/* Lime spotlight behind the figure */}
@@ -258,7 +259,7 @@ export function MuscleCard({ label, img, onPress, index = 0, accessibilityLabel,
           >
             <Text style={[typography.subhead, st.muscleLabel]} numberOfLines={1}>{label}</Text>
             {typeof count === 'number' ? (
-              <Text style={[typography.caption, { color: colors.accent.lime, fontWeight: '600', marginTop: 1 }]} numberOfLines={1}>
+              <Text style={[typography.caption, { color: colors.accent.lime, fontWeight: '500', marginTop: 1 }]} numberOfLines={1}>
                 {count} exercises
               </Text>
             ) : null}
@@ -346,17 +347,36 @@ const WOD_PAGE_W = width - PAGE_PAD * 2;
  * handler for every card body + pill, so the screen's start flow is preserved.
  */
 export function WodCarousel({ items, onStart }: WodCarouselProps) {
-  const { colors, typography, borderRadius, shadows } = useTheme();
+  const { colors, typography } = useTheme();
   const [page, setPage] = useState(0);
+  const listRef = useRef<FlatList>(null);
+  const pausedRef = useRef(false);
 
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const i = Math.round(e.nativeEvent.contentOffset.x / WOD_PAGE_W);
     setPage((prev) => (prev === i ? prev : i));
   }, []);
 
+  // Gentle auto-advance (~4.5s). Pauses while the user is dragging and resumes
+  // after the swipe settles, so it never fights a manual swipe. The dots follow
+  // `page` for free. Guarded to multi-item lists.
+  useEffect(() => {
+    if (items.length <= 1) return;
+    const id = setInterval(() => {
+      if (pausedRef.current) return;
+      setPage((prev) => {
+        const next = (prev + 1) % items.length;
+        listRef.current?.scrollToOffset({ offset: next * WOD_PAGE_W, animated: true });
+        return next;
+      });
+    }, 4500);
+    return () => clearInterval(id);
+  }, [items.length]);
+
   return (
     <View>
       <FlatList
+        ref={listRef}
         data={items}
         keyExtractor={(it) => it.id}
         horizontal
@@ -364,27 +384,38 @@ export function WodCarousel({ items, onStart }: WodCarouselProps) {
         showsHorizontalScrollIndicator={false}
         decelerationRate="fast"
         onScroll={onScroll}
+        onScrollBeginDrag={() => { pausedRef.current = true; }}
+        onMomentumScrollEnd={(e) => { onScroll(e); pausedRef.current = false; }}
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingHorizontal: PAGE_PAD }}
         renderItem={({ item, index }) => (
           <Animated.View entering={FadeInDown.delay(80 + index * 40).springify().damping(18)} style={{ width: WOD_PAGE_W }}>
             <PressableScale onPress={onStart} accessibilityLabel={`${item.title}, ${item.meta}. Start workout`} scaleTo={0.985}>
-              <View style={[st.wodCard, shadows.glow(colors.accent.lime), { borderRadius: borderRadius.xl, borderColor: colors.border.light, backgroundColor: colors.background.tertiary }]}>
-                <Image source={item.img} style={st.wodFigure} contentFit="contain" cachePolicy="memory-disk" transition={200} />
+              <View style={[st.wodCard, { borderRadius: 18, backgroundColor: '#14171E' }]}>
+                {/* 150° graphite gradient base (mockup: #2b303a → #14171e), no glow. */}
                 <LinearGradient
-                  colors={[withAlpha(colors.background.secondary, 0.96), withAlpha(colors.background.secondary, 0.2), 'transparent']}
+                  colors={['#2B303A', '#14171E']}
                   start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
+                  end={{ x: 0.8, y: 1 }}
+                  style={StyleSheet.absoluteFillObject}
+                />
+                <Image source={item.img} style={st.wodFigure} contentFit="contain" cachePolicy="memory-disk" transition={200} />
+                {/* Left→right scrim (#1b1e25 34% → transparent 84%) keeps the copy legible. */}
+                <LinearGradient
+                  colors={['#1B1E25', '#1B1E25', 'transparent']}
+                  locations={[0, 0.34, 0.84]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0.06 }}
                   style={StyleSheet.absoluteFillObject}
                 />
                 <View style={st.wodInner}>
                   <View style={[st.wodEyebrow, { backgroundColor: colors.accent.lime }]}>
                     <Text style={[st.wodEyebrowTxt, { color: colors.text.inverse }]} maxFontSizeMultiplier={1.2}>WORKOUT OF THE DAY</Text>
                   </View>
-                  <Text style={[typography.h2, { color: '#FFF', fontWeight: '700', marginTop: 8 }]} numberOfLines={1}>{item.title}</Text>
+                  <Text style={[typography.h2, { color: '#FFF', fontSize: 22, fontWeight: '600', letterSpacing: -0.4, marginTop: 8 }]} numberOfLines={1}>{item.title}</Text>
                   <View style={st.wodMetaRow}>
                     <Ionicons name="time-outline" size={13} color={colors.accent.lime} />
-                    <Text style={[typography.caption, { color: 'rgba(255,255,255,0.82)', marginLeft: 5 }]} numberOfLines={1}>{item.meta}</Text>
+                    <Text style={[typography.caption, { color: '#CFD4DD', fontSize: 12.5, marginLeft: 5 }]} numberOfLines={1}>{item.meta}</Text>
                   </View>
                   <CtaButton
                     label="Start workout"
@@ -407,7 +438,7 @@ export function WodCarousel({ items, onStart }: WodCarouselProps) {
             key={it.id}
             style={i === page
               ? [st.dotActive, { backgroundColor: colors.accent.lime }]
-              : [st.dot, { backgroundColor: colors.border.light }]}
+              : [st.dot, { backgroundColor: '#3A3F49' }]}
           />
         ))}
       </View>
@@ -425,6 +456,11 @@ export interface BentoItem {
   icon: keyof typeof Ionicons.glyphMap;
   img: any;
   onPress: () => void;
+  /** Optional small subtitle under the title (Meals "Explore meals" cards). */
+  subtitle?: string;
+  /** When true the L-card fills with a COVER photo (slice) instead of Train's
+   *  contained figure (meet). Used by the Meals bento; Train omits it. */
+  cover?: boolean;
 }
 
 export interface BentoBrowseProps {
@@ -499,7 +535,15 @@ function BentoIcon({ icon, color, ink, border }: { icon: keyof typeof Ionicons.g
   );
 }
 
-/** A grayscale-photo rectangular bento tile (HIIT/Cardio/Yoga/Mobility/Pilates). */
+/**
+ * A rectangular bento tile. Two looks, chosen by `item.cover`:
+ *  - TRAIN (`cover` falsy, the mockup `.cat`): a graphite 150° gradient card with
+ *    the figure CONTAINED (whole body visible, dimmed), anchored center (HIIT /
+ *    Cardio) or right (Yoga / Mobility / Pilates) — never cover-cropped.
+ *  - MEALS (`cover: true`): a full-bleed cover food photo.
+ * Both carry the lime hairline + glow, a top-left title (+ optional subtitle) and
+ * a bottom-left lime icon chip.
+ */
 function BentoRect({
   item,
   w,
@@ -507,6 +551,7 @@ function BentoRect({
   left,
   top,
   big = true,
+  anchor = 'center',
 }: {
   item: BentoItem;
   w: number;
@@ -514,6 +559,7 @@ function BentoRect({
   left: number;
   top: number;
   big?: boolean;
+  anchor?: 'center' | 'right';
 }) {
   const { colors, typography } = useTheme();
   const iconInk = withAlpha(colors.accent.limeDark, 0.18);
@@ -521,15 +567,40 @@ function BentoRect({
   return (
     <View style={[st.bentoAbs, { left, top, width: w, height: h }]}>
       <PressableScale onPress={item.onPress} accessibilityLabel={`${item.title} workouts`} style={StyleSheet.absoluteFill}>
-        <View style={[st.bentoRect, { borderColor: colors.accent.lime }, colorGlow(colors.accent.lime)]}>
-          <Image source={item.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+        <View style={[st.bentoRect, { width: w, height: h, borderColor: item.cover ? colors.border.default : colors.accent.lime }, item.cover ? null : colorGlow(colors.accent.lime)]}>
+          {item.cover ? (
+            // Meals: full-bleed cover food photo.
+            <Image source={item.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+          ) : (
+            // Train: graphite gradient base + contained, dimmed figure.
+            <>
+              <LinearGradient
+                colors={['#2B303A', '#14171E']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0.8, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <Image
+                source={item.img}
+                style={anchor === 'right'
+                  ? { position: 'absolute', right: 6, top: 0, bottom: 0, width: '62%', opacity: 0.85 }
+                  : { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, opacity: 0.85 }}
+                contentFit="contain"
+                cachePolicy="memory-disk"
+                transition={200}
+              />
+            </>
+          )}
           <LinearGradient
-            colors={[withAlpha(colors.background.primary, 0.8), withAlpha(colors.background.primary, 0.18), 'transparent']}
-            start={{ x: 0.15, y: 0.9 }}
-            end={{ x: 0.85, y: 0.1 }}
+            colors={item.cover
+              ? [withAlpha(colors.background.primary, 0.8), withAlpha(colors.background.primary, 0.18), 'transparent']
+              : [withAlpha(colors.background.primary, 0.85), withAlpha(colors.background.primary, 0.28), 'transparent']}
+            start={item.cover ? { x: 0.15, y: 0.9 } : { x: 0, y: 0 }}
+            end={item.cover ? { x: 0.85, y: 0.1 } : { x: 1, y: 1 }}
             style={StyleSheet.absoluteFillObject}
           />
           <Text style={[typography.heading, st.bentoTitle, { fontSize: big ? 16 : 15 }]} numberOfLines={1}>{item.title}</Text>
+          {item.subtitle ? <Text style={st.bentoSubtitle} numberOfLines={1}>{item.subtitle}</Text> : null}
           <View style={st.bentoIconWrap}>
             <BentoIcon icon={item.icon} color={colors.accent.lime} ink={iconInk} border={iconBorder} />
           </View>
@@ -553,12 +624,12 @@ export function BentoBrowse({ items }: BentoBrowseProps) {
 
   return (
     <Animated.View entering={FadeInDown.delay(160).springify().damping(18)} style={[st.bentoCanvas, { height: BENTO.totalH }]}>
-      {hiit ? <BentoRect item={hiit} {...BENTO.hiit} /> : null}
+      {hiit ? <BentoRect item={hiit} {...BENTO.hiit} anchor="center" /> : null}
       {strength ? <StrengthCard item={strength} {...BENTO.strength} /> : null}
-      {cardio ? <BentoRect item={cardio} {...BENTO.cardio} /> : null}
-      {yoga ? <BentoRect item={yoga} {...BENTO.yoga} /> : null}
-      {mobility ? <BentoRect item={mobility} {...BENTO.mobility} big={false} /> : null}
-      {pilates ? <BentoRect item={pilates} {...BENTO.pilates} big={false} /> : null}
+      {cardio ? <BentoRect item={cardio} {...BENTO.cardio} anchor="center" /> : null}
+      {yoga ? <BentoRect item={yoga} {...BENTO.yoga} anchor="right" /> : null}
+      {mobility ? <BentoRect item={mobility} {...BENTO.mobility} big={false} anchor="right" /> : null}
+      {pilates ? <BentoRect item={pilates} {...BENTO.pilates} big={false} anchor="right" /> : null}
     </Animated.View>
   );
 }
@@ -598,7 +669,7 @@ function StrengthCard({
   return (
     <View style={[st.bentoAbs, { left, top, width: w, height: h }]}>
       <PressableScale onPress={item.onPress} accessibilityLabel={`${item.title} workouts`} style={StyleSheet.absoluteFill}>
-        <View style={[StyleSheet.absoluteFill, colorGlow(colors.accent.lime)]}>
+        <View style={[StyleSheet.absoluteFill, item.cover ? null : colorGlow(colors.accent.lime)]}>
           <Svg width={w} height={h} style={StyleSheet.absoluteFill}>
             <Defs>
               <ClipPath id="strengthClip">
@@ -609,25 +680,32 @@ function StrengthCard({
                 <Stop offset="0.55" stopColor={colors.background.primary} stopOpacity={0.12} />
                 <Stop offset="1" stopColor={colors.background.primary} stopOpacity={0} />
               </SvgLinearGradient>
+              {/* Graphite 150° base — matches the mockup's sgA + every other Train tile. */}
+              <SvgLinearGradient id="strengthBase" x1="0" y1="0" x2="0.8" y2="1">
+                <Stop offset="0" stopColor="#2B303A" />
+                <Stop offset="1" stopColor="#14171E" />
+              </SvgLinearGradient>
             </Defs>
-            {/* Everything below is clipped to the L silhouette */}
-            <Path d={d} fill={colors.background.tertiary} />
+            {/* Everything below is clipped to the L silhouette. Train uses the
+                graphite gradient; Meals (cover) hides it under the food slice. */}
+            <Path d={d} fill={item.cover ? colors.background.tertiary : 'url(#strengthBase)'} />
             <SvgImage
               href={item.img}
-              x={figX}
+              x={item.cover ? 0 : figX}
               y={0}
-              width={figW}
+              width={item.cover ? w : figW}
               height={h}
-              preserveAspectRatio="xMidYMax meet"
-              opacity={0.85}
+              preserveAspectRatio={item.cover ? 'xMidYMid slice' : 'xMidYMax meet'}
+              opacity={item.cover ? 1 : 0.85}
               clipPath="url(#strengthClip)"
             />
             <Path d={d} fill="url(#strengthScrim)" />
-            {/* Lime outline tracing the L */}
-            <Path d={d} fill="none" stroke={colors.accent.lime} strokeWidth={1.5} />
+            {/* Lime outline tracing the L (Train only; Meals cover uses a neutral hairline). */}
+            <Path d={d} fill="none" stroke={item.cover ? colors.border.default : colors.accent.lime} strokeWidth={1.5} />
           </Svg>
           {/* Title + icon overlays (crisp, outside the SVG clip) */}
           <Text style={[typography.heading, st.strengthTitle]} numberOfLines={1}>{item.title}</Text>
+          {item.subtitle ? <Text style={st.strengthSubtitle} numberOfLines={1}>{item.subtitle}</Text> : null}
           <View style={st.strengthIcon}>
             <BentoIcon icon={item.icon} color={colors.accent.lime} ink={iconInk} border={iconBorder} />
           </View>
@@ -653,14 +731,13 @@ const st = StyleSheet.create({
   wodCard: {
     height: 150,
     overflow: 'hidden',
-    borderWidth: 1,
   },
-  wodFigure: { position: 'absolute', right: -bs(24), bottom: 0, top: 0, width: '58%' },
+  wodFigure: { position: 'absolute', right: -bs(24), top: -7, bottom: -7, width: '58%', opacity: 0.82 },
   wodInner: { flex: 1, padding: 15, alignItems: 'flex-start' },
   wodEyebrow: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 8 },
-  wodEyebrowTxt: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
-  wodMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
-  wodCta: { marginTop: 'auto', alignSelf: 'flex-start', borderRadius: 22, paddingHorizontal: 18 },
+  wodEyebrowTxt: { fontSize: 10, fontWeight: '600', letterSpacing: 0.3 },
+  wodMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  wodCta: { marginTop: 'auto', alignSelf: 'flex-start', borderRadius: 22, paddingHorizontal: 20 },
   dotsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, marginTop: 11 },
   dot: { width: 6, height: 6, borderRadius: 3 },
   dotActive: { width: 18, height: 6, borderRadius: 3 },
@@ -668,7 +745,10 @@ const st = StyleSheet.create({
   bentoCanvas: { position: 'relative', width: WOD_PAGE_W, alignSelf: 'center' },
   bentoAbs: { position: 'absolute' },
   bentoRect: {
-    ...StyleSheet.absoluteFillObject,
+    // Explicit size (set inline to w×h) — NOT absoluteFill: PressableScale's inner
+    // Pressable collapses to 0 height with an absolute-only child, which clipped
+    // every tile to a thin line. A sized, normal-flow child makes the Pressable
+    // wrap it correctly so the gradient/photo/figure fill the tile.
     borderRadius: BENTO_R,
     borderWidth: 1.5,
     overflow: 'hidden',
@@ -679,7 +759,7 @@ const st = StyleSheet.create({
     left: 13,
     right: 13,
     color: '#FFF',
-    fontWeight: '700',
+    fontWeight: '600',
     textShadowColor: '#000',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 5,
@@ -701,12 +781,15 @@ const st = StyleSheet.create({
     right: 14,
     color: '#FFF',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     textShadowColor: '#000',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 5,
   },
   strengthIcon: { position: 'absolute', bottom: 12, left: 12 },
+  // Optional bento subtitles (Meals "Explore meals"). Sit just under the title.
+  bentoSubtitle: { position: 'absolute', top: 30, left: 13, right: 13, color: '#CFD4DD', fontSize: 10.5, fontWeight: '500', zIndex: 1 },
+  strengthSubtitle: { position: 'absolute', top: 30, left: 14, right: 14, color: '#CFD4DD', fontSize: 10.5, fontWeight: '500', zIndex: 2 },
   statCard: {
     flex: 1,
     borderWidth: 1,

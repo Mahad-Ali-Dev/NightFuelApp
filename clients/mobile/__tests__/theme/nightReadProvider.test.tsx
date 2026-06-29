@@ -132,7 +132,7 @@ describe('Night Read selectors — pure contract', () => {
   test('getThemeColors("dark") is unchanged (Aurora dark palette, lime brand)', () => {
     const dark = getThemeColors('dark');
     expect(dark.background.primary).toBe('#0A0C12');
-    expect(dark.brand).toBe('#A8CC3C');
+    expect(dark.brand).toBe('#C2F03C');
     // The deep-red Night Read primary must NOT have leaked into Aurora dark.
     expect(dark.background.primary).not.toBe('#0A0000');
   });
@@ -201,7 +201,7 @@ describe('Night Read provider — useTheme() consumer re-themes', () => {
 
   test('OFF → consumer reads the unchanged Aurora dark primary + lime brand', () => {
     renderProbe(false);
-    expect(screen.getByText('bg:#0A0C12|brand:#A8CC3C')).toBeTruthy();
+    expect(screen.getByText('bg:#0A0C12|brand:#C2F03C')).toBeTruthy();
   });
 });
 

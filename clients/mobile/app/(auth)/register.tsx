@@ -213,11 +213,11 @@ export default function RegisterScreen() {
               onPress={() => router.back()}
               style={({ pressed }) => [
                 styles.backBtn,
-                { top: insets.top + spacing.sm },
+                { top: insets.top + spacing.sm, backgroundColor: withAlpha(colors.background.secondary, 0.8), borderColor: colors.border.default },
                 pressed && styles.backBtnPressed,
               ]}
             >
-              <Ionicons name="chevron-back" size={24} color={colors.text.primary} />
+              <Ionicons name="chevron-back" size={20} color={colors.text.primary} />
             </Pressable>
 
             <View style={[styles.heroCopy, { paddingTop: insets.top }]}>
@@ -229,7 +229,7 @@ export default function RegisterScreen() {
                 Create account
               </Text>
               <Text style={[styles.heroSubtitle, { color: colors.text.secondary }]}>
-                Start training on your clock 🌙
+                Start training on your clock.
               </Text>
             </View>
           </Animated.View>
@@ -370,7 +370,7 @@ export default function RegisterScreen() {
             <CtaButton
               label="Create account"
               size="lg"
-              icon="rocket-outline"
+              flat
               loading={loading}
               onPress={handleRegister}
               style={styles.cta}
@@ -379,7 +379,7 @@ export default function RegisterScreen() {
             {/* "or sign up with" divider */}
             <View style={styles.dividerRow}>
               <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
-              <Text style={[styles.dividerText, { color: colors.text.tertiary }]}>
+              <Text style={[styles.dividerText, { color: colors.text.secondary }]}>
                 or sign up with
               </Text>
               <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
@@ -614,8 +614,10 @@ const styles = StyleSheet.create({
   backBtn: {
     position: 'absolute',
     left: spacing.lg,
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,

@@ -51,6 +51,7 @@ const mockPush = jest.fn();
 const mockBack = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, back: mockBack, replace: jest.fn() }),
+  useLocalSearchParams: () => ({}),
 }));
 
 // Controlled state for the two queries the screen issues. Each test drives a
@@ -290,10 +291,11 @@ describe('RecipesScreen — Ria\'s Kitchen browser', () => {
     fireEvent.press(screen.getByLabelText('High Protein'));
 
     // The chip now reports selected, and the list query has re-keyed to the
-    // 'high-protein' tag (proving setSelTag drove the re-query).
+    // 'High Protein' tag — the exact recipe tag the backend filters by (proving
+    // setSelTag drove the re-query with the real tag value, not a slug).
     expect(screen.getByLabelText('High Protein').props.accessibilityState).toMatchObject({
       selected: true,
     });
-    expect(mockRecipeKeys.current.some((k) => k[1] === 'high-protein')).toBe(true);
+    expect(mockRecipeKeys.current.some((k) => k[1] === 'High Protein')).toBe(true);
   });
 });

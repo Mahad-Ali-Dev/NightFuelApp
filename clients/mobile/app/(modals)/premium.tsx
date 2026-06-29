@@ -20,8 +20,9 @@
  * success/error Alerts, qc invalidations, router.back), the `selectedPlan` toggle
  * and its plan a11y labels, the close handler (router.back), the Restore link
  * (router.push subscription) and the Terms/Privacy Linking.openURL handlers. The
- * REAL prices ($7.50/mo · $89.99 yearly · $9.99 monthly) are kept — the mockup's
- * numbers were placeholders. The benefit/plan lists are static consts (never async)
+ * displayed prices ($9.99/mo · $4.99/mo yearly = $59.99/year · 7-day trial) match the
+ * locked pricing + the mockup — display-only text (real billing is the upgrade({tier})
+ * call, not these strings). The benefit/plan lists are static consts (never async)
  * so the screen can never be empty; no empty/destructive state is required.
  */
 import React, { useState } from 'react';
@@ -34,7 +35,6 @@ import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { GlassCard } from '@/components/ui/GlassCard';
 import { CtaButton } from '@/components/ui/CtaButton';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { withAlpha } from '@/theme/utils';
@@ -103,12 +103,12 @@ export default function PremiumScreen() {
             >
                 {/* ── HERO BAND ─────────────────────────────────────────────── */}
                 <Animated.View entering={FadeInDown.duration(420)} style={styles.hero}>
-                    {/* Diagonal lime → ink base wash */}
+                    {/* Neutral vertical base wash (mockup: #15171d → bg); the lime
+                        glow is the separate radial element below. */}
                     <LinearGradient
-                        colors={[withAlpha(lime, 0.18), '#181C25', '#0E1016']}
-                        locations={[0, 0.55, 1]}
+                        colors={['#15171D', colors.background.primary]}
                         start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
+                        end={{ x: 0, y: 1 }}
                         style={StyleSheet.absoluteFillObject}
                     />
                     {/* Lime radial glow, upper-right */}
@@ -145,7 +145,7 @@ export default function PremiumScreen() {
                                 PREMIUM
                             </Text>
                         </View>
-                        <Text style={[typography.h1, { color: colors.text.primary, marginTop: spacing.md, lineHeight: 30 }]}>
+                        <Text style={[typography.h1, { color: colors.text.primary, fontSize: 29, letterSpacing: -0.8, marginTop: spacing.md, lineHeight: 30 }]}>
                             Zeitra{'\n'}Premium
                         </Text>
                         <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.sm }]}>
@@ -158,8 +158,8 @@ export default function PremiumScreen() {
                 <Animated.View entering={FadeInDown.duration(420).delay(60)} style={styles.benefits}>
                     {FEATURES.map((feat) => (
                         <View key={feat.title} style={styles.benefitRow}>
-                            <View style={[styles.iconBox, { backgroundColor: withAlpha(lime, 0.12), borderColor: withAlpha(lime, 0.35) }]}>
-                                <Ionicons name={feat.icon as any} size={19} color={lime} />
+                            <View style={[styles.iconBox, { backgroundColor: '#1E222B' }]}>
+                                <Ionicons name={feat.icon as any} size={22} color={lime} />
                             </View>
                             <View style={styles.benefitText}>
                                 <Text style={[typography.subhead, { color: colors.text.primary, fontSize: 15 }]}>{feat.title}</Text>
@@ -199,7 +199,7 @@ export default function PremiumScreen() {
                         >
                             <Text style={[typography.captionMedium, { color: colors.text.secondary, fontSize: 13 }]}>Monthly</Text>
                             <Text
-                                style={[typography.statSmall, { color: monthlySelected ? lime : colors.text.primary, marginTop: spacing.xs }]}
+                                style={[typography.statSmall, { color: monthlySelected ? lime : colors.text.primary, fontSize: 22, marginTop: spacing.xs }]}
                                 maxFontSizeMultiplier={1.3}
                             >
                                 $9.99
@@ -215,7 +215,7 @@ export default function PremiumScreen() {
                             pressedScale={0.97}
                             onPress={() => setSelectedPlan('annual')}
                             accessibilityRole="radio"
-                            accessibilityLabel="Yearly plan, $7.50 per month, $89.99 billed yearly, save 20%, best value"
+                            accessibilityLabel="Yearly plan, $4.99 per month, $59.99 billed yearly, save 40%, best value"
                             accessibilityState={{ selected: annualSelected }}
                         >
                             <View
@@ -223,7 +223,7 @@ export default function PremiumScreen() {
                                     styles.planCard,
                                     styles.planCardYearly,
                                     {
-                                        backgroundColor: withAlpha(lime, 0.08),
+                                        backgroundColor: colors.background.secondary,
                                         borderColor: lime,
                                         borderWidth: 1.5,
                                     },
@@ -232,12 +232,12 @@ export default function PremiumScreen() {
                             >
                                 <Text style={[typography.captionMedium, { color: colors.text.primary, fontSize: 13 }]}>Yearly</Text>
                                 <Text
-                                    style={[typography.statSmall, { color: annualSelected ? lime : colors.text.primary, marginTop: spacing.xs }]}
+                                    style={[typography.statSmall, { color: annualSelected ? lime : colors.text.primary, fontSize: 22, marginTop: spacing.xs }]}
                                     maxFontSizeMultiplier={1.3}
                                 >
-                                    $7.50
+                                    $4.99
                                 </Text>
-                                <Text style={[typography.caption, { color: lime, fontWeight: '600', marginTop: 1 }]}>/mo · save 20%</Text>
+                                <Text style={[typography.caption, { color: lime, fontWeight: '600', marginTop: 1 }]}>/mo · save 40%</Text>
                                 {annualSelected && (
                                     <View style={[styles.checkIcon, { backgroundColor: lime }]}>
                                         <Ionicons name="checkmark" size={11} color={ink} />
@@ -259,12 +259,13 @@ export default function PremiumScreen() {
                 <Animated.View entering={FadeInDown.duration(420).delay(200)} style={styles.ctaWrap}>
                     <CtaButton
                         size="lg"
+                        flat
                         label="Start 7-day free trial"
                         loading={upgradeMutation.isPending}
                         onPress={() => upgradeMutation.mutate()}
                     />
                     <Text style={[typography.caption, { color: colors.text.tertiary, textAlign: 'center', marginTop: spacing.md }]}>
-                        {annualSelected ? 'Then $89.99/year · cancel anytime' : 'Then $9.99/month · cancel anytime'}
+                        {annualSelected ? 'Then $59.99/year · cancel anytime' : 'Then $9.99/month · cancel anytime'}
                     </Text>
 
                     {/* Restore · Terms · Privacy — subdued, non-destructive links */}
@@ -366,10 +367,9 @@ const styles = StyleSheet.create({
         paddingVertical: 7,
     },
     iconBox: {
-        width: 36,
-        height: 36,
-        borderRadius: 11,
-        borderWidth: 1,
+        width: 40,
+        height: 40,
+        borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 13,

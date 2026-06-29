@@ -280,7 +280,9 @@ describe('CommunityFeedScreen', () => {
     // like mutation with THIS post's id.
     fireEvent.press(screen.getByRole('button', { name: /Like post/ }));
     expect(mockLikeMutate).toHaveBeenCalledTimes(1);
-    expect(mockLikeMutate).toHaveBeenCalledWith('p1');
+    // The like is now a TOGGLE: it calls mutate({ postId, currentlyLiked }) so the
+    // handler can like vs unlike. POST is not pre-liked → currentlyLiked: false.
+    expect(mockLikeMutate).toHaveBeenCalledWith({ postId: 'p1', currentlyLiked: false });
 
     // The comment button (accessibilityLabel "Comment on post, <n> comments")
     // navigates to the per-post detail route.
@@ -321,7 +323,9 @@ describe('CommunityFeedScreen', () => {
     const likeBtn = within(surface).getByRole('button', { name: /Like post/ });
     fireEvent.press(likeBtn);
     expect(mockLikeMutate).toHaveBeenCalledTimes(1);
-    expect(mockLikeMutate).toHaveBeenCalledWith('p1');
+    // The like is now a TOGGLE: it calls mutate({ postId, currentlyLiked }) so the
+    // handler can like vs unlike. POST is not pre-liked → currentlyLiked: false.
+    expect(mockLikeMutate).toHaveBeenCalledWith({ postId: 'p1', currentlyLiked: false });
   });
 
   // ── (iv) header pushes → achievements + leaderboard ────────────────────────

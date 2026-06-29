@@ -26,6 +26,9 @@ export interface Exercise {
    * paths. Optional/additive, so existing callers are unaffected.
    */
   videoUrl?: string;
+  /** Female-specific demo clip — the player prefers this for Female users and
+   *  falls back to `videoUrl` (Male/canonical) otherwise. */
+  videoUrlFemale?: string;
   /** Animated GIF demonstrating the movement, when available. */
   demoGifUrl?: string;
   /** Secondary muscles worked (wger or self-hosted catalog), when available. */
@@ -122,6 +125,12 @@ export interface SearchLibraryFilters {
   bodyPart?: string | null;
   /** Equipment filter (e.g. "barbell", "body weight") */
   equipment?: string | null;
+  /** Gender filter — 'Male' | 'Female'. Unisex (null-gender) rows always match,
+   *  so both sexes see the shared catalog; gendered rows narrow the rest. */
+  gender?: 'Male' | 'Female' | null;
+  /** Difficulty — 'Beginner' | 'Intermediate' | 'Advanced'. Backend does a
+   *  case-insensitive `contains` match. */
+  difficulty?: string | null;
   /** Page size — backend caps this at 5000 (see exercise-service library route); default 1000 covers the full ~2,232-entry catalog. */
   limit?: number;
 }
@@ -155,6 +164,8 @@ export const searchLibrary = async (
   if (filters.muscleGroup) params.muscleGroup = filters.muscleGroup;
   if (filters.bodyPart) params.bodyPart = filters.bodyPart;
   if (filters.equipment) params.equipment = filters.equipment;
+  if (filters.gender) params.gender = filters.gender;
+  if (filters.difficulty) params.difficulty = filters.difficulty;
 
   const { data } = await apiClient.get<Exercise[]>('/v1/exercises/library', { params });
   return data;

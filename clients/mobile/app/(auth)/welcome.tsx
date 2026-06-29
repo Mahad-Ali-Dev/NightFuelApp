@@ -62,7 +62,7 @@ export default function WelcomeScreen() {
 
   // Hero occupies the lower portion of the frame; sized from the viewport so it
   // scales across devices (the mockup draws it ~74% of the 760px frame).
-  const heroHeight = Math.round(height * 0.62);
+  const heroHeight = Math.round(height * 0.72);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
@@ -145,7 +145,7 @@ export default function WelcomeScreen() {
 
         <Animated.Text
           entering={enter(3)}
-          style={[styles.subtitle, { color: colors.text.secondary }]}
+          style={[styles.subtitle, { color: '#C7C9CF' }]}
           maxFontSizeMultiplier={1.4}
         >
           Eat, train and sleep in sync with your body — your schedule, your
@@ -156,7 +156,7 @@ export default function WelcomeScreen() {
           <CtaButton
             label="Get started"
             size="lg"
-            icon="arrow-forward"
+            flat
             onPress={() => router.push(FIRST_ONBOARDING_ROUTE)}
             style={styles.cta}
             testID="welcome-get-started-cta"
@@ -164,7 +164,7 @@ export default function WelcomeScreen() {
 
           <View style={styles.signInRow}>
             <Text
-              style={[styles.signInText, { color: colors.text.secondary }]}
+              style={[styles.signInText, { color: '#C7C9CF' }]}
               maxFontSizeMultiplier={1.4}
             >
               Already have an account?{' '}
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   subtitle: {
-    ...typography.bodyMedium,
+    ...typography.bodySm,
     fontSize: 14,
     lineHeight: 21,
     textAlign: 'center',
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   },
   signInLink: {
     ...typography.bodySm,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   pressed: {
     opacity: 0.6,

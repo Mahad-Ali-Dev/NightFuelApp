@@ -13,7 +13,9 @@ import { Saira_400Regular, Saira_500Medium, Saira_600SemiBold, Saira_700Bold } f
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ThemeContext, resolveThemeColors, typography, spacing, borderRadius, shadows, ColorScheme } from '@/theme';
+import { ThemeContext, resolveThemeColors, typography, spacing, borderRadius, ColorScheme } from '@/theme';
+import { makeShadows } from '@/theme/shadows';
+import { isLightHex } from '@/theme/utils';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import { setOnSessionExpired } from '@/api/client';
@@ -70,6 +72,13 @@ function RootLayout() {
     () => resolveThemeColors(scheme, nightRead, themeVariant),
     [scheme, nightRead, themeVariant],
   );
+  // Scheme-aware shadows: dark variants keep the tuned dark elevation; LIGHT
+  // variants drop the Android system shadow + soften the iOS cast/halo so cards
+  // don't smear the near-white surface (the "shadow over the sections" bug).
+  const themedShadows = React.useMemo(
+    () => makeShadows(isLightHex(themeColors.background.primary)),
+    [themeColors],
+  );
 
   // Memoized so the ThemeContext value is referentially stable across the root's
   // frequent re-renders (auth / notification / connectivity churn during startup).
@@ -82,8 +91,8 @@ function RootLayout() {
     typography,
     spacing,
     borderRadius,
-    shadows,
-  }), [scheme, nightRead, themeVariant, themeColors]);
+    shadows: themedShadows,
+  }), [scheme, nightRead, themeVariant, themeColors, themedShadows]);
 
   // Per-field scoped selectors: an unscoped `useAuthStore()` destructure
   // subscribes the root to EVERY auth-store change, so any field mutation
@@ -183,6 +192,7 @@ function RootLayout() {
                 <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
                 <Stack.Screen name="(modals)" options={{ headerShown: false, presentation: 'modal' }} />
                 <Stack.Screen name="(coach)" options={{ animation: 'fade' }} />
+                <Stack.Screen name="(challenge)" options={{ animation: 'slide_from_right' }} />
                 <Stack.Screen name="(exercises)" options={{ animation: 'slide_from_right' }} />
                 <Stack.Screen name="(meals)" options={{ animation: 'slide_from_right' }} />
                 <Stack.Screen name="(performance)" options={{ animation: 'slide_from_right' }} />

@@ -46,7 +46,10 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
     fastify.get('/search', {
         schema: {
             querystring: z.object({
-                q:            z.string().min(1).max(100),
+                // Optional: a `foodGroup`-only request (no query) is valid — it
+                // browses a whole group (the service skips the name filter when q
+                // is short/empty, always bounded by `limit`).
+                q:            z.string().max(100).optional(),
                 region:       z.string().max(MAX_FILTER_LEN).optional(),
                 foodGroup:    z.string().max(MAX_FILTER_LEN).optional(),
                 isVegan:      z.enum(['true', 'false']).optional(),
@@ -59,7 +62,7 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const { q, region, foodGroup, isVegan, isGlutenFree, isHalal, source, limit } = request.query as any;
-        const results = await mealService.searchFoods(q, {
+        const results = await mealService.searchFoods(q ?? '', {
             region,
             foodGroup,
             isVegan:      isVegan      !== undefined ? isVegan === 'true'      : undefined,

@@ -410,10 +410,11 @@ describe('CommunityFeedScreen — feed loading / error / empty / populated state
     expect(screen.queryByText('No posts yet')).toBeNull();
     expect(screen.queryByText("Couldn't load the feed")).toBeNull();
 
-    // The like button still calls the like mutation with THIS post's id (the
-    // coverage change left the feed's PostItem wiring intact).
+    // The like button still wires the like toggle for THIS post (the coverage
+    // change left the feed's PostItem wiring intact). The like is now a TOGGLE, so
+    // it calls mutate({ postId, currentlyLiked }); this post is not pre-liked.
     fireEvent.press(screen.getByRole('button', { name: /Like post/ }));
     expect(mockLikeMutate).toHaveBeenCalledTimes(1);
-    expect(mockLikeMutate).toHaveBeenCalledWith('p1');
+    expect(mockLikeMutate).toHaveBeenCalledWith({ postId: 'p1', currentlyLiked: false });
   });
 });

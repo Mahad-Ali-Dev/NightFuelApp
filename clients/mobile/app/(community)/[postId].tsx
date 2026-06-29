@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
     KeyboardAvoidingView, Platform, Alert, ActivityIndicator
@@ -8,7 +8,7 @@ import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { addComment, likePost, getComments, getPostById, Comment, Post } from '@/api/community';
+import { addComment, likePost, unlikePost, getComments, getPostById, Comment, Post } from '@/api/community';
 import { safeImageUri } from '@/lib/imageUrl';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -72,6 +72,14 @@ export default function PostDetailScreen() {
         enabled: !!postId,
     });
 
+    // Seed the heart from the server's per-viewer `liked` once the post resolves
+    // (and after every refetch), so a post the viewer already liked shows a filled
+    // heart on open instead of starting empty. The optimistic onMutate also writes
+    // `liked` into the cache, so this stays consistent through a toggle.
+    useEffect(() => {
+        if (post) setLiked(!!post.liked);
+    }, [post?.liked]);
+
     // Fetch real comments. We pull isLoading/isError too so the comments section
     // has the same honest three-state treatment as the post itself — otherwise a
     // still-loading or failed getComments() silently falls through to the
@@ -103,12 +111,14 @@ export default function PostDetailScreen() {
         }
     });
 
-    // Optimistic like toggle. The like route toggles server-side, so we mirror
-    // that locally: flip `liked`, nudge the cached post.likes by ±1, and on a
-    // crossing-up to a round number fire the peak celebration. On error we roll
-    // the optimistic state back so the pill never lies after a failed tap.
+    // Real like TOGGLE. Like when not yet liked, unlike (count drops) on the
+    // second tap — calling the matching endpoint based on the current state. We
+    // mirror it locally: flip `liked`, nudge the cached post.likes by ±1, write
+    // the new `liked` into the cache (so the post-load effect stays consistent),
+    // and on a crossing-up to a round number fire the peak celebration. On error
+    // we roll the optimistic state back so the pill never lies after a failed tap.
     const likeMutation = useMutation({
-        mutationFn: () => likePost(postId),
+        mutationFn: () => (liked ? unlikePost(postId) : likePost(postId)),
         onMutate: () => {
             const prevPost = queryClient.getQueryData<Post>(['post', postId]);
             const prevLiked = liked;
@@ -120,7 +130,7 @@ export default function PostDetailScreen() {
             );
             if (prevPost) {
                 const nextLikes = Math.max(0, prevPost.likes + (willLike ? 1 : -1));
-                queryClient.setQueryData<Post>(['post', postId], { ...prevPost, likes: nextLikes });
+                queryClient.setQueryData<Post>(['post', postId], { ...prevPost, likes: nextLikes, liked: willLike });
                 if (willLike && isLikeMilestone(nextLikes)) {
                     celebrate();
                 }
@@ -134,6 +144,7 @@ export default function PostDetailScreen() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['community-feed'] });
+            queryClient.invalidateQueries({ queryKey: ['post', postId] });
         },
     });
 

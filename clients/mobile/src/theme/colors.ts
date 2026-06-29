@@ -5,7 +5,7 @@
 //
 // NAMING NOTE: the legacy keys accent.coral / coralLight / coralDark and
 // gradients.coral / coralCta predate the Aurora→Zeitra rebrand and now resolve to
-// LIME (#A8CC3C / #93B82E), NOT coral — no coral pixel is rendered anywhere. New
+// LIME (#C2F03C / #A8CC3C), NOT coral — no coral pixel is rendered anywhere. New
 // code should prefer the brand-accurate aliases accent.lime / accent.limeLight /
 // accent.limeDark and gradients.lime / gradients.limeCta (defined below, same
 // hex). The coral* keys are retained only so existing screens keep compiling.
@@ -14,29 +14,29 @@ export const colors = {
   // Core backgrounds — deep, cool, premium (was GitHub-gray #0D1117)
   background: {
     primary: '#0A0C12',    // Deep near-black, cool undertone
-    secondary: '#13161F',  // Card surface
+    secondary: '#15181F',  // Card surface (mockup --cd)
     tertiary: '#1B2030',   // Elevated surface
     quaternary: '#242B3D', // Higher elevation
   },
 
   // Borders & dividers — subtle "glass" hairlines
   border: {
-    default: '#222838',    // Subtle borders
+    default: '#252A33',    // Subtle borders (mockup --bd)
     light: '#2F3650',      // Lighter border
-    focus: '#A8CC3C',      // Focus ring
+    focus: '#C2F03C',      // Focus ring
   },
 
   // Accent colors
   accent: {
     // Brand-accurate LIME aliases — prefer these in new code. Same hex as the
     // legacy coral* keys below (which despite the name resolve to lime).
-    lime: '#A8CC3C',       // Primary CTA + key indicators (the 10% accent)
+    lime: '#C2F03C',       // Primary CTA + key indicators (the 10% accent)
     limeLight: '#C5E06B',
-    limeDark: '#93B82E',
-    coral: '#A8CC3C',      // LEGACY alias of accent.lime — resolves to lime, not coral
+    limeDark: '#A8CC3C',
+    coral: '#C2F03C',      // LEGACY alias of accent.lime — resolves to lime, not coral
     coralLight: '#C5E06B', // LEGACY alias of accent.limeLight
-    coralDark: '#93B82E',  // LEGACY alias of accent.limeDark
-    pink: '#93B82E',       // Aurora gradient partner / highlights
+    coralDark: '#A8CC3C',  // LEGACY alias of accent.limeDark
+    pink: '#A8CC3C',       // Aurora gradient partner / highlights
     cyan: '#00D4AA',       // Success, progress
     cyanLight: '#33DDBB',
     cyanDark: '#00B894',
@@ -55,10 +55,10 @@ export const colors = {
 
   // Text colors
   text: {
-    primary: '#FFFFFF',
-    secondary: '#9BA3B4',  // brighter for better contrast on the deeper bg
+    primary: '#F4F6FB',    // near-white (mockup --tx)
+    secondary: '#8B919E',  // muted (mockup --mu)
     tertiary: '#7B8497',  // AA-lifted: 5.2:1 on background.primary (#0A0C12); was #5A6373 (3.23:1, failed AA)
-    accent: '#A8CC3C',
+    accent: '#C2F03C',
     inverse: '#0A0C12',
   },
 
@@ -86,15 +86,15 @@ export const colors = {
     // Zeitra lime brand-hero gradient (lime → deeper lime). `lime`/`limeCta` are
     // the brand-accurate names; `coral`/`coralCta` are LEGACY aliases of the same
     // arrays, kept so existing consumers keep compiling.
-    lime: ['#A8CC3C', '#93B82E'] as const,
-    coral: ['#A8CC3C', '#93B82E'] as const,   // LEGACY alias of gradients.lime
-    // The Zeitra lime CTA fill: starts at the bright lime #A8CC3C (= accent.lime)
-    // and deepens to #93B82E (= accent.limeDark). Labels/icons on this fill are
+    lime: ['#C2F03C', '#A8CC3C'] as const,
+    coral: ['#C2F03C', '#A8CC3C'] as const,   // LEGACY alias of gradients.lime
+    // The Zeitra lime CTA fill: starts at the bright lime #C2F03C (= accent.lime)
+    // and deepens to #A8CC3C (= accent.limeDark). Labels/icons on this fill are
     // INK (#0A0C12), NEVER white — ink-on-lime is the high-contrast brand recipe.
     // Shared so the Dashboard "Log Meal" and the Training Start/active CTAs render
     // a byte-identical fill from one token.
-    limeCta: ['#A8CC3C', '#93B82E'] as const, // = [accent.lime, accent.limeDark]
-    coralCta: ['#A8CC3C', '#93B82E'] as const, // LEGACY alias of gradients.limeCta
+    limeCta: ['#C2F03C', '#A8CC3C'] as const, // = [accent.lime, accent.limeDark]
+    coralCta: ['#C2F03C', '#A8CC3C'] as const, // LEGACY alias of gradients.limeCta
     cyan: ['#00D4AA', '#4FC3F7'] as const,
     purple: ['#7C4DFF', '#B47CFF'] as const,
     dark: ['#13161F', '#0A0C12'] as const,
@@ -112,13 +112,13 @@ export const colors = {
     border: {
       default: '#E2E5EA',
       light: '#EDEFF2',
-      focus: '#A8CC3C',
+      focus: '#C2F03C',
     },
     text: {
       primary: '#16181D',
       secondary: '#57606A',
       tertiary: '#8B949E',
-      accent: '#A8CC3C',
+      accent: '#C2F03C',
       inverse: '#FFFFFF',
     },
   },
@@ -238,7 +238,11 @@ function buildVariant(spec: VariantSpec): ThemeVariantColors {
   const accentLight = lightenHex(accent, 0.25);
   const accentDark = darkenHex(accent, 0.12);
   const borderLight = isDark ? lightenHex(border, 0.18) : darkenHex(border, 0.06);
-  const tertiaryText = isDark ? lightenHex(muted, -0.18) /* slightly dimmer */ : lightenHex(muted, 0.18);
+  // On dark variants dim muted toward the bg; on LIGHT variants DARKEN it (away
+  // from the near-white surface) so text.tertiary stays ≥AA — lightening it on a
+  // light bg pushes it into the surface and fails contrast (the light-theme
+  // analogue of the base-palette AA fix on `colors.text.tertiary`).
+  const tertiaryText = isDark ? lightenHex(muted, -0.18) : darkenHex(muted, 0.18);
   // success/error/warning/info: keep the existing Aurora bases for dark variants
   // and the light-mode-friendly equivalents for light variants. These are hue
   // semantics, not brand, so they stay constant across same-mode variants.
@@ -333,8 +337,10 @@ export const themeVariants: Record<ThemeVariantId, ThemeVariantColors> = {
     accent: '#9D7CFF', ink: '#160D2E', text: '#F1F1FA', muted: '#8C8AA0', isDark: true,
   }),
   daylight: buildVariant({
+    // accent darkened (#5DA425 → #4E8C20) so WHITE ink on accent fills (badges/
+    // CTAs) clears WCAG AA — the mid-green was ~3:1 with white.
     bg: '#F4F7EE', surface: '#FFFFFF', border: '#E5E9DD',
-    accent: '#5DA425', ink: '#FFFFFF', text: '#161A1E', muted: '#69707E', isDark: false,
+    accent: '#4E8C20', ink: '#FFFFFF', text: '#161A1E', muted: '#69707E', isDark: false,
   }),
   mist: buildVariant({
     bg: '#F2F5FB', surface: '#FFFFFF', border: '#E2E7F0',
@@ -368,10 +374,10 @@ export interface ThemeVariantMeta {
 }
 
 export const themeVariantList: ThemeVariantMeta[] = [
-  { id: 'midnight-lime', name: 'Midnight Lime', isDark: true, accent: '#A8CC3C', bg: '#0A0C12' },
+  { id: 'midnight-lime', name: 'Midnight Lime', isDark: true, accent: '#C2F03C', bg: '#0A0C12' },
   { id: 'ember', name: 'Ember', isDark: true, accent: '#FF9A3C', bg: '#110D09' },
   { id: 'aurora-violet', name: 'Aurora', isDark: true, accent: '#9D7CFF', bg: '#0B0B15' },
-  { id: 'daylight', name: 'Daylight', isDark: false, accent: '#5DA425', bg: '#F4F7EE' },
+  { id: 'daylight', name: 'Daylight', isDark: false, accent: '#4E8C20', bg: '#F4F7EE' },
   { id: 'mist', name: 'Mist', isDark: false, accent: '#5560E6', bg: '#F2F5FB' },
   { id: 'mono', name: 'Mono', isDark: true, accent: '#FFFFFF', bg: '#0A0A0B' },
   { id: 'pearl', name: 'Pearl', isDark: false, accent: '#1A1A1E', bg: '#F4F4F6' },

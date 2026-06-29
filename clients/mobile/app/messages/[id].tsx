@@ -16,7 +16,7 @@ import {
     declineChatRequest,
     markRead,
     createSocketConnection,
-    sendMessageOverSocket,
+    sendMessage,
     emitTyping,
     type ChatMessage,
     type RequestState,
@@ -156,6 +156,11 @@ export default function UnifiedChatScreen() {
         queryKey: ['messages', conversationId],
         queryFn: () => getMessages(conversationId!) as Promise<UIMessage[]>,
         enabled: !!conversationId,
+        // Real-time fallback: the WebSocket rarely connects through the dev gateway,
+        // so poll the open thread + refetch on focus. New (peer) messages then
+        // appear within a few seconds even with no live socket.
+        refetchInterval: 4000,
+        refetchOnWindowFocus: true,
     });
 
     // 3. Conversation metadata (peer + requestState). GET conversations returns
@@ -421,39 +426,17 @@ export default function UnifiedChatScreen() {
             upsertMessage(optimistic);
             requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: true }));
 
-            // Listen once for the server ack to reconcile THIS temp row. The
-            // decorated socket has no `.once`, so we register an `.on` and rely on
-            // id-matching: the first new_message for me after this send reconciles
-            // the most-recent temp. We match by text+sender to the temp we just made.
-            if (socket) {
-                sendMessageOverSocket(socket, conversationId, text);
-                // Reconcile THIS temp row against the server ack. The decorated
-                // socket exposes on/off (no once), so we register a self-detaching
-                // listener that fires on the first own new_message matching this
-                // text — turning {tmpId,'sending'} into {realId,'sent'} and dropping
-                // the temp twin. Matching on text (not just sender) keeps two
-                // in-flight sends from cross-reconciling if acks ever reorder.
-                const ackHandler = (msg: ChatMessage) => {
-                    if (!msg || msg.conversationId !== conversationId) return;
-                    if (msg.senderId !== myUserId || msg.text !== text) return;
-                    reconcileSent(tmpId, msg);
-                    (socket as any).off?.('newMessage', ackHandler);
-                };
-                (socket as any).on('newMessage', ackHandler);
-                // Fallback: if no ack in 10s, flag the bubble as failed (tap-to-retry).
-                setTimeout(() => {
-                    const list = queryClient.getQueryData<UIMessage[]>(['messages', conversationId]);
-                    const stillPending = list?.find((m) => m.id === tmpId && m.status === 'sending');
-                    if (stillPending) {
-                        markFailed(tmpId);
-                        (socket as any).off?.('newMessage', ackHandler);
-                    }
-                }, 10000);
-            } else {
-                markFailed(tmpId);
-            }
+            // Send over REST — reliable whether or not the WebSocket connected (it
+            // usually doesn't through the dev gateway). The 201 returns the saved
+            // row, which reconciles the optimistic bubble {tmpId,'sending'} →
+            // {realId,'sent'}. The socket, when live, just delivers the PEER's
+            // messages in real time; we no longer wait on a WS ack for our own send
+            // (which falsely marked every message 'failed' when the socket was down).
+            sendMessage(conversationId, text)
+                .then((saved) => { reconcileSent(tmpId, saved as ChatMessage); })
+                .catch(() => { markFailed(tmpId); });
         },
-        [conversationId, myUserId, socket, upsertMessage, reconcileSent, markFailed, queryClient],
+        [conversationId, myUserId, upsertMessage, reconcileSent, markFailed],
     );
 
     const handleSend = useCallback(() => {

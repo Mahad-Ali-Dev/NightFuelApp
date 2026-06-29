@@ -26,6 +26,9 @@ const INTENSITY_COLORS: string[] = [
     '#10B981',                  // 4 — max
 ];
 
+// Brand-lime ramp for the embedded "Consistency" grid (Zeitra You/Profile mockup).
+const LIME_RAMP: string[] = ['#1A1E26', '#2E3B17', '#5D8120', '#92BB2F', '#C2F03C'];
+
 function getIntensity(minutes: number): number {
     if (minutes === 0)  return 0;
     if (minutes <= 20)  return 1;
@@ -47,7 +50,7 @@ interface CellData {
     minutes:   number;
 }
 
-export function ActivityHeatmap() {
+export function ActivityHeatmap({ embedded = false }: { embedded?: boolean } = {}) {
     const { colors } = useTheme();
 
     // Fetch recent workout logs (same endpoint as web component)
@@ -152,6 +155,24 @@ export function ActivityHeatmap() {
     const activeDays   = workoutMap.size;
     const totalMinutes = Array.from(workoutMap.values()).reduce((s, d) => s + d.duration, 0);
     const todayStr     = localDateKey(new Date()); // local frame — matches cell date keys
+
+    // Embedded variant (You/Profile "Consistency") — a BARE lime grid with no card
+    // chrome / header / legend / labels; the screen supplies the surrounding card.
+    if (embedded) {
+        return (
+            <View style={s.bareGrid}>
+                {weekGroups.map((weekCells, weekIdx) => (
+                    <View key={weekIdx} style={s.bareCol}>
+                        {Array.from({ length: 7 }).map((_, dayIdx) => {
+                            const cell = weekCells?.find((c) => c.day === dayIdx);
+                            const bg = LIME_RAMP[cell?.intensity ?? 0] ?? LIME_RAMP[0]!;
+                            return <View key={dayIdx} style={[s.bareCell, { backgroundColor: bg }]} />;
+                        })}
+                    </View>
+                ))}
+            </View>
+        );
+    }
 
     return (
         <View style={[s.card, {
@@ -262,4 +283,9 @@ const s = StyleSheet.create({
     weekCol:     { flexDirection: 'column', gap: GAP },
     cell:        { width: CELL, height: CELL, borderRadius: 2 },
     todayCell:   { borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' },
+
+    // Embedded bare grid (You/Profile "Consistency") — 7-row lime grid, no chrome.
+    bareGrid:    { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
+    bareCol:     { flexDirection: 'column', gap: 4 },
+    bareCell:    { width: 13, height: 13, borderRadius: 3 },
 });

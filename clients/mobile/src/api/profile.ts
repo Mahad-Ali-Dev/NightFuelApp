@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { uploadImage } from './community';
 import { User } from '@/store/authStore';
 
 export interface UserProfile extends User {
@@ -77,7 +78,18 @@ export const getMyProfile = async (): Promise<UserProfile> => {
 };
 
 export const updateProfile = async (updates: UpdateProfileInput): Promise<UserProfile> => {
-    const { data } = await apiClient.put('/v1/users/me', updates);
+    // If the caller passes a freshly-picked LOCAL avatar (a file://… / content://…
+    // ImagePicker URI), upload it to the image host FIRST and persist the returned
+    // https URL. Storing the raw device path means the avatar only renders on the
+    // authoring device and is blank for everyone else — the exact bug that made
+    // community posts show "no avatar" for other users. Mirrors createPost's image
+    // fix. An already-https avatarUrl (or null/empty) passes straight through.
+    let body = updates;
+    if (updates.avatarUrl && !/^https:\/\//i.test(updates.avatarUrl)) {
+        const uploadedUrl = await uploadImage(updates.avatarUrl);
+        body = { ...updates, avatarUrl: uploadedUrl };
+    }
+    const { data } = await apiClient.put('/v1/users/me', body);
     return data;
 };
 

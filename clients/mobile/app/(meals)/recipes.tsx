@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,16 +21,49 @@ import { MacroRings } from '@/components/nutrition/MacroRings';
 // external host (no 404 / rate-limit). '@/*' resolves to ./src, so the asset is
 // required by relative path (same pattern as the exercise fallbacks).
 const RECIPE_FALLBACK = require('../../assets/images/recipe-fallback.png');
+
+/**
+ * Recipe thumbnail with a robust fallback. Uses the recipe photo only when it's a
+ * real http(s) URL AND it loads; otherwise (null / empty / broken URL / load error)
+ * it shows the bundled dark-glass placeholder + a centered food glyph so an
+ * imageless card reads as intentional, never as a blank/broken tile.
+ */
+function RecipeImage({ uri }: { uri?: string | null }) {
+    const { colors } = useTheme();
+    const [failed, setFailed] = useState(false);
+    const usable = !!uri && /^https?:\/\//.test(uri) && !failed;
+    return (
+        <>
+            <Image
+                source={usable ? { uri } : RECIPE_FALLBACK}
+                style={StyleSheet.absoluteFillObject}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+                onError={() => setFailed(true)}
+            />
+            {!usable && (
+                <View style={[StyleSheet.absoluteFillObject, { alignItems: 'center', justifyContent: 'center' }]} pointerEvents="none">
+                    <Ionicons name="restaurant-outline" size={30} color={withAlpha(colors.text.primary, 0.35)} />
+                </View>
+            )}
+        </>
+    );
+}
 // Tag identity (id + label) is static; the accent COLOR is bound to a live theme
 // token below (TAGS, inside the component) so a palette change can't leave a
 // stale hex behind. Order here = render order of the filter rail.
+// `id` IS the exact recipe tag string the backend filters by (Recipe.tags has),
+// so the chip value matches the seeded tags ("High Protein", not "high-protein").
 const TAG_DEFS = [
     { id:'all', label:'All', accent:'coral' },
-    { id:'high-protein', label:'High Protein', accent:'red' },
-    { id:'keto', label:'Keto', accent:'amber' },
-    { id:'vegan', label:'Vegan', accent:'emerald' },
-    { id:'meal-prep', label:'Meal Prep', accent:'purple' },
-    { id:'under-30', label:'Under 30m', accent:'cyan' },
+    { id:'High Protein', label:'High Protein', accent:'red' },
+    { id:'Keto', label:'Keto', accent:'amber' },
+    { id:'Low Carb', label:'Low Carb', accent:'amber' },
+    { id:'Vegan', label:'Vegan', accent:'emerald' },
+    { id:'Vegetarian', label:'Vegetarian', accent:'emerald' },
+    { id:'Meal Prep', label:'Meal Prep', accent:'purple' },
+    { id:'Under 30m', label:'Under 30m', accent:'cyan' },
 ] as const;
 export default function RecipesScreen() {
     const { colors, typography } = useTheme();
@@ -43,10 +76,15 @@ export default function RecipesScreen() {
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const { width } = useWindowDimensions();
-    const [selTag, setSelTag] = useState('all');
+    // A `tags` param (from Explore-meals tiles / a "view all" link) preselects a
+    // filter so the screen opens straight into that tag's recipes.
+    const params = useLocalSearchParams<{ tags?: string; openRecipe?: string }>();
+    const [selTag, setSelTag] = useState(typeof params.tags === 'string' && params.tags ? params.tags : 'all');
     const [query, setQuery] = useState('');
-    const [detailId, setDetailId] = useState<string|null>(null);
-    const recipesQ = useQuery({ queryKey:['recipes',selTag], queryFn:()=>getRecipes(selTag==='all'?undefined:selTag), staleTime:5*60*1000 });
+    // `openRecipe` (from a rail card) opens that recipe's detail modal on mount.
+    const [detailId, setDetailId] = useState<string|null>(typeof params.openRecipe === 'string' ? params.openRecipe : null);
+    // limit 500 (backend max raised to match) so the full ~300 catalog shows.
+    const recipesQ = useQuery({ queryKey:['recipes',selTag], queryFn:()=>getRecipes(selTag==='all'?undefined:selTag, 500), staleTime:5*60*1000 });
     const detailQ = useQuery({ queryKey:['recipe-detail',detailId], queryFn:()=>getRecipe(detailId!), enabled:!!detailId });
     const recipes = (recipesQ.data??[]) as any[];
     // Client-side title search over whatever the active tag returned. Does NOT
@@ -133,7 +171,7 @@ export default function RecipesScreen() {
                                     <PressableScale accessibilityRole="button" accessibilityLabel={r.title} style={[s.recCard,{backgroundColor:colors.background.secondary,borderColor:colors.border.default},shadows.lg]} onPress={()=>setDetailId(r.id)}>
                                         {/* Image + scrim cover the top portion; info sits on the dark-glass body below. */}
                                         <View style={s.recImageWrap}>
-                                            <Image source={r.image ? { uri: r.image } : RECIPE_FALLBACK} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                                            <RecipeImage uri={r.image} />
                                             <LinearGradient colors={[withAlpha(colors.background.primary,0),withAlpha(colors.background.primary,0.65)]} style={StyleSheet.absoluteFillObject} />
                                             <View style={s.topRow}>
                                                 <View style={[s.badge,{backgroundColor:withAlpha(colors.background.primary,0.55)}]}><Ionicons name="time-outline" size={11} color={colors.text.primary} /><Text style={[typography.captionMedium,{color:colors.text.primary,fontSize:11,marginLeft:3}]}>{totalMins}m</Text></View>

@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { searchLibrary } from '@/api/exercises';
+import { getMyProfile } from '@/api/profile';
 import { posterFromVideoUrl } from '@/constants/exerciseDemos';
 import { LinearGradient } from 'expo-linear-gradient';
 import { withAlpha } from '@/theme/utils';
@@ -30,6 +31,9 @@ const CAT_GYM_IMG = require('../../assets/images/cat-gym.png');
 const CAT_HOME_IMG = require('../../assets/images/cat-home.png');
 const CAT_CARDIO_IMG = require('../../assets/images/cat-cardio.png');
 const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
+// Step-1 gender-gate art (full-body athlete renders).
+const GENDER_MALE_IMG = require('../../assets/images/hero-male-1.png');
+const GENDER_FEMALE_IMG = require('../../assets/images/hero-female-1.png');
 
 const CATEGORY_IMAGES = [
     { key: 'gym', label: 'Gym', image: CAT_GYM_IMG, color: '#A8CC3C', description: 'Barbell · Dumbbell · Machines' },
@@ -46,7 +50,24 @@ const CATEGORY_FALLBACK: Record<string, number> = {
     kegel: CAT_RECOVERY_IMG,
 };
 
-const MUSCLE_GROUPS = ['Chest', 'Back', 'Shoulders', 'Arms', 'Core', 'Legs', 'Glutes', 'Full Body'];
+// Muscle groups keyed to the ExerciseDB `bodyPart` values the catalog is actually
+// seeded with (NOT raw `muscleGroup` names like "pectoralis major") — matching
+// app/(exercises)/muscles.tsx so both screens filter identically. 'Arms'/'Legs'
+// use a substring that contains-matches BOTH upper+lower (backend does a `contains`
+// on bodyPart). Filtering by muscleGroup-label was the cause of "No exercises found".
+const MUSCLE_GROUPS: { label: string; bodyPart: string }[] = [
+    { label: 'Chest', bodyPart: 'chest' },
+    { label: 'Back', bodyPart: 'back' },
+    { label: 'Shoulders', bodyPart: 'shoulders' },
+    { label: 'Arms', bodyPart: 'arm' },
+    { label: 'Core', bodyPart: 'waist' },
+    { label: 'Legs', bodyPart: 'leg' },
+    { label: 'Glutes', bodyPart: 'hips' },
+];
+
+// Difficulty refinement chips. Backend does a case-insensitive `contains`, so these
+// also catch the few lowercase stragglers ('beginner'/'intermediate') in the data.
+const DIFFICULTIES = ['Beginner', 'Intermediate', 'Advanced'];
 
 
 export default function ExerciseLibraryScreen() {
@@ -55,46 +76,68 @@ export default function ExerciseLibraryScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
 
+    // ── STEP 1: gender gate ──────────────────────────────────────────────────
+    // The flow is gender → category grid → muscle filter → results. Until a gender
+    // is chosen the screen shows ONLY the Male/Female chooser. A deep link from a
+    // Train muscle-card / style tile (?muscle= / ?category=) skips the gate using
+    // the profile's biological sex, so those land straight on results.
+    const { data: profile } = useQuery({ queryKey: ['my-profile'], queryFn: getMyProfile });
+    const profileSex = ((profile as any)?.biologicalSex ?? '').toString().toUpperCase();
+    const profileDefault: 'Male' | 'Female' = profileSex === 'FEMALE' ? 'Female' : 'Male';
+    const deepLinked = !!(params.category || params.muscle);
+    const [genderPick, setGenderPick] = useState<'Male' | 'Female' | null>(null);
+    // null → show Step 1. Non-null → past the gate (picked, or deep-linked default).
+    const gender: 'Male' | 'Female' | null = genderPick ?? (deepLinked ? profileDefault : null);
+    const effectiveGender: 'Male' | 'Female' = gender ?? profileDefault;
+
     const [activeCategory, setActiveCategory] = useState<string | null>(
         (params.category as string) || null
     );
-    const [activeMuscle, setActiveMuscle] = useState<string | null>(null);
+    // activeMuscle holds an ExerciseDB bodyPart key (e.g. 'chest', 'arm'), seeded
+    // from a Train muscle-card tap (?muscle=) so the screen can land pre-filtered.
+    const [activeMuscle, setActiveMuscle] = useState<string | null>(
+        (params.muscle as string) || null
+    );
     const [searchQuery, setSearchQuery] = useState('');
+    // Difficulty refinement (Beginner / Intermediate / Advanced) — applied with the
+    // category/muscle filters, scoped after the gender step.
+    const [activeDifficulty, setActiveDifficulty] = useState<string | null>(null);
+    // Optional "{gender} only" filter. OFF by default → the FULL catalog shows
+    // (gender otherwise only drives the demo clip, since the catalog is Male-skewed
+    // and hard gender-filtering starved Female users — 132 of 480 chest). When ON,
+    // narrow to the chosen gender's (gender + unisex) exercises — a true gender list.
+    const [genderOnly, setGenderOnly] = useState(false);
     const libraryQuery = useQuery({
-        queryKey: ['exercise-library', searchQuery, activeCategory, activeMuscle],
-        // Pass the right filter type for each path:
-        //   - Search bar typing      → query (name match)
-        //   - Category card tap      → category
-        //   - Muscle chip tap        → muscleGroup (matches LibraryExercise.muscleGroup,
-        //                              not just exercise NAME, so we don't miss
-        //                              "Bench Press" when filtering for Chest)
+        queryKey: ['exercise-library', searchQuery, activeCategory, activeMuscle, activeDifficulty, genderOnly ? effectiveGender : null],
         queryFn: () => searchLibrary({
             query: searchQuery || null,
             category: activeCategory,
-            muscleGroup: activeMuscle,
+            bodyPart: activeMuscle,
+            difficulty: activeDifficulty,
+            gender: genderOnly ? effectiveGender : null,
             // Fetch the full catalog (~2,232 entries) — the backend caps at 5000.
-            // A 200 limit previously truncated category/muscle results.
             limit: 1000,
         }),
-        enabled: !!searchQuery || !!activeCategory || !!activeMuscle,
+        enabled: !!searchQuery || !!activeCategory || !!activeMuscle || !!activeDifficulty || genderOnly,
         staleTime: 5 * 60 * 1000,
     });
 
     const exercises = libraryQuery.data ?? [];
 
-    const showBrowse = !searchQuery && !activeCategory && !activeMuscle;
+    const showBrowse = !searchQuery && !activeCategory && !activeMuscle && !activeDifficulty && !genderOnly;
 
     const clearAllFilters = () => {
         setActiveCategory(null);
         setActiveMuscle(null);
+        setActiveDifficulty(null);
+        setGenderOnly(false);
         setSearchQuery('');
     };
 
-    // Tapping a muscle chip toggles the filter — re-tapping the active muscle
-    // clears back to browse (keeps the same setActiveMuscle data path).
-    const toggleMuscle = (muscle: string) => {
-        setActiveCategory(null);
-        setActiveMuscle((prev) => (prev === muscle ? null : muscle));
+    // Toggle a muscle (bodyPart) filter. Does NOT clear the category — they
+    // COMBINE so a user can drill category → then narrow by muscle group within it.
+    const toggleMuscle = (bodyPart: string) => {
+        setActiveMuscle((prev) => (prev === bodyPart ? null : bodyPart));
     };
 
     const onRefresh = useCallback(() => {
@@ -107,17 +150,16 @@ export default function ExerciseLibraryScreen() {
         // Bundled category art as the fallback module (number from require()).
         const fallbackImg = CATEGORY_FALLBACK[item.category ?? activeCategory ?? 'gym']
             ?? CATEGORY_FALLBACK.gym;
-        // Real wger image -> remote { uri }; otherwise the bundled module.
-        // expo-image's `source` accepts both a require-number and a { uri }.
-        const imageSrc = item.imageUrl ? { uri: item.imageUrl } : fallbackImg;
-        // Prefer the catalog clip's best-frame poster JPG (videoUrl `.mp4`→`.jpg`)
-        // when this is a video exercise — catalog items frequently have a null /
-        // weak imageUrl, so the poster is a sharper, on-brand thumbnail. Order:
-        // poster JPG → imageUrl → bundled placeholder. The poster may 404 while
-        // the batch is still generating it, so the card falls back via onError to
-        // `fallbackSource` (the imageUrl/placeholder) seamlessly.
+        // Prefer the clean Lyfta render (`item.imageUrl`, a CDN <id>.png) as the
+        // tile thumbnail over the catalog clip's best-frame poster JPG
+        // (videoUrl `.mp4`→`.jpg`) — the render is a sharper, consistent image.
+        // Order: imageUrl render → best-frame poster → bundled placeholder. The
+        // render may 404 (e.g. before the CDN upload lands), so the card swaps via
+        // onError to `fallbackSource` (the poster, else the placeholder) seamlessly.
         const poster = posterFromVideoUrl(item.videoUrl);
-        const imgSrc = poster ? { uri: poster } : imageSrc;
+        const posterSrc = poster ? { uri: poster } : null;
+        const imgSrc = item.imageUrl ? { uri: item.imageUrl } : (posterSrc ?? fallbackImg);
+        const imgFallbackSrc = posterSrc ?? fallbackImg;
         // Browse-time demo affordance: derived purely from the already-fetched
         // library item (no extra request). Shown when the backend supplied a
         // demo video / GIF for this exercise.
@@ -126,7 +168,7 @@ export default function ExerciseLibraryScreen() {
             <ExerciseGridCard
                 item={item}
                 imageSource={imgSrc}
-                fallbackSource={imageSrc}
+                fallbackSource={imgFallbackSrc}
                 hasDemo={hasDemo}
                 style={styles.exCardTouch}
                 delay={Math.min(index, 9) * 45}
@@ -136,11 +178,49 @@ export default function ExerciseLibraryScreen() {
     }, [router, activeCategory]);
 
     // Active-filter label for the results header (back row + count subtitle).
-    const filterLabel = activeMuscle
-        ? activeMuscle.toUpperCase() + ' EXERCISES'
+    const muscleLabel = MUSCLE_GROUPS.find(g => g.bodyPart === activeMuscle)?.label;
+    const filterLabel = muscleLabel
+        ? muscleLabel.toUpperCase() + ' EXERCISES'
         : activeCategory
             ? (CATEGORY_IMAGES.find(c => c.key === activeCategory)?.label.toUpperCase() ?? '') + ' EXERCISES'
             : 'BACK';
+
+    // ── STEP 1: gender gate — shown until a gender is chosen (deep links skip it) ─
+    if (gender === null) {
+        return (
+            <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+                <StatusBar style="light" />
+                <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+                    <Text style={[typography.h1, { color: colors.text.primary }]}>Exercise Library</Text>
+                    <View style={styles.subtitleRow}>
+                        <View style={[styles.subtitleAccent, { backgroundColor: colors.accent.coral }]} />
+                        <Text style={[typography.body, { color: colors.text.secondary }]}>Who are you training?</Text>
+                    </View>
+                </View>
+                <View style={styles.genderGate}>
+                    {(['Male', 'Female'] as const).map((gx, i) => (
+                        <Animated.View key={gx} entering={FadeInDown.delay(80 + i * 70).duration(440)} style={{ flex: 1 }}>
+                            <TouchableOpacity
+                                style={[styles.genderCard, { borderColor: colors.border.default }]}
+                                activeOpacity={0.9}
+                                accessibilityRole="button"
+                                accessibilityLabel={`${gx} exercises`}
+                                onPress={() => setGenderPick(gx)}
+                            >
+                                <Image source={gx === 'Male' ? GENDER_MALE_IMG : GENDER_FEMALE_IMG} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" />
+                                <LinearGradient colors={['transparent', 'rgba(0,0,0,0.88)']} style={StyleSheet.absoluteFillObject} />
+                                <View style={[styles.catAccentRail, { backgroundColor: colors.accent.coral }]} />
+                                <View style={styles.genderCardContent}>
+                                    <Ionicons name={gx === 'Male' ? 'male' : 'female'} size={22} color={colors.accent.coral} />
+                                    <Text style={[typography.heading, { color: '#FFF', fontSize: 20, fontWeight: '900', marginTop: 6 }]}>{gx}</Text>
+                                </View>
+                            </TouchableOpacity>
+                        </Animated.View>
+                    ))}
+                </View>
+            </View>
+        );
+    }
 
     return (
         <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
@@ -211,6 +291,45 @@ export default function ExerciseLibraryScreen() {
                 </TouchableOpacity>
             </Animated.View>
 
+            {/* Chosen-gender bar — the gender context, an optional "{gender} only"
+                filter (narrows to that gender + unisex), and a "Change" affordance
+                back to the gate (only when the user explicitly picked, not deep-linked). */}
+            {gender && (
+                <Animated.View entering={FadeInDown.delay(40).duration(360)} style={styles.genderBar}>
+                    <Ionicons name={effectiveGender === 'Male' ? 'male' : 'female'} size={14} color={colors.accent.coral} />
+                    <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 6 }]}>
+                        Showing <Text style={{ color: colors.text.primary, fontWeight: '700' }}>{effectiveGender}</Text>
+                    </Text>
+                    <View style={{ flex: 1 }} />
+                    {/* Toggle: only this gender's exercises (gender + unisex). */}
+                    <TouchableOpacity
+                        onPress={() => setGenderOnly((v) => !v)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="switch"
+                        accessibilityState={{ checked: genderOnly }}
+                        accessibilityLabel={`${effectiveGender} exercises only`}
+                        style={[styles.genderOnlyPill, genderOnly
+                            ? { backgroundColor: colors.accent.coral, borderColor: colors.accent.coral }
+                            : { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
+                    >
+                        {genderOnly && <Ionicons name="checkmark" size={12} color={colors.text.inverse} />}
+                        <Text style={[typography.caption, { fontSize: 11.5, fontWeight: '700', color: genderOnly ? colors.text.inverse : colors.text.secondary }]}>
+                            {effectiveGender} only
+                        </Text>
+                    </TouchableOpacity>
+                    {genderPick && (
+                    <TouchableOpacity
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button" accessibilityLabel="Change gender"
+                        onPress={() => { setGenderPick(null); clearAllFilters(); }}
+                        style={{ marginLeft: 12 }}
+                    >
+                        <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: '700' }]}>Change</Text>
+                    </TouchableOpacity>
+                    )}
+                </Animated.View>
+            )}
+
             {/* Muscle-group filter chips — horizontal snapping carousel. Drives the
                 same setActiveMuscle data path; the active chip is lime-on-ink. */}
             <Animated.View entering={FadeInDown.delay(80).duration(420)} style={{ marginBottom: showBrowse ? 4 : 12 }}>
@@ -222,29 +341,29 @@ export default function ExerciseLibraryScreen() {
                     snapToInterval={104}
                     snapToAlignment="start"
                 >
-                    {MUSCLE_GROUPS.map((muscle) => {
-                        const active = activeMuscle === muscle;
+                    {MUSCLE_GROUPS.map((g) => {
+                        const active = activeMuscle === g.bodyPart;
                         return (
                             <TouchableOpacity
-                                key={muscle}
+                                key={g.bodyPart}
                                 activeOpacity={0.85}
                                 accessibilityRole="button"
                                 accessibilityState={{ selected: active }}
-                                accessibilityLabel={`${muscle} exercises`}
+                                accessibilityLabel={`${g.label} exercises`}
                                 style={[
                                     styles.filterChip,
                                     active
                                         ? { backgroundColor: colors.accent.coral, borderColor: colors.accent.coral, ...shadows.glow(colors.accent.coral) }
                                         : { backgroundColor: colors.background.secondary, borderColor: colors.border.default },
                                 ]}
-                                onPress={() => toggleMuscle(muscle)}
+                                onPress={() => toggleMuscle(g.bodyPart)}
                             >
                                 <Text style={[
                                     typography.caption,
                                     { fontWeight: '800', fontSize: 12.5, letterSpacing: 0.2 },
                                     { color: active ? colors.text.inverse : colors.text.primary },
                                 ]}>
-                                    {muscle}
+                                    {g.label}
                                 </Text>
                             </TouchableOpacity>
                         );
@@ -252,6 +371,30 @@ export default function ExerciseLibraryScreen() {
                 </ScrollView>
             </Animated.View>
 
+            {/* Difficulty refinement — Beginner / Intermediate / Advanced. Re-tap to
+                clear. Combines with the category + muscle filters. */}
+            <Animated.View entering={FadeInDown.delay(100).duration(420)} style={styles.difficultyRow}>
+                {DIFFICULTIES.map((d) => {
+                    const active = activeDifficulty === d;
+                    return (
+                        <TouchableOpacity
+                            key={d}
+                            activeOpacity={0.85}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: active }}
+                            accessibilityLabel={`${d} level`}
+                            style={[styles.difficultyChip, active
+                                ? { backgroundColor: colors.accent.cyan, borderColor: colors.accent.cyan }
+                                : { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
+                            onPress={() => setActiveDifficulty((prev) => (prev === d ? null : d))}
+                        >
+                            <Text style={[typography.caption, { fontWeight: '700', fontSize: 12, color: active ? colors.text.inverse : colors.text.secondary }]}>
+                                {d}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </Animated.View>
 
             {showBrowse ? (
                 <ScrollView
@@ -316,18 +459,18 @@ export default function ExerciseLibraryScreen() {
                         </Text>
                     </View>
                     <View style={styles.muscleGrid}>
-                        {MUSCLE_GROUPS.map((muscle, i) => (
-                            <Animated.View key={muscle} entering={FadeInDown.delay(260 + i * 35).duration(380)}>
+                        {MUSCLE_GROUPS.map((g, i) => (
+                            <Animated.View key={g.bodyPart} entering={FadeInDown.delay(260 + i * 35).duration(380)}>
                                 <TouchableOpacity
                                     activeOpacity={0.85}
                                     accessibilityRole="button"
-                                    accessibilityLabel={`${muscle} exercises`}
+                                    accessibilityLabel={`${g.label} exercises`}
                                     style={[styles.muscleChip, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}
-                                    onPress={() => setActiveMuscle(muscle)}
+                                    onPress={() => setActiveMuscle(g.bodyPart)}
                                 >
                                     <View style={[styles.muscleDot, { backgroundColor: colors.accent.coral }]} />
                                     <Text style={[typography.caption, { color: colors.text.primary, fontWeight: 'bold' }]}>
-                                        {muscle}
+                                        {g.label}
                                     </Text>
                                 </TouchableOpacity>
                             </Animated.View>
@@ -403,6 +546,15 @@ const styles = StyleSheet.create({
     searchBox: { flex: 1 },
     searchBoxInner: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, height: 48, gap: 8 },
     searchInput: { flex: 1, fontSize: 15, fontFamily: 'Inter' },
+    // Step-1 gender gate (two full-height athlete cards) + the chosen-gender bar.
+    genderGate: { flex: 1, flexDirection: 'row', gap: 14, paddingHorizontal: 20, paddingTop: 8, paddingBottom: 40 },
+    genderCard: { flex: 1, borderRadius: 20, borderCurve: 'continuous', overflow: 'hidden', borderWidth: 1, justifyContent: 'flex-end' },
+    genderCardContent: { padding: 16 },
+    genderBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12 },
+    genderOnlyPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1 },
+    // Difficulty refinement (Beginner / Intermediate / Advanced)
+    difficultyRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 20, marginBottom: 12 },
+    difficultyChip: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 9, borderRadius: 10, borderWidth: 1 },
     // Muscle-filter chip carousel
     chipRow: { paddingHorizontal: 20, gap: 8 },
     filterChip: {

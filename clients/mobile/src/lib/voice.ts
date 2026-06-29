@@ -125,6 +125,22 @@ export function getVoiceAdapter(): VoiceAdapter {
   if (resolvedAdapter) return resolvedAdapter;
 
   try {
+    // Probe for the native STT module WITHOUT throwing. Expo Go doesn't bundle
+    // ExpoSpeechRecognition, and the package's module-eval calls requireNativeModule()
+    // which throws a noisy red "Cannot find native module" error. requireOptionalNativeModule
+    // returns null instead of throwing, so if it's absent we skip the native require
+    // entirely and degrade to the honest no-op (mic shows "needs dev build"). In a
+    // real dev/release build the module IS present → we proceed to the native adapter.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const core = require('expo-modules-core') as {
+      requireOptionalNativeModule?: (name: string) => unknown;
+    };
+    if (typeof core.requireOptionalNativeModule === 'function'
+        && !core.requireOptionalNativeModule('ExpoSpeechRecognition')) {
+      resolvedAdapter = noopVoiceAdapter;
+      return resolvedAdapter;
+    }
+
     // Lazy, runtime-only require — Metro needs a STRING LITERAL here so it can
     // bundle the native adapter for the EAS build. This line is NEVER reached at
     // module-eval time of THIS file; it runs only when getVoiceAdapter() is first

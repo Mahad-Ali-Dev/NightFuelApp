@@ -101,6 +101,10 @@ jest.mock('@tanstack/react-query', () => ({
 // the composer's send path is live. Type-only exports (ChatMessage / RequestState)
 // are erased by Babel.
 const mockSendOverSocket = jest.fn();
+// Send now goes over REST (reliable whether or not the socket connected); the
+// composer assertions ride on this spy. Resolves a saved row so the optimistic
+// bubble reconciles.
+const mockSendMessage = jest.fn((..._args: any[]) => Promise.resolve({ id: 'real-1', conversationId: 'conv-1', senderId: 'me-1', text: '', createdAt: '2026-01-01T00:00:00.000Z' }));
 const mockEmitTyping = jest.fn();
 // A minimal socket.io-shaped stub: on/off register-detach, emit/disconnect inert.
 const mockSocket = {
@@ -119,6 +123,7 @@ jest.mock('@/api/chat', () => ({
   markRead: jest.fn(() => Promise.resolve()),
   createSocketConnection: jest.fn(() => Promise.resolve(mockSocket)),
   sendMessageOverSocket: (...args: any[]) => mockSendOverSocket(...args),
+  sendMessage: (...args: any[]) => mockSendMessage(...args),
   emitTyping: (...args: any[]) => mockEmitTyping(...args),
 }));
 
@@ -215,7 +220,7 @@ describe('messages/[id] — DM composer send bound + honest a11y', () => {
 
     // Pressing the disabled control is a no-op — the send path never fires.
     fireEvent.press(send);
-    expect(mockSendOverSocket).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
   // ── (iii) DISABLED state — whitespace-only input is treated as empty ────────
@@ -230,7 +235,7 @@ describe('messages/[id] — DM composer send bound + honest a11y', () => {
     expect(send.props.accessibilityState?.disabled).toBe(true);
 
     fireEvent.press(send);
-    expect(mockSendOverSocket).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
   // ── (iv) ENABLED state — valid trimmed text enables Send + dispatches once ──
@@ -250,8 +255,8 @@ describe('messages/[id] — DM composer send bound + honest a11y', () => {
 
     // One press → exactly one socket send carrying the conversationId + the text.
     fireEvent.press(send);
-    await waitFor(() => expect(mockSendOverSocket).toHaveBeenCalledTimes(1));
-    expect(mockSendOverSocket).toHaveBeenCalledWith(mockSocket, 'conv-1', 'hello world');
+    await waitFor(() => expect(mockSendMessage).toHaveBeenCalledTimes(1));
+    expect(mockSendMessage).toHaveBeenCalledWith('conv-1', 'hello world');
   });
 
   // ── (v) ENABLED state — leading/trailing whitespace is trimmed before send ──
@@ -268,7 +273,7 @@ describe('messages/[id] — DM composer send bound + honest a11y', () => {
 
     // …and the dispatched text is trimmed (the same guard handleSend applies).
     fireEvent.press(send);
-    await waitFor(() => expect(mockSendOverSocket).toHaveBeenCalledTimes(1));
-    expect(mockSendOverSocket).toHaveBeenCalledWith(mockSocket, 'conv-1', 'hi coach');
+    await waitFor(() => expect(mockSendMessage).toHaveBeenCalledTimes(1));
+    expect(mockSendMessage).toHaveBeenCalledWith('conv-1', 'hi coach');
   });
 });

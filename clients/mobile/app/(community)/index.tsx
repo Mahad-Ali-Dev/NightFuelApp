@@ -5,7 +5,7 @@ import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getFeed, likePost, getChallenges, Post } from '@/api/community';
+import { getFeed, likePost, unlikePost, getChallenges, Post } from '@/api/community';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
@@ -52,12 +52,32 @@ export default function CommunityFeedScreen() {
         queryFn: getChallenges,
     });
 
-    const likeMutation = useMutation({
-        mutationFn: (postId: string) => likePost(postId),
-        onError: (err: any) => { Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Something went wrong'); },
+    // Real like TOGGLE: like when not yet liked, unlike (count drops) on the
+    // second tap. We optimistically patch the cached feed row — flip `liked` and
+    // nudge `likes` by ±1 — so the heart + count respond instantly, then reconcile
+    // with the server (which carries the authoritative `liked`/`likes`) on success.
+    // On error we restore the pre-tap snapshot so the pill never lies.
+    const toggleLike = useMutation({
+        mutationFn: ({ postId, currentlyLiked }: { postId: string; currentlyLiked: boolean }) =>
+            currentlyLiked ? unlikePost(postId) : likePost(postId),
+        onMutate: ({ postId, currentlyLiked }) => {
+            const prev = queryClient.getQueryData<Post[]>(['community-feed']);
+            queryClient.setQueryData<Post[]>(['community-feed'], (old) =>
+                old?.map((p) =>
+                    p.id === postId
+                        ? { ...p, liked: !currentlyLiked, likes: Math.max(0, p.likes + (currentlyLiked ? -1 : 1)) }
+                        : p,
+                ),
+            );
+            return { prev };
+        },
+        onError: (err: any, _vars, ctx) => {
+            if (ctx?.prev) queryClient.setQueryData(['community-feed'], ctx.prev);
+            Alert.alert('Error', err?.response?.data?.message ?? err?.message ?? 'Something went wrong');
+        },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['community-feed'] });
-        }
+        },
     });
 
     const onRefresh = async () => {
@@ -226,7 +246,7 @@ export default function CommunityFeedScreen() {
                             <Animated.View key={post.id} entering={FadeInDown.delay(80 + index * 70).duration(420)}>
                                 <PostItem
                                     post={post}
-                                    onLike={() => likeMutation.mutate(post.id)}
+                                    onLike={() => toggleLike.mutate({ postId: post.id, currentlyLiked: !!post.liked })}
                                     onComment={() => router.push(`/(community)/${post.id}`)}
                                     onShare={async () => {
                                         try {
@@ -278,12 +298,11 @@ function RiaSidebarTab({ onPress }: { onPress: () => void }) {
 
 function PostItem({ post, onLike, onComment, onShare }: { post: Post, onLike: () => void, onComment: () => void, onShare: () => void }) {
     const { colors, typography, borderRadius } = useTheme();
-    // Local liked state for immediate, honest feedback: there is no per-viewer
-    // "liked" flag on the Post wire shape, so we reflect THIS session's tap (the
-    // user's own action) — the heart fills lime on like. The real like handler
-    // (onLike → likeMutation.mutate(post.id)) is unchanged; this only drives the
-    // glyph + tint, never the count or the network call.
-    const [liked, setLiked] = useState(false);
+    // The viewer's like state now comes from the post itself (post.liked, computed
+    // server-side from post_likes and patched optimistically by toggleLike), so the
+    // heart shows its REAL state on load and survives reloads — no session-only
+    // guess. onLike runs the like/unlike toggle.
+    const liked = !!post.liked;
     // Trust-gate user-supplied URLs before handing them to <Image>; non-https /
     // malformed values fall back to the placeholder (person icon / card bg).
     const avatarUri = safeImageUri(post.author?.avatarUrl);
@@ -321,9 +340,10 @@ function PostItem({ post, onLike, onComment, onShare }: { post: Post, onLike: ()
                         activeOpacity={0.85}
                         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         accessibilityRole="button"
-                        accessibilityLabel={`Like post, ${post.likes} likes`}
+                        accessibilityLabel={`${liked ? 'Unlike' : 'Like'} post, ${post.likes} likes`}
+                        accessibilityState={{ selected: liked }}
                         style={styles.actionItem}
-                        onPress={() => { setLiked((v) => !v); onLike(); }}
+                        onPress={onLike}
                     >
                         <Ionicons name={liked ? 'heart' : 'heart-outline'} size={20} color={liked ? colors.accent.lime : colors.text.tertiary} />
                         <Text style={[typography.caption, { color: liked ? colors.accent.lime : colors.text.secondary, marginLeft: 6, fontWeight: 'bold' }]}>{post.likes}</Text>

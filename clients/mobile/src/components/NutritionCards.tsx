@@ -20,7 +20,7 @@
  * View with `width:'<n>%'` + `height:'100%'` (the macro-bar probe's signature) —
  * only MacroTile's bar carries that, exactly as before.
  */
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Dimensions, ScrollView, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -375,6 +375,8 @@ export interface NextMealHeroProps {
   /** Primary CTA label (defaults to "View meal"). */
   ctaLabel?: string;
   onPress?: () => void;
+  /** When set, renders a secondary translucent "Add" pill beside the CTA. */
+  onAdd?: () => void;
   accessibilityLabel?: string;
 }
 
@@ -387,65 +389,61 @@ export interface NextMealHeroProps {
  */
 export function NextMealHero({
   eyebrow,
-  time,
   title,
   meta,
   img,
   ctaLabel = 'View meal',
   onPress,
+  onAdd,
   accessibilityLabel,
 }: NextMealHeroProps) {
-  const { colors, typography, borderRadius } = useTheme();
+  const { colors, typography } = useTheme();
   return (
     <Animated.View entering={FadeInDown.delay(40).duration(420)}>
-      <View
-        style={[
-          st.heroCard,
-          { borderRadius: borderRadius.xl, borderColor: withAlpha(colors.accent.lime, 0.5) },
-        ]}
-      >
+      <View style={st.heroCard}>
         <Image source={img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
-        {/* Left-anchored scrim so the copy reads over the photo. */}
+        {/* Bottom-up scrim so the copy reads over the photo (mockup gradient). */}
         <LinearGradient
-          colors={['rgba(10,12,18,0.94)', 'rgba(10,12,18,0.55)', 'rgba(10,12,18,0.12)']}
+          colors={['transparent', 'rgba(10,12,18,0.35)', 'rgba(10,12,18,0.95)']}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
+          end={{ x: 0, y: 1 }}
           style={StyleSheet.absoluteFillObject}
         />
+        {/* Lime badge floated top-left (carries the "NEXT · … · IN 1H 20M" copy). */}
+        <View style={[st.heroBadge, { backgroundColor: colors.accent.lime }]}>
+          <Text style={[st.heroBadgeTxt, { color: colors.text.inverse }]} numberOfLines={1}>{eyebrow}</Text>
+        </View>
+        {/* Content pinned to the bottom. */}
         <View style={st.heroBody}>
-          {/* Eyebrow + a DISCRETE time chip. The time is its own <Text> node (not
-              concatenated into the eyebrow) so callers/tests can find the exact
-              scheduled time string. */}
-          <View style={st.heroChipRow}>
-            <View style={[st.heroChip, { backgroundColor: withAlpha(colors.accent.lime, 0.18), borderColor: withAlpha(colors.accent.lime, 0.4) }]}>
-              <Text style={[typography.caption, { color: colors.accent.lime, fontWeight: '700', fontSize: 10 }]} numberOfLines={1}>
-                {eyebrow}
-              </Text>
-            </View>
-            {time ? (
-              <View style={[st.heroTimeChip, { backgroundColor: 'rgba(10,12,18,0.5)', borderColor: withAlpha(colors.accent.lime, 0.3) }]}>
-                <Text style={[typography.caption, { color: '#FFF', fontWeight: '700', fontSize: 10 }]} numberOfLines={1}>
-                  {time}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-          <Text style={[typography.heading, { color: '#FFF', fontWeight: '800', marginTop: 8 }]} numberOfLines={1}>
+          <Text style={[typography.heading, { color: '#FFF', fontSize: 21, fontWeight: '600', letterSpacing: -0.3 }]} numberOfLines={1}>
             {title}
           </Text>
           {meta ? (
-            <Text style={[typography.caption, { color: 'rgba(255,255,255,0.82)', marginTop: 3 }]} numberOfLines={1}>
-              {meta}
-            </Text>
+            <View style={st.heroMetaRow}>
+              <Ionicons name="flame" size={13} color={colors.accent.lime} />
+              <Text style={[typography.caption, { color: '#CFD4DD', fontSize: 12.5, marginLeft: 4 }]} numberOfLines={1}>{meta}</Text>
+            </View>
           ) : null}
-          <CtaButton
-            label={ctaLabel}
-            icon="arrow-forward"
-            size="sm"
-            onPress={onPress}
-            accessibilityLabel={accessibilityLabel ?? `${ctaLabel}: ${title}`}
-            style={st.heroCta}
-          />
+          <View style={st.heroPills}>
+            <CtaButton
+              label={ctaLabel}
+              icon="restaurant"
+              size="sm"
+              onPress={onPress}
+              accessibilityLabel={accessibilityLabel ?? `${ctaLabel}: ${title}`}
+              style={{ borderRadius: 22 }}
+            />
+            {onAdd ? (
+              <PressableScale
+                onPress={onAdd}
+                accessibilityLabel={`Add ${title}`}
+                style={st.heroAddPill}
+              >
+                <Ionicons name="add" size={15} color="#FFF" />
+                <Text style={[typography.caption, { color: '#FFF', fontSize: 13, fontWeight: '500', marginLeft: 4 }]}>Add</Text>
+              </PressableScale>
+            ) : null}
+          </View>
         </View>
       </View>
     </Animated.View>
@@ -487,12 +485,12 @@ export function MacroRingStrip({ rings }: { rings: MacroRing[] }) {
         >
           <CircularProgress
             progress={ring.fraction}
-            size={56}
+            size={58}
             strokeWidth={6}
             color={ring.color}
-            trackColor={colors.background.tertiary}
+            trackColor="#252A33"
           >
-            <Text style={[typography.captionMedium, { color: colors.text.primary, fontSize: 12 }]} maxFontSizeMultiplier={1.2}>
+            <Text style={[typography.captionMedium, { color: ring.color, fontSize: 14, fontWeight: '600' }]} maxFontSizeMultiplier={1.2}>
               {ring.percent}%
             </Text>
           </CircularProgress>
@@ -521,10 +519,11 @@ export interface MacroRingsCardProps {
 }
 
 export function MacroRingsCard({ rings, consumedKcal, targetKcal }: MacroRingsCardProps) {
-  const { colors, typography, borderRadius } = useTheme();
+  const { colors, typography } = useTheme();
   return (
     <Animated.View entering={FadeInDown.delay(55).duration(420)}>
-      <GlassCard radius={borderRadius.xl} style={st.macroRingsCard}>
+      {/* Flat opaque card (mockup .zc) — #15181F fill + #252A33 hairline, radius 16. */}
+      <View style={[st.macroRingsCard, { backgroundColor: '#15181F', borderWidth: 1, borderColor: '#252A33', borderRadius: 16 }]}>
         <View style={st.macroRingsHead}>
           <Text style={[typography.subhead, { color: colors.text.primary, fontWeight: '700' }]}>Today's macros</Text>
           <Text style={[typography.caption, { color: colors.text.secondary }]}>
@@ -533,7 +532,7 @@ export function MacroRingsCard({ rings, consumedKcal, targetKcal }: MacroRingsCa
           </Text>
         </View>
         <MacroRingStrip rings={rings} />
-      </GlassCard>
+      </View>
     </Animated.View>
   );
 }
@@ -557,17 +556,39 @@ export interface NextMealSlide extends NextMealHeroProps {
 export function NextMealSlider({ slides }: { slides: NextMealSlide[] }) {
   const { colors } = useTheme();
   const [page, setPage] = useState(0);
-  const widthRef = useRef(0);
+  // Page width as STATE (not a ref) so a measured layout re-renders the pages —
+  // a ref wouldn't, leaving the pager stuck on the fallback width.
+  const [pageW, setPageW] = useState(0);
 
   const onLayout = useCallback((e: { nativeEvent: { layout: { width: number } } }) => {
-    widthRef.current = e.nativeEvent.layout.width;
+    const w = e.nativeEvent.layout.width;
+    setPageW((prev) => (prev === w ? prev : w));
   }, []);
 
   const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const w = widthRef.current || e.nativeEvent.layoutMeasurement.width || 1;
+    const w = pageW || e.nativeEvent.layoutMeasurement.width || 1;
     const next = Math.round(e.nativeEvent.contentOffset.x / w);
     setPage((prev) => (prev === next ? prev : next));
   }, []);
+
+  // Gentle auto-advance (~4.5s). Re-arms once the width is measured (pageW); the
+  // stride is the measured width so dots stay correct. Pauses on drag, resumes
+  // after the swipe. The single-slide early return below means this only matters
+  // once the pager actually renders.
+  const scrollRef = useRef<ScrollView>(null);
+  const pausedRef = useRef(false);
+  useEffect(() => {
+    if (slides.length <= 1 || !pageW) return;
+    const id = setInterval(() => {
+      if (pausedRef.current) return;
+      setPage((prev) => {
+        const next = (prev + 1) % slides.length;
+        scrollRef.current?.scrollTo({ x: next * pageW, animated: true });
+        return next;
+      });
+    }, 4500);
+    return () => clearInterval(id);
+  }, [slides.length, pageW]);
 
   if (slides.length === 0) return null;
 
@@ -582,16 +603,19 @@ export function NextMealSlider({ slides }: { slides: NextMealSlide[] }) {
   return (
     <Animated.View entering={FadeInDown.delay(40).duration(420)} onLayout={onLayout}>
       <ScrollView
+        ref={scrollRef}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onScroll={onScroll}
+        onScrollBeginDrag={() => { pausedRef.current = true; }}
+        onMomentumScrollEnd={(e) => { onScroll(e); pausedRef.current = false; }}
         scrollEventThrottle={16}
         accessibilityRole="adjustable"
         accessibilityLabel="Upcoming meals"
       >
         {slides.map(({ key, ...heroProps }) => (
-          <View key={key} style={[st.slidePage, { width: widthRef.current || Dimensions.get('window').width - 40 }]}>
+          <View key={key} style={[st.slidePage, { width: pageW || Dimensions.get('window').width - 32 }]}>
             <NextMealHero {...heroProps} />
           </View>
         ))}
@@ -604,7 +628,7 @@ export function NextMealSlider({ slides }: { slides: NextMealSlide[] }) {
               st.dot,
               i === page
                 ? { width: 18, backgroundColor: colors.accent.lime }
-                : { width: 6, backgroundColor: colors.border.light },
+                : { width: 6, backgroundColor: '#3A3F49' },
             ]}
           />
         ))}
@@ -639,7 +663,7 @@ function FoodGroupCard({ data, index }: { data: FoodGroupCardData; index: number
         <View
           style={[
             st.foodGroupCard,
-            { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: borderRadius.xl },
+            { backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderRadius: 18 },
           ]}
         >
           <Image source={data.img} style={st.foodGroupImg} contentFit="contain" cachePolicy="memory-disk" transition={200} />
@@ -671,7 +695,7 @@ export function FoodGroupCarousel({ groups }: { groups: FoodGroupCardData[] }) {
       decelerationRate="fast"
       snapToInterval={FOOD_GROUP_CARD_W + 12}
       snapToAlignment="start"
-      contentContainerStyle={{ paddingHorizontal: 20, gap: 12, paddingBottom: 4 }}
+      contentContainerStyle={{ paddingHorizontal: 16, gap: 12, paddingBottom: 4 }}
     >
       {groups.map((g, i) => (
         <FoodGroupCard key={g.key} data={g} index={i} />
@@ -831,13 +855,14 @@ const st = StyleSheet.create({
   recipeDiscover: { alignItems: 'center', justifyContent: 'center', padding: 16 },
   discoverIcon: { width: 52, height: 52, borderRadius: 26, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 
-  // ── Next-meal hero ──────────────────────────────────────────────────────
-  heroCard: { height: 158, borderWidth: 1.5, overflow: 'hidden', justifyContent: 'center' },
-  heroBody: { paddingHorizontal: 16, paddingVertical: 14 },
-  heroChipRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  heroChip: { borderWidth: 1, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20 },
-  heroTimeChip: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
-  heroCta: { alignSelf: 'flex-start', marginTop: 12, paddingHorizontal: 16 },
+  // ── Next-meal hero (mockup: photo + badge top-left, content bottom) ──────
+  heroCard: { height: 172, borderRadius: 18, overflow: 'hidden', justifyContent: 'flex-end' },
+  heroBadge: { position: 'absolute', top: 12, left: 12, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 8 },
+  heroBadgeTxt: { fontSize: 10, fontWeight: '600', letterSpacing: 0.3 },
+  heroBody: { paddingHorizontal: 15, paddingBottom: 13 },
+  heroMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  heroPills: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 11 },
+  heroAddPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 16, paddingVertical: 9, borderRadius: 22 },
 
   // ── Macro ring strip ────────────────────────────────────────────────────
   ringStrip: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-start', marginTop: 2 },

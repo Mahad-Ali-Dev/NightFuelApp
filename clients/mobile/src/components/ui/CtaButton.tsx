@@ -46,14 +46,15 @@ const SIZES: Record<
   {
     minHeight: number;
     paddingVertical: number;
+    paddingHorizontal: number;
     fontSize: number;
     icon: number;
     spinner: number | 'small' | 'large';
   }
 > = {
-  sm: { minHeight: 40, paddingVertical: 9, fontSize: 13, icon: 15, spinner: 15 },
-  md: { minHeight: 48, paddingVertical: 13, fontSize: 15, icon: 17, spinner: 'small' },
-  lg: { minHeight: 56, paddingVertical: 16, fontSize: 17, icon: 19, spinner: 19 },
+  sm: { minHeight: 40, paddingVertical: 9, paddingHorizontal: 16, fontSize: 13, icon: 15, spinner: 15 },
+  md: { minHeight: 48, paddingVertical: 13, paddingHorizontal: 20, fontSize: 15, icon: 17, spinner: 'small' },
+  lg: { minHeight: 56, paddingVertical: 16, paddingHorizontal: 24, fontSize: 17, icon: 19, spinner: 19 },
 };
 
 export interface CtaButtonProps {
@@ -71,6 +72,13 @@ export interface CtaButtonProps {
   style?: StyleProp<ViewStyle>;
   /** Optional test handle, forwarded verbatim to the root Pressable. */
   testID?: string;
+  /**
+   * Flat matte-lime fill — a SOLID lime background (no gradient), NO glow halo,
+   * a 16/600 label and a 15px radius. Matches the design mockups' flat lime
+   * buttons (welcome / auth / onboarding / paywall). Default (false) keeps the
+   * brand gradient + glow recipe so every existing caller renders unchanged.
+   */
+  flat?: boolean;
 }
 
 export function CtaButton({
@@ -83,6 +91,7 @@ export function CtaButton({
   accessibilityLabel,
   style,
   testID,
+  flat = false,
 }: CtaButtonProps) {
   const { colors, shadows } = useTheme();
   const isDisabled = disabled || loading;
@@ -98,8 +107,9 @@ export function CtaButton({
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={({ pressed }) => [
         styles.btn,
-        { minHeight: sz.minHeight, paddingVertical: sz.paddingVertical },
-        shadows.glow(colors.accent.coral),
+        { minHeight: sz.minHeight, paddingVertical: sz.paddingVertical, paddingHorizontal: sz.paddingHorizontal },
+        // Flat: solid lime fill + 15px radius, no glow. Default: brand glow halo.
+        flat ? { backgroundColor: colors.accent.coral, borderRadius: 15 } : shadows.glow(colors.accent.coral),
         // Cap the pressed scale at 0.97 (never > 1, never < 0.97) so the tap
         // feedback is a subtle inset, matching the rest of Aurora.
         pressed && !isDisabled ? { transform: [{ scale: 0.97 }] } : null,
@@ -107,18 +117,23 @@ export function CtaButton({
         style,
       ]}
     >
-      <LinearGradient
-        colors={colors.gradients.coralCta}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={StyleSheet.absoluteFillObject}
-      />
+      {!flat && (
+        <LinearGradient
+          colors={colors.gradients.coralCta}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      )}
       {loading ? (
         <ActivityIndicator size={sz.spinner} color="#0A0C12" />
       ) : (
         <>
           {icon ? <Ionicons name={icon} size={sz.icon} color="#0A0C12" /> : null}
-          <Text style={[styles.label, { fontSize: sz.fontSize }]} maxFontSizeMultiplier={1.4}>
+          <Text
+            style={[styles.label, flat ? styles.labelFlat : { fontSize: sz.fontSize }]}
+            maxFontSizeMultiplier={1.4}
+          >
             {label}
           </Text>
         </>
@@ -141,5 +156,11 @@ const styles = StyleSheet.create({
     color: '#0A0C12',
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  // Flat-variant label — the mockups' 16/600 matte-lime button text.
+  labelFlat: {
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0,
   },
 });

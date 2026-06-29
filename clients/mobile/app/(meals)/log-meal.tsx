@@ -195,7 +195,11 @@ export default function LogMealScreen() {
             <View style={[s.header,{paddingTop:insets.top+16,borderBottomColor:colors.border.default}]}>
                 <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Go back" onPress={()=>router.back()} style={[s.iconBtn,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Ionicons name="arrow-back" size={22} color={colors.text.primary} /></TouchableOpacity>
                 <Text style={[typography.h2,{color:colors.text.primary}]}>Add meal</Text>
-                <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Scan barcode" onPress={()=>router.push('/(modals)/barcode-scanner' as any)} style={[s.iconBtn,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Ionicons name="camera-outline" size={20} color={colors.accent.coral} /></TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                    {/* AI photo analysis — point at a plate, the vision model returns macros + micros. */}
+                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Analyze a food photo with AI" onPress={()=>router.push('/(modals)/food-photo' as any)} style={[s.iconBtn,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Ionicons name="camera" size={20} color={colors.accent.coral} /></TouchableOpacity>
+                    <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Scan barcode" onPress={()=>router.push('/(modals)/barcode-scanner' as any)} style={[s.iconBtn,{backgroundColor:colors.background.secondary,borderColor:colors.border.default}]}><Ionicons name="barcode-outline" size={20} color={colors.text.primary} /></TouchableOpacity>
+                </View>
             </View>
             <ScrollView contentContainerStyle={{paddingBottom:140}} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <Animated.View entering={FadeInDown.duration(360).springify()}>

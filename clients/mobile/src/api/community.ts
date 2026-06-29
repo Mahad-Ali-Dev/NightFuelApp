@@ -18,6 +18,11 @@ export interface Post {
   likes: number;
   commentsCount: number;
   createdAt: string;
+  // Per-viewer like state: true when the authenticated viewer has liked this
+  // post. The feed/detail endpoints compute it from post_likes so the heart can
+  // render its real state on load (and the toggle knows whether to like/unlike)
+  // instead of a session-only guess that resets on every reload.
+  liked?: boolean;
   author?: {
     id?: string;
     name: string;
@@ -113,6 +118,15 @@ export const likePost = async (postId: string): Promise<boolean> => {
   // The like route returns the updated Post row (no `success` field), so a
   // `data.success` read is always undefined. Treat any 2xx (no throw) as success.
   await apiClient.post(`/v1/community/post/${postId}/like`);
+  return true;
+};
+
+// Unlike a post the viewer previously liked. The server (DELETE
+// /v1/community/post/:id/like → unlikePost) removes the post_likes row and
+// decrements the counter idempotently, so a stray unlike never drives the count
+// negative. Pairs with likePost to make the heart a real toggle.
+export const unlikePost = async (postId: string): Promise<boolean> => {
+  await apiClient.delete(`/v1/community/post/${postId}/like`);
   return true;
 };
 

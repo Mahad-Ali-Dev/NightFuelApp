@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, FlatList, Modal, Platform } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,14 +50,17 @@ export default function FoodEncyclopediaScreen() {
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const qc = useQueryClient();
+    // A `group` param (from the Meals tab "Browse by food group" cards) preselects
+    // a food group so the screen opens straight into that group's foods.
+    const params = useLocalSearchParams<{ group?: string }>();
     const [query, setQuery] = useState('');
-    const [selGroup, setSelGroup] = useState<string|null>(null);
+    const [selGroup, setSelGroup] = useState<string|null>(typeof params.group === 'string' ? params.group : null);
     const [servingModal, setServingModal] = useState<FoodItem|null>(null);
     const [qty, setQty] = useState('1');
     const [mealType, setMealType] = useState('BREAKFAST');
     const searchR = useQuery({
         queryKey:['food-search',query,selGroup],
-        queryFn:()=>searchFoods({q:query,foodGroup:selGroup||undefined,limit:30}),
+        queryFn:()=>searchFoods({q:query,foodGroup:selGroup||undefined,limit:200}),
         enabled:query.length>2||!!selGroup, staleTime:5*60*1000,
     });
     const logM = useMutation({

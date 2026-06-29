@@ -16,12 +16,14 @@
  *   community → redirects to /(community)
  *   circadian → accessed from Insights / home
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Tabs, useRouter, Redirect } from 'expo-router';
 import { useTheme } from '@/theme';
+import { useCoachSync } from '@/features/coach/useCoachSync';
 import { useAuthStore } from '@/store/authStore';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, Pressable, TouchableOpacity, Modal, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, TouchableOpacity, Modal, StyleSheet, Platform, useWindowDimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
     useSharedValue,
@@ -35,7 +37,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { SafeBlurView } from '@/components/SafeBlurView';
 import { GlassCard, CtaButton } from '@/components/ui';
-import { withAlpha } from '@/theme/utils';
+import { withAlpha, isLightHex } from '@/theme/utils';
 
 // Bundled Quick-add tile art (transparent Zeitra object renders). Bundled via
 // require() so the chooser never depends on an external host (no 404 / rate-limit).
@@ -212,7 +214,7 @@ type QuickLogOption = Omit<QuickLogOptionBase, 'accentKey'> & { accent: string }
 // tile's accentKey resolves against the active theme inside the sheet.
 const QUICK_LOG_OPTIONS: readonly QuickLogOptionBase[] = [
     { id: 'meal', label: 'Meal', image: QA_MEAL_IMG, accentKey: 'cyan', route: '/(meals)/log-meal' },
-    { id: 'workout', label: 'Workout', image: QA_WORKOUT_IMG, accentKey: 'coral', route: '/(modals)/active-workout' },
+    { id: 'workout', label: 'Workout', image: QA_WORKOUT_IMG, accentKey: 'coral', route: '/training/onboarding' },
     { id: 'water', label: 'Water', image: QA_WATER_IMG, accentKey: 'blue', route: '/(performance)/hydration' },
     { id: 'sleep', label: 'Sleep', image: QA_SLEEP_IMG, accentKey: 'purple', route: '/(modals)/log-sleep' },
     { id: 'weight', label: 'Weight', image: QA_WEIGHT_IMG, accentKey: 'emerald', route: '/(performance)/body-metrics' },
@@ -320,6 +322,35 @@ function QuickLogSheet({
                             ))}
                         </View>
 
+                        {/* Meals quick links — the recipe library + the food encyclopedia
+                            (so the + isn't only "log a meal"). Reuses onSelect (close → nav). */}
+                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+                            <Pressable
+                                accessibilityRole="button" accessibilityLabel="Open the Meals page"
+                                onPress={() => onSelect('/(tabs)/nutrition')}
+                                style={({ pressed }) => [qs.mealLink, { backgroundColor: colors.background.secondary, borderColor: withAlpha(colors.text.primary, 0.1) }, pressed ? { opacity: 0.7 } : null]}
+                            >
+                                <Ionicons name="fast-food-outline" size={16} color={colors.accent.lime} />
+                                <Text style={[typography.caption, { color: colors.text.primary, fontWeight: '600' }]}>Meals</Text>
+                            </Pressable>
+                            <Pressable
+                                accessibilityRole="button" accessibilityLabel="Browse recipes"
+                                onPress={() => onSelect('/(meals)/recipes')}
+                                style={({ pressed }) => [qs.mealLink, { backgroundColor: colors.background.secondary, borderColor: withAlpha(colors.text.primary, 0.1) }, pressed ? { opacity: 0.7 } : null]}
+                            >
+                                <Ionicons name="restaurant-outline" size={16} color={colors.accent.coral} />
+                                <Text style={[typography.caption, { color: colors.text.primary, fontWeight: '600' }]}>Recipes</Text>
+                            </Pressable>
+                            <Pressable
+                                accessibilityRole="button" accessibilityLabel="Search foods"
+                                onPress={() => onSelect('/(meals)/encyclopedia')}
+                                style={({ pressed }) => [qs.mealLink, { backgroundColor: colors.background.secondary, borderColor: withAlpha(colors.text.primary, 0.1) }, pressed ? { opacity: 0.7 } : null]}
+                            >
+                                <Ionicons name="nutrition-outline" size={16} color={colors.accent.cyan} />
+                                <Text style={[typography.caption, { color: colors.text.primary, fontWeight: '600' }]}>Food search</Text>
+                            </Pressable>
+                        </View>
+
                         {/* Primary action — scan a meal (Open Food Facts barcode camera). */}
                         <CtaButton
                             label="Scan a meal"
@@ -410,6 +441,16 @@ const qs = StyleSheet.create({
         marginTop: 18,
         borderRadius: 15,
     },
+    mealLink: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        height: 44,
+        borderRadius: 14,
+        borderWidth: 1,
+    },
     riaLine: {
         marginTop: 13,
         alignSelf: 'center',
@@ -417,64 +458,135 @@ const qs = StyleSheet.create({
 });
 
 // ─── Ria AI Coach FAB (global — appears on every tab) ────────────────────────
+// A lime EDGE TAB matching the design mockup's `.ria` element (chat glyph + "Ria",
+// ink-on-lime), NOT a purple sparkles circle. It's DRAGGABLE: drag it anywhere
+// vertically and it snaps to whichever side (left/right) is nearest on release;
+// the chosen side + height persist across launches. A plain tap opens Coach Ria.
+const RIA_FAB_KEY = 'zeitra.riaFab.v1';
+const RIA_W = 46; // tab width (mockup 44)
+const RIA_H = 58; // approx tab height — used only to clamp the vertical range
 
 function RiaFAB({ onPress }: { onPress: () => void }) {
     const { colors } = useTheme();
-    const fab = useMemo(() => makeFab(colors), [colors]);
+    const insets = useSafeAreaInsets();
+    const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+
+    // Vertical travel range — clear of the status bar and the floating tab bar.
+    const minY = insets.top + 56;
+    const maxY = Math.max(minY, SCREEN_H - TAB_BAR_H - insets.bottom - RIA_H - 24);
+
+    const side = useSharedValue(1);     // 1 = right edge, 0 = left edge
+    const ty = useSharedValue(SCREEN_H * 0.4);
+    const tx = useSharedValue(0);       // live x while dragging
+    const dragging = useSharedValue(0);
+    const ready = useSharedValue(0);    // hide until the saved position loads (no flash)
+    const startX = useSharedValue(0);
+    const startY = useSharedValue(0);
+
+    // Load the persisted side + height once (clamped to the current range).
+    useEffect(() => {
+        let alive = true;
+        AsyncStorage.getItem(RIA_FAB_KEY)
+            .then((raw) => {
+                if (!alive) return;
+                let s = 1;
+                let y = SCREEN_H * 0.4;
+                if (raw) {
+                    try {
+                        const p = JSON.parse(raw);
+                        s = p.side === 'left' ? 0 : 1;
+                        if (typeof p.y === 'number') y = p.y;
+                    } catch { /* ignore corrupt value */ }
+                }
+                side.value = s;
+                ty.value = Math.min(Math.max(y, minY), maxY);
+                ready.value = 1;
+            })
+            .catch(() => { ready.value = 1; });
+        return () => { alive = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const persist = useCallback((s: number, y: number) => {
+        AsyncStorage.setItem(RIA_FAB_KEY, JSON.stringify({ side: s ? 'right' : 'left', y })).catch(() => {});
+    }, []);
+
+    const pan = Gesture.Pan()
+        .minDistance(10)
+        .onStart(() => {
+            dragging.value = 1;
+            startX.value = side.value ? SCREEN_W - RIA_W : 0;
+            startY.value = ty.value;
+            tx.value = startX.value;
+        })
+        .onUpdate((e) => {
+            tx.value = startX.value + e.translationX;
+            ty.value = Math.min(Math.max(startY.value + e.translationY, minY), maxY);
+        })
+        .onEnd(() => {
+            const toRight = tx.value + RIA_W / 2 > SCREEN_W / 2 ? 1 : 0;
+            side.value = toRight;
+            dragging.value = 0;
+            runOnJS(persist)(toRight, ty.value);
+        });
+
+    const tap = Gesture.Tap().maxDistance(12).onEnd(() => { runOnJS(onPress)(); });
+    const gesture = Gesture.Exclusive(pan, tap);
+
+    const aStyle = useAnimatedStyle(() => {
+        const restX = side.value ? SCREEN_W - RIA_W : 0;
+        const x = dragging.value ? tx.value : withTiming(restX, { duration: 180 });
+        const roundLeft = side.value === 1; // tab on the right → round its LEFT (inner) corners
+        return {
+            opacity: ready.value ? 1 : 0,
+            transform: [{ translateX: x }, { translateY: ty.value }],
+            borderTopLeftRadius: roundLeft ? 16 : 0,
+            borderBottomLeftRadius: roundLeft ? 16 : 0,
+            borderTopRightRadius: roundLeft ? 0 : 16,
+            borderBottomRightRadius: roundLeft ? 0 : 16,
+        };
+    });
+
     return (
-        <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Generate with AI" style={fab.container} onPress={onPress} activeOpacity={0.85}>
-            <LinearGradient
-                colors={colors.gradients.purple}
-                style={fab.gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+        <GestureDetector gesture={gesture}>
+            <Animated.View
+                accessibilityRole="button"
+                accessibilityLabel="Open Coach Ria (drag to move)"
+                style={[fabStyles.tab, { backgroundColor: colors.accent.coral }, aStyle]}
             >
-                <Ionicons name="sparkles" size={24} color="#fff" />
-                <View style={fab.badge} />
-            </LinearGradient>
-        </TouchableOpacity>
+                <Ionicons name="chatbubble-ellipses" size={19} color="#13200A" />
+                <Text style={fabStyles.label}>Ria</Text>
+            </Animated.View>
+        </GestureDetector>
     );
 }
 
-const makeFab = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
-    container: {
+const fabStyles = StyleSheet.create({
+    tab: {
         position: 'absolute',
-        // Sits just above the tab bar
-        bottom: TAB_BAR_H + 14,
-        right: 20,
-        width: 56,
-        height: 56,
-        borderRadius: 28,
-        shadowColor: colors.accent.purple,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.35,
-        shadowRadius: 10,
-        elevation: 8,
-        zIndex: 100,
-    },
-    gradient: {
-        flex: 1,
-        borderRadius: 28,
+        top: 0,
+        left: 0,
+        width: RIA_W,
+        paddingVertical: 11,
         alignItems: 'center',
         justifyContent: 'center',
+        gap: 5,
+        zIndex: 100,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.5,
+        shadowRadius: 16,
+        elevation: 8,
     },
-    badge: {
-        position: 'absolute',
-        top: 12,
-        right: 12,
-        width: 9,
-        height: 9,
-        borderRadius: 5,
-        backgroundColor: colors.accent.cyan,
-        borderWidth: 1.5,
-        borderColor: '#fff',
-    },
+    label: { color: '#13200A', fontSize: 10, fontWeight: '500' },
 });
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
 export default function TabLayout() {
     const { colors } = useTheme();
+    // Restore + back up the AI Coach plan to the server (reinstall / multi-device).
+    useCoachSync();
     const router = useRouter();
     // Per-field scoped selectors (same fix as app/index.tsx). This layout runs
     // an auth gate that can Redirect to /login, so an unscoped useAuthStore()
@@ -528,7 +640,7 @@ export default function TabLayout() {
                     tabBarBackground: () => (
                         <SafeBlurView
                             intensity={40}
-                            tint="dark"
+                            tint={isLightHex(colors.background.primary) ? 'light' : 'dark'}
                             style={StyleSheet.absoluteFill}
                         />
                     ),

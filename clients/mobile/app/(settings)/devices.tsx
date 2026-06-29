@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { GlassCard, CtaButton } from '@/components/ui';
 import { PressableScale } from '@/components/ui/PressableScale';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { getHealthSyncAdapter, SUPPORTED_HEALTH_SOURCES } from '@/lib/healthSync';
 import { HEALTH_SOURCE_LABELS, type HealthSource } from '@/lib/healthSync.types';
 
@@ -501,6 +502,12 @@ export default function ConnectedDevicesScreen() {
                 <View style={{ width: 24 }} />
             </View>
 
+            {/* Contain any render/native fault in the body (e.g. an APK-only
+                health-module failure) to a recoverable "Try again" card instead
+                of a blank screen — the header above stays so Back always works,
+                and ErrorBoundary.componentDidCatch reports the real error to
+                Sentry so the root cause is diagnosable without adb logcat. */}
+            <ErrorBoundary>
             <ScrollView
                 contentContainerStyle={{
                     paddingHorizontal: spacing['2xl'],
@@ -650,6 +657,7 @@ export default function ConnectedDevicesScreen() {
                     testID="connect-primary"
                 />
             </Animated.View>
+            </ErrorBoundary>
         </View>
     );
 }

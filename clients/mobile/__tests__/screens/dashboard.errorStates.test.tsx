@@ -65,12 +65,20 @@ jest.mock('@tanstack/react-query', () => ({
 
 jest.mock('@/api/shifts', () => ({ getCurrent: jest.fn() }));
 jest.mock('@/api/plans', () => ({ getToday: jest.fn() }));
-jest.mock('@/api/progress', () => ({ getToday: jest.fn(), logHydration: jest.fn() }));
+jest.mock('@/api/progress', () => ({ getToday: jest.fn(), logHydration: jest.fn(), getStreak: jest.fn() }));
 jest.mock('@/api/exercises', () => ({ searchLibrary: jest.fn() }));
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
 }));
+
+// _layout pulls in AsyncStorage (the Ria FAB) — mock it to the constant the screen
+// reads. RecipeRail is its own self-fetching unit (covered elsewhere); stub it out.
+jest.mock('../../app/(tabs)/_layout', () => ({ TAB_BAR_H: 64 }));
+jest.mock('@/components/nutrition/RecipeRail', () => ({ RecipeRail: () => null }));
+// CoachHomeCard pulls in the persisted coach store (AsyncStorage) — stub it like
+// RecipeRail so the dashboard suite doesn't need the native module.
+jest.mock('@/components/coach/CoachHomeCard', () => ({ CoachHomeCard: () => null }));
 
 jest.mock('@expo/vector-icons', () => {
   const { Text: RNText } = require('react-native');
@@ -117,7 +125,7 @@ function renderScreen() {
   );
 }
 
-describe('Dashboard — uniform error-state pattern (every useQuery rejects)', () => {
+describe('Dashboard — graceful degradation (every useQuery rejects)', () => {
   beforeEach(() => {
     mockShiftRefetch.mockClear();
     mockPlanRefetch.mockClear();
@@ -125,36 +133,27 @@ describe('Dashboard — uniform error-state pattern (every useQuery rejects)', (
     mockOtherRefetch.mockClear();
   });
 
-  test('renders at least three Retry buttons (shift + plan + progress)', () => {
-    renderScreen();
-
-    // The acceptance criterion: getAllByText('Retry').length >= 3 across the
-    // three primary failing queries.
-    const retries = screen.getAllByText('Retry');
-    expect(retries.length).toBeGreaterThanOrEqual(3);
+  test('renders the static scaffold without crashing when every query errors', () => {
+    expect(() => renderScreen()).not.toThrow();
+    // The static sections (no data dependency) always render — proves the screen
+    // mounts and degrades gracefully instead of blanking/throwing.
+    expect(screen.getByText('Quick start')).toBeTruthy();
+    expect(screen.getByText('Your rhythm tonight')).toBeTruthy();
+    expect(screen.getByText('Coach Ria')).toBeTruthy();
   });
 
-  test('pressing the FIRST Retry button invokes its query\'s refetch (and only that one)', () => {
+  test('shows NO error-retry UI (the rebuilt home has no Retry / "Couldn\'t load")', () => {
     renderScreen();
-
-    const retries = screen.getAllByText('Retry');
-    expect(retries.length).toBeGreaterThanOrEqual(3);
-
-    // The UP NEXT meal section sits ABOVE ShiftTransitionCard in the JSX (it's
-    // the first error-state EmptyState we encounter), so its "Retry" is the
-    // FIRST one in render order. Pressing it must invoke the plan query's
-    // refetch — and ONLY that one — so the per-section retry stays scoped.
-    fireEvent.press(retries[0]!);
-    expect(mockPlanRefetch).toHaveBeenCalledTimes(1);
-    expect(mockShiftRefetch).not.toHaveBeenCalled();
-    expect(mockProgressRefetch).not.toHaveBeenCalled();
+    // The mockup is happy-path: the old uniform "Couldn't load … / Retry"
+    // EmptyState pattern was intentionally removed. Sections that need data
+    // simply don't render; nothing offers a Retry.
+    expect(screen.queryByText('Retry')).toBeNull();
+    expect(screen.queryByText("Couldn't load")).toBeNull();
   });
 
-  test('renders the "Couldn\'t load" title in the error EmptyStates', () => {
+  test('hides data-dependent sections when their query errors', () => {
     renderScreen();
-    // Every uniform error EmptyState we added uses the same title ("Couldn't
-    // load") — the plan EmptyState and the hydration EmptyState both surface
-    // it. Asserting on its presence pins down the shared copy contract.
-    expect(screen.getAllByText("Couldn't load").length).toBeGreaterThanOrEqual(1);
+    // No plan → the next-meal card is absent; no shift → the shift pill is absent.
+    expect(screen.queryByText('Next · pre-shift meal')).toBeNull();
   });
 });

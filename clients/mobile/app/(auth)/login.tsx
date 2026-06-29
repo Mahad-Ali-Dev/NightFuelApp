@@ -163,6 +163,16 @@ export default function LoginScreen() {
               end={{ x: 0.5, y: 1 }}
               style={StyleSheet.absoluteFillObject}
             />
+            {/* Back button — circular chip, top-left of the hero stage (mockup). */}
+            <Pressable
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/welcome'))}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              style={[styles.backBtn, { top: insets.top + 8, backgroundColor: withAlpha(colors.background.secondary, 0.8), borderColor: colors.border.default }]}
+            >
+              <Ionicons name="chevron-back" size={20} color={colors.text.primary} />
+            </Pressable>
             <View style={[styles.heroCopy, { paddingTop: insets.top }]}>
               <Text
                 style={[styles.heroTitle, { color: colors.text.primary }]}
@@ -172,7 +182,7 @@ export default function LoginScreen() {
                 Welcome back
               </Text>
               <Text style={[styles.heroSubtitle, { color: colors.text.secondary }]}>
-                Sign in to keep your streak going 🔥
+                Sign in to keep your streak going.
               </Text>
             </View>
           </Animated.View>
@@ -275,7 +285,7 @@ export default function LoginScreen() {
             <CtaButton
               label="Sign in"
               size="lg"
-              icon="log-in-outline"
+              flat
               loading={loading}
               onPress={handleLogin}
               style={styles.cta}
@@ -432,6 +442,17 @@ const styles = StyleSheet.create({
   heroCopy: {
     paddingHorizontal: spacing['2xl'],
     paddingBottom: spacing.lg,
+  },
+  backBtn: {
+    position: 'absolute',
+    left: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
   },
   heroTitle: {
     ...typography.display,

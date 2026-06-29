@@ -116,6 +116,11 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/library', {
             // (e.g. "upper arms", "waist", "upper legs", "hips")
             bodyPart: z.string().trim().max(120).optional(),
             category: z.string().trim().max(120).optional(),
+            // Gender filter (Male/Female). NULL-gender (unisex) rows always match
+            // so both genders see the shared catalog; gendered rows narrow the rest.
+            gender: z.enum(['Male', 'Female']).optional(),
+            // Difficulty refinement — case-insensitive contains (Beginner/Intermediate/Advanced).
+            difficulty: z.string().trim().max(40).optional(),
             // Bumped max 100 → 500 → 5000. The seeded LibraryExercise table now
             // holds ~2,232 entries; a 500 cap meant the mobile library could
             // only ever fetch the first 500 (the app appeared to "miss"
@@ -127,8 +132,8 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/library', {
     },
 }, async (request, reply) => {
     try {
-        const { query, equipment, muscleGroup, bodyPart, category, limit } = request.query;
-        return reply.send(await exerciseSvc.searchLibrary({ query, equipment, muscleGroup, bodyPart, category }, limit));
+        const { query, equipment, muscleGroup, bodyPart, category, gender, difficulty, limit } = request.query;
+        return reply.send(await exerciseSvc.searchLibrary({ query, equipment, muscleGroup, bodyPart, category, gender, difficulty }, limit));
     } catch (err: any) {
         logger.error(err);
         return reply.code(500).send({ error: 'An unexpected error occurred' });
@@ -228,6 +233,36 @@ fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/history/heatmap',
     try {
         const userId = (request.user as any).userId ?? (request.user as any).id;
         return reply.send(await exerciseSvc.getHeatmap(userId));
+    } catch (err: any) {
+        logger.error(err);
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
+    }
+});
+
+// ── AI Coach plan persistence — one per-user blob (the generated challenge +
+// progress) so the mobile coachStore survives reinstalls + syncs across devices.
+fastify.withTypeProvider<ZodTypeProvider>().get('/v1/exercises/coach-plan', {
+    onRequest: [(fastify as any).authenticate],
+}, async (request, reply) => {
+    try {
+        const userId = (request.user as any).userId ?? (request.user as any).id;
+        const row = await prisma.coachPlan.findUnique({ where: { userId } });
+        return reply.send(row?.data ?? null);
+    } catch (err: any) {
+        logger.error(err);
+        return reply.code(500).send({ error: 'An unexpected error occurred' });
+    }
+});
+
+fastify.withTypeProvider<ZodTypeProvider>().put('/v1/exercises/coach-plan', {
+    onRequest: [(fastify as any).authenticate],
+    schema: { body: z.object({ plan: z.any() }) },
+}, async (request, reply) => {
+    try {
+        const userId = (request.user as any).userId ?? (request.user as any).id;
+        const { plan } = request.body as { plan: any };
+        await prisma.coachPlan.upsert({ where: { userId }, create: { userId, data: plan }, update: { data: plan } });
+        return reply.send({ ok: true });
     } catch (err: any) {
         logger.error(err);
         return reply.code(500).send({ error: 'An unexpected error occurred' });

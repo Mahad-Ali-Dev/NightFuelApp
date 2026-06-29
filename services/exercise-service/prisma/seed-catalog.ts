@@ -132,9 +132,21 @@ async function main() {
     }
 
     for (const group of byName.values()) {
-      const base = group.find((e) => e.gender === 'Male') ?? group[0];
+      // Pick the canonical row. Prefer an entry that actually has a video clip
+      // (`files`) so an image-only sibling (same name, no clip — the renders we
+      // catalog for not-yet-filmed moves) can never collapse a real video row to
+      // videoUrl=null. Within that, keep the Male-first convention.
+      const hasVid = (e: Entry) => !!firstFile(e.files);
+      const base =
+        group.find((e) => hasVid(e) && e.gender === 'Male') ??
+        group.find(hasVid) ??
+        group.find((e) => e.gender === 'Male') ??
+        group[0];
       const genders = new Set(group.map((e) => e.gender).filter(Boolean));
       const gender = genders.size === 1 ? ([...genders][0] as string) : null;
+      // The separate Female-gendered demo clip (if the group has one), so a Female
+      // user can be shown the Female video while videoUrl stays the Male/canonical.
+      const femaleEntry = group.find((e) => hasVid(e) && e.gender === 'Female');
       const instructions = base.instructions?.length
         ? base.instructions.join('\n')
         : (base.description || null);
@@ -163,6 +175,7 @@ async function main() {
         secondaryMuscles,
         gender,
         videoUrl: videoUrlFor(slug, base),
+        videoUrlFemale: femaleEntry ? videoUrlFor(slug, femaleEntry) : null,
       };
 
       // On UPDATE we deliberately OMIT imageUrl/demoUrl unless the catalog

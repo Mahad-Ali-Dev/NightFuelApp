@@ -1,182 +1,96 @@
 /**
  * Dashboard — Zeitra home screen.
- * Restyled to the "home-preview" mockup (greeting + avatar + shift chip + a lime
- * notification dot · a TONIGHT'S-FOCUS swipeable WOD carousel with pagination
- * dots (the shared WodCarousel) · a "Next · pre-shift meal" hero card · a "Picked
- * for your shift" horizontal carousel · an asymmetric BENTO grid — training-tall
- * (Push day · 45 min) + sleep/water/steps/calories tiles with done-checks · the
- * circadian training-window bar · the full circadian section stack (next shift /
- * transition / light / anchor sleep / "your rhythm tonight" timeline /
- * sleep+hydration+caffeine) · EXPLORE + MORE grids · heatmap · 24h schedule ·
- * weekly recap · a Coach Ria insight card with Ria's avatar). Reanimated
- * staggered FadeInDown entrance.
  *
- * VISUAL re-skin ONLY — every data hook, query, navigation call, handler, prop,
- * route and testID is preserved from the prior revision (the screen still drives
- * the same shift countdown — now folded into the WOD hero's meta — next meal,
- * hydration logging, circadian timeline and quick actions; the WOD carousel's
- * Start preserves the prior hero's START → Training nav). No shared ui/* or
- * theme/* file changed.
+ * Rebuilt 1:1 from the design mockup `app_images/backups/home-preview.html`.
+ * Flat dark (#0A0C12) surface, brighter design-lime (#C2F03C) accent, flat
+ * opaque cards (#15181F / #252A33 hairline) — matching the mockup pixel-for-pixel
+ * rather than the frosted "Aurora" theme. Sections, top→bottom:
+ *   1. header (avatar + greeting + name + bell)
+ *   2. shift pill ("Night shift · 3h in")
+ *   3. hero slider ("Tonight's focus") + pagination dots
+ *   4. next-meal card (photo + Add)
+ *   5. "Picked for your shift" horizontal rail
+ *   6. bento grid (lime-glow training card + Sleep / Water / Steps / Calories)
+ *   7. 12-day streak card (7 day-dots)
+ *   8. "Your rhythm tonight" circadian timeline (markers + gradient bar + 2 tiles)
+ *   9. Coach Ria insight card
+ * The Ria FAB and bottom tab bar are provided globally by (tabs)/_layout.tsx.
+ *
+ * Real data is wired where it exists (name, shift + elapsed, next meal, water /
+ * steps / calories, streak). Slots with no backend source render an honest "—"
+ * (sleep) or static design copy (hero focus, picked rail, training plan).
  */
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, RefreshControl,
-    TouchableOpacity, Dimensions, ImageBackground
+    TouchableOpacity, Dimensions, Pressable,
+    NativeSyntheticEvent, NativeScrollEvent,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
-import { useTheme, typography, spacing, borderRadius } from '@/theme';
-import { Skeleton, EmptyState, GlassCard, CtaButton } from '@/components/ui';
+import { typography } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { getCurrent as getCurrentShift, list as listShifts } from '@/api/shifts';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { RecipeRail } from '@/components/nutrition/RecipeRail';
+import { CoachHomeCard } from '@/components/coach/CoachHomeCard';
+import { MacrosHomeCard } from '@/components/coach/MacrosHomeCard';
+import { ExerciseRail } from '@/components/exercise/ExerciseRail';
+import { getCurrent as getCurrentShift } from '@/api/shifts';
 import { getToday as getTodayPlan, PlanMeal } from '@/api/plans';
-import { getToday as getTodayProgress, logHydration } from '@/api/progress';
+import { getToday as getTodayProgress, getStreak } from '@/api/progress';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
-import { withAlpha } from '@/theme/utils';
-import { WeeklyRecap } from '@/components/WeeklyRecap';
-import { ActivityHeatmap } from '@/components/ActivityHeatmap';
-import { searchLibrary } from '@/api/exercises';
-import NextShiftCard from '@/components/home/NextShiftCard';
-import ShiftTransitionCard from '@/components/home/ShiftTransitionCard';
-import LightPlanCard from '@/components/home/LightPlanCard';
-import AnchorSleepCard from '@/components/home/AnchorSleepCard';
-import TodayCircadianTimeline from '@/components/home/TodayCircadianTimeline';
-import { CaffeineTimerTile } from '@/components/home/CaffeineTimerTile';
-import { TrainingWindowBar } from '@/components/home/HomeHeroExtras';
-import { WodCarousel, type WodItem } from '@/components/TrainingCards';
+import { getMyProfile } from '@/api/profile';
+import { safeImageUri } from '@/lib/imageUrl';
+import { useThemedPalette, type ThemedPalette } from '@/theme/useThemedPalette';
+import { isLightHex } from '@/theme/utils';
 import { TAB_BAR_H } from './_layout';
 
-const { width } = Dimensions.get('window');
-const H_PAD = 20;
-const CARD_GAP = 12;
-const MINI_W = (width - H_PAD * 2 - CARD_GAP) / 2;
-// 3-up stat grid: three equal cards across the content width.
-const STAT_W = (width - H_PAD * 2 - CARD_GAP * 2) / 3;
-// "Picked for your shift" carousel cards — wide enough to peek the next card.
-const QA_CARD_W = 150;
+const { width: SCREEN_W } = Dimensions.get('window');
+const H_PAD = 16;          // mockup body padding
+const CARD_GAP = 11;       // mockup grid gap
 
-// Bottom inset that clears BOTH the floating tab bar AND the purple Ria FAB
-// (FAB sits at bottom: TAB_BAR_H + 14, height 56 → top edge ≈ TAB_BAR_H + 70).
-// Spec asks for >= TAB_BAR_H + 48; we reserve TAB_BAR_H + 72 so the last card
-// never tucks under the Ria sparkles FAB on either platform.
-const BOTTOM_CLEARANCE = TAB_BAR_H + 72;
+// Bottom inset clearing the floating tab bar + the global Ria FAB.
+const BOTTOM_CLEARANCE = TAB_BAR_H + 96;
 
-// Caps Dynamic-Type scaling on the giant hero numeral and the micro NOW/badge
-// text so a large accessibility text size can't clip them out of their pills /
-// the single-line hero. Body + caption text elsewhere scales freely.
-const STAT_MAX_SCALE = 1.4;
-const MICRO_MAX_SCALE = 1.3;
-
-// Optimal circadian training window (physiological alertness/strength peak,
-// late afternoon). Purely visual framing for the TrainingWindowBar — mirrors the
-// circadian coaching already surfaced by getInsight().
-const TRAIN_START_H = 15;
-const TRAIN_END_H = 19;
-
-// Bundled Aurora dark-glass art (no external host → works offline, no 404 /
-// rate-limit / privacy leak). '@/*' resolves to ./src, so assets are required
-// by relative path — same module-scope require pattern as (exercises)/index.tsx.
-const QA_MEAL = require('../../assets/images/qa-meal.png');
-const QA_WORKOUT = require('../../assets/images/qa-workout.png');
-const QA_SLEEP = require('../../assets/images/qa-sleep.png');
-const QA_STATS = require('../../assets/images/qa-stats.png');
-const HERO_TRAINING = require('../../assets/images/hero-training.png');
-const HERO_MUSCLE = require('../../assets/images/muscle-chest-male.png');
-const CAT_GYM_IMG = require('../../assets/images/cat-gym.png');
-const CAT_HOME_IMG = require('../../assets/images/cat-home.png');
-const CAT_CARDIO_IMG = require('../../assets/images/cat-cardio.png');
-const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
-const MUSCLE_SHOULDERS_IMG = require('../../assets/images/muscle-shoulders.png');
-const MUSCLE_ARMS_IMG = require('../../assets/images/muscle-arms.png');
-const MEAL_BREAKFAST_IMG = require('../../assets/images/meal-breakfast.png');
-// Ria's avatar for the Coach-insight card (the mockup floats the app mark in a
-// lime-ringed circle next to a "Coach Ria" sparkles eyebrow).
+// Hero pages (mockup's swipeable "Tonight's focus" slider). Static design copy;
+// page 1 folds in the live shift countdown when a shift is active.
+// Hero + picked + training cover photos — real model/workout shots (the muscle
+// renders read as anatomy diagrams, not models). Cover-cropped behind a scrim.
+const HERO_1 = require('../../assets/images/level-advanced.png');
+const HERO_2 = require('../../assets/images/level-intermediate.png');
+const HERO_3 = require('../../assets/images/level-beginner.png');
+const PICK_HIIT = require('../../assets/images/level-intermediate-female.png');
+const PICK_BOWLS = require('../../assets/images/meal-breakfast.png');
+const PICK_MOB = require('../../assets/images/level-beginner-female.png');
+const TRAINING_IMG = require('../../assets/images/profile-male.png');
+const MEAL_IMG = require('../../assets/images/meal-recovery.png');
 const RIA_AVATAR = require('../../assets/images/logo_app.png');
 
-// Primary "Log Meal" CTA is the shared <CtaButton> (Aurora lime fill via the
-// `gradients.coralCta` token, lime glow, ink label) — the screen-local
-// LinearGradient copy was retired so this tab + Training render the same button
-// from one source. Glass surfaces below use the shared <GlassCard>.
+// "Picked for your shift" rail — gradient tiles with a lime glyph (no images, per
+// mockup). Routes map onto existing destinations.
+// Quick-start actions — real entry points into the core flows (was static
+// decoration that all pointed at the same tabs). Each tile starts something.
+const PICKED = [
+    { id: 'coach', title: 'Your AI plan', sub: 'Tap to start', icon: 'flash' as const, img: PICK_HIIT, route: '/(challenge)' },
+    { id: 'workout', title: 'Start a workout', sub: 'Pick & go', icon: 'barbell' as const, img: PICK_MOB, route: '/training/onboarding' },
+    { id: 'meal', title: 'Log a meal', sub: 'Meals', icon: 'nutrition' as const, img: PICK_BOWLS, route: '/(tabs)/nutrition' },
+];
 
-// ─── Static data ─────────────────────────────────────────────────────────────
+// ~150deg gradient vector (top-left → bottom-right, steep) to match the mockup's
+// linear-gradient(150deg, …) on the hero / glow card / picked tiles.
+const HERO_GRAD_START = { x: 0.15, y: 0 };
+const HERO_GRAD_END = { x: 0.85, y: 1 };
 
-// "Picked for your shift" carousel cards (formerly QUICK ACTIONS). Same ids /
-// routes / labels / icons — only the card presentation changed to the mockup's
-// image-top + title-below style. A short `sub` line was added per card (purely
-// descriptive copy, no new data dependency).
-// `colorKey` indexes the ACTIVE theme's accent palette (resolved in the
-// component via `useMemo` over `colors`) so these accents re-tint on a theme
-// switch. Image requires / routes / icons stay module-static.
-const QUICK_ACTIONS = [
-    { id: 'meal', label: 'Track meal', sub: 'Fuel your shift', icon: 'restaurant', colorKey: 'cyan', image: QA_MEAL, route: '/(tabs)/nutrition' },
-    { id: 'workout', label: 'Track workout', sub: 'Train now', icon: 'flame', colorKey: 'coral', image: QA_WORKOUT, route: '/(tabs)/training' },
-    { id: 'sleep', label: 'Track sleep', sub: 'Anchor rest', icon: 'moon', colorKey: 'purple', image: QA_SLEEP, route: '/(modals)/log-sleep' },
-    { id: 'stats', label: 'Progress', sub: 'Track trends', icon: 'stats-chart', colorKey: 'blue', image: QA_STATS, route: '/(performance)' },
-] as const;
-
-// Exercise categories shown as image cards. `accentKey` indexes the active
-// theme accent palette (resolved in `exerciseCategories` over `colors`) so the
-// count-badge accents re-tint on a theme switch.
-const EXERCISE_CATEGORY_META = [
-    {
-        id: 'gym',
-        label: 'Gym Workout',
-        fallbackCount: '500+',
-        image: CAT_GYM_IMG,
-        accentKey: 'coral',
-        filter: 'gym',
-    },
-    {
-        id: 'home',
-        label: 'Home Workout',
-        fallbackCount: '200+',
-        image: CAT_HOME_IMG,
-        accentKey: 'cyan',
-        filter: 'home',
-    },
-    {
-        id: 'cardio',
-        label: 'Cardio',
-        fallbackCount: '80+',
-        image: CAT_CARDIO_IMG,
-        accentKey: 'blue',
-        filter: 'cardio',
-    },
-    {
-        id: 'kegel',
-        label: 'Kegel / Pelvic',
-        fallbackCount: '5',
-        image: CAT_RECOVERY_IMG,
-        accentKey: 'purple',
-        filter: 'kegel',
-    },
-] as const;
-
-// More Features shown as image cards on Home. (The `accent` field is retained
-// as a non-rendered data attribute; it is not read in the JSX below, so it
-// carries no theme dependency.)
-const MORE_FEATURES = [
-    { id: 'shifts', label: 'Shifts', image: HERO_TRAINING, route: '/(shifts)' },
-    { id: 'sleep', label: 'Sleep Tracker', image: QA_SLEEP, route: '/(modals)/log-sleep' },
-    { id: 'community', label: 'Community', image: MUSCLE_SHOULDERS_IMG, route: '/(community)' },
-    { id: 'coaches', label: 'Coaches', image: MUSCLE_ARMS_IMG, route: '/coaches/browse' },
-    { id: 'circadian', label: 'Circadian', image: CAT_RECOVERY_IMG, route: '/(tabs)/circadian' },
-    { id: 'settings', label: 'Settings', image: CAT_HOME_IMG, route: '/(settings)' },
-] as const;
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
+// ─── Helpers ───────────────────────────────────────────────────────────────
 function toMinutes(t?: string): number {
     if (!t) return 0;
     const [h = '0', m = '0'] = t.split(':');
     return parseInt(h, 10) * 60 + parseInt(m, 10);
 }
-
 function parseTimeStr(t: string): Date | null {
     try {
         const d = new Date(t);
@@ -188,1083 +102,581 @@ function parseTimeStr(t: string): Date | null {
         return r;
     } catch { return null; }
 }
-
-function getCountdown(endTime: string): string | null {
-    const end = parseTimeStr(endTime);
-    if (!end) return null;
-    const now = new Date();
-    if (end < now) end.setDate(end.getDate() + 1);
-    const ms = end.getTime() - now.getTime();
-    if (ms <= 0) return null;
-    const min = Math.floor(ms / 60000);
-    return `${Math.floor(min / 60)}h ${min % 60}m`;
-}
-
 function getNextMeal(meals: PlanMeal[]): PlanMeal | null {
     if (!meals.length) return null;
     const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
     const sorted = [...meals].sort((a, b) => toMinutes(a.time) - toMinutes(b.time));
     return sorted.find(m => toMinutes(m.time) > nowMin) ?? sorted[0] ?? null;
 }
-
-// `colors` is the ACTIVE theme palette (passed from the component) so the
-// insight glow re-tints on a theme switch.
-function getInsight(hour: number, colors: ReturnType<typeof useTheme>['colors']) {
-    if (hour >= 22 || hour < 5) return { icon: 'moon' as const, text: 'Melatonin rising. Wind down screens.', color: colors.accent.purple };
-    if (hour >= 5 && hour < 9) return { icon: 'sunny' as const, text: 'Cortisol peak. Delay caffeine 90 min.', color: colors.accent.amber };
-    if (hour >= 14 && hour < 17) return { icon: 'water' as const, text: 'Cortisol dip. Ideal time for protein.', color: colors.accent.cyan };
-    if (hour >= 17 && hour < 22) return { icon: 'flash' as const, text: 'Alertness window closing. Fuel up now.', color: colors.accent.coral };
-    return { icon: 'pulse' as const, text: 'Optimal alertness window. Stay fuelled.', color: colors.accent.blue };
+// "in 1h 20m" style relative label to a HH:MM meal time (today, else tomorrow).
+function untilLabel(time?: string): string | null {
+    if (!time) return null;
+    const end = parseTimeStr(time);
+    if (!end) return null;
+    const now = new Date();
+    if (end < now) end.setDate(end.getDate() + 1);
+    const min = Math.floor((end.getTime() - now.getTime()) / 60000);
+    if (min <= 0) return 'now';
+    const h = Math.floor(min / 60), m = min % 60;
+    return h > 0 ? `in ${h}h ${m}m` : `in ${m}m`;
+}
+function insightText(hour: number): string {
+    if (hour >= 22 || hour < 5) return 'Melatonin is rising — dim the lights and start winding down for anchor sleep. 🌙';
+    if (hour >= 5 && hour < 9) return 'Cortisol is peaking — hold caffeine 90 min and get bright light to lock in your rhythm. ☀️';
+    if (hour >= 14 && hour < 17) return 'Afternoon dip incoming — a protein-forward meal now keeps you sharp through the shift. 💪';
+    if (hour >= 17 && hour < 22) return 'Your alertness window is closing — fuel up now so you train strong tonight. 🔥';
+    return "You're deep in your shift — eat your pre-shift bowl now so you train fuelled. 💪";
 }
 
-// ─── MacroPill ────────────────────────────────────────────────────────────────
+// ─── Small primitives ────────────────────────────────────────────────────────
 
-const MacroPill = React.memo(function MacroPill({ label, value, color }: { label: string; value: string; color: string }) {
-    const { colors } = useTheme();
-    return (
-        <View style={[mp.pill, { backgroundColor: withAlpha(color, 0.10) }]}>
-            <Text style={[typography.statTiny, mp.val, { color }]}>{value}</Text>
-            <Text style={[typography.caption, mp.lbl, { color: colors.text.secondary }]}>{label}</Text>
-        </View>
-    );
-});
-const mp = StyleSheet.create({
-    pill: { alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, marginRight: 8 },
-    val: {},
-    lbl: { marginTop: 2 },
-});
-
-// ─── BentoStat ─────────────────────────────────────────────────────────────────
-// A single bento tile matching the mockup's stat tiles: a small icon+label row
-// (with an optional lime "done" check), a big condensed numeral with a muted
-// unit, and an optional thin progress bar. Pure presentation — the screen owns
-// the data and passes already-derived strings/flags down. Pressable when an
-// `onPress` is supplied (so the existing stat → screen navigation is preserved).
-const BentoStat = React.memo(function BentoStat({
-    icon, label, value, unit, accent, done, progressPct, onPress, accessibilityLabel,
+/** A bento stat tile: icon + label (+ optional done check), big value (+ unit),
+ *  optional thin progress bar. Flat opaque card per the mockup. */
+function StatTile({
+    icon, label, value, unit, accent, done, progressPct, onPress, a11y,
 }: {
-    icon: keyof typeof Ionicons.glyphMap;
-    label: string;
-    value: string;
-    unit?: string;
-    accent: string;
-    done?: boolean;
-    progressPct?: number;
-    onPress?: () => void;
-    accessibilityLabel?: string;
+    icon: keyof typeof Ionicons.glyphMap; label: string; value: string; unit?: string;
+    accent: string; done?: boolean; progressPct?: number; onPress?: () => void; a11y?: string;
 }) {
-    const { colors } = useTheme();
-    const body = (
-        <GlassCard intensity={40} radius={18} style={{ flex: 1 }}>
-            <View style={bs.inner}>
-                <View style={bs.topRow}>
-                    <View style={bs.lblRow}>
-                        <Ionicons name={icon} size={13} color={colors.text.secondary} />
-                        <Text style={[typography.captionMedium, bs.lbl, { color: colors.text.secondary }]} numberOfLines={1}>
-                            {label}
-                        </Text>
-                    </View>
-                    {done && (
-                        <View style={[bs.check, { backgroundColor: withAlpha(colors.accent.coral, 0.18) }]}>
-                            <Ionicons name="checkmark" size={11} color={colors.accent.coral} />
-                        </View>
-                    )}
-                </View>
-                <View style={bs.valRow}>
-                    <Text
-                        style={[typography.statSmall, { color: colors.text.primary }]}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        maxFontSizeMultiplier={STAT_MAX_SCALE}
-                    >
-                        {value}
-                    </Text>
-                    {!!unit && (
-                        <Text style={[typography.captionMedium, bs.unit, { color: colors.text.secondary }]}>
-                            {unit}
-                        </Text>
-                    )}
-                </View>
-                {typeof progressPct === 'number' && (
-                    <View style={[bs.barBg, { backgroundColor: withAlpha(colors.text.primary, 0.10) }]}>
-                        <View style={[bs.barFill, { width: (Math.max(0, Math.min(100, progressPct)) + '%') as any, backgroundColor: accent }]} />
-                    </View>
-                )}
-            </View>
-        </GlassCard>
-    );
-
-    if (!onPress) return <View style={{ flex: 1 }}>{body}</View>;
+    const D = useThemedPalette();
+    const st = useMemo(() => makeStyles(D), [D]);
     return (
         <TouchableOpacity
-            style={{ flex: 1 }}
-            onPress={onPress}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={accessibilityLabel ?? `${label}, ${value}${unit ? ' ' + unit : ''}`}
+            style={st.tile} activeOpacity={onPress ? 0.85 : 1} onPress={onPress}
+            disabled={!onPress} accessibilityRole={onPress ? 'button' : undefined}
+            accessibilityLabel={a11y ?? `${label}, ${value}${unit ? ' ' + unit : ''}`}
         >
-            {body}
+            <Ionicons name={icon} size={20} color={accent} />
+            {done && (
+                <View style={st.doneDot}>
+                    <Ionicons name="checkmark" size={13} color={D.ink} />
+                </View>
+            )}
+            <Text style={st.tileVal} numberOfLines={1} adjustsFontSizeToFit maxFontSizeMultiplier={1.3}>
+                {value}{!!unit && <Text style={st.tileUnit}>{unit}</Text>}
+            </Text>
+            <Text style={st.tileLbl} numberOfLines={1}>{label}</Text>
+            {typeof progressPct === 'number' && (
+                <View style={st.barBg}>
+                    <View style={[st.barFill, { width: `${Math.max(0, Math.min(100, progressPct))}%`, backgroundColor: accent }]} />
+                </View>
+            )}
         </TouchableOpacity>
     );
-});
-const bs = StyleSheet.create({
-    inner: { padding: 13, minHeight: 78, justifyContent: 'space-between' },
-    topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    lblRow: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
-    lbl: { flexShrink: 1 },
-    check: { width: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-    valRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 3, marginTop: 6 },
-    unit: { marginBottom: 3 },
-    barBg: { height: 4, borderRadius: 4, marginTop: 9, overflow: 'hidden' },
-    barFill: { height: '100%', borderRadius: 4 },
-});
+}
+
+/** Pagination dots — active dot is a wide lime pill. */
+function Dots({ count, active }: { count: number; active: number }) {
+    const D = useThemedPalette();
+    const st = useMemo(() => makeStyles(D), [D]);
+    return (
+        <View style={st.dotsRow}>
+            {Array.from({ length: count }).map((_, i) => (
+                <View key={i} style={i === active ? st.dotActive : st.dot} />
+            ))}
+        </View>
+    );
+}
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
-    const { colors, shadows } = useTheme();
+    const D = useThemedPalette();
+    const st = useMemo(() => makeStyles(D), [D]);
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const qc = useQueryClient();
     const { user } = useAuthStore();
     const [refreshing, setRefreshing] = useState(false);
-    // Theme-derived styles (re-tint the two color-bearing rules on a switch).
-    const s = useMemo(() => makeStyles(colors), [colors]);
+    const [heroIdx, setHeroIdx] = useState(0);
 
-    // ── Queries ──
-    // Each query exposes isError + refetch so the dashboard can render a uniform
-    // "Couldn't load … / Retry" EmptyState (instead of crashing or staying
-    // empty) and re-fire the request on tap.
-    const { data: shift, isLoading: shiftLoading, isError: shiftError, refetch: shiftRefetch } =
-        useQuery({ queryKey: ['current-shift'], queryFn: getCurrentShift, retry: 1 });
-    // The user's shifts (±366d window) — drives the NextShiftCard countdown to
-    // the soonest UPCOMING clock-in. Separate from ['current-shift'] (which is
-    // the ACTIVE shift powering the hero); this activates the previously-dormant
-    // api/shifts.list query. The card owns its own loading/error/empty branches.
-    const { data: upcomingShifts, isLoading: upcomingLoading, isError: upcomingError, refetch: upcomingRefetch } =
-        useQuery({ queryKey: ['shifts-upcoming'], queryFn: listShifts, retry: 1 });
-    const { data: progress, isError: progressError, refetch: progressRefetch } =
-        useQuery({ queryKey: ['today-progress'], queryFn: getTodayProgress, retry: 1 });
-    const { data: plan, isLoading: planLoading, isError: planError, refetch: planRefetch } =
-        useQuery({ queryKey: ['today-plan'], queryFn: getTodayPlan, retry: 1 });
-
-    // Fetch exercise counts per category
-    const exerciseCountQueries = EXERCISE_CATEGORY_META.map(cat => cat.filter);
-    const { data: exerciseCounts } = useQuery({
-        queryKey: ['exercise-counts'],
-        queryFn: async () => {
-            const counts: Record<string, number> = {};
-            await Promise.all(
-                exerciseCountQueries.map(async (category) => {
-                    try {
-                        const results = await searchLibrary(null, category);
-                        counts[category] = results.length;
-                    } catch { counts[category] = 0; }
-                })
-            );
-            return counts;
-        },
-        staleTime: 30 * 60 * 1000, // 30 min cache
-        retry: 1,
-    });
-
-    const exerciseCategories = useMemo(() =>
-        EXERCISE_CATEGORY_META.map(cat => ({
-            ...cat,
-            // Resolve the accent from the ACTIVE theme so the badge re-tints.
-            accent: colors.accent[cat.accentKey],
-            count: exerciseCounts?.[cat.filter] != null
-                ? String(exerciseCounts[cat.filter])
-                : cat.fallbackCount,
-        })),
-        [exerciseCounts, colors]);
-
-    // "Picked for your shift" cards with their accents resolved from the active
-    // theme (re-tints on a theme switch).
-    const quickActions = useMemo(() =>
-        QUICK_ACTIONS.map(a => ({ ...a, color: colors.accent[a.colorKey] })),
-        [colors]);
-
-    const { mutate: addWater } = useMutation({
-        mutationFn: () => logHydration(250),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['today-progress'] }),
-    });
+    // ── Queries (each section degrades on its own; no whole-screen block) ──
+    const { data: shift } = useQuery({ queryKey: ['current-shift'], queryFn: getCurrentShift, retry: 1 });
+    const { data: progress } = useQuery({ queryKey: ['today-progress'], queryFn: getTodayProgress, retry: 1 });
+    const { data: plan } = useQuery({ queryKey: ['today-plan'], queryFn: getTodayPlan, retry: 1 });
+    const { data: streak } = useQuery({ queryKey: ['streak'], queryFn: getStreak, retry: 1 });
+    // Shared cache key with the Profile screen + post-detail, so the freshest
+    // avatar shows on Home with no extra fetch.
+    const { data: profile } = useQuery({ queryKey: ['my-profile'], queryFn: getMyProfile, retry: 1 });
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
-        await qc.invalidateQueries();
+        // Scope to this screen's queries (not the whole app cache).
+        await Promise.all(
+            ['current-shift', 'today-progress', 'today-plan', 'streak']
+                .map((k) => qc.invalidateQueries({ queryKey: [k] })),
+        );
         setRefreshing(false);
     }, [qc]);
 
-    // ── Derived (all before any early return) ──
+    // ── Derived ──
     const greeting = useMemo(() => {
         const h = new Date().getHours();
         return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
     }, []);
-
-    const formattedDate = useMemo(() =>
-        new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date()),
-        []);
-
-    const countdown = useMemo(() => shift?.endTime ? getCountdown(shift.endTime) : null, [shift]);
-    const nextMeal = useMemo(() => plan?.meals ? getNextMeal(plan.meals) : null, [plan]);
-    const insight = useMemo(() => getInsight(new Date().getHours(), colors), [colors]);
-    const hydPct = useMemo(() => progress
-        ? Math.min(((progress.hydrationActual || progress.hydrationMl || 0) / 2500) * 100, 100)
-        : 0, [progress]);
-    const sortedMeals = useMemo(() =>
-        plan?.meals?.length ? [...plan.meals].sort((a, b) => toMinutes(a.time) - toMinutes(b.time)) : [],
-        [plan?.meals]);
-    const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
-    const displayName = (user as any)?.displayName ?? user?.name ?? 'User';
-    const initials = useMemo(() => {
-        const name = displayName;
-        return name.split(' ').map((n: string) => n[0] ?? '').join('').toUpperCase().slice(0, 2);
-    }, [displayName]);
-
-    // Current fractional hour for the live NOW marker on the training-window bar.
-    const nowHour = nowMin / 60;
-
-    // ── Visual-only derived figures (no new data calls) ──
-    // First name for a warmer hero greeting; falls back to the full displayName.
+    const displayName = (profile as any)?.displayName ?? (user as any)?.displayName ?? user?.name ?? 'User';
     const firstName = useMemo(() => String(displayName).split(' ')[0] || displayName, [displayName]);
+    const initial = useMemo(() => String(displayName).trim().charAt(0).toUpperCase() || 'Z', [displayName]);
+    // The user's real avatar (https-trust-gated); falls back to the initial disc
+    // when null/non-https. Mirrors the Profile screen's avatar pattern.
+    const avatarUrl = safeImageUri((profile as any)?.avatarUrl ?? (user as any)?.avatarUrl ?? undefined);
 
-    // Bento / stat values from existing `progress` fields.
-    const hydL = progress ? ((progress.hydrationActual || progress.hydrationMl || 0) / 1000).toFixed(1) : '0.0';
-    const kcal = progress ? String(Math.round(progress.caloriesActual || 0)) : '0';
-    const steps = progress
-        ? (progress.stepCount >= 1000 ? (progress.stepCount / 1000).toFixed(1) + 'k' : String(progress.stepCount))
-        : '0';
-    // Sleep hours (mockup bento tile). Read whatever the progress payload exposes
-    // (sleepHours / sleepActual / sleepMinutes); default to a dash when absent so
-    // we never render a fabricated number. Purely a visual roll-up of existing
-    // signals — no new query.
-    const sleepH = useMemo(() => {
-        const p = progress as any;
-        if (!p) return '—';
-        const hrs = p.sleepHours ?? p.sleepActual
-            ?? (typeof p.sleepMinutes === 'number' ? p.sleepMinutes / 60 : undefined)
-            ?? (typeof p.sleepActualMinutes === 'number' ? p.sleepActualMinutes / 60 : undefined);
-        return typeof hrs === 'number' && hrs > 0 ? (Math.round(hrs * 10) / 10).toFixed(1) : '—';
-    }, [progress]);
-    // Per-tile "done" flags (mockup shows lime checks on met goals). Derived from
-    // existing targets where present; absent target → no check.
-    const stepsDone = !!progress && progress.stepCount >= ((progress as any)?.stepGoal ?? 10000);
-    const kcalTarget = progress?.caloriesTarget ? Math.round(progress.caloriesTarget) : undefined;
-    const sleepDone = sleepH !== '—' && parseFloat(sleepH) >= 7;
-
-    // NB: we no longer block the whole dashboard on `shiftLoading`. The
-    // ShiftTransitionCard owns its own loading + error skeleton, and every
-    // other section (UP NEXT meal, hydration mini, etc.) similarly handles its
-    // own loading/error/empty branches. This keeps the layout stable while any
-    // single query is in flight and lets each section surface its own retry.
-    // Shift chip sub-label ("Night · 3h in" in the mockup) — only the elapsed
-    // portion is computed, and only when the active shift exposes a parseable
-    // startTime; otherwise we show just the shift type.
     const shiftElapsed = useMemo(() => {
         const start = shift?.startTime ? parseTimeStr(shift.startTime) : null;
         if (!start) return null;
         const now = new Date();
         if (start > now) return null;
         const min = Math.floor((now.getTime() - start.getTime()) / 60000);
-        if (min < 60) return `${min}m in`;
-        return `${Math.floor(min / 60)}h in`;
+        return min < 60 ? `${min}m in` : `${Math.floor(min / 60)}h in`;
     }, [shift]);
 
-    // ── WOD hero carousel pages (mockup's swipeable "Tonight's focus" slider) ──
-    // Three shift-tuned focus pages, each a full-bleed muscle-model card with a
-    // "min · exercises" meta line. The FIRST page folds in the live shift
-    // countdown when one is active (so the previous hero's countdown signal is
-    // preserved, not dropped), otherwise reads as a rest-mode prompt. Purely
-    // presentational copy — no new data dependency. `onStart` (below) preserves
-    // the old hero's START handler → the Training tab.
-    const wodItems = useMemo<WodItem[]>(() => [
-        {
-            id: 'wod-upper',
-            title: countdown ? 'Upper body strength' : 'Recovery focus',
-            meta: countdown
-                ? `Shift ends in ${countdown} · chest & arms`
-                : 'No active shift · restore & rebuild',
-            img: HERO_MUSCLE,
-        },
-        { id: 'wod-shoulders', title: 'Shoulders & delts', meta: '35 min · 6 exercises', img: MUSCLE_SHOULDERS_IMG },
-        { id: 'wod-arms', title: 'Arms & grip', meta: '30 min · 7 exercises', img: MUSCLE_ARMS_IMG },
-    ], [countdown]);
+    // Title-cased shift label ("night" → "Night shift") to match the mockup copy.
+    const shiftLabel = useMemo(() => {
+        if (!shift?.type) return null;
+        const t = String(shift.type).trim().toLowerCase();
+        const cap = t.charAt(0).toUpperCase() + t.slice(1);
+        return /shift/i.test(cap) ? cap : `${cap} shift`;
+    }, [shift]);
+
+    const nextMeal = useMemo(() => (plan?.meals ? getNextMeal(plan.meals) : null), [plan]);
+    const mealMeta = useMemo(() => {
+        if (!nextMeal) return null;
+        const kcal = nextMeal.macros?.calories ? `${Math.round(nextMeal.macros.calories)} kcal` : null;
+        const until = untilLabel(nextMeal.time);
+        return [kcal, until].filter(Boolean).join(' · ');
+    }, [nextMeal]);
+
+    // Stats from existing progress fields.
+    const hydMl = progress ? (progress.hydrationActual || (progress as any).hydrationMl || 0) : 0;
+    const hydL = (hydMl / 1000).toFixed(1);
+    const hydPct = Math.min((hydMl / 2500) * 100, 100);
+    const kcal = progress ? String(Math.round(progress.caloriesActual || 0)) : '0';
+    const steps = progress
+        ? (progress.stepCount >= 1000 ? (progress.stepCount / 1000).toFixed(1) + 'k' : String(progress.stepCount))
+        : '0';
+    const stepsDone = !!progress && progress.stepCount >= (((progress as any)?.stepGoal) ?? 10000);
+    // Sleep has no backend field today → honest "—" (tile keeps its shape).
+    const sleepH = useMemo(() => {
+        const p = progress as any;
+        const hrs = p?.sleepHours ?? p?.sleepActual
+            ?? (typeof p?.sleepMinutes === 'number' ? p.sleepMinutes / 60 : undefined);
+        if (typeof hrs !== 'number' || hrs <= 0) return null;
+        const h = Math.floor(hrs); const m = Math.round((hrs - h) * 60);
+        return { h, m };
+    }, [progress]);
+    const sleepDone = !!sleepH && sleepH.h >= 7;
+
+    const streakDays = streak?.current ?? 0;
+    const filledDots = Math.max(0, Math.min(7, streakDays));
+
+    const insight = useMemo(() => insightText(new Date().getHours()), []);
+
+    // Hero pages — page 1 mirrors the mockup copy exactly; the swipeable pages 2/3
+    // extend the rail (the mockup shows 3 dots → a 3-page carousel).
+    const heroPages = useMemo(() => [
+        { id: 'focus', badge: "Tonight's focus", title: 'Upper body strength', meta: '4 exercises · chest & arms · 45 min', img: HERO_1 },
+        { id: 'shoulders', badge: 'Strength', title: 'Shoulders & delts', meta: '6 exercises · delts · 35 min', img: HERO_2 },
+        { id: 'arms', badge: 'Hypertrophy', title: 'Arms & grip', meta: '7 exercises · arms · 30 min', img: HERO_3 },
+    ], []);
+
+    const onHeroScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+        const i = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+        if (i !== heroIdx) setHeroIdx(i);
+    }, [heroIdx]);
+
+    // Gentle hero auto-advance (~4.5s); pauses on drag, resumes after the swipe.
+    const heroRef = useRef<ScrollView>(null);
+    const heroPausedRef = useRef(false);
+    useEffect(() => {
+        if (heroPages.length <= 1) return;
+        const id = setInterval(() => {
+            if (heroPausedRef.current) return;
+            setHeroIdx((prev) => {
+                const next = (prev + 1) % heroPages.length;
+                heroRef.current?.scrollTo({ x: next * SCREEN_W, animated: true });
+                return next;
+            });
+        }, 4500);
+        return () => clearInterval(id);
+    }, [heroPages.length]);
 
     return (
-        <ImageBackground
-            blurRadius={3} // Slight atmospheric blur on the raw image
-            source={HERO_TRAINING}
-            style={[s.root, { backgroundColor: colors.background.primary }]}
-            imageStyle={{ opacity: 0.4 }}
-        >
-            {/* Translucent light status bar so the hero glow bleeds under the
-                notch. Mirrors the global root StatusBar (idempotent) and makes
-                the intent explicit at the screen level. */}
-            <StatusBar style="light" translucent backgroundColor="transparent" />
-            <LinearGradient
-                colors={['rgba(10,10,13,0.7)', colors.background.primary]}
-                style={StyleSheet.absoluteFillObject}
-            />
+        <View style={[st.root, { backgroundColor: D.bg }]}>
+            <StatusBar style="light" />
             <ScrollView
-                contentContainerStyle={[s.scroll, { paddingTop: insets.top + 16, paddingBottom: BOTTOM_CLEARANCE }]}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent.coral} />}
+                contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: BOTTOM_CLEARANCE }}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={D.lime} />}
                 showsVerticalScrollIndicator={false}
             >
-
                 {/* ══ HEADER ══════════════════════════════════════════════════ */}
                 <Animated.View entering={FadeInDown.duration(420)}>
-                    <View style={s.header}>
-                        <View style={s.headerLeft}>
-                            <TouchableOpacity
-                                onPress={() => router.push('/(tabs)/profile' as any)}
-                                activeOpacity={0.75}
-                                accessibilityRole="button"
-                                accessibilityLabel="Profile"
-                            >
-                                <View style={[s.avatar, shadows.glow(colors.accent.coral), {
-                                    backgroundColor: withAlpha(colors.accent.coral, 0.14),
-                                    borderColor: withAlpha(colors.accent.coral, 0.35),
-                                }]}>
-                                    <Text style={[s.avatarTxt, { color: colors.accent.coral }]}>{initials}</Text>
-                                </View>
-                            </TouchableOpacity>
-                            <View style={{ flexShrink: 1 }}>
-                                <Text style={[typography.captionMedium, s.greetTxt, { color: colors.text.secondary }]}>{greeting} 👋</Text>
-                                <Text style={[typography.h1, s.nameTxt, { color: colors.text.primary }]} numberOfLines={1}>{displayName}</Text>
+                    <View style={st.header}>
+                        <TouchableOpacity
+                            style={st.headerLeft} activeOpacity={0.8}
+                            onPress={() => router.push('/(tabs)/profile' as any)}
+                            accessibilityRole="button" accessibilityLabel="Profile"
+                        >
+                            <View style={st.avatar}>
+                                {avatarUrl ? (
+                                    <Image source={{ uri: avatarUrl }} style={st.avatarImg} contentFit="cover" cachePolicy="memory-disk" transition={200} accessibilityLabel={`${firstName} photo`} />
+                                ) : (
+                                    <Text style={st.avatarTxt}>{initial}</Text>
+                                )}
                             </View>
-                        </View>
-                        <View style={s.headerRight}>
-                            {shift && (
-                                <View style={[s.shiftBadge, {
-                                    backgroundColor: withAlpha(colors.accent.cyan, 0.10),
-                                    borderColor: withAlpha(colors.accent.cyan, 0.25),
-                                }]}>
-                                    <Ionicons name="moon" size={11} color={colors.accent.cyan} />
-                                    <Text style={[s.shiftTxt, { color: colors.accent.cyan }]} numberOfLines={1}>
-                                        {shiftElapsed ? `${shift.type} · ${shiftElapsed}` : shift.type}
-                                    </Text>
-                                </View>
-                            )}
-                            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Notifications, new"
-                                activeOpacity={0.75}
-                                style={[s.iconBtn, { backgroundColor: withAlpha(colors.text.primary, 0.06) }]}
-                                onPress={() => router.push('/(settings)/notifications' as any)}
-                            >
-                                <Ionicons name="notifications-outline" size={20} color={colors.text.primary} />
-                                {/* Lime unread dot (mockup) — ringed with the page bg so it reads as a pip. */}
-                                <View style={[s.bellDot, { backgroundColor: colors.accent.lime, borderColor: colors.background.primary }]} />
-                            </TouchableOpacity>
-                        </View>
+                            <View style={{ flexShrink: 1 }}>
+                                <Text style={st.greet}>{greeting}</Text>
+                                <Text style={st.name} numberOfLines={1}>{firstName}</Text>
+                            </View>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.75}
+                            onPress={() => router.push('/(settings)/notifications' as any)}
+                            accessibilityRole="button" accessibilityLabel="Notifications, new"
+                        >
+                            <Ionicons name="notifications" size={23} color={D.text} />
+                            <View style={st.bellDot} />
+                        </TouchableOpacity>
                     </View>
 
-                    {/* Date + momentum chip (real adherence signal, not a fabricated streak) */}
-                    <View style={s.subHeaderRow}>
-                        <Text style={[typography.bodySm, s.dateTxt, { color: colors.text.secondary }]}>{formattedDate}</Text>
-                        <View style={[s.momentumChip, {
-                            backgroundColor: withAlpha(colors.accent.coral, 0.12),
-                            borderColor: withAlpha(colors.accent.coral, 0.30),
-                        }]}>
-                            <Ionicons name="flame" size={12} color={colors.accent.coral} />
-                            <Text style={[typography.caption, s.momentumTxt, { color: colors.accent.coral }]} maxFontSizeMultiplier={MICRO_MAX_SCALE}>
-                                {progress?.isAdherent ? 'ON TRACK' : `${progress?.mealsLogged ?? 0} LOGGED`}
-                            </Text>
+                    {/* Shift pill */}
+                    {shift && (
+                        <View style={st.shiftRow}>
+                            <View style={st.shiftPill}>
+                                <Ionicons name="moon" size={15} color={D.lime} />
+                                <Text style={st.shiftTxt} numberOfLines={1}>
+                                    {shiftLabel ?? shift.type}{shiftElapsed ? ` · ${shiftElapsed}` : ''}
+                                </Text>
+                            </View>
                         </View>
-                    </View>
+                    )}
                 </Animated.View>
 
-                {/* ══ TONIGHT'S FOCUS — WOD swipe carousel + pagination dots ══ */
-                /* Full-bleed: WodCarousel owns its own page padding + paging width,
-                 * so we cancel the ScrollView's H_PAD with a negative margin and let
-                 * the pager run edge-to-edge. `onStart` preserves the prior hero's
-                 * START handler (→ the Training tab). */}
-                <View style={s.wodWrap}>
-                    <WodCarousel
-                        items={wodItems}
-                        onStart={() => router.push('/(tabs)/training' as any)}
-                    />
-                </View>
-
-                {/* ══ NEXT · PRE-SHIFT MEAL (hero meal card) ══════════════════ */}
-                {planError ? (
-                    <View style={s.emptyCard}>
-                        <EmptyState
-                            icon="cloud-offline-outline"
-                            title="Couldn't load"
-                            subtitle="We couldn't reach today's meal plan. Try again in a moment."
-                            actionLabel="Retry"
-                            onAction={() => planRefetch()}
-                        />
-                    </View>
-                ) : planLoading ? (
-                    <View style={s.upNextSkeleton}>
-                        <Skeleton width="100%" height={104} radius={borderRadius.lg} />
-                        <View style={s.upNextTop}>
-                            <Skeleton width={150} height={24} radius={borderRadius.sm} />
-                            <Skeleton width={64} height={34} radius={borderRadius.md} />
-                        </View>
-                        <Skeleton width="55%" height={14} radius={borderRadius.sm} style={{ marginTop: spacing.sm }} />
-                    </View>
-                ) : nextMeal ? (
-                    <GlassCard intensity={40} radius={24} style={{ marginBottom: 18 }}>
-                        {/* Photo header strip with the UP NEXT badge floated on it. */}
-                        <View style={s.mealPhotoWrap}>
-                            <Image
-                                source={MEAL_BREAKFAST_IMG}
-                                style={StyleSheet.absoluteFillObject}
-                                contentFit="cover"
-                                cachePolicy="memory-disk"
-                                transition={200}
-                            />
-                            <LinearGradient
-                                colors={['rgba(0,0,0,0.15)', 'rgba(10,12,18,0.9)']}
-                                style={StyleSheet.absoluteFillObject}
-                            />
-                            <View style={[s.upNextBadge, { backgroundColor: withAlpha(colors.accent.coral, 0.92) }]}>
-                                <Text style={[typography.overline, s.upNextLbl, { color: colors.text.inverse }]}>UP NEXT</Text>
-                                <Text style={[s.upNextTime, { color: colors.text.inverse }]}> · {nextMeal.time}</Text>
-                            </View>
-                        </View>
-                        <View style={s.upNextInner}>
-                            <Text style={[typography.h2, s.mealName, { color: colors.text.primary }]}>{nextMeal.label}</Text>
-                            {!!nextMeal.description && (
-                                <Text style={[typography.bodySm, s.mealDesc, { color: colors.text.secondary }]} numberOfLines={2}>
-                                    {nextMeal.description}
-                                </Text>
-                            )}
-                            {nextMeal.macros && (
-                                <View style={s.macroRow}>
-                                    <MacroPill label="Protein" value={nextMeal.macros.protein + 'g'} color={colors.accent.coral} />
-                                    <MacroPill label="Carbs" value={nextMeal.macros.carbs + 'g'} color={colors.accent.cyan} />
-                                    <MacroPill label="Fat" value={nextMeal.macros.fat + 'g'} color={colors.accent.amber} />
-                                </View>
-                            )}
-                            <CtaButton
-                                testID="dashboard-up-next-log-meal-cta"
-                                size="md"
-                                icon="checkmark"
-                                label="Log Meal"
-                                onPress={() => router.push('/(tabs)/nutrition' as any)}
-                            />
-                        </View>
-                    </GlassCard>
-                ) : (
-                    <View style={s.emptyCard}>
-                        <EmptyState
-                            icon="restaurant-outline"
-                            title="No meals planned yet"
-                            subtitle="Build today's fuelling plan around your shift to see your next meal here."
-                            actionLabel="Plan my meals"
-                            onAction={() => router.push('/(tabs)/nutrition' as any)}
-                        />
-                    </View>
-                )}
-
-                {/* ══ PICKED FOR YOUR SHIFT (horizontal carousel) ═════════════ */}
-                <View style={s.sectionRow}>
-                    <Text style={[typography.subtitle, s.sectionTitle, { color: colors.text.primary }]}>Picked for your shift</Text>
-                    <Ionicons name="chevron-forward" size={16} color={colors.text.secondary} />
-                </View>
-                <Animated.View entering={FadeInDown.delay(240).duration(460)}>
+                {/* ══ TONIGHT'S FOCUS — hero slider + dots ════════════════════ */}
+                <Animated.View entering={FadeInDown.delay(80).duration(440)}>
                     <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        decelerationRate="fast"
-                        snapToInterval={QA_CARD_W + CARD_GAP}
-                        snapToAlignment="start"
-                        contentContainerStyle={s.qaCarousel}
+                        ref={heroRef}
+                        horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+                        scrollEventThrottle={16}
+                        onScrollBeginDrag={() => { heroPausedRef.current = true; }}
+                        onMomentumScrollEnd={(e) => { onHeroScroll(e); heroPausedRef.current = false; }}
+                        onScrollEndDrag={onHeroScroll}
+                        style={st.heroPager}
                     >
-                        {quickActions.map(a => (
-                            <TouchableOpacity
-                                key={a.id}
-                                onPress={() => router.push(a.route as any)}
-                                activeOpacity={0.85}
-                                accessibilityRole="button"
-                                accessibilityLabel={a.label}
-                                style={s.qaCardWrap}
-                            >
-                                <GlassCard intensity={40} radius={16} style={{ width: '100%' }}>
-                                    <View style={s.qaPhoto}>
-                                        <Image
-                                            source={a.image}
-                                            style={StyleSheet.absoluteFillObject}
-                                            contentFit="cover"
-                                            cachePolicy="memory-disk"
-                                            transition={200}
-                                        />
-                                        <LinearGradient
-                                            colors={['transparent', 'rgba(0,0,0,0.55)']}
-                                            style={StyleSheet.absoluteFillObject}
-                                        />
-                                        <View style={[s.qaIcon, { backgroundColor: withAlpha(a.color, 0.22) }]}>
-                                            <Ionicons name={a.icon as any} size={15} color={a.color} />
+                        {heroPages.map((p) => (
+                            <View key={p.id} style={st.heroPage}>
+                                <TouchableOpacity
+                                    activeOpacity={0.9}
+                                    onPress={() => router.push('/(tabs)/training' as any)}
+                                    accessibilityRole="button" accessibilityLabel={`${p.title}. ${p.meta}`}
+                                >
+                                    <View style={st.hero}>
+                                        <Image source={p.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                                        <LinearGradient colors={['rgba(10,12,18,0.15)', 'rgba(10,12,18,0.55)', 'rgba(10,12,18,0.96)']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFillObject} />
+                                        <View style={st.heroContent}>
+                                            <View style={st.heroBadge}><Text style={st.heroBadgeTxt}>{p.badge}</Text></View>
+                                            <Text style={st.heroTitle}>{p.title}</Text>
+                                            <Text style={st.heroMeta}>{p.meta}</Text>
                                         </View>
                                     </View>
-                                    <View style={s.qaMeta}>
-                                        <Text style={[typography.bodyMedium, s.qaLabel, { color: colors.text.primary }]} numberOfLines={1}>{a.label}</Text>
-                                        <Text style={[typography.caption, s.qaSub, { color: colors.text.secondary }]} numberOfLines={1}>{a.sub}</Text>
-                                    </View>
-                                </GlassCard>
+                                </TouchableOpacity>
+                            </View>
+                        ))}
+                    </ScrollView>
+                    <Dots count={heroPages.length} active={heroIdx} />
+                </Animated.View>
+
+                {/* ══ AI COACH — dedicated section (Ria's gated challenge) ════ */}
+                <Animated.View entering={FadeInDown.delay(100).duration(440)} style={{ paddingHorizontal: 14, marginTop: 14 }}>
+                    <CoachHomeCard />
+                </Animated.View>
+
+                {/* ══ EXERCISES TO TRY — image cards → tap for how-to ═════════ */}
+                <ExerciseRail title="Exercises to try" bodyPart="chest" />
+
+                {/* ══ FRESH RECIPES RAIL ══════════════════════════════════════ */}
+                <RecipeRail title="Fresh recipes" />
+
+                {/* ══ NEXT · PRE-SHIFT MEAL ═══════════════════════════════════ */}
+                {nextMeal && (
+                    <Animated.View entering={FadeInDown.delay(120).duration(440)} style={[st.section, { marginTop: 10, paddingHorizontal: 14 }]}>
+                        <View style={st.mealCard}>
+                            <View style={st.mealPhoto}>
+                                <Image source={MEAL_IMG} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                            </View>
+                            <View style={st.mealRow}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={st.mealEyebrow}>Next · pre-shift meal</Text>
+                                    <Text style={st.mealName} numberOfLines={1}>{nextMeal.label}</Text>
+                                    {!!mealMeta && <Text style={st.mealMeta}>{mealMeta}</Text>}
+                                </View>
+                                <TouchableOpacity
+                                    style={st.addPill} activeOpacity={0.85}
+                                    onPress={() => router.push('/(tabs)/nutrition' as any)}
+                                    accessibilityRole="button" accessibilityLabel={`Add ${nextMeal.label}`}
+                                >
+                                    <Text style={st.addPillTxt}>Add</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </Animated.View>
+                )}
+
+                {/* ══ PICKED FOR YOUR SHIFT ═══════════════════════════════════ */}
+                <View style={[st.sectionRow, st.pickedHead]}>
+                    <Text style={st.sectionTitle}>Quick start</Text>
+                    <Ionicons name="chevron-forward" size={18} color={D.muted} />
+                </View>
+                <Animated.View entering={FadeInDown.delay(160).duration(460)}>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.pickedRail}>
+                        {PICKED.map((c) => (
+                            <TouchableOpacity
+                                key={c.id} style={st.pickedCard} activeOpacity={0.85}
+                                onPress={() => router.push(c.route as any)}
+                                accessibilityRole="button" accessibilityLabel={`${c.title}, ${c.sub}`}
+                            >
+                                <View style={st.pickedThumb}>
+                                    <Image source={c.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                                    <LinearGradient colors={['transparent', 'rgba(10,12,18,0.88)']} style={StyleSheet.absoluteFillObject} />
+                                    <Ionicons name={c.icon} size={20} color={D.lime} style={st.pickedIcon} />
+                                </View>
+                                <Text style={st.pickedTitle} numberOfLines={1}>{c.title}</Text>
+                                <Text style={st.pickedSub} numberOfLines={1}>{c.sub}</Text>
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
                 </Animated.View>
 
-                {/* ══ BENTO GRID (training-tall + sleep/water/steps/calories) ═ */}
-                <Animated.View entering={FadeInDown.delay(180).duration(460)} style={s.bentoRow}>
-                    {/* Tall training tile (left column) */}
-                    <TouchableOpacity
-                        style={s.bentoTall}
-                        onPress={() => router.push('/(tabs)/training' as any)}
-                        activeOpacity={0.85}
-                        accessibilityRole="button"
-                        accessibilityLabel="Today's training, start workout"
-                    >
-                        <GlassCard intensity={40} radius={18} style={{ flex: 1 }}>
-                            <View style={s.bentoTallPhoto}>
-                                <Image
-                                    source={CAT_GYM_IMG}
-                                    style={StyleSheet.absoluteFillObject}
-                                    contentFit="cover"
-                                    cachePolicy="memory-disk"
-                                    transition={200}
-                                />
-                                <LinearGradient
-                                    colors={['transparent', 'rgba(10,12,18,0.85)']}
-                                    style={StyleSheet.absoluteFillObject}
-                                />
-                            </View>
-                            <View style={s.bentoTallMeta}>
-                                <Text style={[typography.caption, { color: colors.text.secondary }]}>Today · training</Text>
-                                <Text style={[typography.h3, s.bentoTallTitle, { color: colors.text.primary }]} numberOfLines={1}>
-                                    Push day
-                                    <Text style={[typography.caption, { color: colors.text.secondary }]}> · 45 min</Text>
-                                </Text>
-                                <CtaButton
-                                    size="sm"
-                                    icon="play"
-                                    label="Start workout"
-                                    onPress={() => router.push('/(tabs)/training' as any)}
-                                    accessibilityLabel="Start workout"
-                                    style={{ marginTop: 10 }}
-                                />
-                            </View>
-                        </GlassCard>
-                    </TouchableOpacity>
+                {/* ══ TODAY'S MACROS ══════════════════════════════════════════ */}
+                <Animated.View entering={FadeInDown.delay(170).duration(460)} style={{ paddingHorizontal: 14, marginTop: 16 }}>
+                    <MacrosHomeCard />
+                </Animated.View>
 
-                    {/* Right column: 2×2 stat tiles */}
-                    <View style={s.bentoCol}>
-                        <View style={s.bentoPairRow}>
-                            <BentoStat
-                                icon="moon"
-                                label="Sleep"
-                                value={sleepH}
-                                unit={sleepH === '—' ? undefined : 'h'}
-                                accent={colors.accent.purple}
-                                done={sleepDone}
+                {/* ══ BENTO GRID ══════════════════════════════════════════════ */}
+                <Animated.View entering={FadeInDown.delay(180).duration(460)} style={[st.section, { marginTop: 18 }]}>
+                    <View style={st.bentoTop}>
+                        {/* Tall lime-glow training card */}
+                        <TouchableOpacity
+                            style={st.glowCardWrap} activeOpacity={0.9}
+                            onPress={() => router.push('/(tabs)/training' as any)}
+                            accessibilityRole="button" accessibilityLabel="Tonight's training, start workout"
+                        >
+                            <View style={st.glowCard}>
+                                <Image source={TRAINING_IMG} style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]} contentFit="cover" contentPosition="top" cachePolicy="memory-disk" transition={200} />
+                                <LinearGradient colors={['rgba(10,12,18,0.45)', 'rgba(10,12,18,0.9)']} style={[StyleSheet.absoluteFillObject, { borderRadius: 13 }]} />
+                                <View>
+                                    <Ionicons name="barbell" size={24} color={D.lime} />
+                                    <Text style={st.glowTitle}>Tonight's training</Text>
+                                    <Text style={st.glowSub}>Push day · 45 min</Text>
+                                </View>
+                                <View style={st.glowBtn}><Text style={st.glowBtnTxt}>Start workout</Text></View>
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* Right column: Sleep + Water */}
+                        <View style={st.bentoCol}>
+                            <StatTile
+                                icon="moon" label="Sleep" accent={D.blue}
+                                value={sleepH ? `${sleepH.h}h ${sleepH.m}m` : '—'} done={sleepDone}
                                 onPress={() => router.push('/(shifts)/sleep-optimizer' as any)}
-                                accessibilityLabel={`Sleep, ${sleepH === '—' ? 'not logged' : sleepH + ' hours'}`}
+                                a11y={sleepH ? `Sleep, ${sleepH.h} hours ${sleepH.m} minutes` : 'Sleep, not logged'}
                             />
-                            <BentoStat
-                                icon="water"
-                                label="Water"
-                                value={hydL}
-                                unit="/2.5L"
-                                accent={colors.accent.blue}
-                                progressPct={hydPct}
-                                onPress={() => router.push('/(performance)' as any)}
-                                accessibilityLabel={`Water, ${hydL} of 2.5 litres`}
-                            />
-                        </View>
-                        <View style={s.bentoPairRow}>
-                            <BentoStat
-                                icon="footsteps"
-                                label="Steps"
-                                value={steps}
-                                accent={colors.accent.cyan}
-                                done={stepsDone}
-                                onPress={() => router.push('/(performance)' as any)}
-                                accessibilityLabel={`Steps, ${steps} today`}
-                            />
-                            <BentoStat
-                                icon="flame"
-                                label="Calories"
-                                value={kcal}
-                                unit={kcalTarget ? `/${kcalTarget}` : 'kcal'}
-                                accent={colors.accent.coral}
-                                onPress={() => router.push('/(tabs)/nutrition' as any)}
-                                accessibilityLabel={`Calories, ${kcal} today`}
+                            <StatTile
+                                icon="water" label="Water" accent={D.cyan}
+                                value={hydL} unit="L" progressPct={hydPct}
+                                onPress={() => router.push('/(performance)/hydration' as any)}
+                                a11y={`Water, ${hydL} of 2.5 litres`}
                             />
                         </View>
                     </View>
-                </Animated.View>
-
-                {/* ══ CIRCADIAN TRAINING-WINDOW BAR ═══════════════════════════ */}
-                <Animated.View entering={FadeInDown.delay(220).duration(460)}>
-                    <TrainingWindowBar
-                        startHour={TRAIN_START_H}
-                        endHour={TRAIN_END_H}
-                        nowHour={nowHour}
-                        accent={colors.accent.coral}
-                    />
-                </Animated.View>
-
-                {/* ══ NEXT SHIFT (countdown to the soonest upcoming clock-in) ══ */}
-                <NextShiftCard
-                    shifts={upcomingShifts ?? null}
-                    loading={upcomingLoading}
-                    error={upcomingError}
-                    onRetry={() => upcomingRefetch()}
-                />
-
-                {/* ══ NEXT SHIFT TRANSITION (circadian readiness) ══════════════ */}
-                <ShiftTransitionCard
-                    shift={shift ?? null}
-                    loading={shiftLoading}
-                    error={shiftError}
-                    onRetry={() => shiftRefetch()}
-                />
-
-                {/* ══ LIGHT PLAN (light-exposure coaching) ════════════════════ */}
-                <LightPlanCard
-                    shift={shift ?? null}
-                    loading={shiftLoading}
-                    error={shiftError}
-                    onRetry={() => shiftRefetch()}
-                />
-
-                {/* ══ ANCHOR SLEEP (fixed core-sleep block) ═══════════════════ */}
-                <AnchorSleepCard
-                    shift={shift ?? null}
-                    loading={shiftLoading}
-                    error={shiftError}
-                    onRetry={() => shiftRefetch()}
-                />
-
-                {/* ══ YOUR RHYTHM TONIGHT (composed circadian day-plan timeline) */}
-                <Text style={[typography.subtitle, s.rhythmTitle, { color: colors.text.primary }]}>Your rhythm tonight</Text>
-                <TodayCircadianTimeline
-                    shift={shift ?? null}
-                    loading={shiftLoading}
-                    error={shiftError}
-                    onRetry={() => shiftRefetch()}
-                    now={new Date()}
-                />
-
-                {/* ══ SLEEP + HYDRATION + CAFFEINE MINI CARDS ════════════════ */
-                /* Sleep + Hydration share row 1; CaffeineTimerTile wraps to row
-                 * 2 as the 3rd tile (kept at MINI_W width for visual rhythm). */}
-                <View style={s.miniRow}>
-                    {/* Sleep Window */}
-                    <TouchableOpacity
-                        style={{ width: MINI_W }}
-                        onPress={() => router.push('/(shifts)/sleep-optimizer' as any)}
-                        activeOpacity={0.8}
-                        accessibilityRole="button"
-                        accessibilityLabel="Sleep Window, 8 hour target, melatonin guide"
-                    >
-                        <GlassCard intensity={40} radius={20} style={{ width: '100%' }}>
-                            <View style={s.miniInner}>
-                                <View style={[s.miniIcon, { backgroundColor: withAlpha(colors.accent.purple, 0.14) }]}>
-                                    <Ionicons name="moon" size={20} color={colors.accent.purple} />
-                                </View>
-                                <Text style={[typography.overline, s.miniLbl, { color: colors.text.secondary }]}>Sleep Window</Text>
-                                <Text style={[s.miniVal, { color: colors.text.primary }]}>
-                                    <Text style={typography.statSmall}>8h</Text>
-                                    <Text style={[typography.captionMedium, { color: colors.text.secondary }]}> target</Text>
-                                </Text>
-                                {/* purpleLight (6.27:1) not purple (#7C4DFF, 4.06 — AA-large only) for AA on this small footer text. */}
-                                <Text style={[typography.captionMedium, s.miniSub, { color: colors.accent.purpleLight }]}>Melatonin guide →</Text>
-                            </View>
-                        </GlassCard>
-                    </TouchableOpacity>
-
-                    {/* Hydration (with uniform error EmptyState on failure) */}
-                    {progressError ? (
-                        <View style={{ width: MINI_W }}>
-                            <EmptyState
-                                icon="cloud-offline-outline"
-                                title="Couldn't load"
-                                subtitle="Hydration is offline. Tap retry to try again."
-                                actionLabel="Retry"
-                                onAction={() => progressRefetch()}
-                            />
-                        </View>
-                    ) : (
-                        <GlassCard intensity={40} radius={20} style={{ width: MINI_W }}>
-                            <View style={s.miniInner}>
-                                <View style={[s.miniIcon, { backgroundColor: withAlpha(colors.accent.blue, 0.14) }]}>
-                                    <Ionicons name="water" size={20} color={colors.accent.blue} />
-                                </View>
-                                <Text style={[typography.overline, s.miniLbl, { color: colors.text.secondary }]}>Hydration</Text>
-                                <Text style={[s.miniVal, { color: colors.text.primary }]}>
-                                    <Text style={typography.statMedium}>
-                                        {progress ? ((progress.hydrationActual || progress.hydrationMl || 0) / 1000).toFixed(1) : '0'}
-                                    </Text>
-                                    <Text style={[typography.captionMedium, { color: colors.text.secondary }]}>
-                                        {' / 2.5L'}
-                                    </Text>
-                                </Text>
-                                <View style={[s.hydBarBg, { backgroundColor: withAlpha(colors.accent.blue, 0.15) }]}>
-                                    <View style={[s.hydBarFill, { width: (hydPct + '%') as any, backgroundColor: colors.accent.blue }]} />
-                                </View>
-                                <TouchableOpacity
-                                    style={[s.addWaterBtn, {
-                                        backgroundColor: withAlpha(colors.accent.blue, 0.12),
-                                        borderColor: withAlpha(colors.accent.blue, 0.22),
-                                    }]}
-                                    onPress={() => addWater()}
-                                    activeOpacity={0.85}
-                                    accessibilityRole="button"
-                                    accessibilityLabel="Add 250 millilitres of water"
-                                >
-                                    <Text style={[typography.captionMedium, s.addWaterTxt, { color: colors.accent.blue }]}>+ Add 250ml</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </GlassCard>
-                    )}
-                </View>
-
-                {/* ── Caffeine Timer (mini-card row continuation) ───────────── */}
-                <View style={s.caffeineRow}>
-                    <View style={{ width: MINI_W }}>
-                        <CaffeineTimerTile shift={shift ?? null} />
-                    </View>
-                </View>
-
-                {/* ══ EXERCISE CATEGORIES ═════════════════════════════════════ */}
-                <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>EXPLORE</Text>
-                <View style={s.catGrid}>
-                    {exerciseCategories.map(cat => (
-                        <TouchableOpacity
-                            key={cat.id}
-                            style={s.catCard}
-                            onPress={() => router.push(`/(exercises)?category=${cat.id}` as any)}
-                            activeOpacity={0.82}
-                            accessibilityRole="button"
-                            accessibilityLabel={`${cat.label}, ${cat.count} exercises`}
-                        >
-                            <Image
-                                source={cat.image}
-                                style={StyleSheet.absoluteFillObject}
-                                contentFit="cover"
-                                cachePolicy="memory-disk"
-                                transition={200}
-                            />
-                            {/* Dark gradient overlay for readability */}
-                            <LinearGradient
-                                colors={['transparent', 'rgba(0,0,0,0.72)']}
-                                style={StyleSheet.absoluteFillObject}
-                            />
-                            {/* Count badge top-right */}
-                            <View style={[s.catBadge, { backgroundColor: withAlpha(cat.accent, 0.18) }]}>
-                                <Text style={[s.catBadgeTxt, { color: cat.accent }]}>{cat.count}</Text>
-                            </View>
-                            {/* Label bottom-left */}
-                            <View style={s.catLabel}>
-                                <Text style={s.catLabelTxt}>{cat.label}</Text>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-
-                {/* ══ MORE FEATURES (HOME) ═════════════════════════════════════ */}
-                <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>MORE FEATURES</Text>
-                <View style={[s.catGrid, { marginBottom: 28 }]}>
-                    {MORE_FEATURES.map(feat => (
-                        <TouchableOpacity
-                            key={feat.id}
-                            style={s.catCard}
-                            onPress={() => router.push(feat.route as any)}
-                            activeOpacity={0.82}
-                            accessibilityRole="button"
-                            accessibilityLabel={feat.label}
-                        >
-                            <Image
-                                source={feat.image}
-                                style={StyleSheet.absoluteFillObject}
-                                contentFit="cover"
-                                cachePolicy="memory-disk"
-                                transition={200}
-                            />
-                            {/* Dark gradient overlay for readability */}
-                            <LinearGradient
-                                colors={['transparent', 'rgba(0,0,0,0.72)']}
-                                style={StyleSheet.absoluteFillObject}
-                            />
-                            {/* Label bottom-left */}
-                            <View style={s.catLabel}>
-                                <Text style={s.catLabelTxt}>{feat.label}</Text>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-
-                {/* ══ WORKOUT ACTIVITY HEATMAP ═════════════════════════════════ */}
-                <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>WORKOUT ACTIVITY</Text>
-                <ActivityHeatmap />
-                <View style={{ height: 20 }} />
-
-                {/* ══ 24-HOUR SCHEDULE TIMELINE ════════════════════════════════ */}
-                <View style={s.sectionRow}>
-                    <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary }]}>24H SCHEDULE</Text>
-                    {sortedMeals.length > 0 && (
-                        <TouchableOpacity
-                            onPress={() => router.push('/(tabs)/circadian' as any)}
-                            activeOpacity={0.85}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            accessibilityRole="button"
-                            accessibilityLabel="View full 24 hour schedule"
-                        >
-                            <Text style={[typography.captionMedium, s.viewAll, { color: colors.accent.coral }]}>View Full →</Text>
-                        </TouchableOpacity>
-                    )}
-                </View>
-
-                {planLoading ? (
-                    <View style={[s.timeline, { borderColor: withAlpha(colors.text.primary, 0.1) }]}>
-                        {[0, 1, 2, 3].map(i => (
-                            <View key={i} style={s.tlRow}>
-                                <Skeleton width={40} height={12} radius={borderRadius.sm} />
-                                <View style={s.tlConnector}>
-                                    <Skeleton width={10} height={10} radius={borderRadius.full} />
-                                </View>
-                                <View style={s.tlContent}>
-                                    <Skeleton width="60%" height={14} radius={borderRadius.sm} />
-                                </View>
-                            </View>
-                        ))}
-                    </View>
-                ) : sortedMeals.length === 0 ? (
-                    <View style={s.emptyCard}>
-                        <EmptyState
-                            icon="calendar-outline"
-                            title="Your day is a blank canvas"
-                            subtitle="Set up a meal protocol to map your fuel, hydration and rest across all 24 hours."
-                            actionLabel="View circadian plan"
-                            onAction={() => router.push('/(tabs)/circadian' as any)}
+                    {/* Bottom row: Steps + Calories */}
+                    <View style={st.bentoBottom}>
+                        <StatTile
+                            icon="walk" label="Steps" accent={D.lime} value={steps} done={stepsDone}
+                            onPress={() => router.push('/(performance)' as any)} a11y={`Steps, ${steps} today`}
+                        />
+                        <StatTile
+                            icon="flame" label="Calories" accent={D.lime} value={kcal}
+                            onPress={() => router.push('/(tabs)/nutrition' as any)} a11y={`Calories, ${kcal} today`}
                         />
                     </View>
-                ) : (
-                    <GlassCard intensity={40} radius={20} style={s.timelineWrap}>
-                        <View style={s.timelineInner}>
-                            {sortedMeals.map((meal, idx) => {
-                                const mMin = toMinutes(meal.time);
-                                const isPast = mMin < nowMin;
-                                const prev = sortedMeals[idx - 1];
-                                const isNow = !isPast && (idx === 0 || (prev ? toMinutes(prev.time) < nowMin : true));
-                                const isLast = idx === sortedMeals.length - 1;
-
-                                return (
-                                    <View key={`${meal.time || 'unknown'}-${idx}`} style={s.tlRow}>
-                                        <Text style={[s.tlTime, { color: isNow ? colors.accent.coral : colors.text.tertiary }]}>
-                                            {meal.time}
-                                        </Text>
-                                        <View style={s.tlConnector}>
-                                            <View style={[s.tlDot, {
-                                                backgroundColor: isPast ? colors.accent.cyan : isNow ? colors.accent.coral : 'transparent',
-                                                borderColor: isPast ? colors.accent.cyan : isNow ? colors.accent.coral : colors.border.default,
-                                                transform: [{ scale: isNow ? 1.3 : 1 }],
-                                            }]} />
-                                            {!isLast && (
-                                                <View style={[s.tlLine, { backgroundColor: withAlpha(colors.text.primary, 0.2) }]} />
-                                            )}
-                                        </View>
-                                        <View style={s.tlContent}>
-                                            <View style={s.tlTitleRow}>
-                                                <Text
-                                                    style={[s.tlMeal, { color: isPast ? colors.text.secondary : colors.text.primary }]}
-                                                    numberOfLines={1}
-                                                >
-                                                    {meal.label}
-                                                </Text>
-                                                {isNow && (
-                                                    <View style={[s.nowBadge, { backgroundColor: colors.accent.coral }]}>
-                                                        <Text style={s.nowTxt} maxFontSizeMultiplier={MICRO_MAX_SCALE}>NOW</Text>
-                                                    </View>
-                                                )}
-                                                {isPast && (
-                                                    <Ionicons name="checkmark-circle" size={15} color={colors.accent.cyan} />
-                                                )}
-                                            </View>
-                                            {!!meal.description && !isPast && (
-                                                <Text style={[s.tlDesc, { color: colors.text.secondary }]} numberOfLines={1}>
-                                                    {meal.description}
-                                                </Text>
-                                            )}
-                                        </View>
-                                    </View>
-                                );
-                            })}
-                        </View>
-                    </GlassCard>
-                )}
-
-                {/* ══ WEEKLY RECAP (streak + this-week signal) ════════════════ */}
-                <Text style={[typography.overline, s.sectionLbl, { color: colors.text.secondary, marginTop: 4 }]}>WEEKLY RECAP</Text>
-                <WeeklyRecap />
-
-                {/* ══ COACH RIA (circadian insight card) ══════════════════════ */}
-                <Animated.View entering={FadeInDown.delay(130).duration(460)}>
-                    <GlassCard intensity={40} radius={20} style={s.riaCard} glow={insight.color}>
-                        <View style={s.riaInner}>
-                            {/* Ria avatar — the app mark in a lime-ringed circle (mockup). */}
-                            <View style={[s.riaAvatarRing, { borderColor: withAlpha(colors.accent.lime, 0.4) }]}>
-                                <Image
-                                    source={RIA_AVATAR}
-                                    style={s.riaAvatar}
-                                    contentFit="cover"
-                                    cachePolicy="memory-disk"
-                                    transition={200}
-                                    accessibilityLabel="Coach Ria"
-                                />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <View style={s.riaNameRow}>
-                                    <Ionicons name="sparkles" size={13} color={colors.accent.lime} />
-                                    <Text style={[typography.captionMedium, s.riaName, { color: colors.accent.lime }]}>Coach Ria</Text>
-                                </View>
-                                <Text style={[typography.bodySm, s.riaTxt, { color: colors.text.secondary }]}>{insight.text}</Text>
-                            </View>
-                        </View>
-                    </GlassCard>
                 </Animated.View>
 
-                {/* Tail breathing room; the heavy tab-bar + Ria-FAB clearance
-                    is reserved on the ScrollView's contentContainer paddingBottom
-                    (BOTTOM_CLEARANCE) so we don't double-count it here. */}
-                <View style={{ height: spacing.lg }} />
+                {/* ══ STREAK ══════════════════════════════════════════════════ */}
+                <Animated.View entering={FadeInDown.delay(200).duration(460)} style={[st.section, { marginTop: 18 }]}>
+                    <View style={st.streakCard}>
+                        <View style={st.streakLeft}>
+                            <Ionicons name="flame" size={26} color={D.lime} />
+                            <View>
+                                <Text style={st.streakNum}>{streakDays}-day streak</Text>
+                                <Text style={st.streakSub}>{streakDays > 0 ? 'Keep it rolling' : 'Start one today'}</Text>
+                            </View>
+                        </View>
+                        <View style={st.streakDots}>
+                            {Array.from({ length: 7 }).map((_, i) => (
+                                <View key={i} style={[st.streakDot, { backgroundColor: i < filledDots ? D.lime : D.streakOff }]} />
+                            ))}
+                        </View>
+                    </View>
+                </Animated.View>
+
+                {/* ══ YOUR RHYTHM TONIGHT ═════════════════════════════════════ */}
+                <Text style={st.rhythmTitle}>Your rhythm tonight</Text>
+                <Animated.View entering={FadeInDown.delay(220).duration(460)} style={[st.section, { marginTop: 0 }]}>
+                    <View style={st.rhythmCard}>
+                        <View style={st.rhythmMarks}>
+                            <Text style={st.rhythmMark}>21:00</Text>
+                            <Text style={[st.rhythmMark, { color: D.lime }]}>NOW</Text>
+                            <Text style={st.rhythmMark}>02:00</Text>
+                            <Text style={st.rhythmMark}>08:00</Text>
+                        </View>
+                        <LinearGradient
+                            colors={[D.lime, D.blue, D.border, D.border]}
+                            locations={[0, 0.52, 0.52, 1]}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                            style={st.rhythmBar}
+                        />
+                        <View style={st.rhythmTiles}>
+                            <View style={st.rhythmTile}>
+                                <Ionicons name="cafe" size={18} color={D.lime} />
+                                <Text style={st.rhythmTileLbl}>Caffeine cutoff</Text>
+                                <Text style={st.rhythmTileSub}>by 02:00</Text>
+                            </View>
+                            <View style={st.rhythmTile}>
+                                <Ionicons name="moon" size={18} color={D.blue} />
+                                <Text style={st.rhythmTileLbl}>Wind-down</Text>
+                                <Text style={st.rhythmTileSub}>07:30</Text>
+                            </View>
+                        </View>
+                    </View>
+                </Animated.View>
+
+                {/* ══ COACH RIA ═══════════════════════════════════════════════ */}
+                <Animated.View entering={FadeInDown.delay(240).duration(460)} style={st.section}>
+                    <Pressable
+                        style={st.riaCard}
+                        onPress={() => router.push('/(modals)/ai-coach' as any)}
+                        accessibilityRole="button" accessibilityLabel="Open Coach Ria"
+                    >
+                        <View style={st.riaAvatarRing}>
+                            <Image source={RIA_AVATAR} style={st.riaAvatar} contentFit="cover" cachePolicy="memory-disk" transition={200} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <View style={st.riaNameRow}>
+                                <Ionicons name="sparkles" size={14} color={D.lime} />
+                                <Text style={st.riaName}>Coach Ria</Text>
+                            </View>
+                            <Text style={st.riaTxt}>{insight}</Text>
+                        </View>
+                    </Pressable>
+                </Animated.View>
             </ScrollView>
-        </ImageBackground>
+        </View>
     );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-// Factory so the two color-bearing rules (upNextSkeleton / emptyCard border +
-// background) re-tint from the ACTIVE theme; the component resolves it via
-// `useMemo(() => makeStyles(colors), [colors])`.
-const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
+// ─── Styles (Saira via typography bases; sizes/weights match the mockup) ──────
+const makeStyles = (D: ThemedPalette) => StyleSheet.create({
     root: { flex: 1 },
-    scroll: { paddingHorizontal: H_PAD },
 
     // Header
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flexShrink: 1 },
-    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    avatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
-    avatarTxt: { fontSize: 15, fontWeight: '800' },
-    greetTxt: {},
-    nameTxt: { marginTop: 1 },
-    shiftBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, maxWidth: 150 },
-    shiftTxt: { fontSize: 12, fontWeight: '700' },
-    iconBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-    bellDot: { position: 'absolute', top: 8, right: 9, width: 9, height: 9, borderRadius: 5, borderWidth: 1.5 },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 18, paddingTop: 12, paddingBottom: 4 },
+    headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 11, flexShrink: 1 },
+    avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: D.avBg, borderWidth: 1.5, borderColor: D.avBd, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    avatarImg: { width: '100%', height: '100%', borderRadius: 21 },
+    avatarTxt: [typography.subtitle, { color: D.lime, fontSize: 18 }] as any,
+    greet: [typography.caption, { color: D.muted, fontSize: 12 }] as any,
+    name: [typography.subtitle, { color: D.text, fontSize: 17, marginTop: 1 }] as any,
+    bellDot: { position: 'absolute', top: -1, right: -1, width: 8, height: 8, borderRadius: 4, backgroundColor: D.lime, borderWidth: 1.5, borderColor: D.bg },
 
-    // Sub-header (date + momentum chip)
-    subHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2, marginBottom: 20 },
-    dateTxt: { flexShrink: 1 },
-    momentumChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
-    momentumTxt: { fontWeight: '800', letterSpacing: 0.6 },
+    // Shift pill
+    shiftRow: { paddingHorizontal: H_PAD, paddingTop: 4, alignItems: 'flex-start' },
+    shiftPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: D.card, borderWidth: 1, borderColor: '#2A2F3A', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+    shiftTxt: [typography.captionMedium, { color: D.text, fontSize: 12 }] as any,
 
-    // WOD hero carousel — full-bleed: cancel the ScrollView's H_PAD so the pager
-    // (which owns its own page padding + paging width) runs edge-to-edge.
-    wodWrap: { marginHorizontal: -H_PAD, marginBottom: 16 },
+    // Hero slider
+    heroPager: { marginTop: 14 },
+    heroPage: { width: SCREEN_W, paddingHorizontal: H_PAD },
+    hero: { height: 152, borderRadius: 18, overflow: 'hidden', justifyContent: 'flex-end' },
+    heroImg: { position: 'absolute', right: -14, bottom: 0, height: 170, width: 170 },
+    heroContent: { padding: 16 },
+    heroBadge: { alignSelf: 'flex-start', backgroundColor: D.lime, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 8 },
+    heroBadgeTxt: [typography.subtitle, { color: D.ink, fontSize: 10, letterSpacing: 0.3 }] as any,
+    heroTitle: [typography.h3, { color: '#fff', fontSize: 21, marginTop: 9 }] as any,
+    heroMeta: [typography.caption, { color: D.sub, fontSize: 13, marginTop: 1 }] as any,
+    dotsRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, paddingTop: 10 },
+    dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: D.dotOff },
+    dotActive: { width: 18, height: 6, borderRadius: 3, backgroundColor: D.lime },
 
-    // Coach Ria insight card
-    riaCard: { marginBottom: 20 },
-    riaInner: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, padding: 14 },
-    riaAvatarRing: { width: 38, height: 38, borderRadius: 19, borderWidth: 1.5, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+    // Generic section wrapper (h-padding + top gap)
+    section: { paddingHorizontal: H_PAD, marginTop: 14 },
+    sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    sectionTitle: [typography.subtitle, { color: D.text, fontSize: 16, flexShrink: 1 }] as any,
+
+    // Next meal
+    mealCard: { backgroundColor: D.card, borderWidth: 1, borderColor: D.border, borderRadius: 16, overflow: 'hidden' },
+    mealPhoto: { height: 104, width: '100%' },
+    mealRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 13, paddingVertical: 10 },
+    mealEyebrow: [typography.caption, { color: D.muted, fontSize: 11 }] as any,
+    mealName: [typography.bodyMedium, { color: D.text, fontSize: 15, marginTop: 2 }] as any,
+    mealMeta: [typography.caption, { color: D.muted, fontSize: 11, marginTop: 3 }] as any,
+    addPill: { backgroundColor: D.tile, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 10 },
+    addPillTxt: [typography.captionMedium, { color: D.lime, fontSize: 12 }] as any,
+
+    // Picked rail
+    pickedHead: { paddingHorizontal: 18, marginTop: 18, marginBottom: 10 },
+    pickedRail: { paddingLeft: 14, paddingRight: 14, gap: 11 },
+    pickedCard: { width: 128 },
+    pickedThumb: { height: 90, borderRadius: 14, overflow: 'hidden' },
+    pickedIcon: { position: 'absolute', bottom: 8, left: 10 },
+    pickedTitle: [typography.bodyMedium, { color: D.text, fontSize: 13, marginTop: 7 }] as any,
+    pickedSub: [typography.caption, { color: D.muted, fontSize: 11 }] as any,
+
+    // Bento
+    bentoTop: { flexDirection: 'row', gap: CARD_GAP },
+    glowCardWrap: { flex: 1 },
+    // The lime glow halo reads premium on dark themes but smears the near-white
+    // surface on light variants, so drop it (shadow + Android elevation) there.
+    glowCard: { flex: 1, borderRadius: 15, borderWidth: 1.5, borderColor: D.lime, padding: 13, justifyContent: 'space-between', ...(isLightHex(D.bg) ? {} : { shadowColor: D.lime, shadowOpacity: 0.27, shadowRadius: 14, shadowOffset: { width: 0, height: 0 }, elevation: 6 }) },
+    glowTitle: [typography.bodyMedium, { color: '#fff', fontSize: 16, marginTop: 8 }] as any,
+    glowSub: [typography.caption, { color: D.sub, fontSize: 12, marginTop: 2 }] as any,
+    glowBtn: { backgroundColor: D.lime, paddingVertical: 8, borderRadius: 10, alignItems: 'center', marginTop: 14 },
+    glowBtnTxt: [typography.subtitle, { color: D.ink, fontSize: 13 }] as any,
+    bentoCol: { flex: 1, gap: CARD_GAP },
+    bentoBottom: { flexDirection: 'row', gap: CARD_GAP, marginTop: CARD_GAP },
+
+    // Stat tile
+    tile: { flex: 1, backgroundColor: D.card, borderWidth: 1, borderColor: D.border, borderRadius: 16, padding: 13, minHeight: 84, position: 'relative' },
+    doneDot: { position: 'absolute', top: 9, right: 9, width: 20, height: 20, borderRadius: 10, backgroundColor: D.lime, alignItems: 'center', justifyContent: 'center' },
+    tileVal: [typography.subtitle, { color: D.text, fontSize: 18, marginTop: 6 }] as any,
+    tileUnit: [typography.caption, { color: D.muted, fontSize: 12 }] as any,
+    tileLbl: [typography.caption, { color: D.muted, fontSize: 11 }] as any,
+    barBg: { height: 4, borderRadius: 3, backgroundColor: D.border, marginTop: 7, overflow: 'hidden' },
+    barFill: { height: '100%', borderRadius: 3 },
+
+    // Streak
+    streakCard: { backgroundColor: D.card, borderWidth: 1, borderColor: D.border, borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    streakLeft: { flexDirection: 'row', alignItems: 'center', gap: 11, flexShrink: 1 },
+    streakNum: [typography.subtitle, { color: D.text, fontSize: 17 }] as any,
+    streakSub: [typography.caption, { color: D.muted, fontSize: 12 }] as any,
+    streakDots: { flexDirection: 'row', gap: 5 },
+    streakDot: { width: 8, height: 8, borderRadius: 4 },
+
+    // Rhythm timeline
+    rhythmTitle: [typography.subtitle, { color: D.text, fontSize: 16, paddingHorizontal: 18, paddingTop: 20, paddingBottom: 10 }] as any,
+    rhythmCard: { backgroundColor: D.card, borderWidth: 1, borderColor: D.border, borderRadius: 16, padding: 15 },
+    rhythmMarks: { flexDirection: 'row', justifyContent: 'space-between' },
+    rhythmMark: [typography.caption, { color: D.muted, fontSize: 11 }] as any,
+    rhythmBar: { height: 7, borderRadius: 4, marginTop: 9 },
+    rhythmTiles: { flexDirection: 'row', gap: 9, marginTop: 13 },
+    rhythmTile: { flex: 1, backgroundColor: D.tile, borderRadius: 11, padding: 10 },
+    rhythmTileLbl: [typography.captionMedium, { color: D.text, fontSize: 12, marginTop: 4 }] as any,
+    rhythmTileSub: [typography.caption, { color: D.muted, fontSize: 11 }] as any,
+
+    // Coach Ria
+    riaCard: { flexDirection: 'row', gap: 12, backgroundColor: D.riaBg, borderWidth: 1, borderColor: D.riaBd, borderRadius: 16, padding: 14 },
+    riaAvatarRing: { width: 38, height: 38, borderRadius: 19, borderWidth: 1.5, borderColor: D.avBd, overflow: 'hidden' },
     riaAvatar: { width: '100%', height: '100%' },
     riaNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-    riaName: { fontWeight: '700' },
-    riaTxt: { marginTop: 3 },
-
-    // Bento grid (training-tall + 2×2 stat tiles)
-    bentoRow: { flexDirection: 'row', gap: CARD_GAP, marginBottom: 24 },
-    bentoTall: { width: MINI_W },
-    bentoTallPhoto: { height: 104, width: '100%' },
-    bentoTallMeta: { padding: 13 },
-    bentoTallTitle: { marginTop: 1 },
-    bentoCol: { flex: 1, gap: CARD_GAP, justifyContent: 'space-between' },
-    bentoPairRow: { flexDirection: 'row', gap: CARD_GAP },
-
-    // NEXT meal hero card
-    upNextInner: { padding: 18, paddingTop: 14 },
-    upNextSkeleton: { borderRadius: 24, borderWidth: 1, borderColor: colors.border.default, backgroundColor: withAlpha(colors.background.secondary, 0.5), marginBottom: 18, overflow: 'hidden', padding: 0 },
-    mealPhotoWrap: { height: 104, width: '100%', position: 'relative', justifyContent: 'flex-end' },
-    upNextTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 14 },
-    upNextBadge: { position: 'absolute', left: 14, bottom: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
-    upNextLbl: {},
-    upNextTime: { fontSize: 11, fontWeight: '700' },
-    mealName: { marginBottom: 6 },
-    mealDesc: { marginBottom: 14 },
-    macroRow: { flexDirection: 'row', marginBottom: 18 },
-
-    // Mini cards
-    miniRow: { flexDirection: 'row', gap: CARD_GAP, marginBottom: 12 },
-    caffeineRow: { marginBottom: 28 },
-    // Inner content padding for the GlassCard-wrapped mini cards (sleep/hydration).
-    miniInner: { padding: 16 },
-    miniIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-    miniLbl: { marginBottom: 4 },
-    miniVal: { marginBottom: 4 },
-    miniSub: {},
-    hydBarBg: { height: 4, borderRadius: 4, marginVertical: 10, overflow: 'hidden' },
-    hydBarFill: { height: '100%', borderRadius: 4 },
-    addWaterBtn: { paddingVertical: 7, borderRadius: 10, borderWidth: 1, alignItems: 'center', marginTop: 4 },
-    addWaterTxt: {},
-
-    // Empty / zero-data card (matches glass card rhythm)
-    emptyCard: { borderRadius: 24, borderWidth: 1, borderColor: colors.border.default, backgroundColor: withAlpha(colors.background.secondary, 0.5), marginBottom: 28, overflow: 'hidden' },
-
-    // "Picked for your shift" carousel
-    qaCarousel: { paddingRight: H_PAD, gap: CARD_GAP },
-    qaCardWrap: { width: QA_CARD_W },
-    qaPhoto: { height: 92, width: '100%', position: 'relative' },
-    qaIcon: { position: 'absolute', top: 10, left: 10, width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-    qaMeta: { paddingHorizontal: 11, paddingVertical: 9 },
-    qaLabel: { fontWeight: '700' },
-    qaSub: { marginTop: 2 },
-
-    // Exercise category cards (2×2 image grid)
-    catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: CARD_GAP, marginBottom: 28 },
-    catCard: { width: MINI_W, height: 110, borderRadius: 18, overflow: 'hidden', position: 'relative' },
-    catBadge: { position: 'absolute', top: 10, right: 10, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
-    catBadgeTxt: { color: '#fff', fontSize: 10, fontWeight: '900' },
-    catLabel: { position: 'absolute', bottom: 10, left: 10, right: 10 },
-    catLabelTxt: { color: '#fff', fontSize: 13, fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
-
-    // Section labels
-    sectionLbl: { marginBottom: 14 },
-    // Mockup section headers — sentence-case white titles (e.g. "Picked for your shift").
-    sectionTitle: { fontWeight: '600', flexShrink: 1 },
-    rhythmTitle: { fontWeight: '600', marginBottom: 12, marginTop: 4 },
-
-    // Section row with link
-    sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-    viewAll: {},
-
-    // Timeline
-    // `timeline` is still used by the loading-skeleton View (plain bordered box).
-    // The populated timeline is now a GlassCard: `timelineWrap` carries its outer
-    // margin and `timelineInner` the row padding the old SafeBlurView held.
-    timeline: { borderRadius: 20, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 28 },
-    timelineWrap: { marginBottom: 28 },
-    timelineInner: { paddingHorizontal: 16, paddingVertical: 12 },
-    tlRow: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 10 },
-    tlTime: { width: 44, fontSize: 12, fontWeight: '700', paddingTop: 2 },
-    tlConnector: { alignItems: 'center', width: 24, marginHorizontal: 4 },
-    tlDot: { width: 10, height: 10, borderRadius: 5, borderWidth: 2 },
-    tlLine: { width: 2, flex: 1, minHeight: 24, marginTop: 2 },
-    tlContent: { flex: 1, paddingBottom: 4 },
-    tlTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    tlMeal: { fontSize: 14, fontWeight: '700', flex: 1 },
-    tlDesc: { fontSize: 12, marginTop: 3 },
-    nowBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
-    // White-on-solid-coral is the worst contrast case (~2.5:1); a strong dark
-    // Ink "NOW" pip on the solid lime fill — max contrast, no shadow (ink-on-lime).
-    nowTxt: {
-        color: '#0A0C12', fontSize: 10, fontWeight: '900', letterSpacing: 0.5,
-    },
+    riaName: [typography.captionMedium, { color: D.lime, fontSize: 12 }] as any,
+    riaTxt: [typography.caption, { color: '#DFE3EA', fontSize: 12.5, lineHeight: 19, marginTop: 4 }] as any,
 });

@@ -206,11 +206,11 @@ export class ExerciseService {
     }
 
     async searchLibrary(
-        filters: { query?: string, equipment?: string, muscleGroup?: string, bodyPart?: string, category?: string },
+        filters: { query?: string, equipment?: string, muscleGroup?: string, bodyPart?: string, category?: string, gender?: string, difficulty?: string },
         limit = 50,
     ) {
         try {
-            const { query, category, equipment, muscleGroup, bodyPart } = filters;
+            const { query, category, equipment, muscleGroup, bodyPart, gender, difficulty } = filters;
 
             // ── 1. Search the seeded LibraryExercise table first ──────────────
             const where: Record<string, unknown> = {};
@@ -238,6 +238,14 @@ export class ExerciseService {
                     where.category = 'cardio';
                 }
             }
+            if (gender === 'Male' || gender === 'Female') {
+                // Unisex (null-gender) rows match BOTH genders so the shared catalog
+                // always shows; gendered rows additionally narrow to the chosen sex.
+                where.OR = [{ gender }, { gender: null }];
+            }
+            if (difficulty) {
+                where.difficulty = { contains: difficulty, mode: 'insensitive' };
+            }
 
             const dbResults = await this.prisma.libraryExercise.findMany({
                 where: where as any,
@@ -260,6 +268,7 @@ export class ExerciseService {
                     // omitted (undefined) when the row has no clip → app falls back
                     // to the animated image-frame loop / demoUrl tutorial link.
                     videoUrl: ex.videoUrl ?? undefined,
+                    videoUrlFemale: ex.videoUrlFemale ?? undefined,
                     category: ex.category ?? undefined,
                     bodyPart: ex.bodyPart ?? undefined,
                     // Catalog enrichment — omitted (undefined) for legacy rows so
@@ -317,6 +326,7 @@ export class ExerciseService {
                 // expo-video seam; omitted when absent → app falls back to the
                 // animated image-frame loop / demoUrl tutorial link.
                 videoUrl: dbEx.videoUrl ?? undefined,
+                videoUrlFemale: dbEx.videoUrlFemale ?? undefined,
                 bodyPart: dbEx.bodyPart ?? undefined,
                 category: dbEx.category ?? undefined,
                 secondaryMuscles: dbEx.secondaryMuscles?.length ? dbEx.secondaryMuscles : undefined,

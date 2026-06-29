@@ -70,7 +70,8 @@ export class CommunityService {
         // canViewUserContent but batched over the page so we don't N+1 the
         // resolver / follow lookups.
         const visible = await this._filterViewablePosts(viewerId, posts);
-        return this._withAuthors(visible);
+        const withAuthors = await this._withAuthors(visible);
+        return this._withViewerLikes(viewerId, withAuthors);
     }
 
     /**
@@ -133,7 +134,8 @@ export class CommunityService {
         if (post.authorId && !(await this.canViewUserContent(viewerId, post.authorId))) {
             return null;
         }
-        return this._withAuthor(post);
+        const withAuthor = await this._withAuthor(post);
+        return { ...withAuthor, liked: await this._viewerHasLiked(viewerId, postId) };
     }
 
     async createPost(authorId: string, content: string, imageUrl?: string) {
@@ -607,6 +609,36 @@ export class CommunityService {
             logger.warn({ err }, 'Author enrichment failed; returning row without author');
             return item;
         }
+    }
+
+    // Attach the viewer's per-post like state (`liked`) to a page of posts in ONE
+    // query (no N+1): look up which of the page's post ids this viewer has a
+    // post_likes row for. An anonymous/absent viewer or empty page resolves to
+    // liked:false everywhere. This is what lets the client render the heart's real
+    // state on load and drive a like/unlike toggle instead of a session guess.
+    private async _withViewerLikes<T extends Record<string, any>>(
+        viewerId: string | undefined,
+        posts: T[]
+    ): Promise<Array<T & { liked: boolean }>> {
+        if (!viewerId || posts.length === 0) {
+            return posts.map((p) => ({ ...p, liked: false }));
+        }
+        const ids = posts.map((p) => p.id);
+        const likes = await this.prisma.postLike.findMany({
+            where: { userId: viewerId, postId: { in: ids } },
+            select: { postId: true },
+        });
+        const likedIds = new Set(likes.map((l: { postId: string }) => l.postId));
+        return posts.map((p) => ({ ...p, liked: likedIds.has(p.id) }));
+    }
+
+    // Single-post sibling of _withViewerLikes (used by getPostById).
+    private async _viewerHasLiked(viewerId: string | undefined, postId: string): Promise<boolean> {
+        if (!viewerId) return false;
+        const row = await this.prisma.postLike.findUnique({
+            where: { userId_postId: { userId: viewerId, postId } },
+        });
+        return !!row;
     }
 
     private async _addXP(userId: string, amount: number) {

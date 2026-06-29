@@ -22,7 +22,7 @@ import React from 'react';
 import { View, ViewStyle, StyleProp } from 'react-native';
 import { SafeBlurView } from '@/components/SafeBlurView';
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/utils';
+import { withAlpha, isLightHex } from '@/theme/utils';
 import type { BlurViewProps } from 'expo-blur';
 
 export interface GlassCardProps {
@@ -35,6 +35,13 @@ export interface GlassCardProps {
   tint?: BlurViewProps['tint'];
   /** When set, applies a soft `shadows.glow(glow)` halo on the wrapper. */
   glow?: string;
+  /**
+   * When true (and no `glow`), lifts the card with an elevation shadow
+   * (`shadows.lg`) + a slightly brighter hairline rim — so bare content cards
+   * (e.g. the exercise detail sections) read raised instead of flat. The rim is
+   * what carries the lift on near-black surfaces; the cast adds depth on light.
+   */
+  shadow?: boolean;
   /** Corner radius. Default borderRadius['2xl'] (24) — the Aurora card radius. */
   radius?: number;
   /**
@@ -47,26 +54,20 @@ export interface GlassCardProps {
   testID?: string;
 }
 
-/** True when a #RRGGBB background reads as a light surface (→ light blur tint). */
-function isLightHex(hex: string): boolean {
-  const h = hex.replace('#', '');
-  if (h.length < 6) return false;
-  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.55;
-}
-
 export function GlassCard({
   children,
   style,
   intensity = 40,
   tint,
   glow,
+  shadow,
   radius,
   testID,
 }: GlassCardProps) {
   const { colors, borderRadius, shadows } = useTheme();
   const r = radius ?? borderRadius['2xl'];
   const effectiveTint = tint ?? (isLightHex(colors.background.primary) ? 'light' : 'dark');
+  const lifted = shadow && !glow;
 
   return (
     <View
@@ -76,9 +77,9 @@ export function GlassCard({
           borderRadius: r,
           overflow: 'hidden',
           borderWidth: 1,
-          borderColor: withAlpha(colors.text.primary, 0.1),
+          borderColor: withAlpha(colors.text.primary, lifted ? 0.14 : 0.1),
         },
-        glow ? shadows.glow(glow) : null,
+        glow ? shadows.glow(glow) : lifted ? shadows.lg : null,
         style,
       ]}
     >

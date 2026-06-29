@@ -29,24 +29,6 @@ const ROW_HEIGHT = 76;
 // secondary row is the last message, not "active Xh ago"); the real conversation
 // data + nav are untouched. The pick is id-seeded so a given row always shows the
 // same line (no flicker across re-renders / virtualization).
-const PREVIEW_LINES = [
-    'You training tonight? 💪',
-    'Crushed that session!',
-    'Thanks for the recovery tip 🙏',
-    'See you at the gym 👋',
-    'How do you handle the 4am slump?',
-    'Shared a recipe with you',
-    'Let me know how the shift goes',
-    'Same time tomorrow?',
-];
-
-/** Stable non-negative hash of a string (id) for deterministic presentational picks. */
-function seedFromId(id: string): number {
-    let h = 0;
-    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-    return Math.abs(h);
-}
-
 /**
  * Resolve the human-facing fields of a conversation row once, in one place.
  * Prefers the CONTRACT peer descriptor (GET conversations returns requestState +
@@ -67,18 +49,16 @@ function deriveRow(item: Conversation) {
     // "Coach Ria" / "Ria") per the SOCIAL contract; we tag it as the COACH row and
     // give it the app-logo avatar. Purely presentational — name match only.
     const isCoach = /ria|coach/i.test(name);
-    // Presentational last-message preview (mockup: the secondary row is the last
-    // message, not "active Xh ago"). Coach gets her own circadian one-liner; other
-    // accepted rows draw a stable id-seeded line. Pending rows keep their own
-    // request copy (resolved in the row renderer), so no preview is needed there.
-    const seed = seedFromId(item?.id ?? targetId);
-    const lastMessage = isCoach
-        ? 'Your caffeine cutoff is 02:00 ☕'
-        : PREVIEW_LINES[seed % PREVIEW_LINES.length];
-    // Presentational unread count — lime badge parity. Roughly a third of accepted
-    // conversations read as unread (1–3), id-seeded so it's stable. Coach + pending
-    // rows never show a count (coach pins "now"; pending shows the Request pill).
-    const unreadCount = !isCoach && !isPending && seed % 3 === 0 ? (seed % 3) + 1 : 0;
+    // REAL last-message preview from the backend (GET conversations returns
+    // `lastMessage` as the last message text + `unreadCount`). Fall back to a
+    // neutral prompt — never a fabricated message. Coach keeps her persona line.
+    const realLast = typeof anyItem.lastMessage === 'string' ? anyItem.lastMessage.trim() : '';
+    const lastMessage = realLast
+        ? realLast
+        : isCoach
+            ? 'Your caffeine cutoff is 02:00 ☕'
+            : isPending ? '' : 'Tap to start chatting';
+    const unreadCount = typeof anyItem.unreadCount === 'number' ? anyItem.unreadCount : 0;
     return { peer, targetId, name, isPending, timeAgo, isCoach, lastMessage, unreadCount };
 }
 
@@ -94,6 +74,10 @@ export default function MessagesListScreen() {
     const { data: conversations, isLoading, isError, refetch } = useQuery({
         queryKey: ['conversations'],
         queryFn: getConversations,
+        // Keep the inbox fresh so a new conversation / message surfaces without a
+        // manual reload (the chat WS isn't a reliable live channel through the gateway).
+        refetchInterval: 15000,
+        refetchOnWindowFocus: true,
     });
 
     const total = conversations?.length ?? 0;

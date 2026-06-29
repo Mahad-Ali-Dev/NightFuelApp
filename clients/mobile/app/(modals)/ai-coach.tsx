@@ -141,6 +141,10 @@ export default function AICoachScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { user } = useAuth();
+    // Dismiss Ria safely: must run on the JS thread (router lives there), so the
+    // header tap below bridges via runOnJS. canGoBack falls back to the tabs root
+    // if Ria was ever opened without a back entry — never tear down the app.
+    const handleClose = () => { if (router.canGoBack()) router.back(); else router.replace('/(tabs)' as any); };
     const scrollViewRef = useRef<ScrollView>(null);
     const queryClient = useQueryClient();
     const [input, setInput] = useState('');
@@ -654,7 +658,7 @@ export default function AICoachScreen() {
             <View style={[styles.headerClip, { borderBottomColor: colors.border.light }]}>
                 <GlassCard radius={0} intensity={40} tint="dark" style={styles.glassEdge}>
                     <View style={styles.header}>
-                        <GestureDetector gesture={Gesture.Tap().onEnd(() => { router.back(); })}>
+                        <GestureDetector gesture={Gesture.Tap().onEnd(() => { runOnJS(handleClose)(); })}>
                             <View
                                 accessibilityRole="button"
                                 accessibilityLabel="Close"
