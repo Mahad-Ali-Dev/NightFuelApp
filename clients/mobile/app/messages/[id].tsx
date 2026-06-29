@@ -131,6 +131,10 @@ export default function UnifiedChatScreen() {
 
     const [inputText, setInputText] = useState('');
     const [socket, setSocket] = useState<Socket | null>(null);
+    // Whether the realtime socket is actually CONNECTED (not just created). Drives
+    // adaptive polling: live socket → poll slowly (safety net); socket down → poll
+    // fast. Starts false so we fail-safe to fast polling if it never confirms.
+    const [socketLive, setSocketLive] = useState(false);
     const [peerTyping, setPeerTyping] = useState(false);
     // Whether I (locally) accepted a pending request this session — lets the
     // composer unlock instantly on Accept without waiting for a refetch round-trip.
@@ -156,10 +160,11 @@ export default function UnifiedChatScreen() {
         queryKey: ['messages', conversationId],
         queryFn: () => getMessages(conversationId!) as Promise<UIMessage[]>,
         enabled: !!conversationId,
-        // Real-time fallback: the WebSocket rarely connects through the dev gateway,
-        // so poll the open thread + refetch on focus. New (peer) messages then
-        // appear within a few seconds even with no live socket.
-        refetchInterval: 4000,
+        // Real-time fallback: poll the open thread + refetch on focus so new (peer)
+        // messages arrive even when the WebSocket can't connect. Adaptive — when the
+        // socket IS live it delivers messages instantly, so we drop to a 15s safety
+        // net instead of hammering the API every 4s.
+        refetchInterval: socketLive ? 15000 : 4000,
         refetchOnWindowFocus: true,
     });
 
@@ -281,6 +286,13 @@ export default function UnifiedChatScreen() {
                     if (cancelled) { s.disconnect(); return; }
                     activeSocket = s;
                     setSocket(s);
+                    // Track live connection for adaptive polling (see socketLive).
+                    // 'connect'/'disconnect' are reserved socket.io events; if the
+                    // decorated socket never emits them, socketLive stays false and
+                    // we keep fast-polling — safe either way.
+                    setSocketLive(!!(s as any).connected);
+                    s.on('connect', () => setSocketLive(true));
+                    s.on('disconnect', () => setSocketLive(false));
 
                     // new_message: a server row. OWN-message acks are reconciled by
                     // the per-send one-shot handler in doSend (temp → real id), so
@@ -343,6 +355,7 @@ export default function UnifiedChatScreen() {
 
         return () => {
             cancelled = true;
+            setSocketLive(false);
             if (activeSocket) activeSocket.disconnect();
             if (peerTypingTimerRef.current) { clearTimeout(peerTypingTimerRef.current); peerTypingTimerRef.current = null; }
         };

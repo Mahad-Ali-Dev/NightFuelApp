@@ -124,7 +124,8 @@
       "expo-video"
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "asyncRoutes": false
     },
     "extra": {
       "router": {},
