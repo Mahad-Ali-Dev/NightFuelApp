@@ -670,6 +670,124 @@ export const userRoutes = async (
         }
     );
 
+    // ── Coach applications (apply → admin review → role promotion) ───────────
+
+    // POST /v1/users/me/coach-application — apply (or re-apply) to become a coach
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/me/coach-application',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: {
+                body: z.object({
+                    bio: z.string().max(2000).optional(),
+                    specializations: z.array(z.string().max(60)).max(20).optional(),
+                    certifications: z.array(z.string().max(120)).max(20).optional(),
+                    monthlyRateUsd: z.number().min(0).max(100000).nullish(),
+                }),
+            },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+                const result = await service.submitCoachApplication(userId, request.body as any);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/coach-application — my application status (or null)
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/coach-application',
+        { onRequest: [(fastify as any).authenticate] },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+                const app = await service.getMyCoachApplication(userId);
+                return reply.code(200).send(app);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/admin/coach-applications?status=PENDING — admin review queue
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/admin/coach-applications',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: {
+                querystring: z.object({ status: z.enum(['PENDING', 'APPROVED', 'REJECTED']).optional() }),
+            },
+        },
+        async (request, reply) => {
+            try {
+                if (!requireAdmin(request, reply)) return;
+                const { status } = request.query as { status?: string };
+                const apps = await service.listCoachApplications(status);
+                return reply.code(200).send(apps);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // POST /v1/users/admin/coach-applications/:id/approve — promote to COACH
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/admin/coach-applications/:id/approve',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { params: z.object({ id: z.string().uuid() }) },
+        },
+        async (request, reply) => {
+            try {
+                if (!requireAdmin(request, reply)) return;
+                const adminId = extractUserId(request, reply);
+                if (!adminId) return;
+                const { id } = request.params as { id: string };
+                const result = await service.approveCoachApplication(id, adminId);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                if (err.statusCode === 404) return reply.code(404).send({ error: 'Application not found' });
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // POST /v1/users/admin/coach-applications/:id/reject — reject with a reason
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/admin/coach-applications/:id/reject',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: {
+                params: z.object({ id: z.string().uuid() }),
+                body: z.object({ reason: z.string().max(500).optional() }),
+            },
+        },
+        async (request, reply) => {
+            try {
+                if (!requireAdmin(request, reply)) return;
+                const adminId = extractUserId(request, reply);
+                if (!adminId) return;
+                const { id } = request.params as { id: string };
+                const { reason } = request.body as { reason?: string };
+                const result = await service.rejectCoachApplication(id, adminId, reason);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                if (err.statusCode === 404) return reply.code(404).send({ error: 'Application not found' });
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
     // ── GET /v1/users/internal/profile/:userId ────────────────────────────────────
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/internal/profile/:userId',

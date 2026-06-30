@@ -850,6 +850,117 @@ export class UserService {
         };
     }
 
+    // ── Coach applications (apply → admin review → role promotion) ───────────
+
+    /**
+     * Submit (or re-submit) a coach application. One row per user; re-applying
+     * after a rejection overwrites the prior row back to PENDING. Blocked if the
+     * user is already an active coach.
+     */
+    async submitCoachApplication(
+        userId: string,
+        data: { bio?: string; specializations?: string[]; certifications?: string[]; monthlyRateUsd?: number | null },
+    ): Promise<{ status: string }> {
+        const profile = await this.prisma.coachProfile.findUnique({ where: { userId } });
+        if (profile?.isAvailable) return { status: 'ALREADY_COACH' };
+        const payload = {
+            bio: data.bio ?? null,
+            specializations: data.specializations ?? [],
+            certifications: data.certifications ?? [],
+            monthlyRateUsd: data.monthlyRateUsd ?? null,
+        };
+        const app = await this.prisma.coachApplication.upsert({
+            where: { userId },
+            create: { userId, status: 'PENDING', ...payload },
+            update: { status: 'PENDING', rejectionReason: null, reviewedAt: null, reviewedBy: null, ...payload },
+        });
+        return { status: app.status };
+    }
+
+    /** The caller's own coach application (or null). */
+    async getMyCoachApplication(userId: string) {
+        return this.prisma.coachApplication.findUnique({ where: { userId } });
+    }
+
+    /** Admin: list applications (optionally by status), newest first, with applicant name/avatar. */
+    async listCoachApplications(status?: string) {
+        const apps = await this.prisma.coachApplication.findMany({
+            where: status ? { status } : {},
+            orderBy: { createdAt: 'desc' },
+            take: 100,
+        });
+        const profiles = await this.prisma.userProfile.findMany({
+            where: { userId: { in: apps.map((a) => a.userId) } },
+            select: { userId: true, displayName: true, avatarUrl: true },
+        });
+        const byId = new Map(profiles.map((p) => [p.userId, p]));
+        return apps.map((a) => ({
+            ...a,
+            displayName: byId.get(a.userId)?.displayName ?? null,
+            avatarUrl: byId.get(a.userId)?.avatarUrl ?? null,
+        }));
+    }
+
+    /**
+     * Admin: approve → activate the CoachProfile from the application AND promote
+     * the user's auth role to COACH (cross-service). The role change runs FIRST so
+     * a transient auth-service failure leaves the application PENDING (admin
+     * retries) instead of a half-approved state. Every step is idempotent.
+     */
+    async approveCoachApplication(id: string, adminUserId: string): Promise<{ ok: boolean }> {
+        const app = await this.prisma.coachApplication.findUnique({ where: { id } });
+        if (!app) throw Object.assign(new Error('Application not found'), { statusCode: 404 });
+
+        await this.promoteUserRole(app.userId, 'COACH');
+
+        await this.prisma.coachProfile.upsert({
+            where: { userId: app.userId },
+            create: {
+                userId: app.userId,
+                specializations: app.specializations,
+                bio: app.bio,
+                certifications: app.certifications,
+                isAvailable: true,
+                monthlyRateUsd: app.monthlyRateUsd,
+            },
+            update: {
+                specializations: app.specializations,
+                bio: app.bio,
+                certifications: app.certifications,
+                isAvailable: true,
+                monthlyRateUsd: app.monthlyRateUsd,
+            },
+        });
+        await this.prisma.coachApplication.update({
+            where: { id },
+            data: { status: 'APPROVED', reviewedBy: adminUserId, reviewedAt: new Date(), rejectionReason: null },
+        });
+        return { ok: true };
+    }
+
+    /** Admin: reject an application with an optional reason. */
+    async rejectCoachApplication(id: string, adminUserId: string, reason?: string): Promise<{ ok: boolean }> {
+        const app = await this.prisma.coachApplication.findUnique({ where: { id } });
+        if (!app) throw Object.assign(new Error('Application not found'), { statusCode: 404 });
+        await this.prisma.coachApplication.update({
+            where: { id },
+            data: { status: 'REJECTED', reviewedBy: adminUserId, reviewedAt: new Date(), rejectionReason: reason ?? null },
+        });
+        return { ok: true };
+    }
+
+    /** Promote/demote a user's auth role over the auth-service internal channel. */
+    private async promoteUserRole(userId: string, role: string): Promise<void> {
+        const base = process.env['AUTH_SERVICE_URL'] ?? 'http://auth-service:3001';
+        const token = process.env['INTERNAL_SERVICE_TOKEN'] ?? '';
+        const res = await fetch(`${base}/v1/auth/internal/user/${userId}/role`, {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json', 'x-internal-token': token },
+            body: JSON.stringify({ role }),
+        });
+        if (!res.ok) throw new Error(`auth-service role update failed (${res.status})`);
+    }
+
     /**
      * Fetch all students (clients) for a specific coach.
      */

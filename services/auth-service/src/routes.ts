@@ -266,6 +266,34 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService; internal
         }
     );
 
+    // ── PATCH /v1/auth/internal/user/:userId/role ────────────────────────────
+    // Server-to-server only (same X-Internal-Token guard). user-service calls
+    // this to promote a user to COACH on coach-application approval (and to
+    // demote back to USER on revoke). The role set is restricted to the
+    // non-privileged roles — ADMIN/SUPERADMIN can NEVER be assigned here, so the
+    // approval flow can't be used to escalate anyone to admin.
+    fastify.withTypeProvider<ZodTypeProvider>().patch(
+        '/internal/user/:userId/role',
+        {
+            preHandler: internalAuth,
+            schema: {
+                params: z.object({ userId: z.string().uuid() }),
+                body: z.object({ role: z.enum(['USER', 'COACH', 'TRAINER', 'NUTRITIONIST']) }),
+            },
+        },
+        async (request, reply) => {
+            try {
+                const { userId } = request.params;
+                const { role } = request.body as { role: string };
+                await service.setUserRole(userId, role);
+                return reply.code(200).send({ ok: true });
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
+            }
+        }
+    );
+
     // ── GET /v1/auth/internal/user/:userId/export ────────────────────────────
     // GDPR data export (Right of Access, Art. 15) — server-to-server only,
     // guarded by the SAME X-Internal-Token check as the purge above (404 on a

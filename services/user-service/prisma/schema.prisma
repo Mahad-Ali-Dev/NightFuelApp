@@ -109,6 +109,28 @@ model CoachClientRelation {
   @@map("coach_client_relations")
 }
 
+// ── CoachApplication — "apply to be a coach" → admin review queue ────────────
+// A USER submits one of these; an ADMIN approves (→ role promoted to COACH +
+// CoachProfile activated from this data) or rejects (with a reason). One row per
+// user (re-applying after a rejection overwrites it). PENDING | APPROVED | REJECTED.
+model CoachApplication {
+  id              String    @id @default(uuid())
+  userId          String    @unique @map("user_id")
+  status          String    @default("PENDING")
+  bio             String?
+  specializations String[]  @default([])
+  certifications  String[]  @default([])
+  monthlyRateUsd  Float?    @map("monthly_rate_usd")
+  rejectionReason String?   @map("rejection_reason")
+  reviewedBy      String?   @map("reviewed_by")
+  reviewedAt      DateTime? @map("reviewed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@map("coach_applications")
+}
+
 // ── PeriodLog — ongoing menstrual-period LOGGING + history ───────────────────
 // One row per logged period start (with an optional logged end). This is the
 // raw observed history from which computeCycleStatsFromLogs LEARNS the user's

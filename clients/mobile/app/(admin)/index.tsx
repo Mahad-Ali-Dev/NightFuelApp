@@ -134,6 +134,15 @@ export default function AdminDashboardScreen() {
                     </Card>
                 </View>
 
+                {/* Coach applications review queue */}
+                <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/(admin)/coaches' as any)} accessibilityRole="button" accessibilityLabel="Review coach applications" style={{ marginTop: spacing.lg }}>
+                    <Card style={[styles.actionRow, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                        <Ionicons name="ribbon" size={20} color={colors.accent.lime} />
+                        <Text style={[typography.body, { color: colors.text.primary, flex: 1, marginLeft: 12 }]}>Coach applications</Text>
+                        <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} />
+                    </Card>
+                </TouchableOpacity>
+
                 {/* User List */}
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing['3xl'], marginBottom: spacing.lg }}>
                     <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Recent Users</Text>
@@ -191,6 +200,13 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: sp.md,
+    },
+    actionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: sp.lg,
+        borderRadius: br.lg,
+        borderWidth: 1,
     },
     statCard: {
         width: '48%',

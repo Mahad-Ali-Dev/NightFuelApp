@@ -363,6 +363,19 @@ export class AuthService {
         });
     }
 
+    /**
+     * Set a user's role. Server-to-server ONLY (called by user-service over the
+     * internal channel when a coach application is approved/revoked). The route
+     * restricts `role` to the non-privileged set — ADMIN/SUPERADMIN are NEVER
+     * assignable this way, so an approval flow can't escalate anyone to admin.
+     */
+    async setUserRole(userId: string, role: string): Promise<void> {
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { role: role as any },
+        });
+    }
+
     async logout(refreshToken: string): Promise<void> {
         // Refresh tokens are stored hashed; match on the hash of the raw token.
         await this.prisma.refreshToken.deleteMany({

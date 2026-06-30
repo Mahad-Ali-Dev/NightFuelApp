@@ -209,7 +209,8 @@ export default function ProfileScreen() {
                     <View style={st.menuCard}>
                         <MenuRow icon="color-palette-outline" label="Appearance & theme" onPress={() => router.push('/(settings)' as any)} />
                         <MenuRow icon="notifications-outline" label="Notifications" onPress={() => router.push('/(settings)/notifications' as any)} />
-                        <MenuRow icon="person-circle-outline" label="Account & settings" onPress={() => router.push('/(settings)' as any)} last={!isCoach && !isAdmin} />
+                        <MenuRow icon="person-circle-outline" label="Account & settings" onPress={() => router.push('/(settings)' as any)} />
+                        {!isCoach && !isAdmin && <MenuRow icon="ribbon-outline" label="Become a coach" onPress={() => router.push('/(coach)/apply' as any)} last />}
                         {isCoach && <MenuRow icon="people-outline" label="Coach Hub" onPress={() => router.push('/(coach)/dashboard' as any)} last={!isAdmin} />}
                         {isAdmin && <MenuRow icon="shield-outline" label="Admin Dashboard" onPress={() => router.push('/(admin)' as any)} last />}
                     </View>
