@@ -294,6 +294,64 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService; internal
         }
     );
 
+    // ── PATCH /v1/auth/internal/user/:userId/ban ─────────────────────────────
+    // Server-to-server: admin ban/unban (user-service calls this). A banned user
+    // can no longer log in (see auth.service.login). Existing access tokens still
+    // expire on their own (~30m); refresh is blocked because refresh re-checks.
+    fastify.withTypeProvider<ZodTypeProvider>().patch(
+        '/internal/user/:userId/ban',
+        {
+            preHandler: internalAuth,
+            schema: {
+                params: z.object({ userId: z.string().uuid() }),
+                body: z.object({ banned: z.boolean() }),
+            },
+        },
+        async (request, reply) => {
+            try {
+                const { userId } = request.params;
+                const { banned } = request.body as { banned: boolean };
+                const result = await service.setUserBanned(userId, banned);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
+            }
+        }
+    );
+
+    // ── GET /v1/auth/internal/user/:userId/ban ───────────────────────────────
+    // Current ban state, so the user-service toggle can flip it.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/internal/user/:userId/ban',
+        { preHandler: internalAuth, schema: { params: z.object({ userId: z.string().uuid() }) } },
+        async (request, reply) => {
+            try {
+                const banned = await service.isUserBanned(request.params.userId);
+                return reply.code(200).send({ banned });
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
+            }
+        }
+    );
+
+    // ── GET /v1/auth/internal/banned-ids ─────────────────────────────────────
+    // Banned user ids + count — feeds the admin dashboard stat + user-list status.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/internal/banned-ids',
+        { preHandler: internalAuth },
+        async (request, reply) => {
+            try {
+                const result = await service.getBannedUserIds();
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
+            }
+        }
+    );
+
     // ── GET /v1/auth/internal/user/:userId/export ────────────────────────────
     // GDPR data export (Right of Access, Art. 15) — server-to-server only,
     // guarded by the SAME X-Internal-Token check as the purge above (404 on a

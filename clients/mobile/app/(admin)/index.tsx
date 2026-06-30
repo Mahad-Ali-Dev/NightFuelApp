@@ -132,6 +132,11 @@ export default function AdminDashboardScreen() {
                             Coaches{stats?.availableCoaches != null ? ` · ${stats.availableCoaches} live` : ''}
                         </Text>
                     </Card>
+                    <Card style={[styles.statCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                        <Ionicons name="ban" size={24} color={colors.warning} />
+                        <Text style={[typography.display, { color: colors.text.primary, fontSize: 28, marginTop: 8 }]}>{stats?.bannedUsers ?? 0}</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary }]}>Banned</Text>
+                    </Card>
                 </View>
 
                 {/* Coach applications review queue */}

@@ -271,6 +271,13 @@ export class AuthService {
             throw new Error('Invalid credentials');
         }
 
+        // Banned accounts cannot obtain tokens. Checked AFTER the password is
+        // verified so a wrong password still returns the generic 'Invalid
+        // credentials' (no enumeration of which accounts are banned).
+        if ((user as any).banned) {
+            throw new Error('Account disabled');
+        }
+
         // Success — clear any accumulated failures for this account.
         this.clearLoginFailures(lockoutKey);
 
@@ -374,6 +381,29 @@ export class AuthService {
             where: { id: userId },
             data: { role: role as any },
         });
+    }
+
+    /** Ban/unban a user (admin action via the internal channel). A banned user
+     * cannot log in (see login) — existing access tokens still expire in ~30m. */
+    async setUserBanned(userId: string, banned: boolean): Promise<{ banned: boolean }> {
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { banned } as any,
+        });
+        return { banned };
+    }
+
+    /** Whether a single user is banned (for the ban TOGGLE to flip). */
+    async isUserBanned(userId: string): Promise<boolean> {
+        const u = await this.prisma.user.findUnique({ where: { id: userId } });
+        return Boolean((u as any)?.banned);
+    }
+
+    /** All banned user ids + the count (for the admin dashboard stat + user list). */
+    async getBannedUserIds(): Promise<{ ids: string[]; count: number }> {
+        const rows = await this.prisma.user.findMany({ where: { banned: true } as any, select: { id: true } });
+        const ids = rows.map((r) => r.id);
+        return { ids, count: ids.length };
     }
 
     async logout(refreshToken: string): Promise<void> {

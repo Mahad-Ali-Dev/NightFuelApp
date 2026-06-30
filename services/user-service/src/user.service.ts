@@ -775,12 +775,13 @@ export class UserService {
             this.prisma.coachProfile.count({ where: { isAvailable: true } }),
         ]);
 
-        // banned/premium still need auth-service status + a subscription source;
-        // they stay 0 until those land (later phases).
+        // Real banned count from auth-service (best-effort: 0 if unreachable).
+        // premium still needs a subscription source (later phase).
+        const banned = await this.authBannedIds();
         return {
             totalUsers,
             activeToday,
-            bannedUsers: 0,
+            bannedUsers: banned.count,
             newUsersThisWeek,
             premiumUsers: 0,
             coaches,
@@ -816,11 +817,14 @@ export class UserService {
             take: limit,
         });
 
+        // Real account status from auth-service (BANNED vs ACTIVE), best-effort.
+        const banned = await this.authBannedIds();
+        const bannedSet = new Set(banned.ids);
         return profiles.map((p) => ({
             id: p.id,
             userId: p.userId,
             displayName: p.displayName,
-            status: 'ACTIVE', // placeholder until auth-service exposes account status
+            status: bannedSet.has(p.userId) ? 'BANNED' : 'ACTIVE',
             tier: (p as any).preferences?.primaryGoal === 'GENERAL_HEALTH' ? 'FREE' : 'PRO',
             createdAt: p.createdAt,
             lastActiveAt: p.updatedAt,
@@ -831,23 +835,17 @@ export class UserService {
      * Placeholder for ban/unban toggle.
      * The actual disable logic requires coordination with auth-service.
      */
-    async toggleBanUser(targetUserId: string): Promise<{ success: boolean; message: string }> {
-        // Verify user exists
-        const profile = await this.prisma.userProfile.findUnique({
-            where: { userId: targetUserId },
-        });
-
+    async toggleBanUser(targetUserId: string): Promise<{ success: boolean; message: string; banned: boolean }> {
+        const profile = await this.prisma.userProfile.findUnique({ where: { userId: targetUserId } });
         if (!profile) {
             throw new Error('User not found');
         }
-
-        // TODO: call auth-service to actually disable/enable the account
-        logger.info({ targetUserId }, 'Ban toggle requested (stub — requires auth-service integration)');
-
-        return {
-            success: true,
-            message: `Ban toggle for user ${targetUserId} recorded. Auth-service integration pending.`,
-        };
+        // REAL ban (was a stub): flip the auth-service `banned` flag, which blocks
+        // the account's login. Existing access tokens still expire on their own.
+        const next = !(await this.authIsBanned(targetUserId));
+        await this.authSetBanned(targetUserId, next);
+        logger.info({ targetUserId, banned: next }, 'Ban toggled via auth-service');
+        return { success: true, banned: next, message: next ? 'User banned' : 'User unbanned' };
     }
 
     // ── Coach applications (apply → admin review → role promotion) ───────────
@@ -950,15 +948,46 @@ export class UserService {
     }
 
     /** Promote/demote a user's auth role over the auth-service internal channel. */
+    /** Base URL + headers for auth-service /internal/* calls (X-Internal-Token). */
+    private authInternal() {
+        return {
+            base: process.env['AUTH_SERVICE_URL'] ?? 'http://auth-service:3001',
+            headers: { 'content-type': 'application/json', 'x-internal-token': process.env['INTERNAL_SERVICE_TOKEN'] ?? '' },
+        };
+    }
+
     private async promoteUserRole(userId: string, role: string): Promise<void> {
-        const base = process.env['AUTH_SERVICE_URL'] ?? 'http://auth-service:3001';
-        const token = process.env['INTERNAL_SERVICE_TOKEN'] ?? '';
-        const res = await fetch(`${base}/v1/auth/internal/user/${userId}/role`, {
-            method: 'PATCH',
-            headers: { 'content-type': 'application/json', 'x-internal-token': token },
-            body: JSON.stringify({ role }),
-        });
+        const { base, headers } = this.authInternal();
+        const res = await fetch(`${base}/v1/auth/internal/user/${userId}/role`, { method: 'PATCH', headers, body: JSON.stringify({ role }) });
         if (!res.ok) throw new Error(`auth-service role update failed (${res.status})`);
+    }
+
+    /** Ban/unban a user via auth-service (the real ban — blocks their login). */
+    private async authSetBanned(userId: string, banned: boolean): Promise<void> {
+        const { base, headers } = this.authInternal();
+        const res = await fetch(`${base}/v1/auth/internal/user/${userId}/ban`, { method: 'PATCH', headers, body: JSON.stringify({ banned }) });
+        if (!res.ok) throw new Error(`auth-service ban update failed (${res.status})`);
+    }
+
+    private async authIsBanned(userId: string): Promise<boolean> {
+        const { base, headers } = this.authInternal();
+        const res = await fetch(`${base}/v1/auth/internal/user/${userId}/ban`, { headers });
+        if (!res.ok) throw new Error(`auth-service ban check failed (${res.status})`);
+        const data = (await res.json()) as { banned?: boolean };
+        return Boolean(data.banned);
+    }
+
+    /** Banned user ids + count. Best-effort: returns empty if auth is unreachable
+     * (so the admin dashboard degrades gracefully rather than 500-ing). */
+    private async authBannedIds(): Promise<{ ids: string[]; count: number }> {
+        try {
+            const { base, headers } = this.authInternal();
+            const res = await fetch(`${base}/v1/auth/internal/banned-ids`, { headers });
+            if (!res.ok) return { ids: [], count: 0 };
+            return (await res.json()) as { ids: string[]; count: number };
+        } catch {
+            return { ids: [], count: 0 };
+        }
     }
 
     /**
