@@ -382,7 +382,11 @@ export function setupEventSubscribers(
             const conversationId = payload?.conversationId;
             if (!recipientId || !conversationId) return;
             try {
-                const deepLink = `/messages/${conversationId}`;
+                // chat-service publishes the SENDER as the envelope userId. The
+                // mobile thread screen (/messages/[id]) resolves a conversation from
+                // the PEER userId via startConversation(), so deep-link to the sender
+                // — NOT the conversationId (which the screen treats as a userId).
+                const deepLink = event.userId ? `/messages/${event.userId}` : `/messages/${conversationId}`;
                 const body = payload.textPreview ?? '';
                 const n = await notificationService.createNotificationIfEnabled({
                     userId: recipientId,
