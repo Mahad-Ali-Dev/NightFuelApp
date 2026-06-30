@@ -596,6 +596,87 @@ export const userRoutes = async (
         }
     );
 
+    // ── Coach ↔ client lifecycle ─────────────────────────────────────────────
+
+    // POST /v1/users/coaches/:coachUserId/request — a client requests a coach
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/coaches/:coachUserId/request',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { params: z.object({ coachUserId: z.string().uuid() }) },
+        },
+        async (request, reply) => {
+            try {
+                const clientUserId = extractUserId(request, reply);
+                if (!clientUserId) return;
+                const { coachUserId } = request.params as { coachUserId: string };
+                const result = await service.requestCoach(clientUserId, coachUserId);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                if (err.statusCode === 400) return reply.code(400).send({ error: 'Invalid request' });
+                if (err.statusCode === 404) return reply.code(404).send({ error: 'Coach not found' });
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/coach-requests — a coach's incoming PENDING requests
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/coach-requests',
+        { onRequest: [(fastify as any).authenticate] },
+        async (request, reply) => {
+            try {
+                const coachUserId = extractUserId(request, reply);
+                if (!coachUserId) return;
+                const requests = await service.getCoachRequests(coachUserId);
+                return reply.code(200).send(requests);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // POST /v1/users/coach-requests/:id/accept | /decline — coach responds
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/coach-requests/:id/:action',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { params: z.object({ id: z.string().uuid(), action: z.enum(['accept', 'decline']) }) },
+        },
+        async (request, reply) => {
+            try {
+                const coachUserId = extractUserId(request, reply);
+                if (!coachUserId) return;
+                const { id, action } = request.params as { id: string; action: 'accept' | 'decline' };
+                const result = await service.respondToCoachRequest(id, coachUserId, action === 'accept');
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                if (err.statusCode === 404) return reply.code(404).send({ error: 'Request not found' });
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/coach — a client's current (accepted) coach, or null
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/coach',
+        { onRequest: [(fastify as any).authenticate] },
+        async (request, reply) => {
+            try {
+                const clientUserId = extractUserId(request, reply);
+                if (!clientUserId) return;
+                const coach = await service.getMyCoach(clientUserId);
+                return reply.code(200).send(coach);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
     // ── Admin Routes ───────────────────────────────────────────────────────────
 
     // GET /v1/users/admin/stats — Platform-wide statistics for admin dashboard

@@ -202,9 +202,14 @@ export default function CoachDashboardScreen() {
                     <Text style={[typography.overline, { color: colors.accent.coral }]}>COACH</Text>
                     <Text style={[typography.h3, { color: colors.text.primary, marginTop: 1 }]} numberOfLines={1}>Dashboard</Text>
                 </View>
-                <PressableScale hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Notifications" onPress={() => router.push('/(settings)/notifications' as any)} style={[styles.headerBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
-                    <Ionicons name="notifications-outline" size={22} color={colors.text.primary} />
-                </PressableScale>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <PressableScale hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Client requests" onPress={() => router.push('/(coach)/requests' as any)} style={[styles.headerBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                        <Ionicons name="person-add-outline" size={22} color={colors.text.primary} />
+                    </PressableScale>
+                    <PressableScale hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Notifications" onPress={() => router.push('/(settings)/notifications' as any)} style={[styles.headerBtn, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                        <Ionicons name="notifications-outline" size={22} color={colors.text.primary} />
+                    </PressableScale>
+                </View>
             </View>
 
             {isLoading ? (

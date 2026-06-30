@@ -965,16 +965,86 @@ export class UserService {
      * Fetch all students (clients) for a specific coach.
      */
     async getStudents(coachUserId: string) {
-        return this.prisma.coachClientRelation.findMany({
-            where: {
-                coachUserId,
-                status: 'ACCEPTED'
-            },
-            include: {
-                // Fetch the client's profile and status for the coach to review
-                // profile: { include: { status: true } } // This would depend on Prisma schema structure
-            }
+        const relations = await this.prisma.coachClientRelation.findMany({
+            where: { coachUserId, status: 'ACCEPTED' },
+            orderBy: { startedAt: 'desc' },
         });
+        // clientUserId is a plain id (no Prisma relation to UserProfile), so join
+        // the client profiles manually — this is what was missing, leaving the
+        // coach dashboard showing blank names/avatars.
+        return this.attachClientProfiles(relations);
+    }
+
+    /** Join the client display name + avatar onto a list of relations. */
+    private async attachClientProfiles<T extends { clientUserId: string }>(relations: T[]) {
+        const profiles = await this.prisma.userProfile.findMany({
+            where: { userId: { in: relations.map((r) => r.clientUserId) } },
+            select: { userId: true, displayName: true, avatarUrl: true },
+        });
+        const byId = new Map(profiles.map((p) => [p.userId, p]));
+        return relations.map((r) => ({
+            ...r,
+            displayName: byId.get(r.clientUserId)?.displayName ?? null,
+            avatarUrl: byId.get(r.clientUserId)?.avatarUrl ?? null,
+        }));
+    }
+
+    // ── Coach ↔ client relationship lifecycle ────────────────────────────────
+
+    /** A client requests a coach → PENDING relation (idempotent on the pair). */
+    async requestCoach(clientUserId: string, coachUserId: string): Promise<{ status: string }> {
+        if (clientUserId === coachUserId) throw Object.assign(new Error('Cannot coach yourself'), { statusCode: 400 });
+        const coach = await this.prisma.coachProfile.findUnique({ where: { userId: coachUserId } });
+        if (!coach) throw Object.assign(new Error('Not a coach'), { statusCode: 404 });
+        const rel = await this.prisma.coachClientRelation.upsert({
+            where: { coachUserId_clientUserId: { coachUserId, clientUserId } },
+            create: { coachUserId, clientUserId, status: 'PENDING' },
+            update: { status: 'PENDING', endedAt: null },
+        });
+        return { status: rel.status };
+    }
+
+    /** A coach's incoming PENDING requests, with the requesting client's profile. */
+    async getCoachRequests(coachUserId: string) {
+        const relations = await this.prisma.coachClientRelation.findMany({
+            where: { coachUserId, status: 'PENDING' },
+            orderBy: { createdAt: 'desc' },
+        });
+        return this.attachClientProfiles(relations);
+    }
+
+    /** A coach accepts/declines a request. Only the owning coach may. */
+    async respondToCoachRequest(relationId: string, coachUserId: string, accept: boolean): Promise<{ ok: boolean }> {
+        const rel = await this.prisma.coachClientRelation.findUnique({ where: { id: relationId } });
+        if (!rel || rel.coachUserId !== coachUserId) throw Object.assign(new Error('Request not found'), { statusCode: 404 });
+        await this.prisma.coachClientRelation.update({
+            where: { id: relationId },
+            data: accept ? { status: 'ACCEPTED', startedAt: new Date() } : { status: 'DECLINED', endedAt: new Date() },
+        });
+        return { ok: true };
+    }
+
+    /** A client's current (ACCEPTED) coach + their coach profile, or null. */
+    async getMyCoach(clientUserId: string) {
+        const rel = await this.prisma.coachClientRelation.findFirst({
+            where: { clientUserId, status: 'ACCEPTED' },
+            orderBy: { startedAt: 'desc' },
+        });
+        if (!rel) return null;
+        const [profile, coachProfile] = await Promise.all([
+            this.prisma.userProfile.findUnique({ where: { userId: rel.coachUserId }, select: { displayName: true, avatarUrl: true } }),
+            this.prisma.coachProfile.findUnique({ where: { userId: rel.coachUserId } }),
+        ]);
+        return {
+            ...rel,
+            coach: {
+                userId: rel.coachUserId,
+                displayName: profile?.displayName ?? null,
+                avatarUrl: profile?.avatarUrl ?? null,
+                specializations: coachProfile?.specializations ?? [],
+                bio: coachProfile?.bio ?? null,
+            },
+        };
     }
 
     /**

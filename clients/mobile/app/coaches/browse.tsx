@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, {
     FadeInDown,
@@ -12,8 +12,9 @@ import { useTheme } from '@/theme';
 import { Card, Skeleton, EmptyState } from '@/components/ui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { getCoachDirectory } from '@/api/chat';
+import { requestCoach } from '@/api/coachRelations';
 import { useRouter } from 'expo-router';
 import { withAlpha } from '@/theme/utils';
 
@@ -70,6 +71,14 @@ export default function CoachesBrowseScreen() {
     const { data: coaches, isLoading, isError, refetch } = useQuery({
         queryKey: ['coach-directory'],
         queryFn: getCoachDirectory,
+    });
+
+    // Request a coach (a PENDING relation the coach can accept). coach.id is the
+    // coach's userId (same id the Message CTA routes to).
+    const requestMut = useMutation({
+        mutationFn: (coachUserId: string) => requestCoach(coachUserId),
+        onSuccess: () => Alert.alert('Request sent', 'Your coach will see it and can accept you as a client.'),
+        onError: () => Alert.alert("Couldn't send", 'Please try again in a moment.'),
     });
 
     // Apply the active specialty lens. `all` is a pass-through so the full list
@@ -280,7 +289,17 @@ export default function CoachesBrowseScreen() {
                                             </View>
                                         ) : null}
 
-                                        <View style={{ flexDirection: 'row', marginTop: 20 }}>
+                                        <View style={{ flexDirection: 'row', marginTop: 20, gap: 10 }}>
+                                            <PressableScale
+                                                accessibilityRole="button"
+                                                accessibilityLabel={`Request coaching from ${coach.name}`}
+                                                disabled={requestMut.isPending}
+                                                style={[styles.actionBtn, { flex: 1, backgroundColor: colors.accent.lime, borderColor: colors.accent.lime, opacity: requestMut.isPending ? 0.6 : 1 }]}
+                                                onPress={() => requestMut.mutate(coach.userId ?? coach.id)}
+                                            >
+                                                <Ionicons name="ribbon-outline" size={18} color={colors.text.inverse} style={{ marginRight: 8 }} />
+                                                <Text style={[typography.subhead, { color: colors.text.inverse, fontWeight: '700' }]}>Coach me</Text>
+                                            </PressableScale>
                                             <PressableScale
                                                 accessibilityRole="button"
                                                 accessibilityLabel={`Message ${coach.name}`}
