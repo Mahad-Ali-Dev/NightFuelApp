@@ -60,6 +60,10 @@ module.exports = {
       // (The `@/` mapper must come AFTER these so the package names match first.)
       [`^@kingstinct/react-native-healthkit${END}`]: '<rootDir>/src/mocks/react-native-healthkit-stub.js',
       [`^react-native-health-connect${END}`]: '<rootDir>/src/mocks/react-native-health-connect-stub.js',
+      // Direct-BLE wearable (react-native-ble-plx): bleManager lazy-requires it
+      // and constructs `new BleManager()`. The stub's constructor throws → the
+      // manager's try/catch yields isSupported()=false → honest no-op in the gate.
+      [`^react-native-ble-plx${END}`]: '<rootDir>/src/mocks/react-native-ble-plx-stub.js',
       [`^@/(.*)${END}`]: '<rootDir>/src/$1',
     };
   })(),

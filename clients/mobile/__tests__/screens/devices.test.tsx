@@ -82,6 +82,17 @@ jest.mock('@/lib/healthSync', () => ({
 // expo-router: a benign router; `back` is the only control this screen calls.
 jest.mock('expo-router', () => ({
     useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: jest.fn() }),
+    useFocusEffect: jest.fn(),
+}));
+
+// BLE manager is a separate seam (direct Bluetooth) the generic_ble row reads —
+// mock it so the health-source test doesn't pull in AsyncStorage / ble-plx.
+jest.mock('@/lib/ble/bleManager', () => ({
+    bleManager: {
+        getStatusForRow: () => 'disconnected',
+        lastReadingAt: () => null,
+        isSupported: () => false,
+    },
 }));
 
 // Decorative glyphs → plain <Text> surfacing the icon name so they are inert
@@ -228,7 +239,7 @@ describe('Connected Devices screen', () => {
         mockConnect.mockImplementation(async () => ({ status: 'unavailable' }));
 
         renderScreen();
-        fireEvent.press(screen.getByTestId('connect-generic_ble'));
+        fireEvent.press(screen.getByTestId('connect-google_fit'));
 
         await waitFor(() =>
             expect(screen.getByText('This source is unavailable on the current build.')).toBeTruthy(),
@@ -285,18 +296,18 @@ describe('Connected Devices screen', () => {
     it('after an unavailable attempt the controls announce the honest unavailable state — never a fake "Connected"', async () => {
         renderScreen();
 
-        fireEvent.press(screen.getByTestId('sync-generic_ble'));
+        fireEvent.press(screen.getByTestId('sync-google_fit'));
         await waitFor(() => expect(screen.getByText(MOCK_UNAVAILABLE_REASON)).toBeTruthy());
 
         // The pressed row's controls now ANNOUNCE the unavailable result via
         // their accessible names (honest a11y), while the unpressed rows keep
         // their plain names — and nothing anywhere claims "Connected".
-        expect(screen.getByRole('button', { name: 'Sync Bluetooth Device now, currently unavailable' })).toBeTruthy();
-        expect(screen.getByRole('button', { name: 'Connect Bluetooth Device, currently unavailable' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Sync Google Fit now, currently unavailable' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Connect Google Fit, currently unavailable' })).toBeTruthy();
         expect(screen.getByRole('button', { name: 'Sync Apple Health now' })).toBeTruthy();
         // The Sync control is still honestly NOT disabled (re-pressable).
         expect(
-            screen.getByRole('button', { name: 'Sync Bluetooth Device now, currently unavailable' }).props
+            screen.getByRole('button', { name: 'Sync Google Fit now, currently unavailable' }).props
                 .accessibilityState,
         ).toMatchObject({ disabled: false });
         // Anchored to the START so it catches only a standalone "Connected"
@@ -335,7 +346,9 @@ describe('Connected Devices screen', () => {
         // mock's lastSyncedAt() is global, so all rows re-read the same advanced
         // value — the point is the label is no longer stale at "Never synced".)
         await waitFor(() => expect(screen.getAllByText(/^Last synced /).length).toBeGreaterThan(0));
-        expect(screen.queryByText('Never synced')).toBeNull();
+        // The two HEALTH rows refreshed; generic_ble (BLE) is a SEPARATE source
+        // that didn't sync, so it legitimately stays "Never synced".
+        expect(screen.getAllByText('Never synced')).toHaveLength(1);
         expect(mockSyncNow).toHaveBeenCalledTimes(1);
         // A plain success surfaces NO notice and NEVER fakes a banner reason.
         expect(screen.queryByTestId('notice-apple_health')).toBeNull();
@@ -376,17 +389,17 @@ describe('Connected Devices screen', () => {
 
         renderScreen();
 
-        fireEvent.press(screen.getByTestId('sync-generic_ble'));
+        fireEvent.press(screen.getByTestId('sync-google_fit'));
         await waitFor(() => expect(screen.getByText(NOTHING_NEW)).toBeTruthy());
 
         // A subsequent plain success drops the confirmation (no stale notice).
-        fireEvent.press(screen.getByTestId('sync-generic_ble'));
+        fireEvent.press(screen.getByTestId('sync-google_fit'));
         // Explicit 5s timeout: the two-sync state settle can exceed waitFor's
         // default 1s under full-suite load (passes in isolation at ~1.3s), which
         // made this assertion flaky on a busy gate run. The behavior is correct;
         // the default was just too impatient.
         await waitFor(() => expect(screen.queryByText(NOTHING_NEW)).toBeNull(), { timeout: 5000 });
-        expect(screen.queryByTestId('notice-generic_ble')).toBeNull();
+        expect(screen.queryByTestId('notice-google_fit')).toBeNull();
         expect(mockSyncNow).toHaveBeenCalledTimes(2);
     });
 });

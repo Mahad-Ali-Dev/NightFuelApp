@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useTheme } from '@/theme';
@@ -12,6 +12,7 @@ import { GlassCard, CtaButton } from '@/components/ui';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { getHealthSyncAdapter, SUPPORTED_HEALTH_SOURCES } from '@/lib/healthSync';
+import { bleManager } from '@/lib/ble/bleManager';
 import { HEALTH_SOURCE_LABELS, type HealthSource } from '@/lib/healthSync.types';
 
 /**
@@ -173,9 +174,12 @@ const SourceRow = React.memo(function SourceRow({
     // Ground truth — derived from the adapter on each render, never duplicated
     // into state. `getStatus()` drives the live connection pill; `lastSyncedAt()`
     // is an ISO string or null (→ "Never synced").
-    const status = getHealthSyncAdapter().getStatus();
+    // generic_ble is a DIRECT BLE wearable, not a health-platform source — its
+    // live status/last-reading come from the BLE manager; the other two sources
+    // read the health adapter (HealthKit / Health Connect) ground truth.
+    const status = source === 'generic_ble' ? bleManager.getStatusForRow() : getHealthSyncAdapter().getStatus();
     const sv = statusView(status, colors);
-    const lastSynced = getHealthSyncAdapter().lastSyncedAt();
+    const lastSynced = source === 'generic_ble' ? bleManager.lastReadingAt() : getHealthSyncAdapter().lastSyncedAt();
     const lastSyncedLabel = lastSynced ? formatLastSynced(lastSynced) : 'Never synced';
 
     // Did this source's last attempt come back NON-connected (an honest
@@ -450,8 +454,21 @@ export default function ConnectedDevicesScreen() {
         [bumpSync],
     );
 
-    const handleConnect = useCallback((source: HealthSource) => { void runAttempt(source, 'connect'); }, [runAttempt]);
-    const handleSync = useCallback((source: HealthSource) => { void runAttempt(source, 'syncNow'); }, [runAttempt]);
+    // generic_ble has its own scan/pair/live screen (BLE doesn't fit the
+    // health-platform connect()/syncNow() model) — route there instead.
+    const handleConnect = useCallback((source: HealthSource) => {
+        if (source === 'generic_ble') { router.push('/(settings)/ble-connect' as never); return; }
+        void runAttempt(source, 'connect');
+    }, [runAttempt, router]);
+    const handleSync = useCallback((source: HealthSource) => {
+        if (source === 'generic_ble') { router.push('/(settings)/ble-connect' as never); return; }
+        void runAttempt(source, 'syncNow');
+    }, [runAttempt, router]);
+
+    // Re-derive every row's live status when the screen regains focus (e.g. after
+    // returning from the BLE connect screen) so the generic_ble pill reflects a
+    // new connection without a manual reload.
+    useFocusEffect(useCallback(() => { bumpSync(); }, [bumpSync]));
 
     // The SINGLE thumb-zone primary action. The screen used to have THREE solid
     // lime per-row Connect buttons and no reachable primary; those rows are now

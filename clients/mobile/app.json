@@ -121,7 +121,15 @@
         }
       ],
       "react-native-health-connect",
-      "expo-video"
+      "expo-video",
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": ["central"],
+          "bluetoothAlwaysPermission": "Zeitra uses Bluetooth to connect to your watch or fitness band and read live heart rate and battery."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
