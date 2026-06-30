@@ -128,13 +128,15 @@ describe('WelcomeScreen (auth landing) — brand + primary CTA + sign-in link', 
     expect(String(cta.props.accessibilityLabel)).toBe('Get started');
   });
 
-  test('pressing "Get started" pushes the FIRST onboarding route with no stray param', () => {
+  test('pressing "Get started" pushes to register (onboarding now runs AFTER signup)', () => {
     renderScreen();
 
     fireEvent.press(screen.getByTestId('welcome-get-started-cta'));
 
+    // A new visitor signs up FIRST so onboarding's authenticated calls have a
+    // valid token (register.tsx redirects to onboarding on success).
     expect(mockPush).toHaveBeenCalledTimes(1);
-    expect(mockPush).toHaveBeenCalledWith('/(onboarding)/metrics-goals');
+    expect(mockPush).toHaveBeenCalledWith('/(auth)/register');
   });
 
   test('the "Sign in" affordance is an accessible link to /(auth)/login', () => {

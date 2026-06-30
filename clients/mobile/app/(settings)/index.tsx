@@ -144,7 +144,6 @@ export default function SettingsIndexScreen() {
                 { label: 'Notifications', icon: 'notifications-outline', route: '/(settings)/notifications' },
                 { label: 'Notification Settings', icon: 'options-outline', route: '/(settings)/notification-preferences' },
                 { label: 'Connected Devices', icon: 'watch-outline', route: '/(settings)/devices' }, // Mock route for now
-                { label: 'Dark Mode', icon: 'moon-outline', isSwitch: true, value: true },
                 {
                     label: 'Night Read',
                     icon: 'eye-outline',

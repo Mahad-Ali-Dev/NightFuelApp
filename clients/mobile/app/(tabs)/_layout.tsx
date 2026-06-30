@@ -351,15 +351,28 @@ function QuickLogSheet({
                             </Pressable>
                         </View>
 
-                        {/* Primary action — scan a meal (Open Food Facts barcode camera). */}
-                        <CtaButton
-                            label="Scan a meal"
-                            icon="camera"
-                            size="lg"
-                            accessibilityLabel="Scan a meal"
-                            onPress={() => onSelect('/(modals)/barcode-scanner')}
-                            style={qs.scanCta}
-                        />
+                        {/* Primary actions — scan a meal two ways: AI plate photo
+                            (point at your plate → the vision model returns macros)
+                            or an Open Food Facts barcode. */}
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <CtaButton
+                                label="Snap a plate"
+                                icon="camera"
+                                size="lg"
+                                accessibilityLabel="Snap a photo of your plate to analyze it with AI"
+                                onPress={() => onSelect('/(modals)/food-photo')}
+                                style={[qs.scanCta, { flex: 1 }]}
+                            />
+                            <CtaButton
+                                label="Barcode"
+                                icon="barcode-outline"
+                                size="lg"
+                                flat
+                                accessibilityLabel="Scan a barcode"
+                                onPress={() => onSelect('/(modals)/barcode-scanner')}
+                                style={[qs.scanCta, { flex: 1 }]}
+                            />
+                        </View>
 
                         {/* Secondary nudge — hand off to the Ria AI coach. */}
                         <Pressable

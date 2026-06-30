@@ -21,10 +21,9 @@ import { withAlpha } from '@/theme/utils';
 // Bundled model hero — the male athlete asset (mockup: welcome-preview.html).
 const HERO = require('../../assets/images/hero-male-1.png');
 
-// The first onboarding route (see app/(onboarding)/_layout.tsx — `metrics-goals`
-// is the first Stack.Screen). "Get started" sends a brand-new visitor here so
-// they begin the onboarding flow rather than landing on the sign-in form.
-const FIRST_ONBOARDING_ROUTE = '/(onboarding)/metrics-goals' as const;
+// "Get started" sends a brand-new visitor to REGISTER first; after signup
+// (register.tsx redirects to /(onboarding)/metrics-goals) they enter onboarding
+// WITH a valid auth token — so onboarding's authenticated calls no longer 401.
 
 // Per-block entrance: a staggered FadeInDown spring (transform/opacity only, so
 // it's cheap + interruptible). The wordmark, pager, headline, sub and the CTA
@@ -157,7 +156,7 @@ export default function WelcomeScreen() {
             label="Get started"
             size="lg"
             flat
-            onPress={() => router.push(FIRST_ONBOARDING_ROUTE)}
+            onPress={() => router.push('/(auth)/register')}
             style={styles.cta}
             testID="welcome-get-started-cta"
           />
