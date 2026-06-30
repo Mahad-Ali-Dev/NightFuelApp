@@ -754,12 +754,14 @@ export class UserService {
         bannedUsers: number;
         newUsersThisWeek: number;
         premiumUsers: number;
+        coaches: number;
+        availableCoaches: number;
     }> {
         const now = new Date();
         const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-        const [totalUsers, activeToday, newUsersThisWeek] = await Promise.all([
+        const [totalUsers, activeToday, newUsersThisWeek, coaches, availableCoaches] = await Promise.all([
             this.prisma.userProfile.count(),
             this.prisma.userProfile.count({
                 where: { updatedAt: { gte: oneDayAgo } },
@@ -767,17 +769,22 @@ export class UserService {
             this.prisma.userProfile.count({
                 where: { createdAt: { gte: oneWeekAgo } },
             }),
+            // Coach metrics live in user-service's own DB (coach_profiles), so
+            // these are REAL counts — no cross-service call needed.
+            this.prisma.coachProfile.count(),
+            this.prisma.coachProfile.count({ where: { isAvailable: true } }),
         ]);
 
-        // We don't have a dedicated "banned" or "premium" flag on UserProfile,
-        // so we return 0 for now — these can be wired up when auth-service
-        // exposes status queries or a subscription table is available.
+        // banned/premium still need auth-service status + a subscription source;
+        // they stay 0 until those land (later phases).
         return {
             totalUsers,
             activeToday,
             bannedUsers: 0,
             newUsersThisWeek,
             premiumUsers: 0,
+            coaches,
+            availableCoaches,
         };
     }
 

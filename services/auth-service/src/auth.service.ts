@@ -208,7 +208,11 @@ export class AuthService {
                 region: body.region,
                 timezone: body.timezone ?? 'UTC',
                 locale: body.locale ?? 'en-US',
-                role: (body.role ?? 'USER') as any,
+                // Registration ALWAYS creates a USER — never a privileged role.
+                // The schema already restricts `role` to 'USER', but we hard-pin it
+                // here too (defense in depth): coach/admin roles are only granted
+                // out-of-band (admin approval / seed), never from a register body.
+                role: 'USER' as any,
             },
         });
 

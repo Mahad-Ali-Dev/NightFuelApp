@@ -5,6 +5,10 @@ export interface AdminStats {
     activeToday: number;
     newUsersThisWeek: number;
     premiumUsers: number;
+    // Coach metrics (real, from coach_profiles). Optional so the type is valid
+    // before the user-service deploy that adds them.
+    coaches?: number;
+    availableCoaches?: number;
 }
 
 export interface AdminUser {

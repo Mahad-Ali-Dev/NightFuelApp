@@ -125,6 +125,13 @@ export default function AdminDashboardScreen() {
                         <Text style={[typography.display, { color: colors.text.primary, fontSize: 28, marginTop: 8 }]}>{stats?.premiumUsers || 0}</Text>
                         <Text style={[typography.caption, { color: colors.text.secondary }]}>Premium</Text>
                     </Card>
+                    <Card style={[styles.statCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                        <Ionicons name="ribbon" size={24} color={colors.accent.lime} />
+                        <Text style={[typography.display, { color: colors.text.primary, fontSize: 28, marginTop: 8 }]}>{stats?.coaches ?? 0}</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                            Coaches{stats?.availableCoaches != null ? ` · ${stats.availableCoaches} live` : ''}
+                        </Text>
+                    </Card>
                 </View>
 
                 {/* User List */}

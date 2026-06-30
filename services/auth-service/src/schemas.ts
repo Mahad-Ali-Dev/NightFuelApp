@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
-// Roles a user can self-assign at registration. Admin/Superadmin are system-assigned only.
-const SelfAssignableRole = z.enum(['USER', 'COACH', 'TRAINER', 'NUTRITIONIST']).default('USER');
+// Registration only ever creates a plain USER. The professional roles (COACH,
+// TRAINER, NUTRITIONIST) and ADMIN/SUPERADMIN are NOT self-assignable — they are
+// granted out-of-band: ADMIN via a one-off DB seed, and the coach-family roles via
+// the admin approval flow (apply → admin verifies → role promoted). This closes
+// the "anyone can register as a COACH" hole.
+const SelfAssignableRole = z.enum(['USER']).default('USER');
 
 // Strong-password rule for NEW passwords (register + reset). Mirrors the mobile
 // client's isStrongPassword check: at least 8 chars, one uppercase, one digit.
