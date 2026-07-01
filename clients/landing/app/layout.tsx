@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Barlow, Barlow_Condensed } from 'next/font/google';
+import { ThemeProvider } from '@/components/theme-provider';
 import './globals.css';
 
 const SITE = 'https://zeitra.app';
@@ -21,8 +22,11 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 export const viewport: Viewport = {
-  themeColor: '#0a0c12',
-  colorScheme: 'dark',
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)', color: '#0a0c12' },
+    { media: '(prefers-color-scheme: light)', color: '#f6f8f4' },
+  ],
+  colorScheme: 'light dark',
 };
 
 const TITLE = 'Zeitra — Chrono-nutrition & fitness for shift workers';
@@ -92,14 +96,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${barlow.variable} ${barlowCondensed.variable} dark`}
+      className={`${barlow.variable} ${barlowCondensed.variable}`}
       suppressHydrationWarning
     >
       <body>
-        <a className="skip-link" href="#main">
-          Skip to content
-        </a>
-        {children}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem={false}
+          disableTransitionOnChange
+        >
+          <a className="skip-link" href="#main">
+            Skip to content
+          </a>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

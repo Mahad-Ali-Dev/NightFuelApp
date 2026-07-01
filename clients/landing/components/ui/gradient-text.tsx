@@ -15,7 +15,12 @@ export function GradientText({
 }: React.HTMLAttributes<HTMLElement> & {
   as?: React.ElementType;
 }) {
-  const Component = Tag;
+  // Cast to a plain component type: rendering a bare `React.ElementType`
+  // widens `children` to the union of every JSX element (including the r3f
+  // three.js intrinsics), which collapses the children prop to `never`.
+  const Component = Tag as React.ComponentType<
+    React.HTMLAttributes<HTMLElement>
+  >;
   return (
     <Component className={cn('gradient-text', className)} {...props}>
       {children}

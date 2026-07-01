@@ -201,7 +201,7 @@ export function Faq() {
                       aria-hidden="true"
                       className={cn(
                         'grid size-8 shrink-0 place-items-center rounded-full',
-                        'border border-[var(--color-border-strong)] bg-white/[0.03]',
+                        'border border-[var(--color-border-strong)] bg-[var(--hairline)]',
                         'text-[var(--color-muted-foreground)]',
                         'transition-colors duration-200',
                         'group-hover:border-[var(--color-lime)]/50 group-hover:text-[var(--color-lime)]',

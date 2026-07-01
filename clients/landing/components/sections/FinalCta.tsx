@@ -100,7 +100,7 @@ export function FinalCta() {
           />
 
           <div className="relative z-10 mx-auto flex max-w-2xl flex-col items-center gap-6">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-white/[0.04] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-muted-foreground)]">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--hairline)] px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-muted-foreground)]">
               <span className="relative flex size-2">
                 {!reduce && (
                   <span className="absolute inline-flex size-full animate-ping rounded-full bg-[var(--color-lime)] opacity-60" />

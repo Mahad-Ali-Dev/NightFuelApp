@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Menu, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 /**
  * Site header — sticky, backdrop-blurred top nav. Wordmark "Zeitra" with a lime
@@ -16,8 +17,9 @@ import { Button } from '@/components/ui/button';
 
 const LINKS = [
   { href: '#features', label: 'Features' },
-  { href: '#how', label: 'How it works' },
+  { href: '#app-tour', label: 'Tour' },
   { href: '#science', label: 'Science' },
+  { href: '#ria', label: 'Ria' },
   { href: '#pricing', label: 'Pricing' },
   { href: '#faq', label: 'FAQ' },
 ] as const;
@@ -27,8 +29,16 @@ function Wordmark() {
     <a
       href="#top"
       aria-label="Zeitra home"
-      className="group inline-flex items-center gap-1 text-2xl font-bold uppercase tracking-tight [font-family:var(--font-display)]"
+      className="group inline-flex items-center gap-2 text-2xl font-bold uppercase tracking-tight [font-family:var(--font-display)]"
     >
+      <img
+        src="/images/logo.png"
+        alt=""
+        aria-hidden="true"
+        width={28}
+        height={28}
+        className="size-7 shrink-0 object-contain"
+      />
       <span>Zeitra</span>
       <span
         aria-hidden="true"
@@ -86,23 +96,27 @@ export default function Nav(_props: { active?: string } = {}) {
           ))}
         </ul>
 
-        <div className="hidden md:block">
+        <div className="hidden items-center gap-3 md:flex">
+          <ThemeToggle />
           <Button as="a" href="#waitlist" variant="primary" size="sm">
             Get the app
           </Button>
         </div>
 
-        {/* mobile toggle */}
-        <button
-          type="button"
-          className="inline-flex size-10 items-center justify-center rounded-lg border border-[var(--color-border-strong)] bg-white/[0.04] text-[var(--color-foreground)] md:hidden"
-          aria-label={open ? 'Close menu' : 'Open menu'}
-          aria-expanded={open}
-          aria-controls="mobile-menu"
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? <X className="size-5" /> : <Menu className="size-5" />}
-        </button>
+        {/* mobile controls */}
+        <div className="flex items-center gap-2 md:hidden">
+          <ThemeToggle />
+          <button
+            type="button"
+            className="inline-flex size-10 items-center justify-center rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-panel-2)]/60 text-[var(--color-foreground)] backdrop-blur-md"
+            aria-label={open ? 'Close menu' : 'Open menu'}
+            aria-expanded={open}
+            aria-controls="mobile-menu"
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? <X className="size-5" /> : <Menu className="size-5" />}
+          </button>
+        </div>
       </nav>
 
       {/* mobile panel */}
@@ -120,7 +134,7 @@ export default function Nav(_props: { active?: string } = {}) {
               <a
                 href={l.href}
                 onClick={() => setOpen(false)}
-                className="block rounded-lg px-3 py-3 text-base font-medium text-[var(--color-foreground)] hover:bg-white/[0.05]"
+                className="block rounded-lg px-3 py-3 text-base font-medium text-[var(--color-foreground)] hover:bg-[var(--color-muted)]"
               >
                 {l.label}
               </a>

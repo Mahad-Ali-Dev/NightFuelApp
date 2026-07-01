@@ -1,33 +1,35 @@
 import Nav from '@/components/site/Nav';
 import Footer from '@/components/site/Footer';
-import { Hero } from '@/components/sections/Hero';
-import { Stats } from '@/components/sections/Stats';
+import ClientHero from '@/components/site/ClientHero';
+import SiteBackground from '@/components/site/SiteBackground';
 import { Problem } from '@/components/sections/Problem';
-import { Features } from '@/components/sections/Features';
-import { HowItWorks } from '@/components/sections/HowItWorks';
+import { FeaturesDetailed } from '@/components/sections/FeaturesDetailed';
+import { AppTour } from '@/components/sections/AppTour';
+import { DeviceMockups } from '@/components/sections/DeviceMockups';
+import { Consistency } from '@/components/sections/Consistency';
 import { Science } from '@/components/sections/Science';
-import { Comparison } from '@/components/sections/Comparison';
-import { Personas } from '@/components/sections/Personas';
-import { Testimonials } from '@/components/sections/Testimonials';
-import { Pricing } from '@/components/sections/Pricing';
+import { RiaDemo } from '@/components/sections/RiaDemo';
+import { PricingSection } from '@/components/sections/PricingSection';
 import { Faq } from '@/components/sections/Faq';
 import { FinalCta } from '@/components/sections/FinalCta';
 
 export default function Home() {
   return (
     <>
+      {/* subtle, fixed dot field, sits behind everything (fixed inset-0 -z) */}
+      <SiteBackground />
+
       <Nav active="home" />
-      <main id="main" className="overflow-x-hidden">
-        <Hero />
-        <Stats />
+      <main id="main" className="relative z-10 overflow-x-hidden">
+        <ClientHero />
         <Problem />
-        <Features />
-        <HowItWorks />
+        <FeaturesDetailed />
+        <AppTour />
+        <DeviceMockups />
+        <Consistency />
         <Science />
-        <Comparison />
-        <Personas />
-        <Testimonials />
-        <Pricing />
+        <RiaDemo />
+        <PricingSection />
         <Faq />
         <FinalCta />
       </main>

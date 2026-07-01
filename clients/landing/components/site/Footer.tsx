@@ -38,7 +38,15 @@ const SOCIALS: { label: string; short: string }[] = [
 
 function Wordmark() {
   return (
-    <span className="inline-flex items-center gap-1 text-2xl font-bold uppercase tracking-tight [font-family:var(--font-display)]">
+    <span className="inline-flex items-center gap-2 text-2xl font-bold uppercase tracking-tight [font-family:var(--font-display)]">
+      <img
+        src="/images/logo.png"
+        alt=""
+        aria-hidden="true"
+        width={28}
+        height={28}
+        className="size-7 shrink-0 object-contain"
+      />
       Zeitra
       <span
         aria-hidden="true"
@@ -67,7 +75,7 @@ export default function Footer() {
                   <a
                     href="#"
                     aria-label={s.label}
-                    className="inline-flex size-9 items-center justify-center rounded-lg border border-[var(--color-border-strong)] bg-white/[0.03] text-xs font-semibold text-[var(--color-muted-foreground)] transition-colors hover:border-[var(--color-lime)]/40 hover:text-[var(--color-foreground)]"
+                    className="inline-flex size-9 items-center justify-center rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-muted)] text-xs font-semibold text-[var(--color-muted-foreground)] transition-colors hover:border-[var(--color-lime)]/40 hover:text-[var(--color-foreground)]"
                   >
                     {s.short}
                   </a>

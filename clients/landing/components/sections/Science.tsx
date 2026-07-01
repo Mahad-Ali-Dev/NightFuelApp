@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Moon, Sunrise, Coffee, Dumbbell, Utensils } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { SectionShell } from '@/components/ui/section-shell';
 import { Reveal } from '@/components/ui/reveal';
 import { GlowCard } from '@/components/ui/glow-card';
@@ -17,7 +18,7 @@ import { StatCounter } from '@/components/ui/stat-counter';
  */
 
 type Point = {
-  icon: React.ElementType;
+  icon: LucideIcon;
   title: string;
   body: string;
 };
@@ -103,7 +104,7 @@ function CircadianClock() {
             cy={C}
             r={R}
             fill="none"
-            stroke="rgba(255,255,255,0.10)"
+            stroke="var(--color-border)"
             strokeWidth="1.5"
           />
 
@@ -118,7 +119,7 @@ function CircadianClock() {
                 y1={a.y}
                 x2={b.x}
                 y2={b.y}
-                stroke="rgba(255,255,255,0.16)"
+                stroke="var(--color-border-strong)"
                 strokeWidth={i % 6 === 0 ? 2 : 1}
               />
             );
@@ -178,7 +179,7 @@ function CircadianClock() {
                 <span className="flex size-9 items-center justify-center rounded-full border border-[var(--color-border-strong)] bg-[var(--color-panel-2)] text-[var(--color-lime)] shadow-[0_8px_24px_-10px_rgba(0,0,0,0.8)]">
                   <Icon className="size-4" aria-hidden="true" />
                 </span>
-                <span className="rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--color-foreground)]/80 backdrop-blur">
+                <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-panel-2)]/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--color-foreground)]/80 backdrop-blur">
                   {m.label}
                 </span>
               </div>

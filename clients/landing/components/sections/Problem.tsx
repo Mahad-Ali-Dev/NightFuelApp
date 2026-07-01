@@ -84,7 +84,7 @@ export function Problem() {
             className="flex items-center justify-center py-2 md:py-0"
             aria-hidden="true"
           >
-            <span className="flex size-11 items-center justify-center rounded-full border border-[var(--color-border-strong)] bg-white/[0.03] text-[var(--color-lime)] backdrop-blur">
+            <span className="flex size-11 items-center justify-center rounded-full border border-[var(--color-border-strong)] bg-[var(--hairline)] text-[var(--color-lime)] backdrop-blur">
               <ArrowRight className="size-5 rotate-90 md:rotate-0" />
             </span>
           </div>
@@ -113,7 +113,7 @@ export function Problem() {
         {PAINS.map(({ icon: Icon, title, body }) => (
           <Reveal.Item as="li" key={title} className="h-full">
             <GlowCard as="div" spotlight className="flex h-full flex-col p-6">
-              <span className="flex size-11 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-white/[0.03] text-[var(--color-lime)]">
+              <span className="flex size-11 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--hairline)] text-[var(--color-lime)]">
                 <Icon className="size-5" aria-hidden="true" />
               </span>
               <h3 className="mt-5 text-lg font-semibold text-[var(--color-foreground)]">

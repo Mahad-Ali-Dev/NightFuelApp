@@ -10,6 +10,7 @@ import {
   ScanBarcode,
   Sparkles,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Reveal } from '@/components/ui/reveal';
 import { Marquee } from '@/components/ui/marquee';
 import { StatCounter } from '@/components/ui/stat-counter';
@@ -36,7 +37,7 @@ const STATS: Stat[] = [
   { value: 300, suffix: '+', label: 'Chef-built recipes' },
 ];
 
-const VALUE_PROPS: { icon: React.ElementType; text: string }[] = [
+const VALUE_PROPS: { icon: LucideIcon; text: string }[] = [
   { icon: Camera, text: 'AI photo logging' },
   { icon: Watch, text: 'Syncs any wearable' },
   { icon: Clock, text: 'Chrono-nutrition timing' },

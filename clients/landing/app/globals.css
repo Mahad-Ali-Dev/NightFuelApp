@@ -6,40 +6,169 @@
    Tailwind v4 @theme tokens + base styles + reusable utility classes.
    ============================================================================ */
 
-@theme {
-  /* ---- Surfaces ---------------------------------------------------------- */
-  --color-background: #0a0c12;   /* app base */
-  --color-foreground: #f4f6fb;   /* primary text */
-  --color-ink: #0a0c12;          /* on-lime text */
+/* ============================================================================
+   Runtime theme variables.
 
-  --color-panel: #0d1017;        /* darker glass panel */
-  --color-panel-2: #13161f;      /* lighter glass panel */
-  --color-card: #13161f;         /* shadcn card alias */
-  --color-card-foreground: #f4f6fb;
-  --color-popover: #0d1017;
-  --color-popover-foreground: #f4f6fb;
+   Semantic tokens are declared as *plain* CSS custom properties (not @theme) so
+   they can hold different values per theme: :root carries the LIGHT palette and
+   .dark carries the DARK palette. next-themes toggles the `.dark` class on
+   <html>, which swaps every value below at runtime.
 
-  --color-secondary: #13161f;
-  --color-secondary-foreground: #f4f6fb;
-  --color-muted: #1b2030;
-  --color-muted-foreground: #9aa3b6; /* meets AA on #0a0c12 */
+   @theme inline (further down) then aliases the Tailwind --color-* tokens to
+   these vars, so utilities like text-[var(--color-foreground)], bg-popover,
+   text-muted-foreground, ring-ring, border, etc. all resolve in BOTH themes.
+   ============================================================================ */
 
-  /* ---- Accents ----------------------------------------------------------- */
-  --color-primary: #a8cc3c;          /* electric lime — CTAs, emphasis */
-  --color-primary-foreground: #0a0c12;
-  --color-lime: #a8cc3c;
-  --color-lime-light: #c5e06b;
-  --color-lime-dark: #93b82e;
-  --color-cyan: #00d4aa;             /* secondary spark */
-  --color-accent: #a8cc3c;
-  --color-accent-foreground: #0a0c12;
-  --color-destructive: #ff5c5c;
+:root {
+  /* ---- LIGHT palette ----------------------------------------------------- */
+  /* Surfaces */
+  --background: #f6f8f4;   /* app base — soft warm off-white */
+  --foreground: #0b0e14;   /* primary text (near-black ink) */
+  --ink: #0a0c12;          /* on-lime text — stays dark in both themes */
 
-  /* ---- Lines / focus ----------------------------------------------------- */
-  --color-border: rgba(255, 255, 255, 0.10);
-  --color-border-strong: rgba(255, 255, 255, 0.16);
-  --color-input: rgba(255, 255, 255, 0.12);
-  --color-ring: #a8cc3c;
+  --panel: #ffffff;        /* darker glass panel (in light: pure white) */
+  --panel-2: #eef2ea;      /* lighter glass panel — faint green-grey */
+  --card: #ffffff;
+  --card-foreground: #0b0e14;
+  --popover: #ffffff;
+  --popover-foreground: #0b0e14;
+
+  --secondary: #eef2ea;
+  --secondary-foreground: #0b0e14;
+  --muted: #e7ece1;
+  --muted-foreground: #55606f; /* AA on #f6f8f4 */
+
+  /* Accents — lime is deliberately identical in both themes */
+  --primary: #a8cc3c;
+  --primary-foreground: #0a0c12;
+  --lime: #a8cc3c;
+  --lime-light: #c5e06b;
+  --lime-dark: #86a72a;
+  --cyan: #00b394;             /* slightly deepened for contrast on light */
+  --accent: #a8cc3c;
+  --accent-foreground: #0a0c12;
+  --destructive: #d64545;
+
+  /* Lines / focus */
+  --border: rgba(0, 0, 0, 0.10);
+  --border-strong: rgba(0, 0, 0, 0.16);
+  --input: rgba(0, 0, 0, 0.14);
+  --ring: #a8cc3c;
+
+  /* Ambient glow stops */
+  --glow-lime: rgba(168, 204, 60, 0.28);
+  --glow-cyan: rgba(0, 212, 170, 0.16);
+
+  /* GitHub-style lime heat scale (light: empty is a faint ink tint) */
+  --contribution-empty: rgba(11, 14, 20, 0.06);
+  --contribution-level-1: rgba(168, 204, 60, 0.35);
+  --contribution-level-2: rgba(168, 204, 60, 0.60);
+  --contribution-level-3: #a8cc3c;
+  --contribution-level-4: #86a72a;
+
+  /* Surface tint used by glass / grid / dot textures. In LIGHT it is an INK
+     wash (dark lines on a light surface); in DARK it is a white wash. */
+  --hairline: rgba(11, 14, 20, 0.05);
+  --hairline-strong: rgba(11, 14, 20, 0.08);
+  --glass-tint-top: rgba(255, 255, 255, 0.65);
+  --glass-tint-bottom: rgba(255, 255, 255, 0.30);
+  --glass-inset: rgba(255, 255, 255, 0.6);
+  --glass-shadow: rgba(11, 14, 20, 0.10);
+}
+
+.dark {
+  /* ---- DARK palette (the current/default look) --------------------------- */
+  /* Surfaces */
+  --background: #0a0c12;
+  --foreground: #f4f6fb;
+  --ink: #0a0c12;
+
+  --panel: #0d1017;
+  --panel-2: #13161f;
+  --card: #13161f;
+  --card-foreground: #f4f6fb;
+  --popover: #0d1017;
+  --popover-foreground: #f4f6fb;
+
+  --secondary: #13161f;
+  --secondary-foreground: #f4f6fb;
+  --muted: #1b2030;
+  --muted-foreground: #9aa3b6; /* AA on #0a0c12 */
+
+  /* Accents */
+  --primary: #a8cc3c;
+  --primary-foreground: #0a0c12;
+  --lime: #a8cc3c;
+  --lime-light: #c5e06b;
+  --lime-dark: #93b82e;
+  --cyan: #00d4aa;
+  --accent: #a8cc3c;
+  --accent-foreground: #0a0c12;
+  --destructive: #ff5c5c;
+
+  /* Lines / focus */
+  --border: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #a8cc3c;
+
+  /* Ambient glow stops */
+  --glow-lime: rgba(168, 204, 60, 0.22);
+  --glow-cyan: rgba(0, 212, 170, 0.14);
+
+  /* Lime heat scale (dark: empty is a faint white tint) */
+  --contribution-empty: rgba(255, 255, 255, 0.05);
+  --contribution-level-1: rgba(168, 204, 60, 0.30);
+  --contribution-level-2: rgba(168, 204, 60, 0.55);
+  --contribution-level-3: #a8cc3c;
+  --contribution-level-4: #c5e06b;
+
+  /* Surface tint — white wash on the dark base. */
+  --hairline: rgba(255, 255, 255, 0.04);
+  --hairline-strong: rgba(255, 255, 255, 0.06);
+  --glass-tint-top: rgba(255, 255, 255, 0.045);
+  --glass-tint-bottom: rgba(255, 255, 255, 0.015);
+  --glass-inset: rgba(255, 255, 255, 0.05);
+  --glass-shadow: rgba(0, 0, 0, 0.7);
+}
+
+@theme inline {
+  /* Alias Tailwind's --color-* tokens onto the runtime semantic vars above so
+     every existing text-[var(--color-*)] / bg-popover / text-muted-foreground /
+     ring-ring / border token resolves correctly in BOTH themes. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-lime: var(--lime);
+  --color-lime-light: var(--lime-light);
+  --color-lime-dark: var(--lime-dark);
+  --color-cyan: var(--cyan);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* --neutral-300 mapped to muted-foreground for background-beams' radial. */
+  --color-neutral-300: var(--muted-foreground);
 
   /* ---- Radii ------------------------------------------------------------- */
   --radius-sm: 10px;
@@ -51,10 +180,6 @@
   /* ---- Type -------------------------------------------------------------- */
   --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-barlow-condensed), var(--font-barlow), sans-serif;
-
-  /* ---- Ambient glow color stops (used by .glow / gradients) -------------- */
-  --glow-lime: rgba(168, 204, 60, 0.22);
-  --glow-cyan: rgba(0, 212, 170, 0.14);
 }
 
 /* ============================================================================
@@ -88,8 +213,9 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(1200px 600px at 50% -10%, rgba(168, 204, 60, 0.06), transparent 60%),
-    radial-gradient(900px 500px at 100% 0%, rgba(0, 212, 170, 0.05), transparent 55%);
+    radial-gradient(1200px 600px at 50% -10%, var(--glow-lime), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, var(--glow-cyan), transparent 55%);
+  opacity: 0.28;
 }
 
 h1, h2, h3, h4, h5 {
@@ -144,11 +270,11 @@ a {
   ::-webkit-scrollbar { width: 11px; height: 11px; }
   ::-webkit-scrollbar-track { background: var(--color-background); }
   ::-webkit-scrollbar-thumb {
-    background: #232838;
+    background: var(--color-border-strong);
     border-radius: 999px;
     border: 3px solid var(--color-background);
   }
-  ::-webkit-scrollbar-thumb:hover { background: #2e3448; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-muted-foreground); }
 }
 
 /* ============================================================================
@@ -185,15 +311,31 @@ a {
 /* --- Glass surface ------------------------------------------------------ */
 .glass {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    linear-gradient(180deg, var(--glass-tint-top), var(--glass-tint-bottom)),
     var(--color-panel-2);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-xl);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
-    0 24px 60px -30px rgba(0, 0, 0, 0.7);
+    0 1px 0 0 var(--glass-inset) inset,
+    0 24px 60px -30px var(--glass-shadow);
+}
+
+/* --- Glass panel (alias used by the supplied experience-hero cells) ------ */
+/* experience-hero renders on a fixed near-black 3D canvas in BOTH themes, so
+   this panel intentionally keeps a translucent light-on-dark treatment; it must
+   remain legible over the shader regardless of the active site theme. */
+.glass-panel {
+  position: relative;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 24px 60px -30px rgba(0, 0, 0, 0.8);
 }
 
 /* --- Gradient hairline border (masked ring, doesn't fill the tile) ------ */
@@ -211,7 +353,7 @@ a {
     135deg,
     rgba(168, 204, 60, 0.55),
     rgba(0, 212, 170, 0.28) 45%,
-    rgba(255, 255, 255, 0.06) 75%
+    var(--hairline-strong) 75%
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -244,8 +386,8 @@ a {
   z-index: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    linear-gradient(to right, var(--hairline) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--hairline) 1px, transparent 1px);
   background-size: 64px 64px;
   /* fade the grid toward the edges so it never reads as a hard mesh */
   -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 78%);
@@ -256,7 +398,7 @@ a {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-image: radial-gradient(var(--hairline-strong) 1px, transparent 1px);
   background-size: 22px 22px;
   -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 20%, transparent 75%);
   mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 20%, transparent 75%);
@@ -296,6 +438,30 @@ a {
 .marquee-mask {
   -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
   mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+
+/* --- Outlined display text (experience-hero "YOUR FUEL.") --------------- */
+/* Transparent fill + a 1px stroke. experience-hero always sits on a near-black
+   3D canvas (both themes), so this uses --text-outline-color which defaults to
+   the foreground but is pinned white inside that hero. */
+.text-outline {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--text-outline-color, var(--color-foreground));
+  -webkit-text-fill-color: transparent;
+}
+/* experience-hero renders on a fixed dark canvas regardless of site theme. */
+.text-outline {
+  --text-outline-color: #ffffff;
+}
+
+/* --- Loading progress pulse (experience-hero command cell + progress bars) */
+@keyframes loading-pulse {
+  0%   { width: 20%; opacity: 0.6; }
+  50%  { width: 85%; opacity: 1; }
+  100% { width: 20%; opacity: 0.6; }
+}
+.animate-loading {
+  animation: loading-pulse 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
 }
 
 /* ============================================================================
@@ -354,7 +520,7 @@ a {
 .btn-ghost {
   border: 1px solid var(--color-border-strong);
   color: var(--color-foreground);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--hairline);
 }
 
 /* ============================================================================
