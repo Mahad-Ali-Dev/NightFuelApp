@@ -19,6 +19,8 @@ jest.mock('@/api/client', () => ({
 import {
   login,
   register,
+  verifyOtp,
+  resendOtp,
   refreshToken,
   forgotPassword,
   getMe,
@@ -95,32 +97,63 @@ describe('register', () => {
     shiftType: 'NIGHT',
   };
 
-  test('POSTs the payload to /register, then logs in with the same creds and returns the login body', async () => {
-    // /register is enumeration-resistant and returns only a generic message (no
-    // tokens); register() completes the flow with an explicit /login.
-    mockedPost
-      .mockResolvedValueOnce({ data: { message: 'If this email is available, your account was created.' } })
-      .mockResolvedValueOnce({ data: authResponse });
+  test('POSTs the payload to /register once and returns the generic message (no auto-login, no tokens)', async () => {
+    // /register is enumeration-resistant: it creates the account, emails a
+    // 6-digit OTP, and returns only a generic { message }. It must NOT follow up
+    // with a /login and must NOT persist tokens — sign-in happens later via
+    // verifyOtp once the user enters the code.
+    mockedPost.mockResolvedValueOnce({
+      data: { message: 'verification code sent' },
+    });
 
     const result = await register(payload);
 
-    expect(mockedPost).toHaveBeenNthCalledWith(1, '/v1/auth/register', payload);
-    expect(mockedPost).toHaveBeenNthCalledWith(2, '/v1/auth/login', {
-      email: payload.email,
-      password: payload.password,
+    expect(mockedPost).toHaveBeenCalledTimes(1);
+    expect(mockedPost).toHaveBeenCalledWith('/v1/auth/register', payload);
+    expect(result).toEqual({ message: 'verification code sent' });
+    expect(mockedSetTokens).not.toHaveBeenCalled();
+  });
+});
+
+describe('verifyOtp', () => {
+  test('POSTs the code to /verify-otp, persists tokens, and returns the auth response', async () => {
+    mockedPost.mockResolvedValueOnce({ data: authResponse });
+
+    const result = await verifyOtp('new@example.com', '123456');
+
+    expect(mockedPost).toHaveBeenCalledWith('/v1/auth/verify-otp', {
+      email: 'new@example.com',
+      code: '123456',
     });
+    expect(mockedSetTokens).toHaveBeenCalledTimes(1);
+    expect(mockedSetTokens).toHaveBeenCalledWith('access-abc', 'refresh-xyz');
     expect(result).toEqual(authResponse);
   });
 
-  test('persists tokens from the follow-up login (register itself returns no tokens)', async () => {
-    mockedPost
-      .mockResolvedValueOnce({ data: { message: 'ok' } })
-      .mockResolvedValueOnce({ data: authResponse });
+  test('does not persist tokens when verify-otp rejects (wrong/expired code)', async () => {
+    const err = Object.assign(new Error('Bad Request'), {
+      response: { status: 400, data: { error: 'Invalid or expired code' } },
+    });
+    mockedPost.mockRejectedValueOnce(err);
 
-    await register(payload);
+    await expect(verifyOtp('new@example.com', '000000')).rejects.toThrow(
+      'Bad Request',
+    );
+    expect(mockedSetTokens).not.toHaveBeenCalled();
+  });
+});
 
-    expect(mockedSetTokens).toHaveBeenCalledTimes(1);
-    expect(mockedSetTokens).toHaveBeenCalledWith('access-abc', 'refresh-xyz');
+describe('resendOtp', () => {
+  test('POSTs the email to /resend-otp and returns the generic message', async () => {
+    mockedPost.mockResolvedValueOnce({ data: { message: 'ok' } });
+
+    const result = await resendOtp('new@example.com');
+
+    expect(mockedPost).toHaveBeenCalledWith('/v1/auth/resend-otp', {
+      email: 'new@example.com',
+    });
+    expect(result).toEqual({ message: 'ok' });
+    expect(mockedSetTokens).not.toHaveBeenCalled();
   });
 });
 

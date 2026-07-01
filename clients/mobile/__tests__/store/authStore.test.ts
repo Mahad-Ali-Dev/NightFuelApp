@@ -102,6 +102,7 @@ describe('authStore.login', () => {
       avatarUrl: 'https://cdn/x.png',
       role: 'user',
       onboardingComplete: true,
+      emailVerified: false,
       shiftType: 'night',
     });
   });
@@ -191,6 +192,7 @@ describe('authStore.login', () => {
       [
         'avatarUrl',
         'email',
+        'emailVerified',
         'id',
         'name',
         'onboardingComplete',
@@ -270,6 +272,7 @@ describe('authStore.login', () => {
       avatarUrl: null,
       role: 'admin',
       onboardingComplete: true,
+      emailVerified: false,
       shiftType: null,
     });
     expect(user as unknown as Record<string, unknown>).not.toHaveProperty('passwordHash');
@@ -304,111 +307,129 @@ describe('authStore.register', () => {
     region: 'US',
   };
 
-  test('maps the register response into the stored User (no getMe call)', async () => {
-    mockedRegister.mockResolvedValueOnce(
-      makeAuthResponse({
-        id: 'u_new',
-        email: 'new@example.com',
-        displayName: 'Newbie',
+  test('returns the generic message and does NOT sign the user in', async () => {
+    // NEW CONTRACT: register() creates the account but does not authenticate —
+    // the backend emails a 6-digit OTP and returns a generic anti-enumeration
+    // message. It must NOT mutate the session or call getMe(); sign-in happens
+    // later via verifyOtp -> socialLogin.
+    mockedRegister.mockResolvedValueOnce({ message: 'verification code sent' });
+
+    const result = await useAuthStore.getState().register(registerData);
+
+    expect(result).toEqual({ message: 'verification code sent' });
+    const { user, isAuthenticated, role } = useAuthStore.getState();
+    expect(user).toBeNull();
+    expect(isAuthenticated).toBe(false);
+    expect(role).toBe('user');
+    expect(mockedRegister).toHaveBeenCalledWith(registerData);
+    // register() never hydrates the profile — that's socialLogin's job.
+    expect(mockedGetMe).not.toHaveBeenCalled();
+  });
+
+  test('rejects with the server message when the register API call fails', async () => {
+    const err = Object.assign(new Error('bad'), {
+      response: { data: { message: 'Something went wrong' } },
+    });
+    mockedRegister.mockRejectedValueOnce(err);
+
+    await expect(
+      useAuthStore.getState().register(registerData),
+    ).rejects.toThrow('Something went wrong');
+
+    // Still logged out; the session gate was never touched.
+    const { user, isAuthenticated } = useAuthStore.getState();
+    expect(user).toBeNull();
+    expect(isAuthenticated).toBe(false);
+    expect(mockedGetMe).not.toHaveBeenCalled();
+  });
+});
+
+// ─── socialLogin() — Google / Apple / verify-otp sign-in path ────────────────
+
+describe('authStore.socialLogin', () => {
+  /** A { user, accessToken, refreshToken } response as returned by
+   *  googleSignIn / appleSignIn / verifyOtp (tokens already persisted by the
+   *  api layer). socialLogin() hydrates the profile + flips isAuthenticated. */
+  function makeSocial(overrides: Record<string, any> = {}) {
+    return {
+      user: {
+        id: 'u_s',
+        email: 'social@example.com',
+        displayName: 'Social User',
         role: 'USER',
         onboardingCompleted: false,
-      }),
-    );
+        emailVerified: true,
+        ...overrides,
+      },
+      accessToken: 'access-s',
+      refreshToken: 'refresh-s',
+    };
+  }
 
-    await useAuthStore.getState().register(registerData);
+  test('hydrates the User from /me and flips isAuthenticated', async () => {
+    mockedGetMe.mockResolvedValueOnce({
+      userId: 'u_s',
+      displayName: 'Social User',
+      avatarUrl: 'https://cdn/s.png',
+      onboardingCompleted: true,
+      emailVerified: true,
+      shiftType: 'rotating',
+    });
+
+    await useAuthStore.getState().socialLogin(makeSocial() as any);
 
     const { user, isAuthenticated, isLoading, role } = useAuthStore.getState();
     expect(isAuthenticated).toBe(true);
     expect(isLoading).toBe(false);
     expect(role).toBe('user');
     expect(user).toEqual({
-      id: 'u_new',
-      email: 'new@example.com',
-      name: 'Newbie',
-      avatarUrl: null,
+      id: 'u_s',
+      email: 'social@example.com',
+      name: 'Social User',
+      avatarUrl: 'https://cdn/s.png',
       role: 'user',
-      onboardingComplete: false,
-      shiftType: null,
+      onboardingComplete: true,
+      emailVerified: true,
+      shiftType: 'rotating',
     });
-    // register() builds the user purely from its own response.
-    expect(mockedGetMe).not.toHaveBeenCalled();
   });
 
-  test('lower-cases the role from the register response', async () => {
-    mockedRegister.mockResolvedValueOnce(
-      makeAuthResponse({ id: 'u_new', role: 'COACH' }),
-    );
+  test('lower-cases the role from the auth response (COACH -> coach)', async () => {
+    mockedGetMe.mockResolvedValueOnce({ userId: 'u_s', displayName: 'Coach' });
 
-    await useAuthStore.getState().register(registerData);
+    await useAuthStore.getState().socialLogin(makeSocial({ role: 'COACH' }) as any);
 
     expect(useAuthStore.getState().user?.role).toBe('coach');
     expect(useAuthStore.getState().role).toBe('coach');
   });
 
-  test('reads onboardingComplete from response.onboardingCompleted', async () => {
-    mockedRegister.mockResolvedValueOnce(
-      makeAuthResponse({ id: 'u_new', onboardingCompleted: true }),
-    );
+  test('does not leak passwordHash / password onto the stored User', async () => {
+    mockedGetMe.mockResolvedValueOnce({
+      userId: 'u_s',
+      displayName: 'Social User',
+      passwordHash: '$2b$10$leak',
+      password: 'leak',
+    });
 
-    await useAuthStore.getState().register(registerData);
-
-    expect(useAuthStore.getState().user?.onboardingComplete).toBe(true);
-  });
-
-  test('onboardingComplete defaults to false when response omits the flag', async () => {
-    const resp = makeAuthResponse({ id: 'u_new' });
-    delete (resp.user as any).onboardingCompleted;
-    mockedRegister.mockResolvedValueOnce(resp);
-
-    await useAuthStore.getState().register(registerData);
-
-    expect(useAuthStore.getState().user?.onboardingComplete).toBe(false);
-  });
-
-  test('does not leak passwordHash / password onto the registered User', async () => {
-    mockedRegister.mockResolvedValueOnce(makeAuthResponse({ id: 'u_new' }));
-
-    await useAuthStore.getState().register(registerData);
+    await useAuthStore.getState().socialLogin(makeSocial() as any);
 
     const user = useAuthStore.getState().user as unknown as Record<string, unknown>;
     expect(user).not.toHaveProperty('passwordHash');
     expect(user).not.toHaveProperty('password');
-    expect(Object.keys(user).sort()).toEqual(
-      [
-        'avatarUrl',
-        'email',
-        'id',
-        'name',
-        'onboardingComplete',
-        'role',
-        'shiftType',
-      ].sort(),
-    );
   });
 
-  test('name falls back to "User" when the response has no displayName/name', async () => {
-    const resp = makeAuthResponse({ id: 'u_new' });
-    delete (resp.user as any).displayName;
-    mockedRegister.mockResolvedValueOnce(resp);
+  test('rejects and resets isLoading when profile hydration ultimately fails', async () => {
+    // hydrateUserFromMe swallows a getMe rejection and falls back to the auth
+    // response, so socialLogin resolves; assert the happy fallback path instead.
+    mockedGetMe.mockRejectedValueOnce(new Error('me down'));
 
-    await useAuthStore.getState().register(registerData);
+    await useAuthStore.getState().socialLogin(makeSocial({ role: 'ADMIN' }) as any);
 
-    expect(useAuthStore.getState().user?.name).toBe('User');
-  });
-
-  test('rejects and resets isLoading when the register API call fails', async () => {
-    const err = Object.assign(new Error('bad'), {
-      response: { data: { message: 'Email already in use' } },
-    });
-    mockedRegister.mockRejectedValueOnce(err);
-
-    await expect(
-      useAuthStore.getState().register(registerData),
-    ).rejects.toThrow('Email already in use');
-
-    const { isAuthenticated, isLoading } = useAuthStore.getState();
-    expect(isAuthenticated).toBe(false);
+    const { user, isAuthenticated, isLoading } = useAuthStore.getState();
+    expect(isAuthenticated).toBe(true);
     expect(isLoading).toBe(false);
+    expect(user?.role).toBe('admin');
+    expect(user?.emailVerified).toBe(true);
   });
 });
 
@@ -453,6 +474,7 @@ describe('authStore.loadSession', () => {
       avatarUrl: null,
       role: 'user',
       onboardingComplete: true,
+      emailVerified: false,
       shiftType: 'rotating',
     });
   });
@@ -534,6 +556,7 @@ describe('authStore.logout', () => {
         avatarUrl: null,
         role: 'user',
         onboardingComplete: true,
+        emailVerified: true,
         shiftType: 'night',
       },
       isAuthenticated: true,

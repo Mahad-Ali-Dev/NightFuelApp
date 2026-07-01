@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Pressable,
   Image,
   AccessibilityInfo,
+  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -30,6 +31,11 @@ import {
   normalizeEmail,
   passwordIssues,
 } from '@/utils/validation';
+import {
+  runGoogleSignIn,
+  runAppleSignIn,
+  isAppleAuthAvailable,
+} from '@/lib/socialAuth';
 
 // Hero model — bundled male athlete asset (mockup: signup-preview.html).
 const HERO_MALE = require('../../assets/images/hero-male-2.png');
@@ -47,7 +53,7 @@ export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
-  const { register } = useAuthStore();
+  const { register, socialLogin } = useAuthStore();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -59,6 +65,20 @@ export default function RegisterScreen() {
   // Terms & Privacy consent. Gates submission (a standard signup requirement);
   // surfaced as the mockup's checkbox row. Defaults to unchecked.
   const [termsAccepted, setTermsAccepted] = useState(false);
+  // Which social provider (if any) is mid-flight — locks the buttons.
+  const [socialLoading, setSocialLoading] = useState<'Google' | 'Apple' | null>(null);
+  // Apple sign-up only exists on iOS; gate the button on the runtime check.
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    isAppleAuthAvailable().then((ok) => {
+      if (active) setAppleAvailable(ok);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Per-field inline errors, surfaced BELOW each field on blur (forms best-practice:
   // validate-on-blur + recovery path). Independent of the form-level `error` pill,
@@ -134,13 +154,17 @@ export default function RegisterScreen() {
     setLoading(true);
     setError('');
     try {
+      // register() no longer auto-logs-in: the backend creates the account with
+      // emailVerified=false and emails a 6-digit OTP. Route to the verify screen
+      // with the email so the user can enter the code (which is what finally
+      // issues tokens + signs them in).
       await register({
         displayName: cleanName,
         email: cleanEmail,
         password,
         region: 'US' // Defaulting to US, ideally we'd ask the user or detect it
       });
-      router.replace('/(onboarding)/metrics-goals');
+      router.push(`/(auth)/verify?email=${encodeURIComponent(cleanEmail)}` as any);
     } catch (e: any) {
       fail(e?.message ?? 'Registration failed. Please try again.');
     } finally {
@@ -148,11 +172,34 @@ export default function RegisterScreen() {
     }
   };
 
-  // Social sign-up is not yet provisioned (no Apple/Google provider wired in this
-  // build). The buttons are part of the design; rather than silently no-op, give
-  // an honest, accessible "coming soon" cue via the same error surface.
-  const handleSocial = (provider: 'Apple' | 'Google') => {
-    fail(`${provider} sign-up is coming soon.`);
+  // Real Google / Apple sign-up. The shared helpers return a discriminated
+  // result: success hydrates the store (shared with email login + verify-otp)
+  // and redirects home; cancel is a silent no-op; not-configured / error surface
+  // a friendly message on the same error pill.
+  const handleSocial = async (provider: 'Apple' | 'Google') => {
+    if (socialLoading) return;
+    setError('');
+    setSocialLoading(provider);
+    try {
+      const result =
+        provider === 'Google' ? await runGoogleSignIn() : await runAppleSignIn();
+      switch (result.status) {
+        case 'success':
+          await socialLogin(result.auth);
+          router.replace('/');
+          break;
+        case 'cancelled':
+          break;
+        case 'not-configured':
+        case 'error':
+          fail(result.message);
+          break;
+      }
+    } catch (e: any) {
+      fail(e?.message ?? `${provider} sign-up failed. Please try again.`);
+    } finally {
+      setSocialLoading(null);
+    }
   };
 
   return (
@@ -385,18 +432,24 @@ export default function RegisterScreen() {
               <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
             </View>
 
-            {/* Social auth — Apple + Google */}
+            {/* Social auth — Apple (iOS only) + Google */}
             <View style={styles.socialRow}>
-              <SocialButton
-                provider="Apple"
-                icon="logo-apple"
-                onPress={() => handleSocial('Apple')}
-                colors={colors}
-              />
+              {appleAvailable ? (
+                <SocialButton
+                  provider="Apple"
+                  icon="logo-apple"
+                  onPress={() => handleSocial('Apple')}
+                  loading={socialLoading === 'Apple'}
+                  disabled={socialLoading !== null}
+                  colors={colors}
+                />
+              ) : null}
               <SocialButton
                 provider="Google"
                 icon="logo-google"
                 onPress={() => handleSocial('Google')}
+                loading={socialLoading === 'Google'}
+                disabled={socialLoading !== null}
                 colors={colors}
               />
             </View>
@@ -451,29 +504,43 @@ function SocialButton({
   provider,
   icon,
   onPress,
+  loading = false,
+  disabled = false,
   colors,
 }: {
   provider: string;
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
+  loading?: boolean;
+  disabled?: boolean;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
+  const isDisabled = disabled || loading;
   return (
     <Pressable
       onPress={onPress}
+      disabled={isDisabled}
       accessibilityRole="button"
       accessibilityLabel={`Continue with ${provider}`}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={({ pressed }) => [
         styles.social,
         {
           backgroundColor: colors.background.secondary,
           borderColor: colors.border.default,
         },
-        pressed && styles.socialPressed,
+        pressed && !isDisabled && styles.socialPressed,
+        isDisabled && styles.socialDisabled,
       ]}
     >
-      <Ionicons name={icon} size={19} color={colors.text.primary} />
-      <Text style={[styles.socialText, { color: colors.text.primary }]}>{provider}</Text>
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.text.primary} />
+      ) : (
+        <>
+          <Ionicons name={icon} size={19} color={colors.text.primary} />
+          <Text style={[styles.socialText, { color: colors.text.primary }]}>{provider}</Text>
+        </>
+      )}
     </Pressable>
   );
 }
@@ -716,6 +783,9 @@ const styles = StyleSheet.create({
   socialPressed: {
     opacity: 0.7,
     transform: [{ scale: 0.98 }],
+  },
+  socialDisabled: {
+    opacity: 0.5,
   },
   socialText: {
     ...typography.bodySm,

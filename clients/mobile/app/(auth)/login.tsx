@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Pressable,
   Image,
   AccessibilityInfo,
+  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -23,7 +24,13 @@ import { useTheme } from '@/theme';
 import { spacing, borderRadius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { withAlpha } from '@/theme/utils';
-import { isValidEmail, sanitizeInput } from '@/utils/validation';
+import { isValidEmail, sanitizeInput, normalizeEmail } from '@/utils/validation';
+import { resendOtp } from '@/api/auth';
+import {
+  runGoogleSignIn,
+  runAppleSignIn,
+  isAppleAuthAvailable,
+} from '@/lib/socialAuth';
 
 // Hero model — bundled female athlete asset (mockup: login-preview.html).
 const HERO_FEMALE = require('../../assets/images/hero-female-1.png');
@@ -51,8 +58,23 @@ export default function LoginScreen() {
   // register.tsx so the two auth screens speak the same forms language.
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  // Which social provider (if any) is mid-flight — dims/locks the buttons so the
+  // user can't fire two provider sheets at once.
+  const [socialLoading, setSocialLoading] = useState<'Google' | 'Apple' | null>(null);
+  // Apple sign-in only exists on iOS; gate the button on the runtime check.
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
-  const { login } = useAuthStore();
+  const { login, socialLogin } = useAuthStore();
+
+  useEffect(() => {
+    let active = true;
+    isAppleAuthAvailable().then((ok) => {
+      if (active) setAppleAvailable(ok);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Validate the email on blur so the user gets early, in-context feedback and
   // a clear recovery path before they ever press Sign In. Empty stays silent —
@@ -93,6 +115,20 @@ export default function LoginScreen() {
       router.replace('/');
     } catch (e: any) {
       const message = e?.message ?? 'Login failed. Please try again.';
+      // The account exists but its email was never verified — the backend
+      // returns the allowlisted EMAIL_NOT_VERIFIED marker. Route to the verify
+      // screen and kick off a fresh OTP so the user can complete signup instead
+      // of hitting a wall. resendOtp is anti-enumeration (always 200), so this
+      // is safe to fire-and-forget.
+      if (typeof message === 'string' && message.includes('EMAIL_NOT_VERIFIED')) {
+        const verifyEmail = normalizeEmail(cleanEmail);
+        resendOtp(verifyEmail).catch(() => {});
+        AccessibilityInfo.announceForAccessibility(
+          'Please verify your email. We sent you a new code.',
+        );
+        router.push(`/(auth)/verify?email=${encodeURIComponent(verifyEmail)}` as any);
+        return;
+      }
       setError(message);
       AccessibilityInfo.announceForAccessibility(message);
     } finally {
@@ -100,13 +136,37 @@ export default function LoginScreen() {
     }
   };
 
-  // Social sign-in is not yet provisioned (no Apple/Google provider wired in this
-  // build). The buttons are part of the design; rather than silently no-op, give
-  // an honest, accessible "coming soon" cue via the same error surface.
-  const handleSocial = (provider: 'Apple' | 'Google') => {
-    const message = `${provider} sign-in is coming soon.`;
-    setError(message);
-    AccessibilityInfo.announceForAccessibility(message);
+  // Real Google / Apple sign-in. The shared helpers return a discriminated
+  // result so we branch cleanly: success hydrates the store (shared with email
+  // login + verify-otp) and redirects; cancel is a silent no-op; not-configured
+  // and error surface a friendly message on the same error pill.
+  const handleSocial = async (provider: 'Apple' | 'Google') => {
+    if (socialLoading) return;
+    setError('');
+    setSocialLoading(provider);
+    try {
+      const result =
+        provider === 'Google' ? await runGoogleSignIn() : await runAppleSignIn();
+      switch (result.status) {
+        case 'success':
+          await socialLogin(result.auth);
+          router.replace('/');
+          break;
+        case 'cancelled':
+          break;
+        case 'not-configured':
+        case 'error':
+          setError(result.message);
+          AccessibilityInfo.announceForAccessibility(result.message);
+          break;
+      }
+    } catch (e: any) {
+      const message = e?.message ?? `${provider} sign-in failed. Please try again.`;
+      setError(message);
+      AccessibilityInfo.announceForAccessibility(message);
+    } finally {
+      setSocialLoading(null);
+    }
   };
 
   // Full-bleed hero width: cancel the ScrollView's horizontal padding so the band
@@ -300,18 +360,24 @@ export default function LoginScreen() {
               <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
             </View>
 
-            {/* Social auth — Apple + Google */}
+            {/* Social auth — Apple (iOS only) + Google */}
             <View style={styles.socialRow}>
-              <SocialButton
-                provider="Apple"
-                icon="logo-apple"
-                onPress={() => handleSocial('Apple')}
-                colors={colors}
-              />
+              {appleAvailable ? (
+                <SocialButton
+                  provider="Apple"
+                  icon="logo-apple"
+                  onPress={() => handleSocial('Apple')}
+                  loading={socialLoading === 'Apple'}
+                  disabled={socialLoading !== null}
+                  colors={colors}
+                />
+              ) : null}
               <SocialButton
                 provider="Google"
                 icon="logo-google"
                 onPress={() => handleSocial('Google')}
+                loading={socialLoading === 'Google'}
+                disabled={socialLoading !== null}
                 colors={colors}
               />
             </View>
@@ -350,29 +416,43 @@ function SocialButton({
   provider,
   icon,
   onPress,
+  loading = false,
+  disabled = false,
   colors,
 }: {
   provider: string;
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
+  loading?: boolean;
+  disabled?: boolean;
   colors: ReturnType<typeof useTheme>['colors'];
 }) {
+  const isDisabled = disabled || loading;
   return (
     <Pressable
       onPress={onPress}
+      disabled={isDisabled}
       accessibilityRole="button"
       accessibilityLabel={`Continue with ${provider}`}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       style={({ pressed }) => [
         styles.social,
         {
           backgroundColor: colors.background.secondary,
           borderColor: colors.border.default,
         },
-        pressed && styles.socialPressed,
+        pressed && !isDisabled && styles.socialPressed,
+        isDisabled && styles.socialDisabled,
       ]}
     >
-      <Ionicons name={icon} size={19} color={colors.text.primary} />
-      <Text style={[styles.socialText, { color: colors.text.primary }]}>{provider}</Text>
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.text.primary} />
+      ) : (
+        <>
+          <Ionicons name={icon} size={19} color={colors.text.primary} />
+          <Text style={[styles.socialText, { color: colors.text.primary }]}>{provider}</Text>
+        </>
+      )}
     </Pressable>
   );
 }
@@ -558,6 +638,9 @@ const styles = StyleSheet.create({
   socialPressed: {
     opacity: 0.7,
     transform: [{ scale: 0.98 }],
+  },
+  socialDisabled: {
+    opacity: 0.5,
   },
   socialText: {
     ...typography.bodySm,

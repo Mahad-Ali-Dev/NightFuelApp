@@ -54,8 +54,48 @@ export const resetPasswordSchema = z.object({
     newPassword: strongPassword,
 });
 
+// ── Social sign-in ──────────────────────────────────────────────────────────
+// The mobile client obtains the provider token natively (Google Sign-In SDK /
+// Apple Authentication) and posts the raw token here for the backend to VERIFY.
+// deviceId mirrors login/register so the issued refresh token is bound to a
+// device (defaults to 'unknown' like the other flows).
+export const googleOAuthSchema = z.object({
+    idToken:  z.string().min(1),
+    deviceId: z.string().default('unknown'),
+});
+
+export const appleOAuthSchema = z.object({
+    identityToken: z.string().min(1),
+    // Apple returns the user's name ONLY on the first authorization — the client
+    // forwards it so we can seed displayName on account creation. Optional and
+    // ignored on repeat sign-ins (the account already exists).
+    fullName: z
+        .object({
+            givenName:  z.string().optional().nullable(),
+            familyName: z.string().optional().nullable(),
+        })
+        .optional(),
+    deviceId: z.string().default('unknown'),
+});
+
+// ── Email OTP (verify email at signup) ──────────────────────────────────────
+// The code is exactly 6 numeric digits; store/compare only its hash server-side.
+export const verifyOtpSchema = z.object({
+    email:    z.string().email(),
+    code:     z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
+    deviceId: z.string().default('unknown'),
+});
+
+export const resendOtpSchema = z.object({
+    email: z.string().email(),
+});
+
 export type RegisterBody = z.infer<typeof registerSchema>;
 export type LoginBody = z.infer<typeof loginSchema>;
 export type RefreshTokenBody = z.infer<typeof refreshTokenSchema>;
 export type ForgotPasswordBody = z.infer<typeof forgotPasswordSchema>;
 export type ResetPasswordBody = z.infer<typeof resetPasswordSchema>;
+export type GoogleOAuthBody = z.infer<typeof googleOAuthSchema>;
+export type AppleOAuthBody = z.infer<typeof appleOAuthSchema>;
+export type VerifyOtpBody = z.infer<typeof verifyOtpSchema>;
+export type ResendOtpBody = z.infer<typeof resendOtpSchema>;

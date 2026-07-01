@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.zeitra.app",
+      "usesAppleSignIn": true,
       "associatedDomains": [
         "applinks:zeitra.app",
         "applinks:www.zeitra.app"
@@ -130,8 +131,16 @@
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": false,
-          "modes": ["central"],
+          "modes": [
+            "central"
+          ],
           "bluetoothAlwaysPermission": "Zeitra uses Bluetooth to connect to your watch or fitness band and read live heart rate and battery."
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "REPLACE_WITH_REVERSED_IOS_CLIENT_ID"
         }
       ]
     ],
@@ -141,6 +150,7 @@
     },
     "extra": {
       "router": {},
+      "googleWebClientId": "25511990866-a1t0rjlkbb8lfvu7jbcp9to2qgckro0s.apps.googleusercontent.com",
       "eas": {
         "projectId": "7a5e14b1-cbca-4b66-938b-dac339705833"
       }

@@ -42,6 +42,18 @@ const envSchema = z.object({
     // Base URL the password-reset link points at (the mobile/web reset screen).
     // Falls back to the production marketing reset page when unset.
     APP_RESET_URL: z.string().optional(),
+    // ── Social sign-in (Google + Apple) ─────────────────────────────────────
+    // All OPTIONAL for graceful degradation: when the creds are absent, the
+    // corresponding /oauth/* route returns a clean 503 ("... is not configured")
+    // instead of crashing. GOOGLE_CLIENT_IDS is a comma-separated allowlist of
+    // accepted Google OAuth client IDs (the audience the ID token must target —
+    // typically the web + iOS + Android client IDs). APPLE_CLIENT_ID is the
+    // audience for Apple identity tokens (defaults to the app bundle id
+    // com.zeitra.app inside oauth.ts). The oauth.ts helpers read these directly
+    // from process.env, so they are declared here only to document + validate
+    // them at boot (no crash when unset).
+    GOOGLE_CLIENT_IDS: z.string().optional(),
+    APPLE_CLIENT_ID: z.string().optional(),
 });
 
 const config = loadConfig(envSchema);

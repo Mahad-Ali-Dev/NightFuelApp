@@ -11,6 +11,7 @@ export interface User {
   avatarUrl: string | null;
   role: 'user' | 'coach' | 'admin';
   onboardingComplete: boolean;
+  emailVerified: boolean;
   shiftType: 'night' | 'rotating' | 'on-call' | null;
 }
 
@@ -56,11 +57,65 @@ export interface AuthState {
   isLoading: boolean;
   role: 'user' | 'coach' | 'admin';
   login: (email: string, password: string) => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
+  /**
+   * Create the account. Does NOT authenticate — the backend emails an OTP and
+   * the caller routes to the verify screen, where {@link socialLogin} runs on a
+   * successful verify-otp to sign the user in. Returns the generic
+   * anti-enumeration message the server hands back.
+   */
+  register: (data: RegisterData) => Promise<{ message: string }>;
+  /**
+   * Hydrate the store from an already-issued token pair (Google / Apple /
+   * verify-otp). Mirrors login()'s /me hydration so onboardingComplete / role /
+   * emailVerified are correct, then flips isAuthenticated. `authResponse` is the
+   * { user, accessToken, refreshToken } the api layer already persisted.
+   */
+  socialLogin: (authResponse: authApi.AuthResponse) => Promise<void>;
   logout: () => Promise<void>;
   loadSession: () => Promise<void>;
   setUser: (user: User) => void;
   updateUser: (data: Partial<User>) => void;
+}
+
+/**
+ * Shared /me hydration used by login() and socialLogin(). Fetches the full
+ * profile so onboardingComplete / shiftType / emailVerified are correct for
+ * returning users, falling back to the auth-response fields if /me is briefly
+ * unreachable right after auth. `authUser` carries the role/email/emailVerified
+ * the auth endpoint returns (the /me profile omits some of them).
+ */
+async function hydrateUserFromMe(
+  authUser: authApi.AuthResponse['user'],
+): Promise<User> {
+  try {
+    const raw = (await authApi.getMe()) as any;
+    return {
+      id: raw.userId ?? raw.id,
+      email: authUser.email ?? raw.email ?? '',
+      name: raw.displayName ?? authUser.displayName ?? raw.name ?? 'User',
+      avatarUrl: raw.avatarUrl ?? null,
+      role: (authUser.role ?? raw.role ?? 'user').toLowerCase() as User['role'],
+      onboardingComplete:
+        raw.onboardingCompleted ??
+        raw.onboardingComplete ??
+        raw.preferences?.onboardingCompleted ??
+        false,
+      emailVerified: raw.emailVerified ?? authUser.emailVerified ?? false,
+      shiftType: raw.shiftType ?? null,
+    };
+  } catch {
+    // getMe failed (unlikely right after auth); fall back to minimal data.
+    return {
+      id: authUser.id,
+      email: authUser.email ?? '',
+      name: authUser.displayName ?? authUser.name ?? 'User',
+      avatarUrl: null,
+      role: (authUser.role ?? 'user').toLowerCase() as User['role'],
+      onboardingComplete: authUser.onboardingCompleted ?? false,
+      emailVerified: authUser.emailVerified ?? false,
+      shiftType: null,
+    };
+  }
 }
 
 export const useAuthStore = create<AuthState>((set, _get) => ({
@@ -74,33 +129,9 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
     try {
       const response = await authApi.login(email, password);
       // auth.ts login() already persists tokens via setTokens.
-      // Fetch the full profile so onboardingComplete / shiftType are correct
-      // for returning users who already completed onboarding.
-      let user: User;
-      try {
-        const raw = (await authApi.getMe()) as any;
-        user = {
-          id: raw.userId ?? raw.id,
-          // role + email come from the auth response; the /me profile omits them
-          email: response.user.email ?? raw.email ?? '',
-          name: raw.displayName ?? response.user.displayName ?? raw.name ?? 'User',
-          avatarUrl: raw.avatarUrl ?? null,
-          role: (response.user.role ?? raw.role ?? 'user').toLowerCase() as User['role'],
-          onboardingComplete: raw.onboardingCompleted ?? raw.onboardingComplete ?? raw.preferences?.onboardingCompleted ?? false,
-          shiftType: raw.shiftType ?? null,
-        };
-      } catch {
-        // getMe failed (unlikely right after login); fall back to minimal data
-        user = {
-          id: response.user.id,
-          email: response.user.email ?? '',
-          name: response.user.displayName ?? response.user.name ?? 'User',
-          avatarUrl: null,
-          role: (response.user.role ?? 'user').toLowerCase() as User['role'],
-          onboardingComplete: response.user.onboardingCompleted ?? false,
-          shiftType: null,
-        };
-      }
+      // Fetch the full profile so onboardingComplete / shiftType / emailVerified
+      // are correct for returning users who already completed onboarding.
+      const user = await hydrateUserFromMe(response.user);
       set({
         user,
         isAuthenticated: true,
@@ -114,19 +145,25 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
   },
 
   register: async (data: RegisterData) => {
+    // The account is created but NOT signed in — the backend emails a 6-digit
+    // OTP and returns a generic anti-enumeration message. The caller routes to
+    // the verify screen; socialLogin() runs on a successful verify-otp. We keep
+    // isLoading untouched (no session change here) so the auth gate doesn't
+    // flicker while the user is mid-signup.
+    try {
+      return await authApi.register(data);
+    } catch (error: any) {
+      throw new Error(error.response?.data?.error || error.response?.data?.message || error.message);
+    }
+  },
+
+  socialLogin: async (authResponse: authApi.AuthResponse) => {
+    // Tokens are already persisted by the api layer (googleSignIn / appleSignIn
+    // / verifyOtp). Hydrate the profile exactly like login() so the redirect
+    // gate sees onboardingComplete / role, then flip isAuthenticated.
     set({ isLoading: true });
     try {
-      const response = await authApi.register(data);
-      // auth.ts register() already persists tokens via setTokens
-      const user: User = {
-        id: response.user.id,
-        email: response.user.email ?? '',
-        name: response.user.displayName ?? response.user.name ?? 'User',
-        avatarUrl: null,
-        role: (response.user.role ?? 'user').toLowerCase() as User['role'],
-        onboardingComplete: response.user.onboardingCompleted ?? false,
-        shiftType: null,
-      };
+      const user = await hydrateUserFromMe(authResponse.user);
       set({
         user,
         isAuthenticated: true,
@@ -181,6 +218,7 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
           avatarUrl: raw.avatarUrl ?? null,
           role: (raw.role ?? 'user').toLowerCase() as User['role'],
           onboardingComplete: raw.onboardingCompleted ?? raw.onboardingComplete ?? raw.preferences?.onboardingCompleted ?? false,
+          emailVerified: raw.emailVerified ?? false,
           shiftType: raw.shiftType ?? null,
         };
         set({

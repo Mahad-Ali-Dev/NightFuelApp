@@ -12,7 +12,20 @@
           "package_name": "com.zeitra.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "25511990866-ohaapef04s5omobhbgv0g57719lt02t8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.zeitra.app",
+            "certificate_hash": "c148987c988ff26fc2d8816031d17883507ad1c3"
+          }
+        },
+        {
+          "client_id": "25511990866-a1t0rjlkbb8lfvu7jbcp9to2qgckro0s.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBGkpKs-WRul5C-BxZZn02Oz-Qmj0UJZ2Q"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "25511990866-a1t0rjlkbb8lfvu7jbcp9to2qgckro0s.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

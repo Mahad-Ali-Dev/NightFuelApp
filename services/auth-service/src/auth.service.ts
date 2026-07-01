@@ -1,12 +1,26 @@
 import { PrismaClient, User } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { RegisterBody, LoginBody, ForgotPasswordBody, ResetPasswordBody } from './schemas';
+import {
+    RegisterBody,
+    LoginBody,
+    ForgotPasswordBody,
+    ResetPasswordBody,
+    GoogleOAuthBody,
+    AppleOAuthBody,
+    VerifyOtpBody,
+    ResendOtpBody,
+} from './schemas';
 import bcrypt from 'bcryptjs';
 import { Channels } from '@nightfuel/types';
 import jwt from 'jsonwebtoken';
 import nodemailer, { Transporter } from 'nodemailer';
 import { createLogger } from '@nightfuel/config';
-import { randomUUID, randomBytes, createHash } from 'crypto';
+import { randomUUID, randomBytes, randomInt, createHash, createHmac } from 'crypto';
+import {
+    OAuthIdentity,
+    verifyGoogleIdToken,
+    verifyAppleIdentityToken,
+} from './oauth';
 
 // Generic message returned by forgot-password regardless of whether the account
 // exists, to avoid leaking which emails are registered (user enumeration).
@@ -35,6 +49,33 @@ export type SafeUser = Omit<User, 'passwordHash'>;
 
 // How long a password-reset token stays valid.
 const RESET_TOKEN_TTL_MINUTES = 60;
+
+// ── Email OTP (verify-email-at-signup) tuning ───────────────────────────────
+// A 6-digit numeric code, valid for 10 minutes. Only the SHA-256 hash of the
+// code is ever stored. Up to 5 verify attempts before the code is invalidated
+// (brute-force cap: 5 tries against 1,000,000 possibilities). Resend is throttled
+// to one code per cooldown window so it can't be used to spam or enumerate.
+const OTP_TTL_MINUTES = 10;
+const OTP_MAX_ATTEMPTS = 5;
+const OTP_RESEND_COOLDOWN_MS = 30 * 1000;
+const OTP_PURPOSE_REGISTER = 'REGISTER';
+
+// Generic message returned by resend-otp regardless of whether the email exists
+// or is already verified — anti-enumeration, mirroring the forgot-password and
+// register generic-response style.
+const RESEND_OTP_MESSAGE = 'If an account needs verification, a new code has been sent';
+
+// Generic error thrown when an OTP verify fails for ANY reason (no such pending
+// code / expired / wrong code / too many attempts). A single opaque message
+// prevents an attacker from distinguishing "email not found" from "wrong code".
+const OTP_INVALID_MESSAGE = 'Invalid or expired code';
+
+// Allowlisted login rejections for OAuth-only accounts and unverified emails.
+// These are surfaced verbatim so the mobile client can branch (route to the
+// verify screen on EMAIL_NOT_VERIFIED). They MUST also appear in routes.ts
+// ALLOWED or they collapse to the generic fallback.
+const EMAIL_NOT_VERIFIED_MESSAGE = 'EMAIL_NOT_VERIFIED';
+const OAUTH_ONLY_LOGIN_MESSAGE = 'Use social sign-in for this account';
 
 // Where the password-reset link points when APP_RESET_URL is not configured.
 // The raw token is appended as `?token=...`; the screen reads it and POSTs to
@@ -92,6 +133,39 @@ export class AuthService {
     /** True when SMTP is configured (an SMTP_HOST was provided). */
     private smtpConfigured(): boolean {
         return !!this.config.smtp?.host;
+    }
+
+    /**
+     * Hash a low-entropy OTP code for storage/comparison.
+     *
+     * Unlike the high-entropy refresh/reset tokens (hashToken → plain SHA-256), a
+     * 6-digit code has only 1,000,000 possibilities, so an UNSALTED digest is
+     * trivially reversible from a DB read via a precomputed table. We bind the
+     * code to a server-side secret (JWT_SECRET — never stored alongside the code)
+     * with HMAC-SHA256, so a leaked email_otps row cannot be reversed offline.
+     * The SAME function is used to store (issueEmailOtp) and to verify (verifyOtp).
+     */
+    private hashOtpCode(code: string): string {
+        return createHmac('sha256', this.config.JWT_SECRET).update(code).digest('hex');
+    }
+
+    /** Branded, email-client-safe HTML for the OTP verification email. */
+    private buildOtpEmailHtml(code: string): string {
+        return (
+            `<div style="margin:0;padding:0;background:#0A0C10;">` +
+            `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0C10;padding:32px 0;"><tr><td align="center">` +
+            `<table role="presentation" width="480" cellpadding="0" cellspacing="0" style="width:480px;max-width:480px;background:#12151B;border:1px solid #1E232C;border-radius:16px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">` +
+            `<tr><td style="padding:28px 32px 4px 32px;" align="center"><span style="font-size:22px;font-weight:800;letter-spacing:2px;color:#C2F03C;">ZEITRA</span></td></tr>` +
+            `<tr><td style="padding:10px 32px 0 32px;" align="center"><h1 style="margin:0;font-size:20px;line-height:28px;color:#FFFFFF;font-weight:700;">Verify your email</h1></td></tr>` +
+            `<tr><td style="padding:12px 32px 0 32px;" align="center"><p style="margin:0;font-size:14px;line-height:22px;color:#9BA3AF;">Enter this code in the app to finish creating your account.</p></td></tr>` +
+            `<tr><td style="padding:24px 32px 8px 32px;" align="center"><div style="display:inline-block;background:#0A0C10;border:1px solid #C2F03C;border-radius:12px;padding:16px 24px;"><span style="font-size:34px;font-weight:800;letter-spacing:10px;color:#C2F03C;font-family:'Courier New',Courier,monospace;">${code}</span></div></td></tr>` +
+            `<tr><td style="padding:8px 32px 24px 32px;" align="center"><p style="margin:0;font-size:12px;line-height:18px;color:#6B7280;">This code expires in ${OTP_TTL_MINUTES} minutes.</p></td></tr>` +
+            `<tr><td style="padding:0 32px;"><div style="height:1px;background:#1E232C;line-height:1px;font-size:1px;">&nbsp;</div></td></tr>` +
+            `<tr><td style="padding:20px 32px 28px 32px;" align="center"><p style="margin:0;font-size:12px;line-height:18px;color:#6B7280;">If you didn't create a Zeitra account, you can safely ignore this email.</p></td></tr>` +
+            `</table>` +
+            `<table role="presentation" width="480" cellpadding="0" cellspacing="0" style="width:480px;max-width:480px;"><tr><td align="center" style="padding:16px 32px;"><p style="margin:0;font-size:11px;line-height:16px;color:#4B5563;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">&copy; Zeitra &middot; Nutrition &amp; fitness for every schedule</p></td></tr></table>` +
+            `</td></tr></table></div>`
+        );
     }
 
     /** Build (once) and return the shared nodemailer transport. */
@@ -168,6 +242,97 @@ export class AuthService {
     }
 
     /**
+     * Deliver (or, in dev, log) a 6-digit email-verification OTP `code`.
+     *
+     * Same delivery contract as sendPasswordResetEmail: when SMTP is configured
+     * we email the code and NEVER log it; when SMTP is unset we log the code
+     * under an explicit DEV marker (the only path that surfaces the raw code,
+     * and it cannot run in production where SMTP_* is set). Best-effort: a mail
+     * failure is logged, not rethrown, so verify/resend keep their generic
+     * anti-enumeration responses regardless of delivery outcome.
+     */
+    private async sendOtpEmail(email: string, code: string): Promise<void> {
+        if (!this.smtpConfigured()) {
+            // DEV FALLBACK — no SMTP configured. Log the code so the verify flow
+            // can be exercised without mail credentials. ONLY path that surfaces
+            // the raw code; cannot trigger in production (SMTP_* must be set).
+            // OWNER: configure SMTP_* to switch to real email delivery.
+            logger.warn(
+                { code },
+                '[DEV] SMTP not configured — email verification code (configure SMTP_* for real email delivery)',
+            );
+            return;
+        }
+
+        try {
+            await this.getMailTransport().sendMail({
+                to: email,
+                from: this.config.smtp?.from || 'no-reply@zeitra.app',
+                subject: 'Your Zeitra verification code',
+                text:
+                    `ZEITRA — Verify your email\n\n` +
+                    `Your verification code is: ${code}\n\n` +
+                    `Enter it in the app to finish creating your account. ` +
+                    `This code expires in ${OTP_TTL_MINUTES} minutes.\n\n` +
+                    `If you didn't create a Zeitra account, you can safely ignore this email.`,
+                html: this.buildOtpEmailHtml(code),
+            });
+            // Never log the raw code on the production path.
+            logger.info('Email verification code sent');
+        } catch (err) {
+            logger.error({ err }, 'Failed to send email verification code');
+        }
+    }
+
+    /**
+     * Generate, persist (hashed), and email a fresh OTP for `userId`/`email`.
+     *
+     * Enforces a resend cooldown: if a still-live code for this (email, purpose)
+     * was issued within OTP_RESEND_COOLDOWN_MS, we DON'T issue a new one (returns
+     * false) so the endpoint can't be used to spam mail or hammer the DB. On
+     * issue, any prior pending codes for the (email, purpose) are invalidated so
+     * only the newest code works. Only the SHA-256 hash of the code is stored.
+     *
+     * Returns true when a new code was issued+sent, false when suppressed by the
+     * cooldown. Callers keep their generic response either way.
+     */
+    private async issueEmailOtp(
+        userId: string | null,
+        email: string,
+        purpose: string,
+    ): Promise<boolean> {
+        const now = Date.now();
+
+        // Cooldown: was a code for this (email, purpose) issued very recently?
+        const recent = await this.prisma.emailOtp.findFirst({
+            where: { email, purpose, consumedAt: null },
+            orderBy: { createdAt: 'desc' },
+        });
+        if (recent && now - recent.createdAt.getTime() < OTP_RESEND_COOLDOWN_MS) {
+            return false;
+        }
+
+        // Invalidate prior pending codes so only the newest is valid.
+        await this.prisma.emailOtp.updateMany({
+            where: { email, purpose, consumedAt: null },
+            data: { consumedAt: new Date() },
+        });
+
+        // 6-digit numeric code with crypto-strong entropy (randomInt is uniform,
+        // unlike Math.random). Zero-padded to always be exactly 6 digits.
+        const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
+        const codeHash = this.hashOtpCode(code);
+        const expiresAt = new Date(now + OTP_TTL_MINUTES * 60 * 1000);
+
+        await this.prisma.emailOtp.create({
+            data: { email, userId: userId ?? undefined, codeHash, purpose, expiresAt },
+        });
+
+        await this.sendOtpEmail(email, code);
+        return true;
+    }
+
+    /**
      * Register a new account. Always resolves with the SAME generic message
      * (never reveals whether the email is already taken) to prevent user
      * enumeration — mirroring the forgot-password anti-enumeration style.
@@ -208,6 +373,10 @@ export class AuthService {
                 region: body.region,
                 timezone: body.timezone ?? 'UTC',
                 locale: body.locale ?? 'en-US',
+                // New email signups start UNVERIFIED — the user must confirm the
+                // emailed OTP (verify-otp) before they can log in. login() rejects
+                // an unverified account with EMAIL_NOT_VERIFIED.
+                emailVerified: false,
                 // Registration ALWAYS creates a USER — never a privileged role.
                 // The schema already restricts `role` to 'USER', but we hard-pin it
                 // here too (defense in depth): coach/admin roles are only granted
@@ -232,6 +401,12 @@ export class AuthService {
                 region: user.region,
             },
         });
+
+        // Issue + email the verification OTP (best-effort delivery, like the
+        // reset email). The generic REGISTER_MESSAGE is still returned WITHOUT
+        // tokens — the client routes to the verify screen with the email and the
+        // user logs in only after entering the code.
+        await this.issueEmailOtp(user.id, email, OTP_PURPOSE_REGISTER);
 
         return { message: REGISTER_MESSAGE };
     }
@@ -265,6 +440,15 @@ export class AuthService {
             throw new Error('Invalid credentials');
         }
 
+        // OAuth-only accounts have no local password (passwordHash null). Still
+        // spend a bcrypt.compare against the dummy hash so the timing matches a
+        // password account, then reject with the allowlisted social-only message
+        // so the client can steer the user to Google/Apple sign-in.
+        if (!user.passwordHash) {
+            await bcrypt.compare(body.password, DUMMY_PASSWORD_HASH);
+            throw new Error(OAUTH_ONLY_LOGIN_MESSAGE);
+        }
+
         const validPassword = await bcrypt.compare(body.password, user.passwordHash);
         if (!validPassword) {
             this.recordLoginFailure(lockoutKey);
@@ -276,6 +460,16 @@ export class AuthService {
         // credentials' (no enumeration of which accounts are banned).
         if ((user as any).banned) {
             throw new Error('Account disabled');
+        }
+
+        // Email must be verified before a password login can mint tokens. Checked
+        // AFTER the password so a wrong password can't reveal verification state.
+        // The allowlisted EMAIL_NOT_VERIFIED lets the client route to the verify
+        // screen and trigger a resend. Success clears the failure counter first
+        // so a legitimate unverified user isn't penalised with a lockout.
+        if (!user.emailVerified) {
+            this.clearLoginFailures(lockoutKey);
+            throw new Error(EMAIL_NOT_VERIFIED_MESSAGE);
         }
 
         // Success — clear any accumulated failures for this account.
@@ -333,6 +527,294 @@ export class AuthService {
 
     private clearLoginFailures(key: string): void {
         loginFailures.delete(key);
+    }
+
+    /**
+     * Verify a signup email OTP. On success: mark the code consumed, flip the
+     * user's emailVerified=true, and return the SAME { user, accessToken,
+     * refreshToken } shape as login() so the client logs the user straight in.
+     *
+     * ANTI-ENUMERATION + BRUTE-FORCE: every failure (no pending code / expired /
+     * wrong code / too many attempts / no matching user) throws the SINGLE
+     * opaque OTP_INVALID_MESSAGE, so an attacker can't distinguish "email not
+     * found" from "wrong code". A wrong code increments the attempt counter and,
+     * once OTP_MAX_ATTEMPTS is exceeded, the code is invalidated (consumed) so it
+     * can't be ground down further.
+     */
+    async verifyOtp(body: VerifyOtpBody): Promise<{ user: SafeUser; accessToken: string; refreshToken: string }> {
+        const email = body.email.trim().toLowerCase();
+        // Hash the submitted code up-front so the no-pending-code path and the
+        // wrong-code path pay the same HMAC cost — removes a timing side-channel
+        // that would otherwise reveal whether a pending OTP exists for this email.
+        const submittedHash = this.hashOtpCode(body.code);
+
+        // Newest still-pending REGISTER code for this email.
+        const otp = await this.prisma.emailOtp.findFirst({
+            where: { email, purpose: OTP_PURPOSE_REGISTER, consumedAt: null },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        // No pending code, or it already expired → opaque failure. (Expiry is
+        // treated exactly like "no code" so timing/response don't leak state.)
+        if (!otp || otp.expiresAt < new Date()) {
+            throw new Error(OTP_INVALID_MESSAGE);
+        }
+
+        // Attempt cap already reached (belt-and-suspenders — we also consume on
+        // exceed below, but a concurrent request could land here).
+        if (otp.attempts >= OTP_MAX_ATTEMPTS) {
+            await this.prisma.emailOtp.update({
+                where: { id: otp.id },
+                data: { consumedAt: new Date() },
+            });
+            throw new Error(OTP_INVALID_MESSAGE);
+        }
+
+        const matches = otp.codeHash === submittedHash;
+        if (!matches) {
+            // Wrong code: increment attempts; invalidate once the cap is hit.
+            const attempts = otp.attempts + 1;
+            await this.prisma.emailOtp.update({
+                where: { id: otp.id },
+                data: {
+                    attempts,
+                    consumedAt: attempts >= OTP_MAX_ATTEMPTS ? new Date() : null,
+                },
+            });
+            throw new Error(OTP_INVALID_MESSAGE);
+        }
+
+        // Correct code. Resolve the account (prefer the FK captured at issue time,
+        // fall back to email). A missing/banned user is still an opaque failure.
+        const user = otp.userId
+            ? await this.prisma.user.findUnique({ where: { id: otp.userId } })
+            : await this.prisma.user.findUnique({ where: { email } });
+        if (!user) {
+            throw new Error(OTP_INVALID_MESSAGE);
+        }
+        if ((user as any).banned) {
+            // Don't mint tokens for a banned account; opaque to avoid leaking ban state.
+            throw new Error(OTP_INVALID_MESSAGE);
+        }
+
+        // Consume the code and flip verification atomically.
+        await this.prisma.$transaction([
+            this.prisma.emailOtp.update({
+                where: { id: otp.id },
+                data: { consumedAt: new Date() },
+            }),
+            this.prisma.user.update({
+                where: { id: user.id },
+                data: { emailVerified: true },
+            }),
+        ]);
+
+        const verifiedUser = { ...user, emailVerified: true };
+        const { accessToken, refreshToken } = await this.generateTokens(verifiedUser, body.deviceId);
+        const { passwordHash, ...safeUser } = verifiedUser;
+        return { user: safeUser, accessToken, refreshToken };
+    }
+
+    /**
+     * Resend a signup verification code. ALWAYS resolves with the same generic
+     * message (never reveals whether the email exists or is already verified) —
+     * anti-enumeration, same timing shape as forgot-password. A new code is only
+     * actually issued when the account exists and is still unverified, and the
+     * resend cooldown inside issueEmailOtp throttles repeated calls.
+     */
+    async resendOtp(body: ResendOtpBody): Promise<{ message: string }> {
+        const email = body.email.trim().toLowerCase();
+
+        const user = await this.prisma.user.findUnique({ where: { email } });
+        // Only (re)issue for a real, still-unverified account. Otherwise no-op and
+        // return the identical generic response.
+        if (user && !user.emailVerified) {
+            await this.issueEmailOtp(user.id, email, OTP_PURPOSE_REGISTER);
+        }
+
+        return { message: RESEND_OTP_MESSAGE };
+    }
+
+    /**
+     * Google sign-in. Verifies the ID token (google-auth-library), then
+     * find-or-creates/links the local account and issues tokens. Returns the
+     * SAME shape as login().
+     */
+    async googleSignIn(body: GoogleOAuthBody): Promise<{ user: SafeUser; accessToken: string; refreshToken: string }> {
+        const identity = await verifyGoogleIdToken(body.idToken);
+        return this.signInWithOAuthIdentity('google', identity, body.deviceId);
+    }
+
+    /**
+     * Apple sign-in. Verifies the identity token against Apple's JWKS, then
+     * find-or-creates/links the local account and issues tokens. Apple returns
+     * email/name only on the FIRST authorization; `fullName` (when present) seeds
+     * displayName on account creation. Returns the SAME shape as login().
+     */
+    async appleSignIn(body: AppleOAuthBody): Promise<{ user: SafeUser; accessToken: string; refreshToken: string }> {
+        const identity = await verifyAppleIdentityToken(body.identityToken);
+
+        // Apple only sends the name on first auth — prefer the client-forwarded
+        // fullName for the display name when the token itself carried none.
+        if (!identity.name && body.fullName) {
+            const parts = [body.fullName.givenName, body.fullName.familyName]
+                .map((p) => (p ?? '').trim())
+                .filter(Boolean);
+            if (parts.length > 0) identity.name = parts.join(' ');
+        }
+
+        return this.signInWithOAuthIdentity('apple', identity, body.deviceId);
+    }
+
+    /**
+     * Shared find-or-create/link for a verified provider identity:
+     *   (a) OAuthAccount (provider, sub) exists  -> load that user.
+     *   (b) else a User with this VERIFIED email -> link a new OAuthAccount and
+     *       set emailVerified=true (safe: the provider verified the email).
+     *   (c) else create a new User (emailVerified=true, passwordHash=null,
+     *       displayName from provider name or email local-part), publish the SAME
+     *       UserRegistered event register() publishes (so user-service provisions
+     *       the profile), then link the OAuthAccount — all in one transaction so a
+     *       first-time user is provisioned exactly once.
+     *
+     * Then issues tokens (login() shape). Banned accounts are rejected.
+     */
+    private async signInWithOAuthIdentity(
+        provider: 'google' | 'apple',
+        identity: OAuthIdentity,
+        deviceId: string,
+    ): Promise<{ user: SafeUser; accessToken: string; refreshToken: string }> {
+        // (a) Existing link by (provider, sub) — the stable path for repeat
+        // sign-ins (Apple sends no email after the first auth, so this is the
+        // ONLY reliable key then).
+        const existingLink = await this.prisma.oAuthAccount.findUnique({
+            where: {
+                provider_providerAccountId: {
+                    provider,
+                    providerAccountId: identity.sub,
+                },
+            },
+            include: { user: true },
+        });
+
+        let user: User | null = existingLink?.user ?? null;
+        let created = false;
+
+        // Only a PROVIDER-VERIFIED email may find/link/create an account. Google's
+        // verifier already rejects unverified emails; Apple returns email +
+        // email_verified WITHOUT rejecting, so gate here so an unverified provider
+        // email can never claim, link to, or spoof-create an arbitrary address.
+        const providerEmail = identity.emailVerified ? identity.email : null;
+
+        if (!user && providerEmail) {
+            // (b) Link to an existing local account that owns this verified email.
+            const byEmail = await this.prisma.user.findUnique({
+                where: { email: providerEmail },
+            });
+            if (byEmail) {
+                await this.prisma.oAuthAccount.create({
+                    data: {
+                        userId: byEmail.id,
+                        provider,
+                        providerAccountId: identity.sub,
+                    },
+                });
+                // If the account was ALREADY verified, its owner proved inbox
+                // control earlier (our OTP only reaches the real inbox), so the
+                // account and any password it set are trusted — keep them.
+                // If it was NOT yet verified, the row is unproven and its password
+                // may have been pre-seeded by an attacker who registered the
+                // victim's email first. The provider has now proven inbox
+                // ownership, so we verify the account AND null the unproven
+                // passwordHash so a pre-seeded password can't survive the link
+                // (closes the pre-registration account-takeover).
+                user = byEmail.emailVerified
+                    ? byEmail
+                    : await this.prisma.user.update({
+                          where: { id: byEmail.id },
+                          data: { emailVerified: true, passwordHash: null },
+                      });
+            }
+        }
+
+        if (!user) {
+            // (c) Brand-new user. Provider-verified email (when present) means we
+            // create the account already verified with no local password. Apple
+            // repeat-signins with no email shouldn't reach here (they match by sub
+            // in (a)); a first Apple auth always carries the email.
+            const email = providerEmail
+                ? providerEmail
+                : `${identity.sub}@${provider}.oauth.local`;
+            const displayName = this.deriveDisplayName(identity.name, email);
+
+            // Create user + link in ONE transaction so a partial failure can't
+            // leave a user without its OAuth link (or vice-versa).
+            const newUser = await this.prisma.$transaction(async (tx) => {
+                const u = await tx.user.create({
+                    data: {
+                        email,
+                        passwordHash: null,
+                        displayName,
+                        // OAuth accounts have no region from the provider; default
+                        // to 'us' (2-char, matches the schema's region constraint).
+                        region: 'us',
+                        timezone: 'UTC',
+                        locale: 'en-US',
+                        emailVerified: true,
+                        role: 'USER' as any,
+                    },
+                });
+                await tx.oAuthAccount.create({
+                    data: {
+                        userId: u.id,
+                        provider,
+                        providerAccountId: identity.sub,
+                    },
+                });
+                return u;
+            });
+
+            user = newUser;
+            created = true;
+
+            // Publish the SAME user.registered event register() publishes so
+            // user-service provisions the profile exactly once (first sign-in only).
+            await this.eventBus.publish(Channels.Auth.UserRegistered, {
+                eventId: randomUUID(),
+                eventType: 'user.registered',
+                producedAt: new Date().toISOString(),
+                producerService: 'auth-service',
+                correlationId: randomUUID(),
+                userId: newUser.id,
+                payload: {
+                    email: newUser.email,
+                    displayName: newUser.displayName,
+                    role: newUser.role,
+                    timezone: newUser.timezone,
+                    region: newUser.region,
+                },
+            });
+        }
+
+        // Banned accounts cannot obtain tokens via any path.
+        if ((user as any).banned) {
+            throw new Error('Account disabled');
+        }
+
+        logger.info({ provider, created }, 'OAuth sign-in completed');
+
+        const { accessToken, refreshToken } = await this.generateTokens(user, deviceId);
+        const { passwordHash, ...safeUser } = user;
+        return { user: safeUser, accessToken, refreshToken };
+    }
+
+    /** Best display name from the provider name, else the email local-part. */
+    private deriveDisplayName(name: string | null, email: string): string {
+        const trimmed = (name ?? '').trim();
+        if (trimmed.length >= 2) return trimmed;
+        const local = email.split('@')[0] || 'user';
+        // displayName has a min length of 2 elsewhere — pad ultra-short locals.
+        return local.length >= 2 ? local : `${local}_user`;
     }
 
     async refreshToken(body: { refreshToken: string }): Promise<{ accessToken: string; refreshToken: string }> {
@@ -537,12 +1019,14 @@ export class AuthService {
      * This service's user-owned tables (verified against prisma/schema.prisma):
      *   - refresh_tokens        (user_id)  — child rows, deleted first
      *   - password_reset_tokens (user_id)  — child rows, deleted first
+     *   - oauth_accounts        (user_id)  — child rows, deleted first
+     *   - email_otps            (user_id)  — child rows, deleted first
      *   - users                 (id)       — the parent row, deleted last
      *
-     * (refresh/reset tokens declare `onDelete: Cascade`, so deleting the user
-     * alone would clear them — but we delete them explicitly anyway so the
-     * returned summary reports an accurate per-table count and the purge does
-     * not silently depend on the DB-level cascade.)
+     * (all child tables declare `onDelete: Cascade`, so deleting the user alone
+     * would clear them — but we delete them explicitly anyway so the returned
+     * summary reports an accurate per-table count and the purge does not silently
+     * depend on the DB-level cascade.)
      *
      * IDEMPOTENT: every delete is a `deleteMany` (returns `{ count }`, never
      * throws on zero matches), so purging a user with no rows succeeds with all
@@ -553,22 +1037,33 @@ export class AuthService {
      */
     async purgeUserData(userId: string): Promise<{
         userId: string;
-        deletedCounts: { refresh_tokens: number; password_reset_tokens: number; users: number };
+        deletedCounts: {
+            refresh_tokens: number;
+            password_reset_tokens: number;
+            oauth_accounts: number;
+            email_otps: number;
+            users: number;
+        };
     }> {
-        const [refreshTokens, passwordResetTokens, users] = await this.prisma.$transaction([
-            // Children first (explicit, not relying on the FK cascade) so the
-            // counts are accurate regardless of cascade behaviour.
-            this.prisma.refreshToken.deleteMany({ where: { userId } }),
-            this.prisma.passwordResetToken.deleteMany({ where: { userId } }),
-            // Parent last.
-            this.prisma.user.deleteMany({ where: { id: userId } }),
-        ]);
+        const [refreshTokens, passwordResetTokens, oauthAccounts, emailOtps, users] =
+            await this.prisma.$transaction([
+                // Children first (explicit, not relying on the FK cascade) so the
+                // counts are accurate regardless of cascade behaviour.
+                this.prisma.refreshToken.deleteMany({ where: { userId } }),
+                this.prisma.passwordResetToken.deleteMany({ where: { userId } }),
+                this.prisma.oAuthAccount.deleteMany({ where: { userId } }),
+                this.prisma.emailOtp.deleteMany({ where: { userId } }),
+                // Parent last.
+                this.prisma.user.deleteMany({ where: { id: userId } }),
+            ]);
 
         return {
             userId,
             deletedCounts: {
                 refresh_tokens: refreshTokens.count,
                 password_reset_tokens: passwordResetTokens.count,
+                oauth_accounts: oauthAccounts.count,
+                email_otps: emailOtps.count,
                 users: users.count,
             },
         };
@@ -581,6 +1076,8 @@ export class AuthService {
      *   - users                 (id)
      *   - refresh_tokens        (user_id)
      *   - password_reset_tokens (user_id)
+     *   - oauth_accounts        (user_id)
+     *   - email_otps            (user_id)
      *
      * SECURITY: this is auth-service, so the rows hold live credentials/secrets.
      * We export ONLY non-secret account metadata via Prisma `select` allowlists
@@ -588,6 +1085,9 @@ export class AuthService {
      *   - users:                 passwordHash is EXCLUDED.
      *   - refresh_tokens:        tokenHash is EXCLUDED.
      *   - password_reset_tokens: tokenHash is EXCLUDED.
+     *   - oauth_accounts:        provider + createdAt only (providerAccountId,
+     *                            the raw provider subject id, is EXCLUDED).
+     *   - email_otps:            purpose/timestamps only; codeHash is EXCLUDED.
      * The selects are explicit allowlists (not `omit`) so a future schema column
      * is excluded by default and cannot accidentally leak.
      *
@@ -627,12 +1127,26 @@ export class AuthService {
                 usedAt: Date | null;
                 createdAt: Date;
             }>;
+            oauth_accounts: Array<{
+                id: string;
+                provider: string;
+                createdAt: Date;
+            }>;
+            email_otps: Array<{
+                id: string;
+                purpose: string;
+                expiresAt: Date;
+                consumedAt: Date | null;
+                attempts: number;
+                createdAt: Date;
+            }>;
         };
     }> {
         // Bound child token tables so a per-user export can never be unbounded.
         const TOKEN_TAKE = 1000;
 
-        const [user, refreshTokens, passwordResetTokens] = await this.prisma.$transaction([
+        const [user, refreshTokens, passwordResetTokens, oauthAccounts, emailOtps] =
+            await this.prisma.$transaction([
             // users — non-secret account metadata only; passwordHash EXCLUDED.
             this.prisma.user.findUnique({
                 where: { id: userId },
@@ -675,6 +1189,32 @@ export class AuthService {
                 orderBy: { createdAt: 'asc' },
                 take: TOKEN_TAKE,
             }),
+            // oauth_accounts — provider + createdAt only; the raw provider subject
+            // id (providerAccountId) is EXCLUDED (treated as sensitive).
+            this.prisma.oAuthAccount.findMany({
+                where: { userId },
+                select: {
+                    id: true,
+                    provider: true,
+                    createdAt: true,
+                },
+                orderBy: { createdAt: 'asc' },
+                take: TOKEN_TAKE,
+            }),
+            // email_otps — purpose/timestamps only; codeHash (the secret) EXCLUDED.
+            this.prisma.emailOtp.findMany({
+                where: { userId },
+                select: {
+                    id: true,
+                    purpose: true,
+                    expiresAt: true,
+                    consumedAt: true,
+                    attempts: true,
+                    createdAt: true,
+                },
+                orderBy: { createdAt: 'asc' },
+                take: TOKEN_TAKE,
+            }),
         ]);
 
         return {
@@ -683,6 +1223,8 @@ export class AuthService {
                 users: user as any,
                 refresh_tokens: refreshTokens as any,
                 password_reset_tokens: passwordResetTokens as any,
+                oauth_accounts: oauthAccounts as any,
+                email_otps: emailOtps as any,
             },
         };
     }

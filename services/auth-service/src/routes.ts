@@ -3,9 +3,20 @@ import { FastifyPluginAsync } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { makeInternalAuthGuard } from '@nightfuel/config';
-import { registerSchema, loginSchema, refreshTokenSchema, forgotPasswordSchema, resetPasswordSchema } from './schemas';
+import {
+    registerSchema,
+    loginSchema,
+    refreshTokenSchema,
+    forgotPasswordSchema,
+    resetPasswordSchema,
+    googleOAuthSchema,
+    appleOAuthSchema,
+    verifyOtpSchema,
+    resendOtpSchema,
+} from './schemas';
 import { AuthService } from './auth.service';
 import { buildRefreshCookie, buildClearedRefreshCookie, readRefreshCookie } from './refresh-cookie';
+import { OAuthNotConfiguredError } from './oauth';
 
 export const authRoutes: FastifyPluginAsync<{ authService: AuthService; internalServiceToken?: string }> = async (fastify, opts) => {
     const service = opts.authService;
@@ -32,6 +43,21 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService; internal
         'Invalid refresh token',
         'Refresh token expired',
         'Invalid or expired reset token',
+        // Login branch signals the mobile client must act on (route to verify /
+        // steer to social sign-in). MUST stay allowlisted or the client can't
+        // branch on them.
+        'EMAIL_NOT_VERIFIED',
+        'Use social sign-in for this account',
+        // Opaque OTP failure (never distinguishes not-found vs wrong-code).
+        'Invalid or expired code',
+        // Provider "not configured" 503 messages (graceful degradation when the
+        // OAuth creds are absent) — safe to surface so the client shows a clean
+        // "sign-in unavailable" message instead of a generic 500.
+        'Google sign-in is not configured',
+        'Apple sign-in is not configured',
+        // Generic provider token-verification failure (no detail leaked).
+        'Invalid Google token',
+        'Invalid Apple token',
     ]);
     const safeMsg = (err: any, fallback: string) =>
         typeof err?.message === 'string' && ALLOWED.has(err.message) ? err.message : fallback;
@@ -108,6 +134,120 @@ export const authRoutes: FastifyPluginAsync<{ authService: AuthService; internal
             } catch (err: any) {
                 request.log.error(err);
                 reply.code(401).send({ error: safeMsg(err, 'Invalid credentials') });
+            }
+        }
+    );
+
+    // ── POST /v1/auth/oauth/google ───────────────────────────────────────────
+    // Verify a Google ID token, find-or-create/link the account, and return the
+    // SAME { user, accessToken, refreshToken } shape as /login (+ refresh cookie)
+    // so the mobile client's setTokens + hydration is unchanged. When Google is
+    // not configured (no GOOGLE_CLIENT_IDS), the service throws
+    // OAuthNotConfiguredError → clean 503, never a crash. A bad token → 401 with
+    // the allowlisted generic 'Invalid Google token'.
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/oauth/google',
+        {
+            config: authRateLimit,
+            schema: {
+                body: googleOAuthSchema,
+            },
+        },
+        async (request, reply) => {
+            try {
+                const result = await service.googleSignIn(request.body);
+                reply.header('Set-Cookie', buildRefreshCookie(result.refreshToken));
+                const { passwordHash, ...safeUser } = (result.user ?? {}) as any;
+                reply.send({ ...result, user: safeUser });
+            } catch (err: any) {
+                request.log.error(err);
+                if (err instanceof OAuthNotConfiguredError) {
+                    return reply.code(503).send({ error: safeMsg(err, 'Google sign-in is not configured') });
+                }
+                reply.code(401).send({ error: safeMsg(err, 'Invalid credentials') });
+            }
+        }
+    );
+
+    // ── POST /v1/auth/oauth/apple ────────────────────────────────────────────
+    // Verify an Apple identity token, find-or-create/link the account, and return
+    // the SAME shape as /login (+ cookie). Apple returns email/name only on the
+    // FIRST authorization — repeat sign-ins are matched by (provider, sub) in the
+    // service. Not-configured → 503; bad token → 401 with 'Invalid Apple token'.
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/oauth/apple',
+        {
+            config: authRateLimit,
+            schema: {
+                body: appleOAuthSchema,
+            },
+        },
+        async (request, reply) => {
+            try {
+                const result = await service.appleSignIn(request.body);
+                reply.header('Set-Cookie', buildRefreshCookie(result.refreshToken));
+                const { passwordHash, ...safeUser } = (result.user ?? {}) as any;
+                reply.send({ ...result, user: safeUser });
+            } catch (err: any) {
+                request.log.error(err);
+                if (err instanceof OAuthNotConfiguredError) {
+                    return reply.code(503).send({ error: safeMsg(err, 'Apple sign-in is not configured') });
+                }
+                reply.code(401).send({ error: safeMsg(err, 'Invalid credentials') });
+            }
+        }
+    );
+
+    // ── POST /v1/auth/verify-otp ─────────────────────────────────────────────
+    // Confirm the signup email OTP. On success: emailVerified=true + logs the
+    // user in, returning the SAME shape as /login (+ cookie). ANY failure (no
+    // pending code / expired / wrong / too many attempts) returns 400 with the
+    // single opaque 'Invalid or expired code' (anti-enumeration + brute-force cap
+    // enforced in the service).
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/verify-otp',
+        {
+            config: authRateLimit,
+            schema: {
+                body: verifyOtpSchema,
+            },
+        },
+        async (request, reply) => {
+            try {
+                const result = await service.verifyOtp(request.body);
+                reply.header('Set-Cookie', buildRefreshCookie(result.refreshToken));
+                const { passwordHash, ...safeUser } = (result.user ?? {}) as any;
+                reply.send({ ...result, user: safeUser });
+            } catch (err: any) {
+                request.log.error(err);
+                reply.code(400).send({ error: safeMsg(err, 'Invalid or expired code') });
+            }
+        }
+    );
+
+    // ── POST /v1/auth/resend-otp ─────────────────────────────────────────────
+    // Re-send a signup verification code. ALWAYS 200 with the same generic
+    // message (never reveals whether the email exists / is already verified) —
+    // anti-enumeration, mirroring /forgot-password. Internal failures are logged
+    // but still surface the generic body. The resend cooldown lives in the
+    // service so this can't be used to spam mail.
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/resend-otp',
+        {
+            config: authRateLimit,
+            schema: {
+                body: resendOtpSchema,
+            },
+        },
+        async (request, reply) => {
+            const GENERIC_RESEND_MESSAGE =
+                'If an account needs verification, a new code has been sent';
+            try {
+                const result = await service.resendOtp(request.body);
+                reply.send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                reply.send({ message: GENERIC_RESEND_MESSAGE });
             }
         }
     );
