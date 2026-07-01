@@ -40,6 +40,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "package": "com.zeitra.app",
+      "googleServicesFile": "./google-services.json",
       "usesCleartextTraffic": false,
       "intentFilters": [
         {

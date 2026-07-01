@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "25511990866",
+    "project_id": "zeitra-59b15",
+    "storage_bucket": "zeitra-59b15.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:25511990866:android:831fddfa7cc4047e43318b",
+        "android_client_info": {
+          "package_name": "com.zeitra.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBGkpKs-WRul5C-BxZZn02Oz-Qmj0UJZ2Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

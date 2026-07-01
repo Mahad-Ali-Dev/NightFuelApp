@@ -168,6 +168,13 @@ export function useNotifications() {
             } catch (err) {
                 console.warn('[Notifications] Failed to register push token:', err);
             }
+        }).catch((err) => {
+            // getExpoPushTokenAsync THROWS on Android when FCM / google-services.json
+            // isn't configured (and on simulators). Without this catch the rejection
+            // was silent — the token never registered and nothing surfaced. Surface
+            // it (and to Sentry) so a missing-FCM setup is diagnosable, not invisible.
+            console.warn('[Notifications] Push registration failed — FCM/google-services.json configured?', err);
+            captureException(err instanceof Error ? err : new Error('push_registration_failed'), { where: 'useNotifications' });
         });
 
         const sub = Notifications.addNotificationResponseReceivedListener((response: any) => {
