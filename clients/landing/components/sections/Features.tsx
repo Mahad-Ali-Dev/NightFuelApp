@@ -1,118 +1,204 @@
-import { BarChart3, Clock, Coffee, Droplet, Leaf, Moon, Sparkles, Video } from 'lucide-react';
-import { Reveal } from './Reveal';
+'use client';
+
+import * as React from 'react';
+import {
+  Bot,
+  Timer,
+  Camera,
+  UtensilsCrossed,
+  Dumbbell,
+  Trophy,
+  Watch,
+  Users,
+  BadgeCheck,
+  MessagesSquare,
+  type LucideIcon,
+} from 'lucide-react';
+
+import { SectionShell } from '@/components/ui/section-shell';
+import { GradientText } from '@/components/ui/gradient-text';
+import { Reveal } from '@/components/ui/reveal';
+import { GlowCard } from '@/components/ui/glow-card';
+import { Badge } from '@/components/ui/badge';
+
+/**
+ * Features — the product showcase. A premium BENTO grid of Zeitra's core
+ * features. Flagship tiles (Ria, chrono-nutrition, wearable sync) get a larger,
+ * richer treatment; the rest fill a varied, magazine-style grid. Every tile is
+ * a GlowCard (glass + gradient-border ring) with a lucide icon, title and a
+ * single supporting line, plus a hover lift and pointer spotlight.
+ */
+
+type Feature = {
+  icon: LucideIcon;
+  title: string;
+  copy: string;
+  /** Tailwind grid-span classes for the lg bento layout. */
+  span: string;
+  /** Flagship tiles get a larger, display-type treatment. */
+  flagship?: boolean;
+  /** Optional accent chip. */
+  tag?: string;
+};
+
+const FEATURES: Feature[] = [
+  {
+    icon: Bot,
+    title: 'Meet Ria, your AI coach',
+    copy: 'Chat or talk to Ria. She builds your meal plans, tracks every macro and adapts as your week shifts.',
+    span: 'lg:col-span-3 lg:row-span-2',
+    flagship: true,
+    tag: 'Chat + voice',
+  },
+  {
+    icon: Timer,
+    title: 'Chrono-nutrition engine',
+    copy: 'Meals, caffeine, training and sleep timed to your real rota — not a textbook 9-to-5 clock.',
+    span: 'lg:col-span-3 lg:row-span-2',
+    flagship: true,
+    tag: 'The core',
+  },
+  {
+    icon: Camera,
+    title: 'AI photo meal-logging',
+    copy: 'Snap a plate and log it. Backed by 8,600+ foods and barcode scan.',
+    span: 'lg:col-span-2',
+  },
+  {
+    icon: UtensilsCrossed,
+    title: '300+ recipes',
+    copy: 'Shift-friendly meals that fit your macros and your window.',
+    span: 'lg:col-span-2',
+  },
+  {
+    icon: Dumbbell,
+    title: 'Workouts + body-map',
+    copy: 'Exercise library, interactive muscle body-map and ready-made WODs.',
+    span: 'lg:col-span-2',
+  },
+  {
+    icon: Watch,
+    title: 'Sync any wearable',
+    copy: 'Any watch or band — even unbranded ones — over Bluetooth, plus Apple Health & Health Connect.',
+    span: 'lg:col-span-3',
+    flagship: true,
+    tag: 'Any device',
+  },
+  {
+    icon: Trophy,
+    title: 'AI challenges',
+    copy: '3, 7, 15 or 30-day challenges with AI-picked workouts and meals.',
+    span: 'lg:col-span-3',
+  },
+  {
+    icon: Users,
+    title: 'Community "Crew"',
+    copy: 'A feed and accountability circle for people the 9-to-5 apps forget.',
+    span: 'lg:col-span-2',
+  },
+  {
+    icon: BadgeCheck,
+    title: 'Coaching marketplace',
+    copy: 'Book verified human coaches when you want a real person in your corner.',
+    span: 'lg:col-span-2',
+  },
+  {
+    icon: MessagesSquare,
+    title: 'Chat + smart reminders',
+    copy: 'Real-time messaging and nudges timed to when you actually work.',
+    span: 'lg:col-span-2',
+  },
+];
+
+function FeatureTile({ icon: Icon, title, copy, span, flagship, tag }: Feature) {
+  return (
+    <Reveal.Item as="li" className={`flex ${span}`}>
+      <GlowCard
+        as="article"
+        spotlight
+        className={`flex w-full flex-col ${flagship ? 'p-7 md:p-8' : 'p-6'}`}
+      >
+        {/* icon + optional tag */}
+        <div className="mb-5 flex items-center justify-between gap-3">
+          <span
+            aria-hidden="true"
+            className={`inline-flex items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-lime)]/25 bg-[var(--color-lime)]/10 text-[var(--color-lime)] ${
+              flagship ? 'size-12 [&_svg]:size-6' : 'size-11 [&_svg]:size-5'
+            }`}
+          >
+            <Icon strokeWidth={1.75} />
+          </span>
+          {tag && (
+            <Badge variant="outline" className="shrink-0">
+              {tag}
+            </Badge>
+          )}
+        </div>
+
+        <h3
+          className={`font-semibold leading-tight ${
+            flagship
+              ? 'text-2xl uppercase tracking-tight [font-family:var(--font-display)] md:text-3xl'
+              : 'text-lg md:text-xl'
+          }`}
+        >
+          {title}
+        </h3>
+
+        <p
+          className={`mt-2 leading-relaxed text-[var(--color-muted-foreground)] ${
+            flagship ? 'max-w-md text-base md:text-lg' : 'text-sm md:text-[15px]'
+          }`}
+        >
+          {copy}
+        </p>
+
+        {flagship && (
+          <div aria-hidden="true" className="mt-auto pt-6">
+            <div className="h-px w-full bg-gradient-to-r from-[var(--color-lime)]/40 via-white/10 to-transparent" />
+          </div>
+        )}
+      </GlowCard>
+    </Reveal.Item>
+  );
+}
 
 export function Features() {
   return (
-    <section id="features">
-      <div className="container">
-        <Reveal className="section-head">
-          <span className="eyebrow">Everything in one app</span>
-          <h2>Built around your shift, not the sun</h2>
-          <p>The full toolkit other fitness apps get wrong for people who work nights.</p>
-        </Reveal>
-        <div className="features-grid">
-          <Reveal className="feature glass">
-            <div className="ficon">
-              <Clock width={24} height={24} strokeWidth={2} />
-            </div>
-            <h3>Reverse meal timing</h3>
-            <p>
-              Pre-shift, mid-shift, recovery and sleep-prep meals — scheduled around your sleep
-              window by chrono-nutrition science.
-            </p>
-          </Reveal>
-          <Reveal className="feature glass">
-            <div className="ficon">
-              <Sparkles width={24} height={24} strokeWidth={2} />
-            </div>
-            <h3>Meet Ria, your 3-layer AI</h3>
-            <p>
-              A deterministic circadian model + chrono-nutrition rules + Claude AI personalize every
-              plan. Faster than ChatGPT, sharper than a macro tracker.
-            </p>
-          </Reveal>
-          <Reveal className="feature glass">
-            <div className="ficon">
-              <Coffee width={24} height={24} strokeWidth={2} />
-            </div>
-            <h3>Caffeine timing that works</h3>
-            <p>
-              Real cut-off windows for night shifts — so you&apos;re not lying awake at 8 AM after a
-              coffee at 4 AM.
-            </p>
-          </Reveal>
-          <Reveal className="feature glass">
-            <div className="ficon">
-              <Leaf width={24} height={24} strokeWidth={2} />
-            </div>
-            <h3>Foods, online or off</h3>
-            <p>
-              760 whole foods offline, 3M+ branded items online. Halal, vegan, keto, gluten-free,
-              acne-safe and Ramadan modes built in.
-            </p>
-          </Reveal>
-          <Reveal className="feature glass">
-            <div className="ficon">
-              {/* Custom "fatigue-adjust" glyph — no clean lucide equivalent */}
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="m6.5 6.5 11 11M21 21l-1-1M3 3l1 1M18 22l4-4M2 6l4-4M3 10l7-7M14 21l7-7" />
-              </svg>
-            </div>
-            <h3>Fatigue-aware workouts</h3>
-            <p>
-              Intensity auto-adjusts to your last shift, sleep quality and circadian phase. PPL,
-              full-body and beginner-friendly progressions.
-            </p>
-          </Reveal>
-          <Reveal className="feature glass">
-            <div className="ficon">
-              <Video width={24} height={24} strokeWidth={2} />
-            </div>
-            <h3>2,500+ exercise demos</h3>
-            <p>
-              A full video library across 13 muscle groups, with form cues read aloud — split by
-              level, equipment and primary muscle.
-            </p>
-          </Reveal>
-          <Reveal className="feature glass">
-            <div className="ficon">
-              <Moon width={24} height={24} strokeWidth={2} />
-            </div>
-            <h3>Sleep optimization</h3>
-            <p>
-              Wind-down routines, light and caffeine guidance, and a sleep window tuned to your
-              rotation — so you fall asleep at 8 AM.
-            </p>
-          </Reveal>
-          <Reveal className="feature glass">
-            <div className="ficon">
-              <Droplet width={24} height={24} strokeWidth={2} />
-            </div>
-            <h3>Hydration &amp; reminders</h3>
-            <p>
-              Shift-aware water targets and local nudges that respect your sleep — never a buzz at 3
-              PM when you&apos;re finally resting.
-            </p>
-          </Reveal>
-          <Reveal className="feature glass">
-            <div className="ficon">
-              <BarChart3 width={24} height={24} strokeWidth={2} />
-            </div>
-            <h3>Weekly AI coach reports</h3>
-            <p>
-              Ria reviews your week — adherence, sleep, performance and body metrics — and adapts
-              next week&apos;s plan automatically.
-            </p>
-          </Reveal>
-        </div>
-      </div>
-    </section>
+    <SectionShell
+      id="features"
+      eyebrow="The product"
+      title={
+        <>
+          Everything you need, <GradientText>timed to you</GradientText>
+        </>
+      }
+      subtitle="One app that replaces the four or five you juggle now — coaching, nutrition, training, wearables and community, all aligned to your real schedule."
+      decoration={
+        <>
+          <div
+            className="glow"
+            style={{ width: 620, height: 620, top: '-6%', left: '-10%' }}
+          />
+          <div
+            className="glow-cyan"
+            style={{ width: 520, height: 520, bottom: '-8%', right: '-8%' }}
+          />
+          <div className="dot-bg" />
+        </>
+      }
+    >
+      <Reveal
+        as="ul"
+        stagger
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5 lg:grid-cols-6 lg:auto-rows-fr"
+      >
+        {FEATURES.map((feature) => (
+          <FeatureTile key={feature.title} {...feature} />
+        ))}
+      </Reveal>
+    </SectionShell>
   );
 }
+
+export default Features;

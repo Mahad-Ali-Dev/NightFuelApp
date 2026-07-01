@@ -1,82 +1,108 @@
+import * as React from 'react';
+import { AppBadges } from '@/components/ui/app-badges';
+
 /**
- * Site footer — ported from the legacy `build.mjs` `footer()` markup: a brand
- * blurb plus three link columns (Product / Learn / Company) and a copyright
- * base row. Legacy `*.html` links are mapped to the App Router routes.
- *
- * Plain server component — no interactivity.
+ * Site footer — brand blurb + app badges, three link columns (Product / Learn /
+ * Company & legal), social placeholders, and the copyright base row. Plain
+ * server component (no interactivity).
  */
 
-// Zeitra mark — same inline SVG used in the nav (kept local to avoid a shared
-// client boundary; this is a server component).
-function LogoMark() {
+type Col = { title: string; links: { href: string; label: string; ariaLabel?: string }[] };
+
+const COLUMNS: Col[] = [
+  {
+    title: 'Product',
+    links: [
+      { href: '#features', label: 'Features' },
+      { href: '#how', label: 'How it works' },
+      { href: '#pricing', label: 'Pricing' },
+      { href: '#faq', label: 'FAQ' },
+    ],
+  },
+  {
+    title: 'Company',
+    links: [
+      { href: '/privacy', label: 'Privacy' },
+      { href: '/terms', label: 'Terms' },
+      { href: '/support', label: 'Support' },
+    ],
+  },
+];
+
+const SOCIALS: { label: string; short: string }[] = [
+  { label: 'Zeitra on Instagram (coming soon)', short: 'IG' },
+  { label: 'Zeitra on X / Twitter (coming soon)', short: 'X' },
+  { label: 'Zeitra on LinkedIn (coming soon)', short: 'in' },
+  { label: 'Zeitra on TikTok (coming soon)', short: 'TT' },
+];
+
+function Wordmark() {
   return (
-    <svg
-      className="logo-mark"
-      viewBox="0 0 32 32"
-      width="28"
-      height="28"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <defs>
-        <linearGradient id="zg-footer" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#C5E06B" />
-          <stop offset="1" stopColor="#93B82E" />
-        </linearGradient>
-      </defs>
-      <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#zg-footer)" />
-      <path
-        d="M10 11h12l-9 10h9"
-        fill="none"
-        stroke="#0a0c12"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+    <span className="inline-flex items-center gap-1 text-2xl font-bold uppercase tracking-tight [font-family:var(--font-display)]">
+      Zeitra
+      <span
+        aria-hidden="true"
+        className="mb-1 size-2 self-end rounded-full bg-[var(--color-lime)] shadow-[0_0_12px_2px_rgba(168,204,60,0.55)]"
       />
-      <circle cx="22.5" cy="9.5" r="2.1" fill="#0a0c12" />
-    </svg>
+    </span>
   );
 }
 
 export default function Footer() {
-  const year = 2026;
   return (
-    <footer className="site-footer">
-      <div className="container footer-grid">
-        <div className="footer-brand">
-          <a className="brand" href="/" aria-label="Zeitra home">
-            <LogoMark />
-            <span>Zeitra</span>
-          </a>
-          <p>
-            Chrono-nutrition, training and sleep for the 1.8&nbsp;billion people
-            who work while the world sleeps.
-          </p>
+    <footer className="relative border-t border-[var(--color-border)] bg-[var(--color-panel)]">
+      <div className="container-x py-16 md:py-20">
+        <div className="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr]">
+          {/* brand */}
+          <div className="flex flex-col gap-5">
+            <Wordmark />
+            <p className="max-w-sm text-[var(--color-muted-foreground)]">
+              Nutrition &amp; fitness that runs on your clock. The AI coach that times your
+              meals, training, caffeine and sleep to when you actually work.
+            </p>
+            <AppBadges size="sm" />
+            <ul className="mt-1 flex items-center gap-2">
+              {SOCIALS.map((s) => (
+                <li key={s.short}>
+                  <a
+                    href="#"
+                    aria-label={s.label}
+                    className="inline-flex size-9 items-center justify-center rounded-lg border border-[var(--color-border-strong)] bg-white/[0.03] text-xs font-semibold text-[var(--color-muted-foreground)] transition-colors hover:border-[var(--color-lime)]/40 hover:text-[var(--color-foreground)]"
+                  >
+                    {s.short}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* link columns */}
+          {COLUMNS.map((col) => (
+            <nav key={col.title} aria-label={col.title} className="flex flex-col gap-4">
+              <h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-[var(--color-foreground)]">
+                {col.title}
+              </h3>
+              <ul className="flex flex-col gap-3">
+                {col.links.map((l) => (
+                  <li key={l.label}>
+                    <a
+                      href={l.href}
+                      aria-label={l.ariaLabel}
+                      className="text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)]"
+                    >
+                      {l.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          ))}
         </div>
-        <div className="footer-col">
-          <h4>Product</h4>
-          <a href="/#how">How it works</a>
-          <a href="/#features">Features</a>
-          <a href="/#shifts">Shift types</a>
-          <a href="/#pricing">Pricing</a>
+
+        <div className="mt-14 flex flex-col items-start justify-between gap-4 border-t border-[var(--color-border)] pt-8 text-sm text-[var(--color-muted-foreground)] sm:flex-row sm:items-center">
+          <span>&copy; Zeitra 2026. All rights reserved.</span>
+          <span>Nutrition &amp; fitness that runs on your clock.</span>
         </div>
-        <div className="footer-col">
-          <h4>Learn</h4>
-          <a href="/guide">User guide</a>
-          <a href="/#science">The science</a>
-          <a href="/#faq">FAQ</a>
-          <a href="/support">Support</a>
-        </div>
-        <div className="footer-col">
-          <h4>Company</h4>
-          <a href="/privacy">Privacy</a>
-          <a href="/terms">Terms</a>
-          <a href="mailto:hello@zeitra.app">hello@zeitra.app</a>
-        </div>
-      </div>
-      <div className="container footer-base">
-        <span>&copy; {year} Tase LLC. All rights reserved.</span>
-        <span>Strong today. Better everyday.</span>
       </div>
     </footer>
   );

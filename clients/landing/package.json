@@ -7,8 +7,7 @@
   "scripts": {
     "dev": "next dev --port 4400",
     "build": "next build",
-    "start": "next start",
-    "legacy:build": "node build.mjs"
+    "start": "next start"
   },
   "dependencies": {
     "clsx": "^2.1.1",

@@ -1,110 +1,144 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import * as React from 'react';
+import { Menu, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 /**
- * Site header / sticky top nav — ported from the legacy `build.mjs` `nav()`
- * markup (logo + links + CTA). The mobile menu toggle behavior comes from
- * `app.js`: clicking the hamburger toggles `.nav-open` on the header (and the
- * `aria-expanded` state); clicking any nav link closes the menu again.
+ * Site header — sticky, backdrop-blurred top nav. Wordmark "Zeitra" with a lime
+ * dot, anchor links (Features / How it works / Science / Pricing / FAQ), and a
+ * "Get the app" CTA. A mobile hamburger toggles an accessible drop panel.
  *
- * Links that pointed at the legacy `*.html` files are mapped to the App Router
- * routes (home is `/`, with in-page anchors like `/#how`).
+ * Client component: uses local menu state + a scroll listener to condense the
+ * bar. Static-export safe.
  */
 
-// Zeitra mark — a circadian "Z" in ink on the electric-lime brand tile.
-function LogoMark() {
+const LINKS = [
+  { href: '#features', label: 'Features' },
+  { href: '#how', label: 'How it works' },
+  { href: '#science', label: 'Science' },
+  { href: '#pricing', label: 'Pricing' },
+  { href: '#faq', label: 'FAQ' },
+] as const;
+
+function Wordmark() {
   return (
-    <svg
-      className="logo-mark"
-      viewBox="0 0 32 32"
-      width="28"
-      height="28"
-      aria-hidden="true"
-      focusable="false"
+    <a
+      href="#top"
+      aria-label="Zeitra home"
+      className="group inline-flex items-center gap-1 text-2xl font-bold uppercase tracking-tight [font-family:var(--font-display)]"
     >
-      <defs>
-        <linearGradient id="zg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#C5E06B" />
-          <stop offset="1" stopColor="#93B82E" />
-        </linearGradient>
-      </defs>
-      <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#zg)" />
-      <path
-        d="M10 11h12l-9 10h9"
-        fill="none"
-        stroke="#0a0c12"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+      <span>Zeitra</span>
+      <span
+        aria-hidden="true"
+        className="mb-1 size-2 self-end rounded-full bg-[var(--color-lime)] shadow-[0_0_12px_2px_rgba(168,204,60,0.6)] transition-transform group-hover:scale-125"
       />
-      <circle cx="22.5" cy="9.5" r="2.1" fill="#0a0c12" />
-    </svg>
+    </a>
   );
 }
 
-export default function Nav({ active }: { active?: string }) {
-  const headerRef = useRef<HTMLElement | null>(null);
-  const toggleRef = useRef<HTMLButtonElement | null>(null);
+export default function Nav(_props: { active?: string } = {}) {
+  const [open, setOpen] = React.useState(false);
+  const [scrolled, setScrolled] = React.useState(false);
 
-  useEffect(() => {
-    const header = headerRef.current;
-    const toggle = toggleRef.current;
-    if (!header || !toggle) return;
-
-    const onToggle = () => {
-      const open = header.classList.toggle('nav-open');
-      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    };
-    const onLinkClick = () => {
-      header.classList.remove('nav-open');
-      toggle.setAttribute('aria-expanded', 'false');
-    };
-
-    toggle.addEventListener('click', onToggle);
-    const links = header.querySelectorAll<HTMLAnchorElement>('.nav-links a');
-    links.forEach((a) => a.addEventListener('click', onLinkClick));
-
-    return () => {
-      toggle.removeEventListener('click', onToggle);
-      links.forEach((a) => a.removeEventListener('click', onLinkClick));
-    };
+  React.useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const current = (id: string) =>
-    active === id ? ({ 'aria-current': 'page' } as const) : {};
+  // Close the mobile menu on Escape.
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
 
   return (
-    <header className="site-header" ref={headerRef}>
-      <div className="container nav">
-        <a className="brand" href="/" aria-label="Zeitra home">
-          <LogoMark />
-          <span>Zeitra</span>
-        </a>
+    <header
+      className={cn(
+        'fixed inset-x-0 top-0 z-50 transition-all duration-300',
+        scrolled
+          ? 'border-b border-[var(--color-border)] bg-[var(--color-background)]/80 backdrop-blur-xl'
+          : 'border-b border-transparent bg-transparent',
+      )}
+    >
+      <nav
+        className="container-x flex h-16 items-center justify-between md:h-20"
+        aria-label="Primary"
+      >
+        <Wordmark />
+
+        {/* desktop links */}
+        <ul className="hidden items-center gap-8 md:flex">
+          {LINKS.map((l) => (
+            <li key={l.href}>
+              <a
+                href={l.href}
+                className="text-sm font-medium text-[var(--color-muted-foreground)] transition-colors hover:text-[var(--color-foreground)]"
+              >
+                {l.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+
+        <div className="hidden md:block">
+          <Button as="a" href="#waitlist" variant="primary" size="sm">
+            Get the app
+          </Button>
+        </div>
+
+        {/* mobile toggle */}
         <button
-          className="nav-toggle"
-          aria-label="Menu"
-          aria-expanded="false"
-          ref={toggleRef}
+          type="button"
+          className="inline-flex size-10 items-center justify-center rounded-lg border border-[var(--color-border-strong)] bg-white/[0.04] text-[var(--color-foreground)] md:hidden"
+          aria-label={open ? 'Close menu' : 'Open menu'}
+          aria-expanded={open}
+          aria-controls="mobile-menu"
+          onClick={() => setOpen((v) => !v)}
         >
-          <span></span>
-          <span></span>
-          <span></span>
+          {open ? <X className="size-5" /> : <Menu className="size-5" />}
         </button>
-        <nav className="nav-links">
-          <a href="/#how">How it works</a>
-          <a href="/#features">Features</a>
-          <a href="/#pricing">Pricing</a>
-          <a href="/guide" {...current('guide')}>
-            Guide
-          </a>
-          <a href="/support" {...current('support')}>
-            Support
-          </a>
-          <a className="btn btn-primary btn-sm" href="/#waitlist">
-            Join the waitlist
-          </a>
-        </nav>
+      </nav>
+
+      {/* mobile panel */}
+      <div
+        id="mobile-menu"
+        hidden={!open}
+        className={cn(
+          'md:hidden',
+          'border-t border-[var(--color-border)] bg-[var(--color-background)]/95 backdrop-blur-xl',
+        )}
+      >
+        <ul className="container-x flex flex-col gap-1 py-4">
+          {LINKS.map((l) => (
+            <li key={l.href}>
+              <a
+                href={l.href}
+                onClick={() => setOpen(false)}
+                className="block rounded-lg px-3 py-3 text-base font-medium text-[var(--color-foreground)] hover:bg-white/[0.05]"
+              >
+                {l.label}
+              </a>
+            </li>
+          ))}
+          <li className="mt-2 px-3">
+            <Button
+              as="a"
+              href="#waitlist"
+              variant="primary"
+              size="md"
+              className="w-full"
+              onClick={() => setOpen(false)}
+            >
+              Get the app
+            </Button>
+          </li>
+        </ul>
       </div>
     </header>
   );

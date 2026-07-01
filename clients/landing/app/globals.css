@@ -1,37 +1,436 @@
 @import "tailwindcss";
-@import "../styles.css";
 
-/* Zeitra design tokens for Tailwind + 21st.dev components. The hand-written
-   section styles (lime/Barlow/glass) live in ../styles.css, imported above. */
+/* ============================================================================
+   ZEITRA — premium dark design system (self-contained; 21st.dev idiom).
+   No legacy ../styles.css import — everything the redesign needs is here:
+   Tailwind v4 @theme tokens + base styles + reusable utility classes.
+   ============================================================================ */
+
 @theme {
-  --color-background: #0a0c12;
-  --color-foreground: #f4f6fb;
-  --color-card: #13161f;
+  /* ---- Surfaces ---------------------------------------------------------- */
+  --color-background: #0a0c12;   /* app base */
+  --color-foreground: #f4f6fb;   /* primary text */
+  --color-ink: #0a0c12;          /* on-lime text */
+
+  --color-panel: #0d1017;        /* darker glass panel */
+  --color-panel-2: #13161f;      /* lighter glass panel */
+  --color-card: #13161f;         /* shadcn card alias */
   --color-card-foreground: #f4f6fb;
-  --color-popover: #0a0c12;
+  --color-popover: #0d1017;
   --color-popover-foreground: #f4f6fb;
-  --color-primary: #a8cc3c;
-  --color-primary-foreground: #0a0c12;
-  --color-secondary: #1b2030;
+
+  --color-secondary: #13161f;
   --color-secondary-foreground: #f4f6fb;
   --color-muted: #1b2030;
-  --color-muted-foreground: #9ba3b4;
-  --color-accent: #a8cc3c;
-  --color-accent-foreground: #0a0c12;
-  --color-destructive: #ff4444;
-  --color-border: rgba(255, 255, 255, 0.1);
-  --color-input: rgba(255, 255, 255, 0.1);
-  --color-ring: #a8cc3c;
+  --color-muted-foreground: #9aa3b6; /* meets AA on #0a0c12 */
 
+  /* ---- Accents ----------------------------------------------------------- */
+  --color-primary: #a8cc3c;          /* electric lime — CTAs, emphasis */
+  --color-primary-foreground: #0a0c12;
   --color-lime: #a8cc3c;
   --color-lime-light: #c5e06b;
   --color-lime-dark: #93b82e;
-  --color-cyan: #00d4aa;
-  --color-ink: #0a0c12;
+  --color-cyan: #00d4aa;             /* secondary spark */
+  --color-accent: #a8cc3c;
+  --color-accent-foreground: #0a0c12;
+  --color-destructive: #ff5c5c;
 
-  --radius-lg: 18px;
-  --radius-md: 12px;
+  /* ---- Lines / focus ----------------------------------------------------- */
+  --color-border: rgba(255, 255, 255, 0.10);
+  --color-border-strong: rgba(255, 255, 255, 0.16);
+  --color-input: rgba(255, 255, 255, 0.12);
+  --color-ring: #a8cc3c;
 
-  --font-sans: 'Barlow', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Barlow Condensed', 'Barlow', sans-serif;
+  /* ---- Radii ------------------------------------------------------------- */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-2xl: 34px;
+
+  /* ---- Type -------------------------------------------------------------- */
+  --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-barlow-condensed), var(--font-barlow), sans-serif;
+
+  /* ---- Ambient glow color stops (used by .glow / gradients) -------------- */
+  --glow-lime: rgba(168, 204, 60, 0.22);
+  --glow-cyan: rgba(0, 212, 170, 0.14);
+}
+
+/* ============================================================================
+   Base
+   ============================================================================ */
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* Ambient page tint — a faint dark radial vignette so the base never reads flat. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(168, 204, 60, 0.06), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(0, 212, 170, 0.05), transparent 55%);
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-display);
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+  font-weight: 700;
+  color: var(--color-foreground);
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--color-lime);
+  color: var(--color-ink);
+}
+
+/* Focus visibility — accessible, brand-tinted. */
+:where(a, button, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-lime);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Skip link */
+.skip-link {
+  position: fixed;
+  left: 16px;
+  top: -60px;
+  z-index: 100;
+  background: var(--color-lime);
+  color: var(--color-ink);
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  transition: top 0.2s ease;
+}
+.skip-link:focus {
+  top: 16px;
+}
+
+/* Custom scrollbar (desktop, cosmetic) */
+@media (pointer: fine) {
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track { background: var(--color-background); }
+  ::-webkit-scrollbar-thumb {
+    background: #232838;
+    border-radius: 999px;
+    border: 3px solid var(--color-background);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: #2e3448; }
+}
+
+/* ============================================================================
+   Reusable utility classes (the shared vocabulary for every section)
+   ============================================================================ */
+
+/* --- Layout ------------------------------------------------------------- */
+
+/* Centered max-width gutter. Every section body sits in one of these. */
+.container-x {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 20px;
+  position: relative;
+  z-index: 1;
+}
+@media (min-width: 768px) {
+  .container-x { padding-inline: 32px; }
+}
+
+/* Consistent responsive vertical rhythm for a section. */
+.section {
+  position: relative;
+  padding-block: 72px;
+}
+@media (min-width: 768px) {
+  .section { padding-block: 104px; }
+}
+@media (min-width: 1024px) {
+  .section { padding-block: 128px; }
+}
+
+/* --- Glass surface ------------------------------------------------------ */
+.glass {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    var(--color-panel-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.05) inset,
+    0 24px 60px -30px rgba(0, 0, 0, 0.7);
+}
+
+/* --- Gradient hairline border (masked ring, doesn't fill the tile) ------ */
+.gradient-border {
+  position: relative;
+  border-radius: var(--radius-xl);
+}
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(168, 204, 60, 0.55),
+    rgba(0, 212, 170, 0.28) 45%,
+    rgba(255, 255, 255, 0.06) 75%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* --- Ambient radial glow (place behind hero / CTA) ---------------------- */
+.glow {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(circle at center, var(--glow-lime), transparent 70%);
+}
+.glow-cyan {
+  background: radial-gradient(circle at center, var(--glow-cyan), transparent 70%);
+}
+
+/* --- Background textures ------------------------------------------------ */
+.grid-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 64px 64px;
+  /* fade the grid toward the edges so it never reads as a hard mesh */
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 78%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 78%);
+}
+.dot-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 20%, transparent 75%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 20%, transparent 75%);
+}
+
+/* --- Gradient text ------------------------------------------------------ */
+.gradient-text {
+  background: linear-gradient(100deg, var(--color-lime-light), var(--color-lime) 55%, var(--color-cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* keep a solid fallback so text never vanishes if clip is unsupported */
+  -webkit-text-fill-color: transparent;
+}
+
+/* --- Scroll reveal (CSS fallback; framer-motion drives the primitive) --- */
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal.in,
+.reveal[data-in="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+/* --- Marquee keyframes (Marquee primitive references these) ------------- */
+@keyframes marquee-x {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee-x var(--marquee-duration, 32s) linear infinite;
+}
+.marquee-mask {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+
+/* ============================================================================
+   Legacy compatibility shims
+   A few remaining pages (guide, 404) still use the pre-redesign class names
+   (.container / .eyebrow / .grad / .btn). Map them onto the new tokens so those
+   pages stay readable now that styles.css is gone.
+   ============================================================================ */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 20px;
+  position: relative;
+  z-index: 1;
+}
+@media (min-width: 768px) {
+  .container { padding-inline: 32px; }
+}
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  background: rgba(168, 204, 60, 0.08);
+  color: var(--color-lime);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.grad {
+  background: linear-gradient(100deg, var(--color-lime-light), var(--color-lime) 55%, var(--color-cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  padding-inline: 24px;
+  border-radius: 999px;
+  font-weight: 700;
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn-primary {
+  background: var(--color-lime);
+  color: var(--color-ink);
+}
+.btn-ghost {
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-foreground);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* ============================================================================
+   Legal / long-form prose
+   Styles the HTML produced by renderLegal() (privacy & terms markdown) and any
+   long-form article body. Scoped so it only affects .legal-prose containers.
+   ============================================================================ */
+.legal-prose {
+  color: var(--color-foreground);
+  font-size: 16px;
+  line-height: 1.75;
+}
+.legal-prose > * + * { margin-top: 1.1em; }
+.legal-prose h1 {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  margin-bottom: 0.25em;
+}
+.legal-prose h2 {
+  font-size: clamp(1.35rem, 2.4vw, 1.7rem);
+  margin-top: 2em;
+  padding-top: 1.4em;
+  border-top: 1px solid var(--color-border);
+}
+.legal-prose h3 { font-size: 1.2rem; margin-top: 1.6em; }
+.legal-prose p,
+.legal-prose li { color: var(--color-muted-foreground); }
+.legal-prose strong { color: var(--color-foreground); font-weight: 600; }
+.legal-prose a {
+  color: var(--color-lime);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(168, 204, 60, 0.4);
+}
+.legal-prose a:hover { text-decoration-color: var(--color-lime); }
+.legal-prose ul,
+.legal-prose ol { padding-left: 1.4em; }
+.legal-prose ul { list-style: disc; }
+.legal-prose ol { list-style: decimal; }
+.legal-prose li { margin-top: 0.4em; }
+.legal-prose li::marker { color: var(--color-lime); }
+.legal-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  padding: 0.15em 0.4em;
+  border-radius: 6px;
+  background: var(--color-muted);
+  color: var(--color-foreground);
+}
+.legal-prose blockquote {
+  border-left: 3px solid var(--color-lime);
+  padding-left: 1em;
+  color: var(--color-muted-foreground);
+  font-style: italic;
+}
+.legal-prose hr { border: 0; border-top: 1px solid var(--color-border); margin-block: 2em; }
+.legal-prose table { width: 100%; border-collapse: collapse; }
+.legal-prose th,
+.legal-prose td {
+  border: 1px solid var(--color-border);
+  padding: 10px 12px;
+  text-align: left;
+}
+.legal-prose th { color: var(--color-foreground); font-weight: 600; }
+
+/* ============================================================================
+   Reduced motion
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .reveal { opacity: 1; transform: none; }
+  .animate-marquee { animation: none; }
 }
