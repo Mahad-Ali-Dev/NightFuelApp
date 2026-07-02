@@ -120,12 +120,18 @@ function RiaAvatar({ small = false }: { small?: boolean }) {
   return (
     <span
       className={
-        'flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-lime)] to-[var(--color-lime-dark)] text-[var(--color-ink)] shadow-[0_0_18px_-4px_var(--glow-lime)] ' +
+        'flex shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-[var(--color-lime)]/50 shadow-[0_0_18px_-4px_var(--glow-lime)] ' +
         (small ? 'size-7' : 'size-8')
       }
       aria-hidden="true"
     >
-      <Sparkles className={small ? 'size-3.5' : 'size-4'} />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/images/logo.png"
+        alt=""
+        className="h-full w-full select-none object-cover"
+        draggable={false}
+      />
     </span>
   );
 }
