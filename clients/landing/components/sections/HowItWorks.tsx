@@ -21,6 +21,9 @@ interface Step {
   title: string;
   body: string;
   caption: string;
+  /** Real on-device screen shown in the step's phone. */
+  screen: string;
+  alt: string;
 }
 
 const STEPS: Step[] = [
@@ -30,6 +33,8 @@ const STEPS: Step[] = [
     title: 'Tell Zeitra your shifts & goals',
     body: 'Set your real rota — nights, rotating, split or on-call — plus your goals. No pretending you work 9-to-5.',
     caption: 'Your shift pattern',
+    screen: '/images/app/sleep-window.webp',
+    alt: 'Zeitra preferences — setting a sleep window and circadian rhythm around a shift',
   },
   {
     n: '02',
@@ -37,6 +42,8 @@ const STEPS: Step[] = [
     title: 'Ria builds your timed plan',
     body: 'Your AI coach times meals, training, caffeine and sleep around your clock — chrono-nutrition, done for you.',
     caption: 'Ria plans your day',
+    screen: '/images/app/rhythm.webp',
+    alt: 'Zeitra — the “your rhythm tonight” timeline Ria builds for the shift',
   },
   {
     n: '03',
@@ -44,6 +51,8 @@ const STEPS: Step[] = [
     title: 'Log by photo, sync, adapt',
     body: 'Snap a plate to log it, sync any watch, and Zeitra adapts your plan every single day as life shifts.',
     caption: 'Log & adapt',
+    screen: '/images/app/log-meal.webp',
+    alt: 'Zeitra — logging a meal by snapping a plate or scanning a barcode',
   },
 ];
 
@@ -113,7 +122,12 @@ export function HowItWorks() {
 
               {/* Phone frame */}
               <div className="mt-auto flex justify-center pt-2">
-                <DeviceFrame width={200} caption={step.caption} />
+                <DeviceFrame
+                  width={200}
+                  caption={step.caption}
+                  src={step.screen}
+                  alt={step.alt}
+                />
               </div>
             </GlowCard>
 

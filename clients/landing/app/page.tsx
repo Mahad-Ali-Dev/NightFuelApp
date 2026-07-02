@@ -3,6 +3,7 @@ import Footer from '@/components/site/Footer';
 import { MorphHero } from '@/components/sections/MorphHero';
 import { Stats } from '@/components/sections/Stats';
 import { Problem } from '@/components/sections/Problem';
+import { Personas } from '@/components/sections/Personas';
 import { FeaturesDetailed } from '@/components/sections/FeaturesDetailed';
 import { HowItWorks } from '@/components/sections/HowItWorks';
 import { FeatureShowcase } from '@/components/sections/FeatureShowcase';
@@ -33,6 +34,7 @@ export default function Home() {
         <MorphHero />
         <Stats />
         <Problem />
+        <Personas />
         <FeaturesDetailed />
         <HowItWorks />
         <FeatureShowcase />
