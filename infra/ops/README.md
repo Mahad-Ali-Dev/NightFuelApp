@@ -42,6 +42,30 @@ Test restores periodically (into a scratch DB: `createdb scratch && pg_restore -
 (The postgres container's own `POSTGRES_PASSWORD` env is only read on FIRST
 init of an empty volume — step 2 is what actually changes it.)
 
+## Operational gotchas (learned the hard way, 2026-07-02)
+
+- **Gateway nginx.conf changes need `docker compose restart nginx`, NOT `nginx -s reload`.**
+  The conf is a single-FILE bind mount; `git checkout` replaces the file's inode,
+  so the running container keeps seeing the OLD content (and `nginx -t` inside it
+  validates the old file too). Restart re-binds the path.
+- **`docker compose exec -T <svc> ...` inside a piped/heredoc script eats the rest
+  of the script as its stdin.** Every `compose exec` in scripts must end with
+  `</dev/null` (the ops scripts here do this implicitly by being invoked as files
+  from cron, but interactive heredocs must add it).
+- `/health` on the gateway is a plain `return 200` — nginx executes `return` in
+  the rewrite phase, BEFORE `limit_req` (preaccess), so health checks are never
+  rate-limited. By design; don't "fix" it.
+
+## Verified state (2026-07-02)
+
+- Edge rate limits live + burst-tested: global 110 pass/40×429 at loopback speed,
+  auth 22 pass/18×429; WAN clients never trip it.
+- Postgres password rotated to a random 48-hex value living only in the VPS
+  `.env` (mode 600); all 17 services recreated and healthy on the new credential.
+- First backup: 14 DBs, 1.3MB, integrity-checked — and RESTORE-TESTED (auth dump
+  → scratch DB → 104 users → dropped).
+- Watchdog: both targets green; alerts to info@reviewboostcard.com via Resend.
+
 ## Still on the list (needs owner accounts / later scale)
 
 - **Cloudflare in front of zeitra.app + api.zeitra.app** — free tier = CDN + WAF + edge DDoS. Owner action: add site on cloudflare.com, move the two DNS records behind the proxy (orange cloud), SSL mode "Full (strict)".
