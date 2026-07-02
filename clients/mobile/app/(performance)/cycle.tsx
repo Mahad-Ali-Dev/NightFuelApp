@@ -18,6 +18,7 @@ import { CycleCalendar } from '@/components/cycle/CycleCalendar';
 import { CycleHistoryCard } from '@/components/cycle/CycleHistoryCard';
 import { PhaseFoodsCard } from '@/components/cycle/PhaseFoodsCard';
 import { LogPeriodCard } from '@/components/cycle/LogPeriodCard';
+import { SymptomQuickLogCard } from '@/components/cycle/SymptomQuickLogCard';
 import { MedicalDisclaimerBanner } from '@/components/MedicalDisclaimer';
 import { getMyProfile, getStatus, updateProfile } from '@/api/profile';
 import { getCycleForecast, getCycleHistory } from '@/api/cycle';
@@ -338,6 +339,12 @@ export default function CycleScreen() {
                         Measured so the thumb-zone anchor can scroll straight to it. */}
                     <Animated.View entering={enter(5)} onLayout={onLogCardLayout}>
                         <LogPeriodCard />
+                    </Animated.View>
+
+                    {/* Per-day symptom quick log (mood / cramps / energy) —
+                        one-tap chips, upserts today's row. */}
+                    <Animated.View entering={enter(5)}>
+                        <SymptomQuickLogCard />
                     </Animated.View>
 
                     {/* History + averages + variability range. */}

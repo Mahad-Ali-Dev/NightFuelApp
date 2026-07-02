@@ -113,3 +113,40 @@ export const getCycleForecast = async (months = 1): Promise<CycleForecast> => {
     });
     return data;
 };
+
+// ── Cycle symptoms (per-day quick log) ─────────────────────────────────────────
+export type SymptomFlow = 'NONE' | 'SPOTTING' | 'LIGHT' | 'MEDIUM' | 'HEAVY';
+
+export interface CycleSymptomEntry {
+    id: string;
+    date: string;            // ISO date
+    mood: number | null;     // 1..5
+    cramps: number | null;   // 0..3
+    energy: number | null;   // 1..5
+    flow: SymptomFlow | null;
+    notes: string | null;
+}
+
+export interface LogSymptomsBody {
+    date?: string;           // YYYY-MM-DD; defaults to today server-side
+    mood?: number;
+    cramps?: number;
+    energy?: number;
+    flow?: SymptomFlow;
+    notes?: string;
+}
+
+/** POST /v1/users/me/cycle/symptoms — upsert today's (or a given day's) quick log. */
+export const logCycleSymptoms = async (body: LogSymptomsBody): Promise<CycleSymptomEntry> => {
+    const { data } = await apiClient.post<CycleSymptomEntry>('/v1/users/me/cycle/symptoms', body);
+    return data;
+};
+
+/** GET /v1/users/me/cycle/symptoms?days= — trailing window, newest first. */
+export const getCycleSymptoms = async (days = 35): Promise<{ symptoms: CycleSymptomEntry[] }> => {
+    const { data } = await apiClient.get<{ symptoms: CycleSymptomEntry[] }>(
+        '/v1/users/me/cycle/symptoms',
+        { params: { days } },
+    );
+    return data;
+};

@@ -138,6 +138,26 @@ const start = async (): Promise<void> => {
         const port = parseInt(config.USER_PORT, 10);
         await fastify.listen({ port, host: '0.0.0.0' });
         logger.info(`User Service running on port ${port}`);
+
+        // ── Period-reminder sweep ────────────────────────────────────────────
+        // Publishes `cycle:period-approaching` for eligible users (see
+        // sweepPeriodReminders — uncertainty-aware, one nudge per cycle).
+        // Every 6h + one warm-up pass shortly after boot; a `running` latch
+        // guards against overlap; failures are logged and never fatal.
+        let sweepRunning = false;
+        const runSweep = async () => {
+            if (sweepRunning) return;
+            sweepRunning = true;
+            try {
+                await userService.sweepPeriodReminders();
+            } catch (err) {
+                logger.warn({ err }, 'Period reminder sweep failed (will retry next tick)');
+            } finally {
+                sweepRunning = false;
+            }
+        };
+        setTimeout(() => { void runSweep(); }, 90_000).unref();
+        setInterval(() => { void runSweep(); }, 6 * 60 * 60 * 1000).unref();
     } catch (err) {
         logger.error(err, 'Failed to start user-service');
         process.exit(1);

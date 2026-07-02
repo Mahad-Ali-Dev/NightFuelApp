@@ -1238,6 +1238,126 @@ export class UserService {
         return computeCycleForecast(input, windowStart, windowEnd, now);
     }
 
+    /**
+     * Upsert the per-day symptom quick-log (mood / cramps / energy / flow /
+     * notes). One row per user per calendar day — re-logging the same day
+     * merges the new fields over the old (partial updates supported).
+     */
+    async logCycleSymptoms(userId: string, body: {
+        date?: string;
+        mood?: number;
+        cramps?: number;
+        energy?: number;
+        flow?: string;
+        notes?: string;
+    }) {
+        await this.ensureProfileExists(userId);
+        const day = new Date(`${body.date ?? new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+
+        // Same `any` shim precedent as periodLog (checked-in generated client
+        // may predate the model; schema + db push own the runtime table).
+        const fields: Record<string, unknown> = {};
+        if (body.mood != null) fields.mood = body.mood;
+        if (body.cramps != null) fields.cramps = body.cramps;
+        if (body.energy != null) fields.energy = body.energy;
+        if (body.flow != null) fields.flow = body.flow;
+        if (body.notes != null) fields.notes = body.notes;
+
+        const row = await (this.prisma as any).cycleSymptomLog.upsert({
+            where: { userId_date: { userId, date: day } },
+            create: { userId, date: day, ...fields },
+            update: fields,
+        });
+        logger.info({ userId }, 'Cycle symptoms logged');
+        return row;
+    }
+
+    /** Symptom rows for the trailing `days` window (default 35), newest first. */
+    async getCycleSymptoms(userId: string, days = 35) {
+        const cutoff = new Date(Date.now() - days * 86_400_000);
+        const rows = await (this.prisma as any).cycleSymptomLog.findMany({
+            where: { userId, date: { gte: cutoff } },
+            orderBy: { date: 'desc' },
+        });
+        return { symptoms: rows ?? [] };
+    }
+
+    /**
+     * Daily "period approaching" reminder sweep. For every FEMALE profile with
+     * tracking on and learned cycle inputs, when the next expected period start
+     * is 1–2 days out, publish `cycle:period-approaching` (notification-service
+     * turns it into a discreet push) and stamp lastPeriodReminderAt so each
+     * cycle nudges at most once (≥14-day cooldown).
+     *
+     * UNCERTAINTY-AWARE by design: profiles whose LEARNED regularity is
+     * IRREGULAR are skipped — we never send a confident-sounding reminder off a
+     * forecast the model itself flags as unreliable.
+     */
+    async sweepPeriodReminders(): Promise<{ checked: number; reminded: number }> {
+        const now = new Date();
+        const cooldownBefore = new Date(now.getTime() - 14 * 86_400_000);
+
+        const profiles = await (this.prisma as any).userProfile.findMany({
+            where: {
+                cycleTrackingEnabled: true,
+                biologicalSex: 'FEMALE',
+                lastPeriodStartDate: { not: null },
+                NOT: { cycleRegularity: 'IRREGULAR' },
+                OR: [
+                    { lastPeriodReminderAt: null },
+                    { lastPeriodReminderAt: { lt: cooldownBefore } },
+                ],
+            },
+            select: {
+                userId: true,
+                lastPeriodStartDate: true,
+                avgCycleLengthDays: true,
+            },
+            take: 1000,
+        });
+
+        let reminded = 0;
+        for (const p of profiles as Array<{
+            userId: string;
+            lastPeriodStartDate: Date;
+            avgCycleLengthDays: number | null;
+        }>) {
+            const cycleLen = p.avgCycleLengthDays ?? 28;
+            const nextStart = new Date(p.lastPeriodStartDate.getTime() + cycleLen * 86_400_000);
+            const daysUntil = Math.ceil((nextStart.getTime() - now.getTime()) / 86_400_000);
+            if (daysUntil < 1 || daysUntil > 2) continue;
+
+            try {
+                await this.eventBus.publish('cycle:period-approaching', {
+                    eventId: randomUUID(),
+                    eventType: 'cycle.period-approaching',
+                    producedAt: now.toISOString(),
+                    producerService: 'user-service',
+                    correlationId: randomUUID(),
+                    userId: p.userId,
+                    payload: {
+                        recipientId: p.userId,
+                        daysUntil,
+                        expectedDate: nextStart.toISOString().slice(0, 10),
+                    },
+                });
+                await this.prisma.userProfile.update({
+                    where: { userId: p.userId },
+                    data: { lastPeriodReminderAt: now } as any,
+                });
+                reminded += 1;
+            } catch (err) {
+                // Best-effort per user — one failure never aborts the sweep.
+                logger.warn({ err, userId: p.userId }, 'period-reminder publish failed');
+            }
+        }
+
+        if (profiles.length > 0) {
+            logger.info({ checked: profiles.length, reminded }, 'Period reminder sweep done');
+        }
+        return { checked: profiles.length, reminded };
+    }
+
     // ── GDPR account deletion (own-data purge + event) ────────────────────────
 
     /**
@@ -1275,6 +1395,7 @@ export class UserService {
         const [
             coachClientRelations,
             periodLogs,
+            cycleSymptomLogs,
             userStatuses,
             userPreferences,
             coachProfiles,
@@ -1285,6 +1406,8 @@ export class UserService {
                 where: { OR: [{ coachUserId: userId }, { clientUserId: userId }] },
             }),
             p.periodLog.deleteMany({ where: { userId } }),
+            // cycle_symptom_logs: GDPR Art.9 special-category health data.
+            p.cycleSymptomLog.deleteMany({ where: { userId } }),
             this.prisma.userStatus.deleteMany({ where: { userId } }),
             this.prisma.userPreferences.deleteMany({ where: { userId } }),
             p.coachProfile.deleteMany({ where: { userId } }),
@@ -1295,6 +1418,7 @@ export class UserService {
         const deletedCounts: Record<string, number> = {
             coach_client_relations: coachClientRelations.count,
             period_logs: periodLogs.count,
+            cycle_symptom_logs: cycleSymptomLogs.count,
             user_statuses: userStatuses.count,
             user_preferences: userPreferences.count,
             coach_profiles: coachProfiles.count,
@@ -1345,7 +1469,7 @@ export class UserService {
             }
         };
 
-        const [profile, preferences, status, coachProfile, coachClientRelations, periodLogs, cycleHistory, cycleForecast] =
+        const [profile, preferences, status, coachProfile, coachClientRelations, periodLogs, cycleSymptomLogs, cycleHistory, cycleForecast] =
             await Promise.all([
                 safe('profile', () => this.prisma.userProfile.findUnique({ where: { userId } })),
                 safe('preferences', () => this.prisma.userPreferences.findUnique({ where: { userId } })),
@@ -1360,6 +1484,9 @@ export class UserService {
                 safe('periodLogs', () =>
                     p.periodLog.findMany({ where: { userId }, orderBy: { startDate: 'asc' } }),
                 ),
+                safe('cycleSymptomLogs', () =>
+                    p.cycleSymptomLog.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
+                ),
                 // Read-only derived views the user sees in-app.
                 safe('cycleHistory', () => this.getCycleHistory(userId)),
                 safe('cycleForecast', () => this.getCycleForecast(userId, 1)),
@@ -1373,6 +1500,7 @@ export class UserService {
             coachProfile,
             coachClientRelations,
             periodLogs,
+            cycleSymptomLogs,
             cycleHistory,
             cycleForecast,
         };

@@ -599,6 +599,48 @@ export function setupEventSubscribers(
         },
     });
 
+    // ── cycle:period-approaching → discreet reminder push ────────────────────
+    // Published by user-service's daily sweep (uncertainty-aware: irregular
+    // cycles never trigger it). COPY IS DELIBERATELY DISCREET — push previews
+    // land on lock screens, so the title says only "Cycle update"; the detail
+    // lives in the body and the deep-linked screen.
+    interface PeriodApproachingPayload {
+        recipientId: string;
+        daysUntil: number;
+        expectedDate: string;
+    }
+    eventBus.subscribeDurable<PeriodApproachingPayload>({
+        stream: 'cycle:period-approaching',
+        group: 'notification-service',
+        handler: async (event: NightFuelEvent<PeriodApproachingPayload>) => {
+            const { payload, eventId } = event;
+            if (!payload?.recipientId) return;
+            try {
+                const days = payload.daysUntil === 1 ? 'tomorrow' : `in about ${payload.daysUntil} days`;
+                const deepLink = '/(performance)/cycle';
+                const body = `Your next period is likely ${days}. Ria can ease your plan — tap to see.`;
+                const data = { deepLink, kind: 'period-approaching', eventId, expectedDate: payload.expectedDate };
+                const n = await notificationService.createNotificationIfEnabled({
+                    userId: payload.recipientId,
+                    type: 'SYSTEM',
+                    title: 'Cycle update',
+                    body,
+                    data,
+                });
+                await pushService.sendToUser(payload.recipientId, {
+                    title: 'Cycle update',
+                    body,
+                    url: deepLink,
+                    data,
+                });
+                broadcastToUser(fastify, payload.recipientId, n);
+            } catch (err) {
+                logger.error({ err, eventId }, 'Failed to send period-approaching notification');
+                throw err;
+            }
+        },
+    });
+
     const subscribedChannels = [
         Channels.Plan.PlanGenerated,
         WORKOUT_GENERATED_CHANNEL,
@@ -613,6 +655,7 @@ export function setupEventSubscribers(
         'community:post-commented',
         'community:user-followed',
         'community:post-created',
+        'cycle:period-approaching',
     ];
 
     logger.info({ channels: subscribedChannels }, 'notification-service: all event subscribers registered');

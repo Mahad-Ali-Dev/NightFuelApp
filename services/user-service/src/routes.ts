@@ -9,6 +9,8 @@ import {
     updatePrivacySchema,
     logPeriodSchema,
     cycleForecastQuerySchema,
+    logSymptomsSchema,
+    symptomsQuerySchema,
 } from './schemas';
 import { z } from 'zod';
 import { UserService } from './user.service';
@@ -537,6 +539,52 @@ export const userRoutes = async (
                 const { months } = request.query as { months?: number };
                 const forecast = await service.getCycleForecast(userId, months ?? 1);
                 return reply.code(200).send(forecast);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // POST /v1/users/me/cycle/symptoms — per-day symptom quick-log (mood /
+    // cramps / energy / flow / notes). Upserts on (user, day): re-logging the
+    // same day merges fields. Same self-only identity contract as the other
+    // cycle routes (extractUserId is the only identity source).
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/me/cycle/symptoms',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { body: logSymptomsSchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const row = await service.logCycleSymptoms(userId, request.body as any);
+                return reply.code(201).send(row);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/cycle/symptoms?days=35 — trailing symptom window.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/cycle/symptoms',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { querystring: symptomsQuerySchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const { days } = request.query as { days?: number };
+                const result = await service.getCycleSymptoms(userId, days ?? 35);
+                return reply.code(200).send(result);
             } catch (err: any) {
                 request.log.error(err);
                 return reply.code(500).send({ error: 'Internal server error' });

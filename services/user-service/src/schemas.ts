@@ -113,3 +113,26 @@ export const waitlistJoinSchema = z.object({
     source: z.string().trim().max(64).optional(),
 });
 export type WaitlistJoinBody = z.infer<typeof waitlistJoinSchema>;
+
+// ── Cycle symptoms (per-day quick log) ────────────────────────────────────────
+export const logSymptomsSchema = z
+    .object({
+        // Calendar day (YYYY-MM-DD). Defaults to "today" at the service layer.
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        mood: z.number().int().min(1).max(5).optional(),
+        cramps: z.number().int().min(0).max(3).optional(),
+        energy: z.number().int().min(1).max(5).optional(),
+        flow: z.enum(['NONE', 'SPOTTING', 'LIGHT', 'MEDIUM', 'HEAVY']).optional(),
+        notes: z.string().trim().max(280).optional(),
+    })
+    .refine(
+        (b) => b.mood != null || b.cramps != null || b.energy != null || b.flow != null || !!b.notes,
+        { message: 'Log at least one symptom field' }
+    );
+export type LogSymptomsBody = z.infer<typeof logSymptomsSchema>;
+
+export const symptomsQuerySchema = z.object({
+    // How many days back to return (default 35 ≈ one cycle + margin).
+    days: z.coerce.number().int().min(1).max(120).optional(),
+});
+export type SymptomsQuery = z.infer<typeof symptomsQuerySchema>;
