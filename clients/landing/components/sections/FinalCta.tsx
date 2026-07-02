@@ -112,7 +112,7 @@ export function FinalCta() {
 
             <h2
               id="waitlist-cta-title"
-              className="text-4xl font-bold uppercase leading-[0.98] tracking-tight md:text-6xl [font-family:var(--font-display)]"
+              className="text-4xl font-bold leading-[1.06] tracking-[-0.02em] md:text-[3.4rem] [font-family:var(--font-display)]"
             >
               Start training <GradientText>on your clock.</GradientText>
             </h2>

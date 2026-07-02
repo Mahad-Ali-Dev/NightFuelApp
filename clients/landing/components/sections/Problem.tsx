@@ -71,7 +71,7 @@ export function Problem() {
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-muted-foreground)]">
               What the 9-to-5 apps assume
             </p>
-            <p className="mt-3 text-2xl md:text-3xl font-semibold uppercase leading-[1.05] [font-family:var(--font-display)] text-[var(--color-muted-foreground)]">
+            <p className="mt-3 text-2xl md:text-3xl font-semibold leading-[1.12] tracking-[-0.01em] [font-family:var(--font-display)] text-[var(--color-muted-foreground)]">
               Same hours.
               <br />
               Same body.
@@ -90,10 +90,10 @@ export function Problem() {
           </div>
 
           <GlowCard highlight className="p-6 md:p-7">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-lime-light)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-lime-dark)] dark:text-[var(--color-lime-light)]">
               What your life actually looks like
             </p>
-            <p className="mt-3 text-2xl md:text-3xl font-semibold uppercase leading-[1.05] [font-family:var(--font-display)]">
+            <p className="mt-3 text-2xl md:text-3xl font-semibold leading-[1.12] tracking-[-0.01em] [font-family:var(--font-display)]">
               Nights. Earlies.
               <br />
               Doubles. Cycles.

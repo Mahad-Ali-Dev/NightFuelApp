@@ -81,7 +81,7 @@ export function SectionShell({
             {title && (
               <h2
                 id={titleId}
-                className="text-4xl md:text-5xl lg:text-6xl font-bold uppercase leading-[0.98]"
+                className="text-4xl md:text-[2.9rem] lg:text-[3.4rem] font-bold leading-[1.06] tracking-[-0.02em]"
               >
                 {title}
               </h2>

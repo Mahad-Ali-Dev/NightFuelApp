@@ -174,7 +174,7 @@ function ShowcaseRow({ row, flip }: { row: Row; flip: boolean }) {
             <Icon className="size-3.5" />
             {row.eyebrow}
           </span>
-          <h3 className="mt-4 [font-family:var(--font-display)] text-3xl font-bold uppercase leading-[1.02] tracking-tight md:text-4xl">
+          <h3 className="mt-4 [font-family:var(--font-display)] text-3xl font-bold leading-[1.08] tracking-[-0.02em] md:text-4xl">
             {row.title}
           </h3>
           <p className="mt-4 max-w-md text-[15px] leading-relaxed text-[var(--color-muted-foreground)]">

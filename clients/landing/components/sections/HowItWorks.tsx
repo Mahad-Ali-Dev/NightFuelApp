@@ -111,7 +111,7 @@ export function HowItWorks() {
 
               {/* Copy */}
               <div className="flex flex-col gap-2.5">
-                <h3 className="text-2xl font-semibold uppercase leading-tight [font-family:var(--font-display)]">
+                <h3 className="text-2xl font-semibold leading-tight tracking-[-0.01em] [font-family:var(--font-display)]">
                   <span className="sr-only">{`Step ${i + 1}: `}</span>
                   {step.title}
                 </h3>

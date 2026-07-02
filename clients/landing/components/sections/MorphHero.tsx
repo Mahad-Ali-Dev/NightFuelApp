@@ -45,9 +45,19 @@ export function MorphHero() {
       {/* ── 1 · Headline block ─────────────────────────────────────────── */}
       <div className="container-x relative z-10 pt-14 pb-4 text-center md:pt-20">
         <Reveal className="mx-auto flex max-w-3xl flex-col items-center gap-5">
-          <Badge variant="lime">Built for the 1.8B the 9-to-5 apps forget</Badge>
+          {/* SaaS announcement pill */}
+          <a
+            href="#features"
+            className="group inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-panel)] py-1.5 pl-2 pr-3.5 text-[13px] font-medium text-[var(--color-muted-foreground)] shadow-[0_1px_2px_rgba(15,23,20,0.05)] transition-colors hover:border-[var(--color-lime)]/50 hover:text-[var(--color-foreground)]"
+          >
+            <span className="rounded-full bg-[var(--color-lime)]/15 px-2 py-0.5 text-[11px] font-semibold text-[var(--color-lime-dark)]">
+              New
+            </span>
+            Now on iOS &amp; Android — meet Zeitra
+            <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
+          </a>
 
-          <h1 className="[font-family:var(--font-display)] text-[2.75rem] font-bold uppercase leading-[0.98] tracking-tight md:text-7xl">
+          <h1 className="[font-family:var(--font-display)] text-[2.9rem] font-bold leading-[1.04] tracking-[-0.025em] md:text-[4.6rem]">
             Your body runs on shifts.
             <br />
             So should <GradientText>your fuel.</GradientText>

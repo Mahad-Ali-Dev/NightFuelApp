@@ -117,7 +117,7 @@ export function Personas() {
                     <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--color-lime-light)]">
                       {p.eyebrow}
                     </span>
-                    <h3 className="text-2xl font-bold uppercase leading-tight [font-family:var(--font-display)]">
+                    <h3 className="text-2xl font-bold leading-tight tracking-[-0.01em] [font-family:var(--font-display)]">
                       {p.title}
                     </h3>
                   </div>
