@@ -7,6 +7,7 @@ import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
 import { CommunityService } from './community.service';
 import { AuthorResolver } from './author-resolver';
+import { RedisEventBus } from '@nightfuel/events';
 import { registerMultipartCollector } from './uploads';
 import routes from './routes';
 
@@ -23,6 +24,9 @@ const envSchema = z.object({
     // preHandler. Defaulted to '' so boot doesn't break in dev; an empty expected
     // token fails CLOSED (the guard 404s every request until the token is set).
     INTERNAL_SERVICE_TOKEN: z.string().default(''),
+    // Social-event publishing (post-liked / commented / followed / created) —
+    // consumed by notification-service for in-app + push fan-out.
+    REDIS_URL: z.string().default('redis://redis:6379'),
 });
 
 const config = loadConfig(envSchema);
@@ -56,7 +60,9 @@ fastify.get('/health', async () => {
 });
 
 const authorResolver = new AuthorResolver(config.JWT_SECRET, config.USER_SERVICE_URL);
-const communityService = new CommunityService(prisma, authorResolver);
+// Best-effort social-event bus (additive third arg — see CommunityService ctor).
+const eventBus = new RedisEventBus(config.REDIS_URL);
+const communityService = new CommunityService(prisma, authorResolver, eventBus);
 fastify.register(routes, {
     communityService,
     jwtSecret: config.JWT_SECRET,

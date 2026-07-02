@@ -19,6 +19,9 @@ interface ChatMessageSentPayload {
     recipientId: string;
     conversationId: string;
     textPreview: string;
+    /** Sender's display identity (added 2026-07: title/avatar for a real-feeling push). */
+    senderName?: string;
+    senderAvatarUrl?: string;
 }
 
 // BUG #6: channel exercise-service publishes when an AI workout routine is
@@ -388,18 +391,27 @@ export function setupEventSubscribers(
                 // — NOT the conversationId (which the screen treats as a userId).
                 const deepLink = event.userId ? `/messages/${event.userId}` : `/messages/${conversationId}`;
                 const body = payload.textPreview ?? '';
+                // Sender identity (when the publisher resolved it): the push tray
+                // shows "Mahad Ali" as the title — like a real messenger — and the
+                // avatar rides in `data` for in-app notification rendering.
+                const senderName = payload.senderName?.trim();
+                const title = senderName || 'New message';
+                const identity = {
+                    senderName: senderName ?? null,
+                    senderAvatarUrl: payload.senderAvatarUrl ?? null,
+                };
                 const n = await notificationService.createNotificationIfEnabled({
                     userId: recipientId,
                     type: 'COACH_MESSAGE',
-                    title: 'New message',
+                    title,
                     body,
-                    data: { conversationId, deepLink, eventId },
+                    data: { conversationId, deepLink, eventId, ...identity },
                 });
                 await pushService.sendToUser(recipientId, {
-                    title: 'New message',
+                    title,
                     body,
                     url: deepLink,
-                    data: { conversationId, deepLink },
+                    data: { conversationId, deepLink, ...identity },
                 });
                 broadcastToUser(fastify, recipientId, n);
                 logger.info({ recipientId, conversationId }, 'COACH_MESSAGE (chat) notification sent');
@@ -408,6 +420,183 @@ export function setupEventSubscribers(
                 throw err;
             }
         }
+    });
+
+    // ── Social events (community-service) → SYSTEM notifications + push ──────
+    // Raw string channels shared with community-service's emitSocial() — same
+    // convention as `chat:message-sent`. KEEP THE LITERALS IN SYNC. Every
+    // payload carries actorName/actorAvatarUrl (best-effort resolved by the
+    // publisher) so the tray reads "Sara liked your post" with a real avatar
+    // riding in `data` for in-app rendering. Type SYSTEM (no enum migration);
+    // `data.kind` disambiguates for the client.
+
+    interface SocialBasePayload {
+        actorName?: string;
+        actorAvatarUrl?: string;
+    }
+    interface PostLikedPayload extends SocialBasePayload {
+        recipientId: string;
+        postId: string;
+        postPreview?: string;
+    }
+    interface PostCommentedPayload extends SocialBasePayload {
+        recipientId: string;
+        postId: string;
+        commentPreview?: string;
+        postPreview?: string;
+    }
+    interface UserFollowedPayload extends SocialBasePayload {
+        recipientId: string;
+    }
+    interface PostCreatedPayload extends SocialBasePayload {
+        recipientIds: string[];
+        postId: string;
+        postPreview?: string;
+    }
+
+    /** Shared "notify one user about a social action" helper. */
+    const sendSocial = async (opts: {
+        recipientId: string;
+        title: string;
+        body: string;
+        deepLink: string;
+        kind: string;
+        eventId: string;
+        actorName?: string;
+        actorAvatarUrl?: string;
+        extra?: Record<string, unknown>;
+    }): Promise<void> => {
+        const data = {
+            deepLink: opts.deepLink,
+            kind: opts.kind,
+            eventId: opts.eventId,
+            actorName: opts.actorName ?? null,
+            actorAvatarUrl: opts.actorAvatarUrl ?? null,
+            ...(opts.extra ?? {}),
+        };
+        const n = await notificationService.createNotificationIfEnabled({
+            userId: opts.recipientId,
+            type: 'SYSTEM',
+            title: opts.title,
+            body: opts.body,
+            data,
+        });
+        await pushService.sendToUser(opts.recipientId, {
+            title: opts.title,
+            body: opts.body,
+            url: opts.deepLink,
+            data,
+        });
+        broadcastToUser(fastify, opts.recipientId, n);
+    };
+
+    eventBus.subscribeDurable<PostLikedPayload>({
+        stream: 'community:post-liked',
+        group: 'notification-service',
+        handler: async (event: NightFuelEvent<PostLikedPayload>) => {
+            const { payload, eventId } = event;
+            if (!payload?.recipientId || !payload.postId) return;
+            try {
+                await sendSocial({
+                    recipientId: payload.recipientId,
+                    title: `${payload.actorName ?? 'Someone'} liked your post`,
+                    body: payload.postPreview ?? '',
+                    deepLink: `/(community)/${payload.postId}`,
+                    kind: 'post-liked',
+                    eventId,
+                    actorName: payload.actorName,
+                    actorAvatarUrl: payload.actorAvatarUrl,
+                    extra: { postId: payload.postId },
+                });
+            } catch (err) {
+                logger.error({ err, eventId }, 'Failed to send post-liked notification');
+                throw err;
+            }
+        },
+    });
+
+    eventBus.subscribeDurable<PostCommentedPayload>({
+        stream: 'community:post-commented',
+        group: 'notification-service',
+        handler: async (event: NightFuelEvent<PostCommentedPayload>) => {
+            const { payload, eventId } = event;
+            if (!payload?.recipientId || !payload.postId) return;
+            try {
+                await sendSocial({
+                    recipientId: payload.recipientId,
+                    title: `${payload.actorName ?? 'Someone'} commented on your post`,
+                    body: payload.commentPreview ?? '',
+                    deepLink: `/(community)/${payload.postId}`,
+                    kind: 'post-commented',
+                    eventId,
+                    actorName: payload.actorName,
+                    actorAvatarUrl: payload.actorAvatarUrl,
+                    extra: { postId: payload.postId },
+                });
+            } catch (err) {
+                logger.error({ err, eventId }, 'Failed to send post-commented notification');
+                throw err;
+            }
+        },
+    });
+
+    eventBus.subscribeDurable<UserFollowedPayload>({
+        stream: 'community:user-followed',
+        group: 'notification-service',
+        handler: async (event: NightFuelEvent<UserFollowedPayload>) => {
+            const { payload, eventId } = event;
+            const followerId = event.userId; // envelope userId = the actor
+            if (!payload?.recipientId) return;
+            try {
+                await sendSocial({
+                    recipientId: payload.recipientId,
+                    title: `${payload.actorName ?? 'Someone'} started following you`,
+                    body: 'Tap to see their profile.',
+                    deepLink: followerId
+                        ? `/(community)/userProfile?userId=${followerId}`
+                        : '/(tabs)/community',
+                    kind: 'user-followed',
+                    eventId,
+                    actorName: payload.actorName,
+                    actorAvatarUrl: payload.actorAvatarUrl,
+                    extra: { followerId: followerId ?? null },
+                });
+            } catch (err) {
+                logger.error({ err, eventId }, 'Failed to send user-followed notification');
+                throw err;
+            }
+        },
+    });
+
+    eventBus.subscribeDurable<PostCreatedPayload>({
+        stream: 'community:post-created',
+        group: 'notification-service',
+        handler: async (event: NightFuelEvent<PostCreatedPayload>) => {
+            const { payload, eventId } = event;
+            const recipients = Array.isArray(payload?.recipientIds) ? payload.recipientIds : [];
+            if (!payload?.postId || recipients.length === 0) return;
+            try {
+                // Sequential fan-out keeps DB/push pressure smooth; the publisher
+                // caps the list (500) so worst case stays bounded.
+                for (const recipientId of recipients) {
+                    if (!recipientId || recipientId === event.userId) continue;
+                    await sendSocial({
+                        recipientId,
+                        title: `${payload.actorName ?? 'Someone'} shared a new post`,
+                        body: payload.postPreview ?? '',
+                        deepLink: `/(community)/${payload.postId}`,
+                        kind: 'post-created',
+                        eventId,
+                        actorName: payload.actorName,
+                        actorAvatarUrl: payload.actorAvatarUrl,
+                        extra: { postId: payload.postId },
+                    });
+                }
+            } catch (err) {
+                logger.error({ err, eventId }, 'Failed to fan out post-created notifications');
+                throw err;
+            }
+        },
     });
 
     const subscribedChannels = [
@@ -420,6 +609,10 @@ export function setupEventSubscribers(
         Channels.Progress.StreakUpdated,
         Channels.Progress.DailyUpdated,
         'chat:message-sent',
+        'community:post-liked',
+        'community:post-commented',
+        'community:user-followed',
+        'community:post-created',
     ];
 
     logger.info({ channels: subscribedChannels }, 'notification-service: all event subscribers registered');

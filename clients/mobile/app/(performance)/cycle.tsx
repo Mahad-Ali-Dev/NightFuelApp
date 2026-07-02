@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 
 import { useTheme } from '@/theme';
@@ -18,7 +18,7 @@ import { CycleHistoryCard } from '@/components/cycle/CycleHistoryCard';
 import { PhaseFoodsCard } from '@/components/cycle/PhaseFoodsCard';
 import { LogPeriodCard } from '@/components/cycle/LogPeriodCard';
 import { MedicalDisclaimerBanner } from '@/components/MedicalDisclaimer';
-import { getMyProfile, getStatus } from '@/api/profile';
+import { getMyProfile, getStatus, updateProfile } from '@/api/profile';
 import { getCycleForecast, getCycleHistory } from '@/api/cycle';
 
 // Coral period/cycle accent for this screen (the brand `accent.coral` token
@@ -88,6 +88,19 @@ export default function CycleScreen() {
 
     const profileQuery = useQuery({ queryKey: ['my-profile'], queryFn: getMyProfile });
     const statusQuery = useQuery({ queryKey: ['my-status'], queryFn: getStatus });
+    const queryClient = useQueryClient();
+
+    // Inline opt-in from the gated state. The old CTA did router.back() — a
+    // no-op/wrong hop when the user arrived via the + FAB. Female users now
+    // enable tracking right here (one tap, screen unlocks in place); users
+    // without biologicalSex=FEMALE are routed to profile edit where that lives.
+    const enableTracking = useMutation({
+        mutationFn: () => updateProfile({ cycleTrackingEnabled: true }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['my-profile'] });
+            queryClient.invalidateQueries({ queryKey: ['my-status'] });
+        },
+    });
 
     const profile = profileQuery.data as any;
     // Eligibility gate — opt-in + female. Treat unknown (still loading) as gated
@@ -206,16 +219,45 @@ export default function CycleScreen() {
                         <EmptyState
                             icon="ellipse-outline"
                             title="Cycle tracking is off"
-                            subtitle="Turn on cycle tracking in your profile to estimate your phase, log periods, and see your history."
+                            subtitle={
+                                isFemale
+                                    ? 'Turn it on to estimate your phase, log periods, and get cycle-aware meal and training guidance.'
+                                    : 'Cycle tracking is available for female profiles. Set your biological sex in profile settings to use it.'
+                            }
                         />
-                        {/* Thumb-zone CTA back to where the toggle lives. */}
-                        <CtaButton
-                            label="Open profile settings"
-                            icon="settings-outline"
-                            onPress={() => router.back()}
-                            accessibilityLabel="Go back to profile to turn on cycle tracking"
-                            style={styles.gatedCta}
-                        />
+                        {isFemale ? (
+                            // One-tap opt-in — the screen unlocks in place on success.
+                            <CtaButton
+                                label={enableTracking.isPending ? 'Turning on…' : 'Turn on cycle tracking'}
+                                icon="ellipse-outline"
+                                onPress={() => {
+                                    if (!enableTracking.isPending) enableTracking.mutate();
+                                }}
+                                accessibilityLabel="Turn on cycle tracking"
+                                style={styles.gatedCta}
+                            />
+                        ) : (
+                            // biologicalSex lives on the profile edit screen.
+                            <CtaButton
+                                label="Open profile settings"
+                                icon="settings-outline"
+                                onPress={() => router.push('/(tabs)/profile/edit' as never)}
+                                accessibilityLabel="Open profile settings to set your biological sex"
+                                style={styles.gatedCta}
+                            />
+                        )}
+                        {enableTracking.isError ? (
+                            <Text
+                                style={{
+                                    marginTop: spacing.sm,
+                                    color: colors.error,
+                                    ...typography.caption,
+                                    textAlign: 'center',
+                                }}
+                            >
+                                Couldn't turn on tracking — check your connection and try again.
+                            </Text>
+                        ) : null}
                     </Animated.View>
                 </View>
             ) : (

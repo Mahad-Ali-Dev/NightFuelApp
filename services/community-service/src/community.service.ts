@@ -1,8 +1,14 @@
+import crypto from 'crypto';
 import { PrismaClient } from './generated/prisma';
 import { createLogger } from '@nightfuel/config';
+import type { EventBus } from '@nightfuel/events';
 import { AuthorResolver } from './author-resolver';
 
 const logger = createLogger('community.service');
+
+// Cap the new-post follower fan-out so one mega-account can't turn a single
+// post into an unbounded notification storm. Most-recent followers win.
+const POST_FANOUT_MAX_FOLLOWERS = 500;
 
 // Typed error so the route layer can map a self-follow attempt to a 400
 // (vs. a generic 500). Carries a stable `code` for assertion in tests.
@@ -49,10 +55,54 @@ const BADGE_KEYS = {
 const BADGE_CASCADE_MAX_DEPTH = 16;
 
 export class CommunityService {
+    // eventBus is OPTIONAL and additive (mirrors chat-service): existing
+    // `new CommunityService(prisma, resolver)` callers keep compiling. When
+    // supplied, social actions emit best-effort events for notification fan-out.
     constructor(
         private prisma: PrismaClient,
-        private authorResolver?: AuthorResolver
+        private authorResolver?: AuthorResolver,
+        private eventBus?: EventBus
     ) { }
+
+    // ── Outbound social events ────────────────────────────────────────────────
+
+    /**
+     * Best-effort social-event emission (like / comment / follow / new post).
+     * The actor's display identity is resolved through the existing cached
+     * AuthorResolver so pushes can read "Sara liked your post" with a real
+     * avatar. Any failure is swallowed and logged — never blocks the action.
+     * Channels are raw string literals shared with notification-service's
+     * subscribers (same convention as `chat:message-sent`) — KEEP IN SYNC.
+     */
+    private async emitSocial(
+        channel: string,
+        actorId: string,
+        payload: Record<string, unknown>
+    ): Promise<void> {
+        if (!this.eventBus) return;
+        try {
+            let actorName: string | undefined;
+            let actorAvatarUrl: string | undefined;
+            try {
+                const actor = await this.authorResolver?.resolveOne(actorId);
+                actorName = actor?.name || undefined;
+                actorAvatarUrl = actor?.avatarUrl || undefined;
+            } catch {
+                /* anonymous fallback */
+            }
+            await this.eventBus.publish(channel, {
+                eventId: crypto.randomUUID(),
+                eventType: channel.replace(/:/g, '.'),
+                producedAt: new Date().toISOString(),
+                producerService: 'community-service',
+                correlationId: crypto.randomUUID(),
+                userId: actorId,
+                payload: { ...payload, actorName, actorAvatarUrl },
+            });
+        } catch (err) {
+            logger.warn({ err, channel }, 'Failed to publish social event (best-effort)');
+        }
+    }
 
     // ── Feed & Posts ──────────────────────────────────────────────────────────
 
@@ -147,6 +197,23 @@ export class CommunityService {
         const postCount = await this.prisma.post.count({ where: { authorId } });
         if (postCount === 1) {
             await this._awardBadgeIfNew(authorId, BADGE_KEYS.FIRST_POST);
+        }
+
+        // Fan a "new post" notification out to the author's followers (capped;
+        // most-recent followers win). Followers of a private author are accepted
+        // followers by definition, so the privacy contract holds.
+        const followers = await this.prisma.follow.findMany({
+            where: { followingId: authorId },
+            select: { followerId: true },
+            orderBy: { createdAt: 'desc' },
+            take: POST_FANOUT_MAX_FOLLOWERS,
+        });
+        if (followers.length > 0) {
+            await this.emitSocial('community:post-created', authorId, {
+                recipientIds: followers.map((f: { followerId: string }) => f.followerId),
+                postId: post.id,
+                postPreview: (content ?? '').slice(0, 80),
+            });
         }
 
         return post;
@@ -279,6 +346,15 @@ export class CommunityService {
             }
         }
 
+        // Notify the author of a NEW like (never for re-likes or self-likes).
+        if (counted && likerId && post.authorId && likerId !== post.authorId) {
+            await this.emitSocial('community:post-liked', likerId, {
+                recipientId: post.authorId,
+                postId,
+                postPreview: (post.content ?? '').slice(0, 80),
+            });
+        }
+
         return post;
     }
 
@@ -318,6 +394,20 @@ export class CommunityService {
         const commentCount = await this.prisma.comment.count({ where: { authorId } });
         if (commentCount >= 20) {
             await this._awardBadgeIfNew(authorId, BADGE_KEYS.CONVERSATIONALIST);
+        }
+
+        // Notify the post's author about the new comment (never self-comments).
+        const post = await this.prisma.post.findUnique({
+            where: { id: postId },
+            select: { authorId: true, content: true },
+        });
+        if (post?.authorId && post.authorId !== authorId) {
+            await this.emitSocial('community:post-commented', authorId, {
+                recipientId: post.authorId,
+                postId,
+                commentPreview: text.slice(0, 80),
+                postPreview: (post.content ?? '').slice(0, 60),
+            });
         }
 
         return comment;
@@ -457,10 +547,17 @@ export class CommunityService {
     async followUser(followerId: string, followingId: string) {
         if (followerId === followingId) throw new SelfFollowError();
 
-        await this.prisma.follow.createMany({
+        const created = await this.prisma.follow.createMany({
             data: [{ followerId, followingId }],
             skipDuplicates: true,
         });
+
+        // Notify only on a NEW edge — re-follows (count 0) stay silent.
+        if (created.count > 0) {
+            await this.emitSocial('community:user-followed', followerId, {
+                recipientId: followingId,
+            });
+        }
 
         return { success: true };
     }

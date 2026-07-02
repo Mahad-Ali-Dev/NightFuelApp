@@ -625,6 +625,20 @@ export class ChatService {
         if (!this.eventBus) return;
         if (recipientId === RIA_AI_USER_ID || senderId === RIA_AI_USER_ID) return;
         try {
+            // Resolve the sender's display identity (cached resolvePeers lookup)
+            // so the recipient's push reads "Mahad: hey" with the real avatar
+            // instead of an anonymous "New message". Best-effort: any resolution
+            // failure falls back to the anonymous payload — never blocks the send.
+            let senderName: string | undefined;
+            let senderAvatarUrl: string | undefined;
+            try {
+                const peers = await this.resolvePeers([senderId]);
+                const sender = peers.get(senderId);
+                senderName = sender?.displayName || undefined;
+                senderAvatarUrl = sender?.avatarUrl || undefined;
+            } catch {
+                /* keep anonymous */
+            }
             await this.eventBus.publish('chat:message-sent', {
                 eventId: crypto.randomUUID(),
                 eventType: 'chat.message-sent',
@@ -636,6 +650,8 @@ export class ChatService {
                     recipientId,
                     conversationId,
                     textPreview: text.slice(0, 120),
+                    senderName,
+                    senderAvatarUrl,
                 },
             });
         } catch (err) {
