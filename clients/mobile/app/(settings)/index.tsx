@@ -170,6 +170,7 @@ export default function SettingsIndexScreen() {
             items: [
                 { label: 'Help Center', icon: 'help-circle-outline', url: 'https://zeitra.app/support' },
                 { label: 'Terms of Service', icon: 'document-text-outline', url: 'https://zeitra.app/terms' },
+                { label: 'Privacy Policy', icon: 'lock-closed-outline', url: 'https://zeitra.app/privacy' },
             ]
         }
     ], [subscription?.tier, activeVariant.name, colors]);

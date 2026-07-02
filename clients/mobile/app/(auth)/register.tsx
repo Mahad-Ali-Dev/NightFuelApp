@@ -11,6 +11,7 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   useWindowDimensions,
+  Linking,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { StatusBar } from 'expo-status-bar';
@@ -391,9 +392,21 @@ export default function RegisterScreen() {
               </View>
               <Text style={[styles.termsText, { color: colors.text.secondary }]}>
                 I agree to the{' '}
-                <Text style={{ color: colors.accent.coral, fontWeight: '600' }}>Terms</Text>
+                <Text
+                  style={{ color: colors.accent.coral, fontWeight: '600' }}
+                  accessibilityRole="link"
+                  onPress={() => Linking.openURL('https://zeitra.app/terms')}
+                >
+                  Terms
+                </Text>
                 {' & '}
-                <Text style={{ color: colors.accent.coral, fontWeight: '600' }}>Privacy</Text>
+                <Text
+                  style={{ color: colors.accent.coral, fontWeight: '600' }}
+                  accessibilityRole="link"
+                  onPress={() => Linking.openURL('https://zeitra.app/privacy')}
+                >
+                  Privacy
+                </Text>
               </Text>
             </Pressable>
 
