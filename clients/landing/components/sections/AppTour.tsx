@@ -6,21 +6,21 @@ import { Badge } from '@/components/ui/badge';
 import { Reveal } from '@/components/ui/reveal';
 
 /**
- * AppTour — a scroll-zoom tour of the real Zeitra app. The <ZoomParallax>
- * canvas is 300vh tall by design: as you scroll the seven real app screens
- * zoom out from a single hero and fan into a composed grid. Uses the actual
- * dark-UI screenshots from /images/screens.
+ * AppTour — a scroll-zoom tour of the REAL app. The <ZoomParallax> canvas is
+ * 300vh tall by design: as you scroll, seven real Zeitra screens (captured on
+ * device, /images/app) zoom out from the home dashboard and fan into a
+ * composed grid.
  *
  * Client-only because ZoomParallax relies on framer-motion scroll + transforms.
  */
 const TOUR_SCREENS: { src: string; alt: string }[] = [
-  { src: '/images/screens/home.png', alt: 'Zeitra home dashboard tuned to your shift' },
-  { src: '/images/screens/meals.png', alt: 'Meal tracking and daily macro targets' },
-  { src: '/images/screens/log-meal.png', alt: 'AI photo meal-logging screen' },
-  { src: '/images/screens/cycle-calendar.png', alt: 'Cycle calendar with phase-adapted nutrition' },
-  { src: '/images/screens/coach-dashboard.png', alt: 'Verified coach dashboard' },
-  { src: '/images/screens/analytics.png', alt: 'Analytics for HRV, sleep and body metrics' },
-  { src: '/images/screens/community.png', alt: 'Crew community feed and leaderboards' },
+  { src: '/images/app/home.webp', alt: 'The Zeitra home dashboard with tonight’s training and pre-shift meal' },
+  { src: '/images/app/scan-plate.webp', alt: 'AI plate scanning — point the camera at a meal to log it' },
+  { src: '/images/app/recipes.webp', alt: 'Ria’s Kitchen — chef-crafted recipes with full macros' },
+  { src: '/images/app/rhythm.webp', alt: 'Your rhythm tonight — caffeine cut-off and wind-down timeline' },
+  { src: '/images/app/crew.webp', alt: 'Crew — leaderboards, challenges and your standing' },
+  { src: '/images/app/ai-planner.webp', alt: 'AI workout planner building a plan around your goal' },
+  { src: '/images/app/insights.webp', alt: 'Sleep vs performance insights and circadian entrainment' },
 ];
 
 export function AppTour() {
@@ -40,17 +40,18 @@ export function AppTour() {
         />
         <div className="container-x">
           <Reveal className="mx-auto flex max-w-2xl flex-col items-center gap-4 text-center">
-            <Badge variant="lime">The whole app</Badge>
+            <Badge variant="lime">Real life, real fuel</Badge>
             <h2
               id="app-tour-title"
               className="text-4xl font-bold uppercase leading-[0.98] md:text-5xl lg:text-6xl"
             >
-              See the whole app{' '}
-              <GradientText>come into focus</GradientText>
+              Built for the way{' '}
+              <GradientText>you actually live</GradientText>
             </h2>
             <p className="text-lg leading-relaxed text-[var(--color-muted-foreground)] md:text-xl">
-              Keep scrolling. Every real screen — from your shift-tuned home to
-              cycle syncing, coaching and your Crew — zooms into place.
+              Keep scrolling — these are real screens from the app. Plate
+              scanning, chef-crafted recipes, your nightly rhythm, the Crew and
+              the AI planner, all in one place.
             </p>
           </Reveal>
         </div>

@@ -28,7 +28,7 @@ export function PricingComparison() {
         <Badge>Pricing</Badge>
         <div className="flex gap-2 flex-col">
           <h2 className="text-3xl md:text-5xl tracking-tighter max-w-xl text-center font-semibold [font-family:var(--font-display)]">
-            One plan. Every feature.
+            One plan. <span className="gradient-text">Every feature.</span>
           </h2>
           <p className="text-lg leading-relaxed tracking-tight text-muted-foreground max-w-xl text-center">
             Start with a 7-day free trial — then everything, for the price of a couple of coffees. Cancel anytime.

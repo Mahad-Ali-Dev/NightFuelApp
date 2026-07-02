@@ -3,22 +3,45 @@
 import React, { useRef, useEffect, useMemo } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Float, MeshDistortMaterial } from '@react-three/drei';
+import { useTheme } from 'next-themes';
 import * as THREE from 'three';
 import gsap from 'gsap';
 
-const LiquidBackground = () => {
+/**
+ * ExperienceHero — the 3D react-three-fiber hero, tuned LIGHT-FIRST.
+ *
+ * The section, shader background, Monolith material and all copy adapt to the
+ * active theme (via next-themes `resolvedTheme`):
+ *  - LIGHT (primary): a bright off-white base with faint lime crests in the
+ *    shader, a lime-tinted light-stone Monolith, dark ink text + lime accents,
+ *    and light frosted-glass command cells.
+ *  - DARK: keeps the original near-black / white treatment.
+ *
+ * The `isLight` flag is threaded into the shader as a uniform (0/1) so a single
+ * material animates correctly if the theme is toggled at runtime.
+ */
+
+const LiquidBackground = ({ isLight }: { isLight: boolean }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   const { viewport } = useThree();
   const uniforms = useMemo(() => ({
     uTime: { value: 0 },
     uMouse: { value: new THREE.Vector2(0, 0) },
-  }), []);
+    uLight: { value: isLight ? 1 : 0 },
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useFrame((state) => {
     const { clock, mouse } = state;
     if (meshRef.current) {
-      (meshRef.current.material as THREE.ShaderMaterial).uniforms.uTime.value = clock.getElapsedTime();
-      (meshRef.current.material as THREE.ShaderMaterial).uniforms.uMouse.value.lerp(mouse, 0.05);
+      const mat = meshRef.current.material as THREE.ShaderMaterial;
+      mat.uniforms.uTime.value = clock.getElapsedTime();
+      mat.uniforms.uMouse.value.lerp(mouse, 0.05);
+      // Ease the light/dark uniform for a smooth cross-theme transition.
+      mat.uniforms.uLight.value = THREE.MathUtils.lerp(
+        mat.uniforms.uLight.value,
+        isLight ? 1 : 0,
+        0.08,
+      );
     }
   });
 
@@ -30,13 +53,20 @@ const LiquidBackground = () => {
         uniforms={uniforms}
         vertexShader={`varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`}
         fragmentShader={`
-          uniform float uTime; uniform vec2 uMouse; varying vec2 vUv;
+          uniform float uTime; uniform vec2 uMouse; uniform float uLight; varying vec2 vUv;
           void main() {
             vec2 uv = vUv; float t = uTime * 0.15;
             vec2 m = uMouse * 0.1;
             float color = smoothstep(0.0, 1.0, (sin(uv.x * 8.0 + t + m.x * 12.0) + sin(uv.y * 6.0 - t + m.y * 12.0)) * 0.5 + 0.5);
-            // Zeitra: charcoal base with a faint lime tint in the crests.
-            gl_FragColor = vec4(mix(vec3(0.02,0.03,0.02), vec3(0.10,0.13,0.05), color), 1.0);
+            // DARK: charcoal base with a faint lime tint in the crests.
+            vec3 darkBase  = vec3(0.02, 0.03, 0.02);
+            vec3 darkCrest = vec3(0.10, 0.13, 0.05);
+            vec3 darkCol = mix(darkBase, darkCrest, color);
+            // LIGHT: soft off-white base with faint lime crests.
+            vec3 lightBase  = vec3(0.965, 0.976, 0.949);
+            vec3 lightCrest = vec3(0.847, 0.902, 0.667);
+            vec3 lightCol = mix(lightBase, lightCrest, color);
+            gl_FragColor = vec4(mix(darkCol, lightCol, uLight), 1.0);
           }
         `}
       />
@@ -44,7 +74,7 @@ const LiquidBackground = () => {
   );
 };
 
-const Monolith = () => {
+const Monolith = ({ isLight }: { isLight: boolean }) => {
   const meshRef = useRef<THREE.Mesh>(null);
   useFrame((state) => {
     if (meshRef.current) {
@@ -55,7 +85,14 @@ const Monolith = () => {
     <Float speed={2} rotationIntensity={0.5} floatIntensity={1}>
       <mesh ref={meshRef}>
         <icosahedronGeometry args={[13, 1]} />
-        <MeshDistortMaterial color="#0d1006" speed={4} distort={0.4} roughness={0.05} metalness={1.0} />
+        {/* LIGHT: lime-tinted light stone/metal. DARK: original near-black metal. */}
+        <MeshDistortMaterial
+          color={isLight ? '#c8dc86' : '#0d1006'}
+          speed={4}
+          distort={0.4}
+          roughness={isLight ? 0.35 : 0.05}
+          metalness={isLight ? 0.65 : 1.0}
+        />
       </mesh>
     </Float>
   );
@@ -65,6 +102,8 @@ export const ExperienceHero = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const revealRef = useRef<HTMLDivElement>(null);
   const ctaRef = useRef<HTMLAnchorElement>(null);
+  const { resolvedTheme } = useTheme();
+  const isLight = resolvedTheme !== 'dark'; // default/primary is light
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -93,14 +132,30 @@ export const ExperienceHero = () => {
     return () => ctx.revert();
   }, []);
 
+  // Theme-aware class helpers so the copy is legible on the light base.
+  const heroBg = isLight
+    ? 'bg-[linear-gradient(180deg,#f6f8f4_0%,#eef3e6_100%)]'
+    : 'bg-[#050604]';
+  const primaryText = isLight ? 'text-[var(--color-ink)]' : 'text-white';
+  const eyebrowText = isLight ? 'text-[var(--color-ink)]' : 'text-white';
+  const subText = isLight ? 'text-black/55' : 'text-white/45';
+  const ctaRing = isLight ? 'border-black/15' : 'border-white/15';
+  const ctaStroke = isLight ? 'stroke-[var(--color-ink)]' : 'stroke-white';
+  const ctaLabel = isLight ? 'text-[var(--color-ink)]' : 'text-white';
+
   return (
-    <section ref={containerRef} className="relative min-h-screen w-full bg-[#050604] flex flex-col selection:bg-[var(--color-lime)] selection:text-[var(--color-ink)] overflow-hidden">
+    <section
+      ref={containerRef}
+      data-theme-mode={isLight ? 'light' : 'dark'}
+      className={`experience-hero relative min-h-screen w-full ${heroBg} flex flex-col selection:bg-[var(--color-lime)] selection:text-[var(--color-ink)] overflow-hidden`}
+    >
       <div className="fixed inset-0 z-0 pointer-events-none">
         <Canvas camera={{ position: [0, 0, 60], fov: 35 }}>
-          <ambientLight intensity={0.4} />
-          <spotLight position={[50, 50, 50]} intensity={3} />
-          <LiquidBackground />
-          <Monolith />
+          <ambientLight intensity={isLight ? 0.9 : 0.4} />
+          <spotLight position={[50, 50, 50]} intensity={isLight ? 2 : 3} />
+          {isLight && <directionalLight position={[-30, 20, 40]} intensity={1.2} />}
+          <LiquidBackground isLight={isLight} />
+          <Monolith isLight={isLight} />
         </Canvas>
       </div>
 
@@ -110,25 +165,25 @@ export const ExperienceHero = () => {
             <div className="relative w-2.5 h-2.5 bg-[var(--color-lime)] rounded-full">
               <div className="absolute inset-0 bg-[var(--color-lime)] rounded-full animate-ping opacity-30" />
             </div>
-            <span className="font-mono text-[11px] font-bold text-white tracking-[0.2em] uppercase">ZEITRA — WAITLIST OPEN</span>
+            <span className={`font-mono text-[11px] font-bold ${eyebrowText} tracking-[0.2em] uppercase`}>ZEITRA — WAITLIST OPEN</span>
           </div>
 
           <div className="max-w-4xl lg:-translate-y-8 pr-12">
-            <h1 className="text-[clamp(3.2rem,9vw,10.5rem)] font-black leading-[0.87] tracking-tighter text-white uppercase">
-              YOUR CLOCK. <br /> <span className="text-outline">YOUR FUEL.</span>
+            <h1 className={`text-[clamp(3.2rem,9vw,10.5rem)] font-black leading-[0.87] tracking-tighter ${primaryText} uppercase`}>
+              YOUR CLOCK. <br /> <span className={isLight ? 'text-outline-light' : 'text-outline'}>YOUR FUEL.</span>
             </h1>
-            <p className="mt-8 font-mono text-[11px] text-white/45 uppercase tracking-[0.3em] max-w-md leading-relaxed">
+            <p className={`mt-8 font-mono text-[11px] ${subText} uppercase tracking-[0.3em] max-w-md leading-relaxed`}>
               The AI coach that times meals, training, caffeine &amp; sleep to when you actually work — built for the 1.8B shift workers the 9-to-5 apps forget.
             </p>
           </div>
 
           <a ref={ctaRef} href="#waitlist" className="w-fit flex items-center gap-6 group lg:-translate-y-20">
-            <div className="w-14 h-14 rounded-full border border-white/15 flex items-center justify-center group-hover:bg-[var(--color-lime)] transition-all duration-500 overflow-hidden">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="group-hover:stroke-[var(--color-ink)] stroke-white transition-colors duration-500">
+            <div className={`w-14 h-14 rounded-full border ${ctaRing} flex items-center justify-center group-hover:bg-[var(--color-lime)] transition-all duration-500 overflow-hidden`}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className={`group-hover:stroke-[var(--color-ink)] ${ctaStroke} transition-colors duration-500`}>
                 <path d="M7 17L17 7M17 7H8M17 7V16" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <span className="font-mono text-[11px] font-bold text-white uppercase tracking-[0.2em]">Get early access</span>
+            <span className={`font-mono text-[11px] font-bold ${ctaLabel} uppercase tracking-[0.2em]`}>Get early access</span>
           </a>
         </div>
 
@@ -137,35 +192,44 @@ export const ExperienceHero = () => {
             { id: "001", title: "AUDIENCE", val: "1.8B", type: "progress" },
             { id: "002", title: "FOOD DATABASE", val: "8,600+", type: "data" },
             { id: "003", title: "THE EDGE", val: "Chrono-nutrition", type: "text" },
-          ].map((item) => (
-            <div key={item.id} className="command-cell glass-panel p-6 sm:p-7 block opacity-1">
-              <span className="font-mono text-[9px] text-white/25 uppercase tracking-widest block mb-3">{item.id} // {item.title}</span>
-              {item.type === "progress" ? (
-                <div className="flex justify-between items-end mt-2">
-                  <h4 className="text-2xl sm:text-3xl font-bold text-white tracking-tighter">{item.val} <span className="text-sm text-white/40">shift workers</span></h4>
-                  <div className="h-[2px] w-20 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-[var(--color-lime)] w-[60%] animate-loading" />
+          ].map((item) => {
+            const cellClass = isLight ? 'command-cell glass-panel-light p-6 sm:p-7 block' : 'command-cell glass-panel p-6 sm:p-7 block opacity-1';
+            const idText = isLight ? 'text-black/40' : 'text-white/25';
+            const cellTitle = isLight ? 'text-[var(--color-ink)]' : 'text-white';
+            const cellSub = isLight ? 'text-black/45' : 'text-white/40';
+            const dataText = isLight ? 'text-black/60' : 'text-white/50';
+            const rule = isLight ? 'bg-black/10' : 'bg-white/5';
+            const bodyText = isLight ? 'text-[var(--color-ink)]/70' : 'text-white/70';
+            return (
+              <div key={item.id} className={cellClass}>
+                <span className={`font-mono text-[9px] ${idText} uppercase tracking-widest block mb-3`}>{item.id} // {item.title}</span>
+                {item.type === "progress" ? (
+                  <div className="flex justify-between items-end mt-2">
+                    <h4 className={`text-2xl sm:text-3xl font-bold ${cellTitle} tracking-tighter`}>{item.val} <span className={`text-sm ${cellSub}`}>shift workers</span></h4>
+                    <div className={`h-[2px] w-20 ${rule} rounded-full overflow-hidden`}>
+                      <div className="h-full bg-[var(--color-lime)] w-[60%] animate-loading" />
+                    </div>
                   </div>
-                </div>
-              ) : item.type === "data" ? (
-                <div className="mt-4 flex flex-col gap-3">
-                  <div className="flex justify-between text-[10px] font-mono text-white/50">
-                    <span>Foods + barcode</span>
-                    <span>8,600+</span>
+                ) : item.type === "data" ? (
+                  <div className="mt-4 flex flex-col gap-3">
+                    <div className={`flex justify-between text-[10px] font-mono ${dataText}`}>
+                      <span>Foods + barcode</span>
+                      <span>8,600+</span>
+                    </div>
+                    <div className={`h-[1px] w-full ${rule}`} />
+                    <div className={`flex justify-between text-[10px] font-mono ${dataText}`}>
+                      <span>AI photo logging</span>
+                      <span>Built in</span>
+                    </div>
                   </div>
-                  <div className="h-[1px] w-full bg-white/5" />
-                  <div className="flex justify-between text-[10px] font-mono text-white/50">
-                    <span>AI photo logging</span>
-                    <span>Built in</span>
-                  </div>
-                </div>
-              ) : (
-                <h3 className="text-sm font-medium text-white/70 mt-3 leading-snug">
-                  Nutrition &amp; training <span className="italic text-[var(--color-lime)]">timed to your rota</span>, not a textbook 9-to-5.
-                </h3>
-              )}
-            </div>
-          ))}
+                ) : (
+                  <h3 className={`text-sm font-medium ${bodyText} mt-3 leading-snug`}>
+                    Nutrition &amp; training <span className="italic text-[var(--color-lime-dark)]">timed to your rota</span>, not a textbook 9-to-5.
+                  </h3>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </section>

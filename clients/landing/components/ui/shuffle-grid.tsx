@@ -3,16 +3,16 @@
 import { motion } from "framer-motion"
 import { useEffect, useRef, useState } from "react"
 
-// Real Zeitra app screens (captured from the in-app previews).
-const SCREENS = [
-  "home", "meals", "log-meal", "meal-generator", "plan-result", "meal-result",
-  "cycle-calendar", "coach-dashboard", "analytics", "challenges", "community",
-  "devices", "paywall",
+// Bright editorial lifestyle imagery (Replicate) — food, training, wearables,
+// shift work + the two product shots. Cycled to fill the 16-cell grid.
+const LIFESTYLE = [
+  "food-bowl", "meal-prep", "home-workout", "runner",
+  "wearable", "shift-worker", "app-home", "app-workout",
 ]
 
 const squareData = Array.from({ length: 16 }, (_, i) => ({
   id: i + 1,
-  src: `/images/screens/${SCREENS[i % SCREENS.length]}.png`,
+  src: `/images/gen/${LIFESTYLE[i % LIFESTYLE.length]}.webp`,
 }))
 
 const shuffle = (array: (typeof squareData)[0][]) => {
@@ -33,12 +33,16 @@ const generateSquares = () => {
       layout
       transition={{ duration: 1.5, type: "spring" }}
       className="w-full h-full rounded-xl overflow-hidden bg-muted ring-1 ring-black/10 dark:ring-white/10"
-      style={{
-        backgroundImage: `url(${sq.src})`,
-        backgroundSize: "cover",
-        backgroundPosition: "top center",
-      }}
-    />
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={sq.src}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className="h-full w-full rounded-xl object-cover"
+      />
+    </motion.div>
   ))
 }
 
