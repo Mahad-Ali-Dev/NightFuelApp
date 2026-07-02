@@ -101,6 +101,18 @@ services:
       # F36 GDPR purge: verifies X-Internal-Token on DELETE /internal/user/:userId.
       # Shared INTERNAL_SERVICE_TOKEN across services; guard fails closed if empty.
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      # Email OTP delivery (Resend SMTP) + social sign-in verification. Values
+      # live ONLY in the deploy-host .env; empty in dev → the service logs a
+      # [DEV] line instead of sending. These mappings MUST stay in this file:
+      # they were once added on the VPS copy only, and a `git checkout` of the
+      # compose silently wiped them (2026-07-02 incident — OTP emails stopped).
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:-}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
       LOG_LEVEL: info
     # MEDIUM #12: node:alpine has no curl/wget, so probe /health via a node
     # one-liner (exit 0 only on HTTP 200). Lets nginx wait for service_healthy.
