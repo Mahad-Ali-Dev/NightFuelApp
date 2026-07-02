@@ -2,24 +2,28 @@ import Nav from '@/components/site/Nav';
 import Footer from '@/components/site/Footer';
 import { MorphHero } from '@/components/sections/MorphHero';
 import { Stats } from '@/components/sections/Stats';
+import { Problem } from '@/components/sections/Problem';
 import { FeaturesDetailed } from '@/components/sections/FeaturesDetailed';
+import { HowItWorks } from '@/components/sections/HowItWorks';
 import { AppTour } from '@/components/sections/AppTour';
 import { DeviceMockups } from '@/components/sections/DeviceMockups';
+import { Science } from '@/components/sections/Science';
 import { RiaDemo } from '@/components/sections/RiaDemo';
+import { Testimonials } from '@/components/sections/Testimonials';
 import { Consistency } from '@/components/sections/Consistency';
 import { PricingSection } from '@/components/sections/PricingSection';
 import { Faq } from '@/components/sections/Faq';
 import { FinalCta } from '@/components/sections/FinalCta';
 
 /**
- * Landing v3 — clean, minimal, LIGHT-first.
+ * Landing v3.1 — clean, minimal, LIGHT-first, full narrative arc:
  *
- * Approved layout:
- *   Hero (scroll-morph of 20 real app screens) → trust Stats strip →
- *   FeaturesDetailed (every feature, grouped) → AppTour (zoom-parallax of real
- *   screens) → DeviceMockups (iOS + Android, real screens) → RiaDemo (chat over
- *   beams) → Consistency (contribution graph) → Pricing (comparison) → FAQ →
- *   FinalCta (waitlist). No heavy 3D site background — minimal and bright.
+ *   Hero (headline block + orbit of 20 real app screens below it) →
+ *   Stats (trust strip) → Problem (the gap) → FeaturesDetailed (every
+ *   feature) → HowItWorks (3 steps) → AppTour (zoom-parallax of real
+ *   screens) → DeviceMockups (iOS + Android) → Science (chrono credibility) →
+ *   RiaDemo (chat) → Testimonials → Consistency (streak graph) → Pricing →
+ *   FAQ → FinalCta (waitlist).
  */
 export default function Home() {
   return (
@@ -28,10 +32,14 @@ export default function Home() {
       <main id="main" className="relative z-10 overflow-x-hidden">
         <MorphHero />
         <Stats />
+        <Problem />
         <FeaturesDetailed />
+        <HowItWorks />
         <AppTour />
         <DeviceMockups />
+        <Science />
         <RiaDemo />
+        <Testimonials />
         <Consistency />
         <PricingSection />
         <Faq />

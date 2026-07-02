@@ -3,14 +3,18 @@
 import ScrollMorphHero from '@/components/ui/scroll-morph-hero';
 import { AppBadges } from '@/components/ui/app-badges';
 import { GradientText } from '@/components/ui/gradient-text';
+import { Badge } from '@/components/ui/badge';
+import { Reveal } from '@/components/ui/reveal';
 
 /**
- * MorphHero — the landing hero. Twenty REAL Zeitra app screens (from
- * /images/app) scatter in, form a circle around the headline, then morph into
- * a bottom arc as you scroll — the hero doubles as the app gallery.
+ * MorphHero — the landing hero, stacked layout:
  *
- * The underlying ScrollMorphHero owns the scroll choreography (virtual scroll
- * 0→3000, released to native page scroll at both bounds).
+ *   1. A static headline block in normal flow (eyebrow → display headline →
+ *      subline → store badges + waitlist link → trust note). Text never
+ *      competes with imagery.
+ *   2. Below it, the ScrollMorphHero canvas in its own band: twenty REAL app
+ *      screens orbit in a circle, then morph into an arc as you scroll
+ *      (released to native scroll at both bounds).
  */
 const HERO_SCREENS = [
   'home',
@@ -37,40 +41,62 @@ const HERO_SCREENS = [
 
 export function MorphHero() {
   return (
-    <section id="hero" aria-label="Zeitra — nutrition and training on your clock" className="relative h-[100svh] min-h-[620px]">
-      <ScrollMorphHero
-        images={HERO_SCREENS}
-        introTitle={
-          <>
+    <section id="hero" aria-label="Zeitra — nutrition and training on your clock" className="relative overflow-hidden">
+      {/* ── 1 · Headline block ─────────────────────────────────────────── */}
+      <div className="container-x relative z-10 pt-14 pb-4 text-center md:pt-20">
+        <Reveal className="mx-auto flex max-w-3xl flex-col items-center gap-5">
+          <Badge variant="lime">Built for the 1.8B the 9-to-5 apps forget</Badge>
+
+          <h1 className="[font-family:var(--font-display)] text-[2.75rem] font-bold uppercase leading-[0.98] tracking-tight md:text-7xl">
             Your body runs on shifts.
             <br />
             So should <GradientText>your fuel.</GradientText>
-          </>
-        }
-        introSub="Zeitra — AI nutrition & training on your clock · scroll to explore"
-        arcTitle={
-          <>
-            One app. <GradientText>Every feature.</GradientText>
-          </>
-        }
-        arcSub="Meals, training, caffeine and sleep — timed to when you actually work. This is the real app."
-        arcExtra={
-          <div className="flex flex-col items-center gap-4">
+          </h1>
+
+          <p className="max-w-xl text-base leading-relaxed text-[var(--color-muted-foreground)] md:text-lg">
+            Zeitra is the AI coach that times your meals, training, caffeine and
+            sleep to when you <span className="font-semibold text-[var(--color-foreground)]">actually work</span>.
+          </p>
+
+          <div className="mt-1 flex flex-col items-center gap-3">
             <AppBadges className="justify-center" />
-            <a
-              href="#waitlist"
-              className="text-sm font-semibold text-[var(--color-lime-dark)] underline-offset-4 hover:underline"
-            >
-              or join the waitlist →
-            </a>
+            <p className="text-sm text-[var(--color-muted-foreground)]">
+              7-day free trial · iOS &amp; Android ·{' '}
+              <a
+                href="#waitlist"
+                className="font-semibold text-[var(--color-lime-dark)] underline-offset-4 hover:underline"
+              >
+                join the waitlist
+              </a>
+            </p>
           </div>
-        }
-      />
-      {/* soft fade into the page below */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-20 bg-gradient-to-t from-[var(--color-background)] to-transparent"
-      />
+        </Reveal>
+      </div>
+
+      {/* ── 2 · The orbit of real app screens (below the text) ────────── */}
+      <div className="relative h-[56vh] min-h-[420px] md:h-[64vh]">
+        <ScrollMorphHero
+          images={HERO_SCREENS}
+          introTitle={null}
+          introSub={null}
+          arcTitle={null}
+          arcSub={null}
+        />
+        {/* small scroll hint in the middle of the orbit */}
+        <div className="pointer-events-none absolute left-1/2 top-1/2 z-0 -translate-x-1/2 -translate-y-1/2 text-center">
+          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-[var(--color-muted-foreground)]">
+            The real app
+          </p>
+          <p className="mt-1 text-[11px] uppercase tracking-[0.3em] text-[var(--color-muted-foreground)]/70">
+            scroll to explore
+          </p>
+        </div>
+        {/* soft fade into the page below */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-16 bg-gradient-to-t from-[var(--color-background)] to-transparent"
+        />
+      </div>
     </section>
   );
 }

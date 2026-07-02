@@ -21,10 +21,10 @@
 
 :root {
   /* ---- LIGHT palette (primary, polished experience) ---------------------- */
-  /* Surfaces — a clean, cool-neutral off-white with a whisper of green so the
-     lime accent feels native rather than pasted on. */
-  --background: #f4f7f1;   /* app base — soft, premium off-white */
-  --foreground: #0b0e14;   /* primary text (near-black ink) */
+  /* Surfaces — near-white, neutral and airy; the lime accent supplies all the
+     color so the base stays gallery-clean. */
+  --background: #fafbf9;   /* app base — near-white */
+  --foreground: #101418;   /* primary text (near-black ink) */
   --ink: #0a0c12;          /* on-lime text — stays dark in both themes */
 
   --panel: #ffffff;        /* solid glass panel (pure white in light) */
@@ -93,20 +93,21 @@
   /* ---- DARK palette (the current/default look) --------------------------- */
   /* Surfaces */
   --background: #0a0c12;
-  --foreground: #f4f6fb;
+  --foreground: #f2f4f7;
   --ink: #0a0c12;
 
-  --panel: #0d1017;
-  --panel-2: #13161f;
-  --card: #13161f;
-  --card-foreground: #f4f6fb;
-  --popover: #0d1017;
-  --popover-foreground: #f4f6fb;
+  /* Neutral charcoal surfaces — no green/blue tint; lime is the only hue. */
+  --panel: #101216;
+  --panel-2: #15181d;
+  --card: #15181d;
+  --card-foreground: #f2f4f7;
+  --popover: #101216;
+  --popover-foreground: #f2f4f7;
 
-  --secondary: #13161f;
-  --secondary-foreground: #f4f6fb;
-  --muted: #1b2030;
-  --muted-foreground: #9aa3b6; /* AA on #0a0c12 */
+  --secondary: #15181d;
+  --secondary-foreground: #f2f4f7;
+  --muted: #1c2026;
+  --muted-foreground: #99a1ac; /* AA on the dark base */
 
   /* Accents */
   --primary: #a8cc3c;
@@ -114,21 +115,21 @@
   --lime: #a8cc3c;
   --lime-light: #c5e06b;
   --lime-dark: #93b82e;
-  --cyan: #00d4aa;
+  --cyan: #a8cc3c; /* single-accent: 'cyan' resolves to lime */
   --accent: #a8cc3c;
   --accent-foreground: #0a0c12;
   --destructive: #ff5c5c;
 
   /* Lines / focus */
-  --border: rgba(255, 255, 255, 0.10);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.15);
   --input: rgba(255, 255, 255, 0.12);
   --ring: #a8cc3c;
 
-  /* Ambient glow stops */
-  --glow-lime: rgba(168, 204, 60, 0.22);
-  --glow-cyan: rgba(0, 212, 170, 0.14);
-  --page-glow-opacity: 0.28;
+  /* Ambient glow stops — single accent, restrained */
+  --glow-lime: rgba(168, 204, 60, 0.16);
+  --glow-cyan: rgba(168, 204, 60, 0.08);
+  --page-glow-opacity: 0.24;
 
   /* Translucent control surfaces — white wash on the dark base. */
   --control-surface: rgba(255, 255, 255, 0.03);
@@ -238,8 +239,8 @@ body::before {
 
 h1, h2, h3, h4, h5 {
   font-family: var(--font-display);
-  line-height: 1.02;
-  letter-spacing: -0.01em;
+  line-height: 1.04;
+  letter-spacing: -0.015em;
   font-weight: 700;
   color: var(--color-foreground);
   text-wrap: balance;

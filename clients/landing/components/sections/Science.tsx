@@ -89,7 +89,7 @@ function CircadianClock() {
           <defs>
             <linearGradient id="sci-ring" x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stopColor="#a8cc3c" />
-              <stop offset="55%" stopColor="#00d4aa" />
+              <stop offset="55%" stopColor="#93b82e" />
               <stop offset="100%" stopColor="#a8cc3c" stopOpacity="0.35" />
             </linearGradient>
             <radialGradient id="sci-core" cx="50%" cy="45%" r="60%">
@@ -176,7 +176,7 @@ function CircadianClock() {
               transition={{ duration: 0.5, delay: 0.4 + i * 0.12, ease: [0.16, 1, 0.3, 1] }}
             >
               <div className="flex flex-col items-center gap-1">
-                <span className="flex size-9 items-center justify-center rounded-full border border-[var(--color-border-strong)] bg-[var(--color-panel-2)] text-[var(--color-lime)] shadow-[0_8px_24px_-10px_rgba(0,0,0,0.8)]">
+                <span className="flex size-9 items-center justify-center rounded-full border border-[var(--color-border-strong)] bg-[var(--color-panel-2)] text-[var(--color-lime)] shadow-[0_8px_24px_-10px_var(--glass-shadow)]">
                   <Icon className="size-4" aria-hidden="true" />
                 </span>
                 <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-panel-2)]/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--color-foreground)]/80 backdrop-blur">

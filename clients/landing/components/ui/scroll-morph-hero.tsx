@@ -234,45 +234,57 @@ export default function ScrollMorphHero({
       className={`relative w-full h-full bg-[var(--color-background)] overflow-hidden ${className ?? ""}`}
     >
       <div className="flex h-full w-full flex-col items-center justify-center perspective-1000">
-        {/* Intro Text — visible from page load (fades as the arc forms) */}
-        <div className="absolute z-0 flex flex-col items-center justify-center text-center pointer-events-none top-1/2 -translate-y-1/2 px-6">
-          <motion.h1
-            initial={{ opacity: 0, y: 20, filter: "blur(10px)" }}
-            animate={
-              morphValue < 0.5
-                ? { opacity: 1 - morphValue * 2, y: 0, filter: "blur(0px)" }
-                : { opacity: 0, filter: "blur(10px)" }
-            }
-            transition={{ duration: 1 }}
-            className="[font-family:var(--font-display)] max-w-4xl text-4xl font-bold uppercase leading-[1.02] tracking-tight text-[var(--color-foreground)] md:text-6xl lg:text-7xl"
-          >
-            {introTitle}
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={morphValue < 0.5 ? { opacity: 0.6 - morphValue } : { opacity: 0 }}
-            transition={{ duration: 1, delay: 0.2 }}
-            className="mt-5 text-xs font-bold tracking-[0.25em] uppercase text-[var(--color-muted-foreground)]"
-          >
-            {introSub}
-          </motion.p>
-        </div>
+        {/* Intro Text — optional (pass introTitle={null} to run the canvas
+            text-free, e.g. when the headline lives above the canvas). Fades as
+            the arc forms. */}
+        {introTitle ? (
+          <div className="absolute z-0 flex flex-col items-center justify-center text-center pointer-events-none top-1/2 -translate-y-1/2 px-6">
+            <motion.h1
+              initial={{ opacity: 0, y: 20, filter: "blur(10px)" }}
+              animate={
+                morphValue < 0.5
+                  ? { opacity: 1 - morphValue * 2, y: 0, filter: "blur(0px)" }
+                  : { opacity: 0, filter: "blur(10px)" }
+              }
+              transition={{ duration: 1 }}
+              className="[font-family:var(--font-display)] max-w-4xl text-4xl font-bold uppercase leading-[1.02] tracking-tight text-[var(--color-foreground)] md:text-6xl lg:text-7xl"
+            >
+              {introTitle}
+            </motion.h1>
+            {introSub ? (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={morphValue < 0.5 ? { opacity: 0.6 - morphValue } : { opacity: 0 }}
+                transition={{ duration: 1, delay: 0.2 }}
+                className="mt-5 text-xs font-bold tracking-[0.25em] uppercase text-[var(--color-muted-foreground)]"
+              >
+                {introSub}
+              </motion.p>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Arc Active Content (fades in) */}
-        <motion.div
-          style={{ opacity: contentOpacity, y: contentY }}
-          className="absolute top-[10%] z-10 flex flex-col items-center justify-center text-center pointer-events-none px-4"
-        >
-          <h2 className="[font-family:var(--font-display)] text-3xl md:text-5xl font-bold uppercase text-[var(--color-foreground)] tracking-tight mb-4">
-            {arcTitle}
-          </h2>
-          <p className="text-sm md:text-base text-[var(--color-muted-foreground)] max-w-lg leading-relaxed">
-            {arcSub}
-          </p>
-          {arcExtra ? (
-            <div className="pointer-events-auto mt-6">{arcExtra}</div>
-          ) : null}
-        </motion.div>
+        {arcTitle || arcSub || arcExtra ? (
+          <motion.div
+            style={{ opacity: contentOpacity, y: contentY }}
+            className="absolute top-[10%] z-10 flex flex-col items-center justify-center text-center pointer-events-none px-4"
+          >
+            {arcTitle ? (
+              <h2 className="[font-family:var(--font-display)] text-3xl md:text-5xl font-bold uppercase text-[var(--color-foreground)] tracking-tight mb-4">
+                {arcTitle}
+              </h2>
+            ) : null}
+            {arcSub ? (
+              <p className="text-sm md:text-base text-[var(--color-muted-foreground)] max-w-lg leading-relaxed">
+                {arcSub}
+              </p>
+            ) : null}
+            {arcExtra ? (
+              <div className="pointer-events-auto mt-6">{arcExtra}</div>
+            ) : null}
+          </motion.div>
+        ) : null}
 
         {/* Cards */}
         <div className="relative flex items-center justify-center w-full h-full">
