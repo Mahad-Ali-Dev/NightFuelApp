@@ -302,7 +302,12 @@ export default function ScrollMorphHero({
               const isMobile = containerSize.width < 768;
               const minDimension = Math.min(containerSize.width, containerSize.height);
 
-              const circleRadius = Math.min(minDimension * 0.35, 350);
+              // Tighter ring on phones so outer card edges stay inside 375–430px
+              // viewports instead of clipping at both sides.
+              const circleRadius = Math.min(
+                minDimension * (containerSize.width < 480 ? 0.29 : 0.35),
+                350
+              );
               const circleAngle = (i / TOTAL_IMAGES) * 360;
               const circleRad = (circleAngle * Math.PI) / 180;
               const circlePos = {

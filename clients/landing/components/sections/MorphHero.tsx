@@ -48,16 +48,19 @@ export function MorphHero() {
           {/* SaaS announcement pill */}
           <a
             href="#features"
-            className="group inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-panel)] py-1.5 pl-2 pr-3.5 text-[13px] font-medium text-[var(--color-muted-foreground)] shadow-[0_1px_2px_rgba(15,23,20,0.05)] transition-colors hover:border-[var(--color-lime)]/50 hover:text-[var(--color-foreground)]"
+            className="group inline-flex max-w-[94vw] items-center gap-2 whitespace-nowrap rounded-full border border-[var(--color-border)] bg-[var(--color-panel)] py-1.5 pl-2 pr-3.5 text-[13px] font-medium text-[var(--color-muted-foreground)] shadow-[0_1px_2px_rgba(15,23,20,0.05)] transition-colors hover:border-[var(--color-lime)]/50 hover:text-[var(--color-foreground)]"
           >
             <span className="rounded-full bg-[var(--color-lime)]/15 px-2 py-0.5 text-[11px] font-semibold text-[var(--color-lime-dark)]">
               New
             </span>
-            Now on iOS &amp; Android — meet Zeitra
+            Now on iOS &amp; Android
+            <span className="hidden sm:inline">&nbsp;— meet Zeitra</span>
             <span aria-hidden className="transition-transform group-hover:translate-x-0.5">→</span>
           </a>
 
-          <h1 className="[font-family:var(--font-display)] text-[2.9rem] font-bold leading-[1.04] tracking-[-0.025em] md:text-[4.6rem]">
+          {/* clamp() scales the display line fluidly from 375px phones to desktop —
+              the fixed 2.9rem base clipped at the right edge on mobile. */}
+          <h1 className="[font-family:var(--font-display)] text-[clamp(2.05rem,9.6vw,4.6rem)] font-bold leading-[1.04] tracking-[-0.025em]">
             Your body runs on shifts.
             <br />
             So should <GradientText>your fuel.</GradientText>
