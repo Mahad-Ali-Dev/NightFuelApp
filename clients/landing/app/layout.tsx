@@ -33,10 +33,65 @@ const TITLE = 'Zeitra — Chrono-nutrition & fitness for shift workers';
 const DESCRIPTION =
   'Zeitra is the AI coach that times your meals, training, caffeine and sleep to when you actually work — built for the 1.8 billion shift workers the 9-to-5 apps forget.';
 const OG_IMAGE = {
-  url: '/og.svg',
+  url: '/og.png',
   width: 1200,
   height: 630,
   alt: 'Zeitra — nutrition & fitness that runs on your clock',
+};
+
+/* JSON-LD structured data — Organization + WebSite + the mobile app itself.
+   Emitted once, site-wide, for Google rich results / knowledge panel. */
+const JSON_LD = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': `${SITE}/#org`,
+      name: 'Zeitra',
+      legalName: 'Tase LLC',
+      url: SITE,
+      logo: `${SITE}/icon-192.png`,
+      contactPoint: {
+        '@type': 'ContactPoint',
+        email: 'support@zeitra.app',
+        contactType: 'customer support',
+      },
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${SITE}/#website`,
+      url: SITE,
+      name: 'Zeitra',
+      publisher: { '@id': `${SITE}/#org` },
+    },
+    {
+      '@type': 'MobileApplication',
+      '@id': `${SITE}/#app`,
+      name: 'Zeitra',
+      operatingSystem: 'iOS, Android',
+      applicationCategory: 'HealthApplication',
+      description: DESCRIPTION,
+      url: SITE,
+      image: `${SITE}/og.png`,
+      publisher: { '@id': `${SITE}/#org` },
+      offers: [
+        {
+          '@type': 'Offer',
+          name: 'Zeitra Pro — Monthly',
+          price: '9.99',
+          priceCurrency: 'USD',
+          category: 'subscription',
+        },
+        {
+          '@type': 'Offer',
+          name: 'Zeitra Pro — Annual',
+          price: '59',
+          priceCurrency: 'USD',
+          category: 'subscription',
+        },
+      ],
+    },
+  ],
 };
 
 export const metadata: Metadata = {
@@ -103,6 +158,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
     >
       <body>
+        <script
+          type="application/ld+json"
+          // Static, build-time structured data — no user input flows in.
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+        />
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
