@@ -5,7 +5,7 @@ import { Stats } from '@/components/sections/Stats';
 import { Problem } from '@/components/sections/Problem';
 import { FeaturesDetailed } from '@/components/sections/FeaturesDetailed';
 import { HowItWorks } from '@/components/sections/HowItWorks';
-import { AppTour } from '@/components/sections/AppTour';
+import { FeatureShowcase } from '@/components/sections/FeatureShowcase';
 import { DeviceMockups } from '@/components/sections/DeviceMockups';
 import { Science } from '@/components/sections/Science';
 import { RiaDemo } from '@/components/sections/RiaDemo';
@@ -35,7 +35,7 @@ export default function Home() {
         <Problem />
         <FeaturesDetailed />
         <HowItWorks />
-        <AppTour />
+        <FeatureShowcase />
         <DeviceMockups />
         <Science />
         <RiaDemo />

@@ -81,10 +81,10 @@ export function DeviceFrame({
                 <div className="grid-bg absolute inset-0 opacity-60" />
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
                   <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-lime)]/70">
-                    Screenshot
+                    Zeitra
                   </span>
                   <span className="text-xs text-[var(--color-muted-foreground)]">
-                    Coming soon
+                    On your clock
                   </span>
                 </div>
               </div>

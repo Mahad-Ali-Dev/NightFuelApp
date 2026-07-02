@@ -30,10 +30,10 @@ const COLUMNS: Col[] = [
 ];
 
 const SOCIALS: { label: string; short: string }[] = [
-  { label: 'Zeitra on Instagram (coming soon)', short: 'IG' },
-  { label: 'Zeitra on X / Twitter (coming soon)', short: 'X' },
-  { label: 'Zeitra on LinkedIn (coming soon)', short: 'in' },
-  { label: 'Zeitra on TikTok (coming soon)', short: 'TT' },
+  { label: 'Zeitra on Instagram', short: 'IG' },
+  { label: 'Zeitra on X / Twitter', short: 'X' },
+  { label: 'Zeitra on LinkedIn', short: 'in' },
+  { label: 'Zeitra on TikTok', short: 'TT' },
 ];
 
 function Wordmark() {

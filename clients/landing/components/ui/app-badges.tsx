@@ -83,7 +83,7 @@ export function AppBadges({
     <div className={cn('flex flex-wrap items-center gap-3', className)} {...rest}>
       <StoreBadge
         href={appStoreHref}
-        label="Download Zeitra on the App Store (link coming soon)"
+        label="Download Zeitra on the App Store"
         top="Download on the"
         bottom="App Store"
         icon={AppleIcon}
@@ -91,7 +91,7 @@ export function AppBadges({
       />
       <StoreBadge
         href={playStoreHref}
-        label="Get Zeitra on Google Play (link coming soon)"
+        label="Get Zeitra on Google Play"
         top="Get it on"
         bottom="Google Play"
         icon={PlayIcon}

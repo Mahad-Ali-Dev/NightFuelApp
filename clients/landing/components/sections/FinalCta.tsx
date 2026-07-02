@@ -107,18 +107,19 @@ export function FinalCta() {
                 )}
                 <span className="relative inline-flex size-2 rounded-full bg-[var(--color-lime)]" />
               </span>
-              Waitlist open
+              Now on iOS &amp; Android
             </span>
 
             <h2
               id="waitlist-cta-title"
               className="text-4xl font-bold uppercase leading-[0.98] tracking-tight md:text-6xl [font-family:var(--font-display)]"
             >
-              Be first <GradientText>through the door.</GradientText>
+              Start training <GradientText>on your clock.</GradientText>
             </h2>
 
             <p className="max-w-xl text-lg leading-relaxed text-[var(--color-muted-foreground)] md:text-xl">
-              Join the waitlist and we&rsquo;ll set you up the moment Zeitra hits your store.
+              Get the app and run your first shift-timed day tonight — or drop
+              your email for launch news, early perks and chrono-nutrition tips.
             </p>
 
             {/* Form / success swap */}
@@ -171,7 +172,7 @@ export function FinalCta() {
                           'border-[var(--color-input)] backdrop-blur transition-colors',
                           'focus:border-[var(--color-lime)]/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-lime)]',
                           'disabled:opacity-60',
-                          errored && 'border-red-400/60',
+                          errored && 'border-[var(--color-destructive)]/60',
                         )}
                       />
                     </div>
@@ -191,7 +192,7 @@ export function FinalCta() {
                   </div>
 
                   {errored && message && (
-                    <p id="waitlist-msg" className="text-sm text-red-300" role="alert">
+                    <p id="waitlist-msg" className="text-sm text-[var(--color-destructive)]" role="alert">
                       {message}
                     </p>
                   )}
