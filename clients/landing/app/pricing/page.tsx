@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import Nav from '@/components/site/Nav';
 import Footer from '@/components/site/Footer';
-import { Pricing } from '@/components/sections/Pricing';
+import { PricingSection } from '@/components/sections/PricingSection';
 import { Faq } from '@/components/sections/Faq';
 import { FinalCta } from '@/components/sections/FinalCta';
 
@@ -17,7 +17,7 @@ export default function PricingPage() {
     <>
       <Nav active="pricing" />
       <main id="main" className="overflow-x-hidden pt-20 md:pt-24">
-        <Pricing />
+        <PricingSection />
         <Faq />
         <FinalCta />
       </main>
