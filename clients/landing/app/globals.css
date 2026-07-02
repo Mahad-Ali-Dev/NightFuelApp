@@ -20,44 +20,48 @@
    ============================================================================ */
 
 :root {
-  /* ---- LIGHT palette ----------------------------------------------------- */
-  /* Surfaces */
-  --background: #f6f8f4;   /* app base — soft warm off-white */
+  /* ---- LIGHT palette (primary, polished experience) ---------------------- */
+  /* Surfaces — a clean, cool-neutral off-white with a whisper of green so the
+     lime accent feels native rather than pasted on. */
+  --background: #f4f7f1;   /* app base — soft, premium off-white */
   --foreground: #0b0e14;   /* primary text (near-black ink) */
   --ink: #0a0c12;          /* on-lime text — stays dark in both themes */
 
-  --panel: #ffffff;        /* darker glass panel (in light: pure white) */
-  --panel-2: #eef2ea;      /* lighter glass panel — faint green-grey */
+  --panel: #ffffff;        /* solid glass panel (pure white in light) */
+  --panel-2: #ffffff;      /* lighter glass panel — pure white for crisp cards */
   --card: #ffffff;
   --card-foreground: #0b0e14;
   --popover: #ffffff;
   --popover-foreground: #0b0e14;
 
-  --secondary: #eef2ea;
+  --secondary: #eef2e8;
   --secondary-foreground: #0b0e14;
-  --muted: #e7ece1;
-  --muted-foreground: #55606f; /* AA on #f6f8f4 */
+  --muted: #e9eee2;
+  --muted-foreground: #566173; /* AA on the light base */
 
   /* Accents — lime is deliberately identical in both themes */
   --primary: #a8cc3c;
   --primary-foreground: #0a0c12;
   --lime: #a8cc3c;
   --lime-light: #c5e06b;
-  --lime-dark: #86a72a;
-  --cyan: #00b394;             /* slightly deepened for contrast on light */
+  --lime-dark: #7c9c26;        /* deepened so lime-on-white text has AA contrast */
+  --cyan: #059e84;             /* deepened for contrast on light */
   --accent: #a8cc3c;
   --accent-foreground: #0a0c12;
   --destructive: #d64545;
 
-  /* Lines / focus */
-  --border: rgba(0, 0, 0, 0.10);
-  --border-strong: rgba(0, 0, 0, 0.16);
-  --input: rgba(0, 0, 0, 0.14);
+  /* Lines / focus — a touch stronger than pure alpha-black so borders read as
+     intentional hairlines, not smudges. */
+  --border: rgba(15, 23, 20, 0.09);
+  --border-strong: rgba(15, 23, 20, 0.15);
+  --input: rgba(15, 23, 20, 0.14);
   --ring: #a8cc3c;
 
-  /* Ambient glow stops */
-  --glow-lime: rgba(168, 204, 60, 0.28);
-  --glow-cyan: rgba(0, 212, 170, 0.16);
+  /* Ambient glow stops — restrained tints so glows read as light, airy washes
+     rather than dark muddy blobs on white. */
+  --glow-lime: rgba(168, 204, 60, 0.20);
+  --glow-cyan: rgba(5, 158, 132, 0.10);
+  --page-glow-opacity: 0.5;
 
   /* GitHub-style lime heat scale (light: empty is a faint ink tint) */
   --contribution-empty: rgba(11, 14, 20, 0.06);
@@ -68,12 +72,20 @@
 
   /* Surface tint used by glass / grid / dot textures. In LIGHT it is an INK
      wash (dark lines on a light surface); in DARK it is a white wash. */
-  --hairline: rgba(11, 14, 20, 0.05);
-  --hairline-strong: rgba(11, 14, 20, 0.08);
-  --glass-tint-top: rgba(255, 255, 255, 0.65);
-  --glass-tint-bottom: rgba(255, 255, 255, 0.30);
-  --glass-inset: rgba(255, 255, 255, 0.6);
-  --glass-shadow: rgba(11, 14, 20, 0.10);
+  --hairline: rgba(11, 14, 20, 0.045);
+  --hairline-strong: rgba(11, 14, 20, 0.075);
+  /* Glass: a crisp frosted-white card that lifts off the base with a soft,
+     directional shadow — the signature light-theme surface. */
+  --glass-tint-top: rgba(255, 255, 255, 0.9);
+  --glass-tint-bottom: rgba(255, 255, 255, 0.72);
+  --glass-inset: rgba(255, 255, 255, 0.9);
+  --glass-shadow: rgba(20, 30, 24, 0.16);
+
+  /* Surface used by translucent controls (nav, secondary button) that used to
+     rely on white/[0.0x] — swap to a subtle ink wash so they're visible on
+     light. Dark overrides this to a white wash. */
+  --control-surface: rgba(15, 23, 20, 0.04);
+  --control-surface-hover: rgba(15, 23, 20, 0.07);
 }
 
 .dark {
@@ -115,6 +127,11 @@
   /* Ambient glow stops */
   --glow-lime: rgba(168, 204, 60, 0.22);
   --glow-cyan: rgba(0, 212, 170, 0.14);
+  --page-glow-opacity: 0.28;
+
+  /* Translucent control surfaces — white wash on the dark base. */
+  --control-surface: rgba(255, 255, 255, 0.03);
+  --control-surface-hover: rgba(255, 255, 255, 0.07);
 
   /* Lime heat scale (dark: empty is a faint white tint) */
   --contribution-empty: rgba(255, 255, 255, 0.05);
@@ -215,7 +232,7 @@ body::before {
   background:
     radial-gradient(1200px 600px at 50% -10%, var(--glow-lime), transparent 60%),
     radial-gradient(900px 500px at 100% 0%, var(--glow-cyan), transparent 55%);
-  opacity: 0.28;
+  opacity: var(--page-glow-opacity, 0.28);
 }
 
 h1, h2, h3, h4, h5 {
@@ -452,6 +469,28 @@ a {
 /* experience-hero renders on a fixed dark canvas regardless of site theme. */
 .text-outline {
   --text-outline-color: #ffffff;
+}
+/* Light-theme variant: dark ink stroke so the outlined display reads on the
+   bright hero base. */
+.text-outline-light {
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(11, 14, 20, 0.9);
+  -webkit-text-fill-color: transparent;
+}
+
+/* --- Light command-deck cell (experience-hero, light theme) ------------- */
+/* A crisp frosted-white glass tile that lifts off the bright hero base with a
+   soft shadow + hairline — the light-first counterpart to .glass-panel. */
+.glass-panel-light {
+  position: relative;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(11, 14, 20, 0.08);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.9) inset,
+    0 24px 50px -28px rgba(20, 30, 24, 0.35);
 }
 
 /* --- Loading progress pulse (experience-hero command cell + progress bars) */
