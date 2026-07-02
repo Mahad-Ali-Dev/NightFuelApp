@@ -8,6 +8,7 @@ import {
   Sparkles,
   Users,
   LineChart,
+  Dumbbell,
   type LucideIcon,
 } from 'lucide-react';
 import { SectionShell } from '@/components/ui/section-shell';
@@ -32,6 +33,8 @@ type Row = {
   points: string[];
   screen: string;
   alt: string;
+  /** Optional screen-recording loop (real in-app footage); screen = poster. */
+  video?: string;
 };
 
 const ROWS: Row[] = [
@@ -48,6 +51,7 @@ const ROWS: Row[] = [
     ],
     screen: '/images/app/rhythm.webp',
     alt: 'Zeitra — the “your rhythm tonight” timeline with caffeine cut-off and wind-down',
+    video: '/videos/sleep.mp4',
   },
   {
     id: 'log',
@@ -62,6 +66,7 @@ const ROWS: Row[] = [
     ],
     screen: '/images/app/plate-macros.webp',
     alt: 'Zeitra — building a plate with live calorie and macro totals',
+    video: '/videos/macros.mp4',
   },
   {
     id: 'kitchen',
@@ -76,6 +81,7 @@ const ROWS: Row[] = [
     ],
     screen: '/images/app/recipes.webp',
     alt: 'Zeitra — Ria’s Kitchen recipe grid with calories and macros',
+    video: '/videos/kitchen.mp4',
   },
   {
     id: 'planner',
@@ -92,6 +98,21 @@ const ROWS: Row[] = [
     alt: 'Zeitra — the AI workout planner choosing goal and level',
   },
   {
+    id: 'bodymap',
+    icon: Dumbbell,
+    eyebrow: 'Built for your body',
+    title: <>Training that <GradientText>knows you</GradientText></>,
+    desc: 'Tell Zeitra who you are and where you train — every exercise list, muscle map and workout adapts, male or female, gym or home.',
+    points: [
+      'Male & female exercise catalogues',
+      'Target any muscle group — 480+ exercises',
+      'Gym, home, cardio & recovery categories',
+    ],
+    screen: '/images/app/muscle-groups.webp',
+    alt: 'Zeitra — choosing who you train as, then targeting muscle groups',
+    video: '/videos/bodymap.mp4',
+  },
+  {
     id: 'crew',
     icon: Users,
     eyebrow: 'Community',
@@ -104,6 +125,22 @@ const ROWS: Row[] = [
     ],
     screen: '/images/app/crew.webp',
     alt: 'Zeitra — the Crew screen with leaderboard, challenges and achievements',
+    video: '/videos/crew.mp4',
+  },
+  {
+    id: 'themes',
+    icon: Sparkles,
+    eyebrow: 'Personalization',
+    title: <>Make it <GradientText>yours</GradientText></>,
+    desc: 'Nine hand-tuned themes — switch the whole app’s mood in one tap, from midnight lime to ember and mono.',
+    points: [
+      '9 themes, one tap to switch',
+      'Smart reminders that fit your day',
+      'Night-shift friendly dark modes',
+    ],
+    screen: '/images/app/themes.webp',
+    alt: 'Zeitra — the theme picker switching the app’s look',
+    video: '/videos/themes.mp4',
   },
   {
     id: 'insights',
@@ -163,6 +200,7 @@ function ShowcaseRow({ row, flip }: { row: Row; flip: boolean }) {
             alt={row.alt}
             os={flip ? 'ios' : 'android'}
             glow
+            video={row.video}
             className="w-full max-w-[260px] md:max-w-[290px]"
           />
         </div>

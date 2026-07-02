@@ -3,6 +3,7 @@ import { SectionShell } from '@/components/ui/section-shell';
 import { GradientText } from '@/components/ui/gradient-text';
 import { AppBadges } from '@/components/ui/app-badges';
 import { Reveal } from '@/components/ui/reveal';
+import { PhoneShell } from '@/components/ui/phone-shell';
 
 /**
  * DeviceMockups — the "ONE APP. EVERY PHONE." showcase, now with REAL
@@ -18,69 +19,6 @@ function OsLabel({ children }: { children: React.ReactNode }) {
     <span className="inline-flex items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-panel-2)]/60 px-4 py-1.5 text-sm font-semibold text-[var(--color-foreground)] backdrop-blur">
       {children}
     </span>
-  );
-}
-
-/* ── CSS phone shell with a real screenshot inside ───────────────────────── */
-function Phone({
-  src,
-  alt,
-  os,
-  glow,
-  className,
-}: {
-  src: string;
-  alt: string;
-  os: 'ios' | 'android';
-  glow: 'lime' | 'cyan';
-  className?: string;
-}) {
-  return (
-    <div className={'relative ' + (className ?? '')}>
-      {/* ambient glow behind the device */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-1/2 -z-10 h-[92%] w-[110%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[90px]"
-        style={{
-          background:
-            glow === 'lime'
-              ? 'radial-gradient(circle, color-mix(in oklab, var(--color-lime) 45%, transparent), transparent 70%)'
-              : 'radial-gradient(circle, color-mix(in oklab, var(--color-cyan) 40%, transparent), transparent 70%)',
-        }}
-      />
-      {/* shell */}
-      <div className="phone-float relative rounded-[2.6rem] border border-black/20 bg-[#0b0d12] p-[10px] shadow-[0_45px_90px_-30px_rgba(10,14,8,0.55)] dark:border-white/10">
-        {/* screen */}
-        <div className="relative overflow-hidden rounded-[2rem] bg-black">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={src}
-            alt={alt}
-            loading="lazy"
-            decoding="async"
-            className="block w-full select-none"
-            draggable={false}
-          />
-          {/* iOS Dynamic-Island pill / Android hole-punch camera */}
-          {os === 'ios' ? (
-            <div
-              aria-hidden="true"
-              className="absolute left-1/2 top-2.5 h-[22px] w-[86px] -translate-x-1/2 rounded-full bg-black ring-1 ring-white/10"
-            />
-          ) : (
-            <div
-              aria-hidden="true"
-              className="absolute left-1/2 top-3 size-[14px] -translate-x-1/2 rounded-full bg-black ring-2 ring-black/80"
-            />
-          )}
-        </div>
-        {/* side button hints */}
-        <div
-          aria-hidden="true"
-          className="absolute -right-[2px] top-24 h-16 w-[3px] rounded-full bg-black/50 dark:bg-white/15"
-        />
-      </div>
-    </div>
   );
 }
 
@@ -122,11 +60,13 @@ export function DeviceMockups() {
         {/* device cluster: iPhone (home) + Android (recipes) + a peeking third (rhythm) */}
         <div className="relative mx-auto flex max-w-4xl flex-col items-center justify-center gap-14 md:flex-row md:items-end md:gap-12 lg:gap-20">
           <div className="relative flex w-full max-w-[270px] flex-col items-center gap-6 md:max-w-[300px]">
-            <Phone
+            <PhoneShell
               src="/images/app/home.webp"
-              alt="Zeitra home on iPhone — tonight’s training, fat-loss challenge and pre-shift meal"
+              alt="Zeitra on iPhone — browsing the 30-day fat-loss challenge, live"
               os="ios"
-              glow="lime"
+              glow
+              float
+              video="/videos/home.mp4"
               className="md:-rotate-[2.5deg]"
             />
             <OsLabel>
@@ -138,11 +78,13 @@ export function DeviceMockups() {
           </div>
 
           <div className="relative flex w-full max-w-[270px] flex-col items-center gap-6 md:max-w-[300px]">
-            <Phone
-              src="/images/app/recipes.webp"
-              alt="Ria’s Kitchen on Android — chef-crafted recipes with calories and macros"
+            <PhoneShell
+              src="/images/app/train.webp"
+              alt="Zeitra on Android — an exercise page with coaching cues, live"
               os="android"
-              glow="lime"
+              glow
+              float
+              video="/videos/training.mp4"
               className="md:rotate-[2.5deg] [&_.phone-float]:[animation-delay:-3s]"
             />
             <OsLabel>
@@ -158,11 +100,12 @@ export function DeviceMockups() {
 
           {/* peeking third device (desktop only) — the chrono rhythm timeline */}
           <div className="pointer-events-none absolute -right-10 bottom-16 hidden w-[190px] opacity-90 lg:block" aria-hidden="true">
-            <Phone
+            <PhoneShell
               src="/images/app/rhythm.webp"
               alt=""
               os="android"
-              glow="lime"
+              glow
+              float
               className="rotate-[7deg] [&_.phone-float]:[animation-delay:-1.5s]"
             />
           </div>

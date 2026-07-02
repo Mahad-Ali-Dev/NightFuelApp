@@ -13,6 +13,7 @@ export function PhoneShell({
   os = 'android',
   glow = false,
   float = false,
+  video,
   className,
 }: {
   src: string;
@@ -22,6 +23,8 @@ export function PhoneShell({
   glow?: boolean;
   /** Gentle idle float (requires the zeitra-phone-float keyframes). */
   float?: boolean;
+  /** Optional screen-recording — autoplaying muted loop; `src` becomes the poster. */
+  video?: string;
   className?: string;
 }) {
   return (
@@ -43,15 +46,30 @@ export function PhoneShell({
         )}
       >
         <div className="relative overflow-hidden rounded-[2rem] bg-black">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={src}
-            alt={alt}
-            loading="lazy"
-            decoding="async"
-            className="block w-full select-none"
-            draggable={false}
-          />
+          {video ? (
+            <video
+              className="block w-full select-none"
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="metadata"
+              poster={src}
+              aria-label={alt}
+            >
+              <source src={video} type="video/mp4" />
+            </video>
+          ) : (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={src}
+              alt={alt}
+              loading="lazy"
+              decoding="async"
+              className="block w-full select-none"
+              draggable={false}
+            />
+          )}
           {os === 'ios' ? (
             <div
               aria-hidden="true"
