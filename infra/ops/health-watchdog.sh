@@ -15,7 +15,7 @@ set -uo pipefail
 
 ENV_FILE="${ENV_FILE:-/home/deploy/nightfuel/infra/docker/.env}"
 STATE_DIR="${STATE_DIR:-/home/deploy/.watchdog}"
-ALERT_TO="${ALERT_TO:-info@reviewboostcard.com}"
+ALERT_TO="${ALERT_TO:-mahadali107600@gmail.com}"
 ALERT_FROM="${ALERT_FROM:-no-reply@zeitra.app}"
 COOLDOWN_SECS=3600
 

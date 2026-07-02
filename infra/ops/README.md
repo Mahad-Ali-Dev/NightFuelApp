@@ -64,7 +64,7 @@ init of an empty volume — step 2 is what actually changes it.)
   `.env` (mode 600); all 17 services recreated and healthy on the new credential.
 - First backup: 14 DBs, 1.3MB, integrity-checked — and RESTORE-TESTED (auth dump
   → scratch DB → 104 users → dropped).
-- Watchdog: both targets green; alerts to info@reviewboostcard.com via Resend.
+- Watchdog: both targets green; alerts to mahadali107600@gmail.com via Resend.
 
 ## Still on the list (needs owner accounts / later scale)
 
