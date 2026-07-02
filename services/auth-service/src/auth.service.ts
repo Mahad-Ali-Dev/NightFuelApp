@@ -285,6 +285,52 @@ export class AuthService {
     }
 
     /**
+     * Deliver (or, in dev, log) the "you already have an account" notice.
+     *
+     * Sent when someone tries to REGISTER (or resend a signup code) with an
+     * email that already belongs to a VERIFIED account. The API response stays
+     * the generic anti-enumeration message — only the inbox owner learns the
+     * account exists, which is information they already have. Without this,
+     * an existing user who taps "sign up" instead of "log in" lands on the
+     * verify screen and waits forever for a code that will never come.
+     */
+    private async sendAccountExistsEmail(email: string): Promise<void> {
+        if (!this.smtpConfigured()) {
+            logger.warn(
+                { email },
+                '[DEV] SMTP not configured — would send "account exists, please log in" notice',
+            );
+            return;
+        }
+        try {
+            await this.getMailTransport().sendMail({
+                to: email,
+                from: this.config.smtp?.from || 'no-reply@zeitra.app',
+                subject: 'You already have a Zeitra account',
+                text:
+                    `Someone (probably you) tried to sign up for Zeitra with this email — ` +
+                    `but you already have an account.\n\n` +
+                    `Just open Zeitra and log in with this email. Forgot your password? ` +
+                    `Use "Forgot password" on the login screen.\n\n` +
+                    `If this wasn't you, you can safely ignore this email — no new account was created.`,
+                html:
+                    `<div style="margin:0;padding:0;background:#0A0C10;">` +
+                    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#0A0C10;padding:32px 0;"><tr><td align="center">` +
+                    `<table role="presentation" width="480" cellpadding="0" cellspacing="0" style="width:480px;max-width:480px;background:#12151B;border:1px solid #1E232C;border-radius:16px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">` +
+                    `<tr><td style="padding:28px 32px 4px 32px;" align="center"><span style="font-size:22px;font-weight:800;letter-spacing:2px;color:#C2F03C;">ZEITRA</span></td></tr>` +
+                    `<tr><td style="padding:10px 32px 0 32px;" align="center"><h1 style="margin:0;font-size:20px;line-height:28px;color:#FFFFFF;font-weight:700;">You already have an account</h1></td></tr>` +
+                    `<tr><td style="padding:12px 32px 0 32px;" align="center"><p style="margin:0;font-size:14px;line-height:22px;color:#9BA3AF;">Someone (probably you) tried to sign up with this email — but it's already registered. Just open Zeitra and <strong style="color:#FFFFFF;">log in</strong> instead.</p></td></tr>` +
+                    `<tr><td style="padding:20px 32px 8px 32px;" align="center"><p style="margin:0;font-size:13px;line-height:20px;color:#9BA3AF;">Forgot your password? Use <strong style="color:#C2F03C;">Forgot password</strong> on the login screen.</p></td></tr>` +
+                    `<tr><td style="padding:16px 32px 28px 32px;" align="center"><p style="margin:0;font-size:12px;line-height:18px;color:#6B7280;">If this wasn't you, you can safely ignore this email — no new account was created.</p></td></tr>` +
+                    `</table></td></tr></table></div>`,
+            });
+            logger.info('Account-exists notice sent');
+        } catch (err) {
+            logger.error({ err }, 'Failed to send account-exists notice');
+        }
+    }
+
+    /**
      * Generate, persist (hashed), and email a fresh OTP for `userId`/`email`.
      *
      * Enforces a resend cooldown: if a still-live code for this (email, purpose)
@@ -355,6 +401,15 @@ export class AuthService {
         });
 
         if (existingUser) {
+            // The API response stays generic (anti-enumeration), but the inbox
+            // owner gets a helpful nudge instead of a verify screen that never
+            // receives a code: verified accounts are told to log in; a stale
+            // UNVERIFIED signup gets a fresh code so they can finish.
+            if (existingUser.emailVerified) {
+                await this.sendAccountExistsEmail(email);
+            } else {
+                await this.issueEmailOtp(existingUser.id, email, OTP_PURPOSE_REGISTER);
+            }
             // Account-enumeration defence: do NOT reveal that the email is
             // taken. Still spend the same bcrypt.hash cost a real signup would,
             // so the duplicate path is timing-indistinguishable from a new one,
@@ -626,10 +681,13 @@ export class AuthService {
         const email = body.email.trim().toLowerCase();
 
         const user = await this.prisma.user.findUnique({ where: { email } });
-        // Only (re)issue for a real, still-unverified account. Otherwise no-op and
-        // return the identical generic response.
+        // (Re)issue for a real, still-unverified account. An already-VERIFIED
+        // account gets the "you already have an account — log in" notice
+        // instead of silence (the response stays generic either way).
         if (user && !user.emailVerified) {
             await this.issueEmailOtp(user.id, email, OTP_PURPOSE_REGISTER);
+        } else if (user && user.emailVerified) {
+            await this.sendAccountExistsEmail(email);
         }
 
         return { message: RESEND_OTP_MESSAGE };
