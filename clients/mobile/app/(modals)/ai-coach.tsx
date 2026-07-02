@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GlassCard, CtaButton, KeyboardAvoidingWrapper } from '@/components/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRiaMessages, sendRiaMessage, type RiaMessage } from '@/api/chat';
+import { getCycleSymptoms } from '@/api/cycle';
 import { streamChat } from '@/api/ai';
 import { useAuth } from '@/hooks/useAuth';
 import { apiClient } from '@/api/client';
@@ -305,6 +306,33 @@ export default function AICoachScreen() {
         enabled: !!user,
     });
 
+    // Today's cycle symptom quick-log (mood/cramps/energy) — rides Ria's
+    // context so her plans REACT to how the user actually feels today
+    // ("you logged low energy — here's a gentler session"). Fetched only for
+    // users with a concrete cycle phase (tracking on + estimable); everyone
+    // else skips the call entirely.
+    const hasConcretePhase =
+        !!userStatus?.cyclePhase && userStatus.cyclePhase !== 'UNKNOWN';
+    const { data: symptomsData } = useQuery({
+        queryKey: ['cycle-symptoms', 'ria-context'],
+        queryFn: () => getCycleSymptoms(2),
+        enabled: !!user && hasConcretePhase,
+        staleTime: 5 * 60 * 1000,
+    });
+    const todaySymptoms = React.useMemo(() => {
+        const today = new Date().toISOString().slice(0, 10);
+        const row = symptomsData?.symptoms?.find(
+            (s) => (s.date ?? '').slice(0, 10) === today,
+        );
+        if (!row) return null;
+        const out: Record<string, number | string> = {};
+        if (row.mood != null) out.mood = row.mood;
+        if (row.cramps != null) out.cramps = row.cramps;
+        if (row.energy != null) out.energy = row.energy;
+        if (row.flow != null) out.flow = row.flow;
+        return Object.keys(out).length > 0 ? out : null;
+    }, [symptomsData]);
+
     // ── Streaming text effect ───────────────────────────────────────────────
     const streamText = useCallback((fullText: string, messageId: string) => {
         // Clear any prior typing interval so a new turn never leaves two timers
@@ -331,10 +359,9 @@ export default function AICoachScreen() {
 
     // ── Send message mutation (non-streaming fallback path) ──────────────────
     const mutation = useMutation({
-        mutationFn: (text: string) => sendRiaMessage(text, userStatus
-            ? { fatigueScore: userStatus.fatigueScore, adherenceRate: userStatus.adherenceRate }
-            : {}
-        ),
+        // buildContext is defined below; the arrow defers evaluation to call
+        // time (post-render), so the const is initialized by then.
+        mutationFn: (text: string) => sendRiaMessage(text, buildContext()),
         onError: (error: any) => {
             // Daily-quota 429 from chat-service: switch the composer into the
             // "limit reached — Upgrade" state instead of a generic snag notice.
@@ -402,11 +429,16 @@ export default function AICoachScreen() {
     speakRef.current = speakReply;
 
     /** AI context payload mirrored from the non-streaming sendRiaMessage path. */
-    const buildContext = useCallback((): Record<string, unknown> => (
-        userStatus
+    const buildContext = useCallback((): Record<string, unknown> => ({
+        ...(userStatus
             ? { fatigueScore: userStatus.fatigueScore, adherenceRate: userStatus.adherenceRate }
-            : {}
-    ), [userStatus]);
+            : {}),
+        // Cycle-aware coaching: phase + today's logged symptoms flow into the
+        // prompt (the pipeline embeds the whole context JSON), so Ria adapts
+        // meals/training to how the user feels TODAY.
+        ...(hasConcretePhase ? { cyclePhase: userStatus.cyclePhase } : {}),
+        ...(todaySymptoms ? { todaySymptoms } : {}),
+    }), [userStatus, hasConcretePhase, todaySymptoms]);
 
     /**
      * Transparent fallback to the EXISTING non-streaming sendRiaMessage path.
