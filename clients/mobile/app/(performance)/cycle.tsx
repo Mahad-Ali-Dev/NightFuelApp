@@ -12,6 +12,7 @@ import { EmptyState, Skeleton, CtaButton } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import { CyclePhaseHero } from '@/components/cycle/CyclePhaseHero';
 import { PhaseRecommendationCards } from '@/components/cycle/PhaseRecommendationCards';
+import { PhaseCoachCard } from '@/components/cycle/PhaseCoachCard';
 import { CyclePhaseCard } from '@/components/CyclePhaseCard';
 import { CycleCalendar } from '@/components/cycle/CycleCalendar';
 import { CycleHistoryCard } from '@/components/cycle/CycleHistoryCard';
@@ -290,6 +291,13 @@ export default function CycleScreen() {
                         (training + nutrition). Self-gates on null / UNKNOWN. */}
                     <Animated.View entering={enter(1)}>
                         <PhaseRecommendationCards phase={cyclePhase} />
+                    </Animated.View>
+
+                    {/* Dedicated phase-coaching section — states what Ria adapts
+                        for today's phase + one-tap "Plan today with Ria" (opens
+                        the chat modal pre-filled). Self-gates like its siblings. */}
+                    <Animated.View entering={enter(2)}>
+                        <PhaseCoachCard phase={cyclePhase} />
                     </Animated.View>
 
                     {/* Phase guidance card (reused) — tip + how today's plan adjusts. */}

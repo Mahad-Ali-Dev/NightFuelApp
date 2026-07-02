@@ -9,7 +9,7 @@ import Reanimated, {
     FadeInDown,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '@/theme';
 import { shadows } from '@/theme/shadows';
@@ -150,6 +150,21 @@ export default function AICoachScreen() {
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
     const [hasLoaded, setHasLoaded] = useState(false);
+
+    // Deep-link prefill (e.g. the cycle screen's "Plan today with Ria" CTA
+    // passes ?prompt=…). PRE-FILLS the composer only — never auto-sends, so
+    // the user reviews the request and the AI quota is spent consciously.
+    // Applied once on mount and only into an empty composer.
+    const { prompt: prefillPrompt } = useLocalSearchParams<{ prompt?: string }>();
+    const prefillAppliedRef = useRef(false);
+    useEffect(() => {
+        if (prefillAppliedRef.current) return;
+        const p = typeof prefillPrompt === 'string' ? prefillPrompt.trim() : '';
+        if (p) {
+            prefillAppliedRef.current = true;
+            setInput((cur) => (cur.length === 0 ? p.slice(0, 500) : cur));
+        }
+    }, [prefillPrompt]);
     // True while a token-by-token stream is in flight (separate from the
     // sendRiaMessage fallback mutation's isPending).
     const [isStreaming, setIsStreaming] = useState(false);
