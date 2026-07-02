@@ -182,3 +182,14 @@ model UserStatus {
 
   @@map("user_statuses")
 }
+
+// Public launch waitlist — captured from the marketing site's email form.
+// No FK to users: entries are pre-signup leads.
+model WaitlistEntry {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  source    String?  // e.g. "landing-finalcta"
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("waitlist_entries")
+}

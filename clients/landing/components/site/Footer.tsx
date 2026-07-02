@@ -13,10 +13,11 @@ const COLUMNS: Col[] = [
   {
     title: 'Product',
     links: [
-      { href: '#features', label: 'Features' },
-      { href: '#how', label: 'How it works' },
-      { href: '#pricing', label: 'Pricing' },
-      { href: '#faq', label: 'FAQ' },
+      { href: '/#features', label: 'Features' },
+      { href: '/#how', label: 'How it works' },
+      { href: '/#pricing', label: 'Pricing' },
+      { href: '/blog', label: 'Blog' },
+      { href: '/#faq', label: 'FAQ' },
     ],
   },
   {

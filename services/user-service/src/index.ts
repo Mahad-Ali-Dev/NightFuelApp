@@ -5,7 +5,7 @@ import { RedisEventBus } from '@nightfuel/events';
 import { createLogger, loadConfig, bootstrapCluster, connectWithRetry, registerGlobalProcessHandlers, sendUnauthorized, registerFastifyErrorHandler } from '@nightfuel/config';
 import { z } from 'zod';
 import { UserService } from './user.service';
-import { userRoutes } from './routes';
+import { userRoutes, waitlistRoutes } from './routes';
 import { setupEventSubscribers } from './events';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCors from '@fastify/cors';
@@ -70,7 +70,14 @@ fastify.register(fastifyRateLimit, {
 });
 
 fastify.register(fastifyCors, {
-    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    // The marketing site (zeitra.app) browser-POSTs the public waitlist route,
+    // so the production origins join the local dev ones.
+    origin: [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'https://zeitra.app',
+        'https://www.zeitra.app',
+    ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -100,6 +107,14 @@ fastify.register(
         await userRoutes(instance, { userService, internalServiceToken: config.INTERNAL_SERVICE_TOKEN });
     },
     { prefix: '/v1/users' }
+);
+
+// Public launch waitlist — no auth, tight per-IP rate limit inside the plugin.
+fastify.register(
+    async (instance) => {
+        await waitlistRoutes(instance, { prisma });
+    },
+    { prefix: '/v1/waitlist' }
 );
 
 // ── Global error handler ──────────────────────────────────────────────────────

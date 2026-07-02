@@ -105,3 +105,11 @@ export type UpdateOnboardingBody = z.infer<typeof updateOnboardingSchema>;
 export type UpdatePrivacyBody = z.infer<typeof updatePrivacySchema>;
 export type LogPeriodBody = z.infer<typeof logPeriodSchema>;
 export type CycleForecastQuery = z.infer<typeof cycleForecastQuerySchema>;
+
+// ── Waitlist (public, marketing site) ─────────────────────────────────────────
+export const waitlistJoinSchema = z.object({
+    email: z.string().trim().toLowerCase().email().max(254),
+    // Optional attribution tag from the site (e.g. "landing-finalcta").
+    source: z.string().trim().max(64).optional(),
+});
+export type WaitlistJoinBody = z.infer<typeof waitlistJoinSchema>;

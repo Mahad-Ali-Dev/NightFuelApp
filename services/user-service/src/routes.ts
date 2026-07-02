@@ -954,3 +954,47 @@ export const userRoutes = async (
         }
     );
 };
+
+// ── Public waitlist routes (/v1/waitlist) ─────────────────────────────────────
+// Registered as a SEPARATE plugin with NO auth hook: the marketing site posts
+// here pre-signup. Anti-enumeration: a duplicate email returns the exact same
+// success body as a fresh signup, so the endpoint can't be used to probe who
+// is already on the list. Tightly rate-limited per IP on top of the global cap.
+import type { PrismaClient } from './generated/prisma';
+import { waitlistJoinSchema } from './schemas';
+
+const WAITLIST_OK = { message: "You're on the list — we'll be in touch." };
+
+export const waitlistRoutes = async (
+    fastify: FastifyInstance,
+    opts: { prisma: PrismaClient }
+): Promise<void> => {
+    const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+    app.post(
+        '/',
+        {
+            config: {
+                // 5 joins/min/IP — generous for humans, hostile to scripts.
+                rateLimit: { max: 5, timeWindow: '1 minute' },
+            },
+            schema: { body: waitlistJoinSchema },
+        },
+        async (request, reply) => {
+            const { email, source } = request.body;
+            try {
+                await opts.prisma.waitlistEntry.create({
+                    data: { email, source: source ?? 'landing' },
+                });
+            } catch (err: any) {
+                // P2002 = unique violation (already on the list) → identical
+                // success response; anything else is a real failure.
+                if (err?.code !== 'P2002') {
+                    request.log.error(err);
+                    return reply.code(500).send({ error: 'Internal server error' });
+                }
+            }
+            return reply.code(200).send(WAITLIST_OK);
+        }
+    );
+};
