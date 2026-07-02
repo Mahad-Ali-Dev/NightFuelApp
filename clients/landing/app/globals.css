@@ -58,9 +58,10 @@
   --ring: #a8cc3c;
 
   /* Ambient glow stops — restrained tints so glows read as light, airy washes
-     rather than dark muddy blobs on white. */
-  --glow-lime: rgba(168, 204, 60, 0.20);
-  --glow-cyan: rgba(5, 158, 132, 0.10);
+     rather than dark muddy blobs on white. Single-accent palette: the "cyan"
+     stop is intentionally just a fainter lime so no second hue ever appears. */
+  --glow-lime: rgba(168, 204, 60, 0.14);
+  --glow-cyan: rgba(168, 204, 60, 0.07);
   --page-glow-opacity: 0.5;
 
   /* GitHub-style lime heat scale (light: empty is a faint ink tint) */
@@ -368,9 +369,8 @@ a {
   padding: 1px;
   background: linear-gradient(
     135deg,
-    rgba(168, 204, 60, 0.55),
-    rgba(0, 212, 170, 0.28) 45%,
-    var(--hairline-strong) 75%
+    rgba(168, 204, 60, 0.38),
+    var(--hairline-strong) 60%
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -423,7 +423,8 @@ a {
 
 /* --- Gradient text ------------------------------------------------------ */
 .gradient-text {
-  background: linear-gradient(100deg, var(--color-lime-light), var(--color-lime) 55%, var(--color-cyan));
+  /* single-hue accent: lime deepening to lime-dark — clean, no second color */
+  background: linear-gradient(100deg, var(--color-lime), var(--color-lime-dark));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -535,7 +536,7 @@ a {
   text-transform: uppercase;
 }
 .grad {
-  background: linear-gradient(100deg, var(--color-lime-light), var(--color-lime) 55%, var(--color-cyan));
+  background: linear-gradient(100deg, var(--color-lime), var(--color-lime-dark));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

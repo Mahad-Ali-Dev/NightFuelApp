@@ -120,7 +120,7 @@ function RiaAvatar({ small = false }: { small?: boolean }) {
   return (
     <span
       className={
-        'flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-lime)] to-[var(--color-cyan)] text-[var(--color-ink)] shadow-[0_0_18px_-4px_var(--glow-lime)] ' +
+        'flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-lime)] to-[var(--color-lime-dark)] text-[var(--color-ink)] shadow-[0_0_18px_-4px_var(--glow-lime)] ' +
         (small ? 'size-7' : 'size-8')
       }
       aria-hidden="true"
@@ -138,9 +138,9 @@ function MealCard() {
     { icon: Moon, label: 'fat', value: `${MEAL.fat}g` },
   ];
   return (
-    <div className="overflow-hidden rounded-2xl rounded-bl-md border border-[var(--color-lime)]/25 bg-[var(--color-panel-2)] shadow-[0_10px_30px_-16px_rgba(0,0,0,0.6)]">
+    <div className="overflow-hidden rounded-2xl rounded-bl-md border border-[var(--color-lime)]/25 bg-[var(--color-panel-2)] shadow-[0_10px_30px_-16px_var(--glass-shadow)]">
       <div className="flex items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-lime)]/10 px-4 py-2">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-lime-light)]">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--color-lime-dark)] dark:text-[var(--color-lime-light)]">
           {MEAL.tag}
         </span>
       </div>
@@ -307,7 +307,7 @@ function RiaPhone() {
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-2 text-sm font-semibold leading-none text-[var(--color-foreground)]">
               Ria
-              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-lime)]/12 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--color-lime-light)]">
+              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-lime)]/12 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-[var(--color-lime-dark)] dark:text-[var(--color-lime-light)]">
                 <Sparkles className="size-2.5" aria-hidden="true" /> AI coach
               </span>
             </p>

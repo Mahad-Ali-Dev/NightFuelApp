@@ -3,72 +3,37 @@
 import * as React from 'react';
 import {
   Bot,
-  MessageSquare,
-  Mic,
-  Sparkles,
-  Target,
   Clock,
-  Coffee,
-  Moon,
-  Dumbbell,
   Camera,
-  Database,
-  ScanBarcode,
-  BookOpen,
-  ShoppingCart,
-  Droplets,
-  Timer,
-  PlayCircle,
-  PersonStanding,
+  Dumbbell,
   CalendarDays,
-  Trophy,
-  Flame,
-  HeartPulse,
   Watch,
-  Bluetooth,
-  Activity,
-  Ruler,
-  LineChart,
   Users,
-  Medal,
-  BadgeCheck,
-  LayoutDashboard,
   Palette,
-  Bell,
-  GraduationCap,
-  Mail,
-  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { SectionShell } from '@/components/ui/section-shell';
 import { Reveal } from '@/components/ui/reveal';
-import { GlowCard } from '@/components/ui/glow-card';
 import { GradientText } from '@/components/ui/gradient-text';
-import { ShuffleGrid } from '@/components/ui/shuffle-grid';
 
 /**
- * FeaturesDetailed — the COMPREHENSIVE feature catalogue. Every Zeitra feature,
- * grouped into eight labelled clusters, each rendered as a GlowCard with a lucide
- * icon + a tight line of features. Below the clusters: the auto-shuffling
- * <ShuffleGrid/> of real in-app screens with a caption. Light/dark aware via
- * the theming vars — no single-theme hardcoded hex.
+ * FeaturesDetailed — the full feature catalogue, CLEAN edition.
+ *
+ * Every Zeitra feature grouped into eight clusters, rendered as flat white
+ * cards: hairline border, one lime icon per cluster, features as quiet text
+ * lines with a small lime dot. No glass, no spotlight, no gradient borders,
+ * no per-feature icon chips, no image grid — whitespace and typography do the
+ * work. Light-first; the same tokens keep it correct in dark.
  */
 
-type Feature = {
-  icon: LucideIcon;
-  label: string;
-  desc: string;
-};
+type Feature = { label: string; desc: string };
 
 type Cluster = {
   id: string;
   eyebrow: string;
   title: string;
-  blurb: string;
   icon: LucideIcon;
   features: Feature[];
-  /** Give the anchor cluster a wider footprint in the bento. */
-  wide?: boolean;
 };
 
 const CLUSTERS: Cluster[] = [
@@ -76,189 +41,142 @@ const CLUSTERS: Cluster[] = [
     id: 'ai-coaching',
     eyebrow: 'AI Coaching',
     title: 'Ria, your AI coach',
-    blurb:
-      'A coach that actually knows your rota, your goals and your macros — and rebuilds your plan on demand.',
     icon: Bot,
-    wide: true,
     features: [
-      { icon: MessageSquare, label: 'Chat coaching', desc: 'Ask Ria anything, 24/7.' },
-      { icon: Mic, label: 'Voice coaching', desc: 'Talk it through hands-free.' },
-      { icon: Sparkles, label: 'Personalized meal plans', desc: 'Built around your day.' },
-      { icon: Target, label: 'Macro tracking', desc: 'Protein, carbs & fat, dialed in.' },
-      { icon: Bot, label: 'Plan generation', desc: 'Fresh plans on tap.' },
+      { label: 'Chat coaching', desc: 'ask Ria anything, 24/7' },
+      { label: 'Voice coaching', desc: 'talk it through hands-free' },
+      { label: 'Personalized meal plans', desc: 'built around your day' },
+      { label: 'Macro tracking', desc: 'protein, carbs & fat, dialed in' },
+      { label: 'Plan generation', desc: 'fresh plans on tap' },
     ],
   },
   {
     id: 'chrono',
     eyebrow: 'Chrono-nutrition',
     title: 'Timed to your shift',
-    blurb:
-      'Meals, caffeine, training and sleep aligned to your real rota and circadian science.',
     icon: Clock,
     features: [
-      { icon: Clock, label: 'Meal timing', desc: 'Fuel at the right hour.' },
-      { icon: Coffee, label: 'Caffeine cut-offs', desc: 'Protect the sleep that matters.' },
-      { icon: Dumbbell, label: 'Training windows', desc: 'Train when your body can.' },
-      { icon: Moon, label: 'Sleep alignment', desc: 'Wind-down set to clock-off.' },
+      { label: 'Meal timing', desc: 'fuel at the right hour' },
+      { label: 'Caffeine cut-offs', desc: 'protect the sleep that matters' },
+      { label: 'Training windows', desc: 'train when your body can' },
+      { label: 'Sleep alignment', desc: 'wind-down set to clock-off' },
     ],
   },
   {
     id: 'nutrition',
     eyebrow: 'Nutrition',
     title: 'Log it in a snap',
-    blurb: 'Photo logging, a huge food database and 300+ recipes — the whole kitchen.',
     icon: Camera,
-    wide: true,
     features: [
-      { icon: Camera, label: 'AI photo logging', desc: 'Snap a plate, get the macros.' },
-      { icon: Database, label: '8,600+ food database', desc: 'Search anything.' },
-      { icon: ScanBarcode, label: 'Barcode scanning', desc: 'Packaged food in one tap.' },
-      { icon: BookOpen, label: '300+ recipes', desc: 'Shift-friendly meals.' },
-      { icon: ShoppingCart, label: 'Grocery lists', desc: 'Auto-built from your plan.' },
-      { icon: Droplets, label: 'Hydration', desc: 'Water tracking that nudges.' },
-      { icon: Timer, label: 'Fasting tracking', desc: 'Windows around your shift.' },
+      { label: 'AI photo logging', desc: 'snap a plate, get the macros' },
+      { label: '8,600+ food database', desc: 'search anything' },
+      { label: 'Barcode scanning', desc: 'packaged food in one tap' },
+      { label: '300+ recipes', desc: 'shift-friendly meals' },
+      { label: 'Grocery lists', desc: 'auto-built from your plan' },
+      { label: 'Hydration & fasting', desc: 'windows around your shift' },
     ],
   },
   {
     id: 'training',
     eyebrow: 'Training',
     title: 'Move with a plan',
-    blurb:
-      'A full exercise library, an interactive body-map and AI-built challenges.',
     icon: Dumbbell,
     features: [
-      { icon: PlayCircle, label: 'Exercise library', desc: 'Demo videos for every move.' },
-      { icon: PersonStanding, label: 'Muscle body-map', desc: 'Interactive, male & female.' },
-      { icon: Flame, label: 'Workout of the day', desc: 'Ready when you are.' },
-      { icon: Activity, label: 'Active-workout tracking', desc: 'Live sets & reps.' },
-      { icon: Trophy, label: 'AI challenges', desc: '3 / 7 / 15 / 30-day plans.' },
+      { label: 'Exercise library', desc: 'demo videos for every move' },
+      { label: 'Muscle body-map', desc: 'interactive, male & female' },
+      { label: 'Workout of the day', desc: 'ready when you are' },
+      { label: 'Active-workout tracking', desc: 'live sets & reps' },
+      { label: 'AI challenges', desc: '3 / 7 / 15 / 30-day plans' },
     ],
   },
   {
     id: 'womens-health',
     eyebrow: "Women's health",
     title: 'In sync with your cycle',
-    blurb: 'Nutrition and training that adapt to every phase of your cycle.',
     icon: CalendarDays,
     features: [
-      { icon: CalendarDays, label: 'Cycle calendar', desc: 'Track every phase.' },
-      { icon: HeartPulse, label: 'Phase-adapted nutrition', desc: 'Fuel that flexes.' },
-      { icon: Dumbbell, label: 'Phase-adapted training', desc: 'Train with your rhythm.' },
+      { label: 'Cycle calendar', desc: 'track every phase' },
+      { label: 'Phase-adapted nutrition', desc: 'fuel that flexes' },
+      { label: 'Phase-adapted training', desc: 'train with your rhythm' },
     ],
   },
   {
     id: 'wearables',
     eyebrow: 'Tracking & Wearables',
     title: 'Connect any device',
-    blurb:
-      'Apple Health, Health Connect and literally any Bluetooth wearable — even unbranded ones.',
     icon: Watch,
-    wide: true,
     features: [
-      { icon: Watch, label: 'Apple Health', desc: 'Two-way sync.' },
-      { icon: Activity, label: 'Health Connect', desc: 'Android, covered.' },
-      { icon: Bluetooth, label: 'Any BLE wearable', desc: 'Even the unbranded ones.' },
-      { icon: HeartPulse, label: 'HR, HRV, sleep', desc: 'Heart-rate, HRV & steps.' },
-      { icon: Ruler, label: 'Body metrics', desc: 'Weight & measurements.' },
-      { icon: LineChart, label: 'Analytics', desc: 'Trends that mean something.' },
+      { label: 'Apple Health', desc: 'two-way sync' },
+      { label: 'Health Connect', desc: 'Android, covered' },
+      { label: 'Any BLE wearable', desc: 'even the unbranded ones' },
+      { label: 'HR, HRV, sleep & steps', desc: 'the numbers that matter' },
+      { label: 'Body metrics & analytics', desc: 'trends that mean something' },
     ],
   },
   {
     id: 'community',
     eyebrow: 'Community & Coaching',
     title: 'Your Crew & real coaches',
-    blurb: 'A social feed, leaderboards and a marketplace of verified human coaches.',
     icon: Users,
     features: [
-      { icon: Users, label: '"Crew" social feed', desc: 'Share wins & stay accountable.' },
-      { icon: Medal, label: 'Leaderboards', desc: 'Friendly competition.' },
-      { icon: BadgeCheck, label: 'Verified coaches', desc: 'A vetted marketplace.' },
-      { icon: LayoutDashboard, label: 'Coach dashboard', desc: 'Pros manage clients.' },
-      { icon: MessageSquare, label: 'Real-time chat', desc: 'Talk to your coach live.' },
+      { label: '“Crew” social feed', desc: 'share wins & stay accountable' },
+      { label: 'Leaderboards', desc: 'friendly competition' },
+      { label: 'Verified coaches', desc: 'a vetted marketplace' },
+      { label: 'Coach dashboard', desc: 'pros manage clients' },
+      { label: 'Real-time chat', desc: 'talk to your coach live' },
     ],
   },
   {
     id: 'personalization',
-    eyebrow: 'Personalization & Accounts',
+    eyebrow: 'Personalization',
     title: 'Made yours, secured',
-    blurb: 'Nine themes, smart reminders, an encyclopedia — plus fast, secure sign-in.',
     icon: Palette,
     features: [
-      { icon: Palette, label: '9 themes', desc: 'Make the app your own.' },
-      { icon: Bell, label: 'Smart reminders', desc: 'Nudges that fit your day.' },
-      { icon: GraduationCap, label: 'Encyclopedia', desc: 'How-tos & the why.' },
-      { icon: Mail, label: 'Email, Google & Apple', desc: 'Sign in your way.' },
-      { icon: ShieldCheck, label: 'Email OTP verification', desc: 'Secure by default.' },
+      { label: '9 themes', desc: 'make the app your own' },
+      { label: 'Smart reminders', desc: 'nudges that fit your day' },
+      { label: 'Encyclopedia & how-tos', desc: 'the what and the why' },
+      { label: 'Email, Google & Apple sign-in', desc: 'with OTP verification' },
     ],
   },
 ];
 
 function ClusterCard({ cluster }: { cluster: Cluster }) {
-  const HeadIcon = cluster.icon;
+  const Icon = cluster.icon;
   return (
-    <Reveal.Item
-      as="li"
-      className={cluster.wide ? 'md:col-span-2' : ''}
-    >
-      <GlowCard as="article" spotlight className="flex h-full flex-col p-6 md:p-7">
-        {/* header */}
-        <div className="flex items-center gap-3.5">
+    <Reveal.Item as="li" className="h-full">
+      <article className="flex h-full flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-panel)] p-6 transition-all duration-300 hover:-translate-y-0.5 hover:border-[var(--color-lime)]/45 hover:shadow-[0_18px_40px_-24px_rgba(15,23,20,0.18)] md:p-7">
+        <div className="flex items-center gap-3">
           <span
-            className="flex size-12 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-panel-2)] text-[var(--color-lime)] shadow-[0_10px_28px_-14px_rgba(0,0,0,0.7)]"
+            className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-lime)]/12 text-[var(--color-lime-dark)]"
             aria-hidden="true"
           >
-            <HeadIcon className="size-6" />
+            <Icon className="size-5" />
           </span>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-lime-light)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-muted-foreground)]">
               {cluster.eyebrow}
             </p>
-            <h3 className="[font-family:var(--font-display)] text-2xl font-bold uppercase leading-none tracking-tight">
+            <h3 className="[font-family:var(--font-display)] text-xl font-bold leading-tight tracking-tight">
               {cluster.title}
             </h3>
           </div>
         </div>
 
-        <p className="mt-4 text-[15px] leading-relaxed text-[var(--color-muted-foreground)]">
-          {cluster.blurb}
-        </p>
-
-        {/* hairline divider */}
-        <div
-          className="my-5 h-px w-full bg-[var(--color-border)]"
-          aria-hidden="true"
-        />
-
-        {/* feature lines */}
-        <ul
-          className={
-            'grid flex-1 gap-x-6 gap-y-4 ' +
-            (cluster.wide ? 'sm:grid-cols-2' : 'grid-cols-1')
-          }
-        >
-          {cluster.features.map((f) => {
-            const Icon = f.icon;
-            return (
-              <li key={f.label} className="flex items-start gap-3">
-                <span
-                  className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-[var(--color-lime)]/10 text-[var(--color-lime)] ring-1 ring-inset ring-[var(--color-lime)]/25"
-                  aria-hidden="true"
-                >
-                  <Icon className="size-[18px]" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-snug text-[var(--color-foreground)]">
-                    {f.label}
-                  </p>
-                  <p className="mt-0.5 text-[13px] leading-snug text-[var(--color-muted-foreground)]">
-                    {f.desc}
-                  </p>
-                </div>
-              </li>
-            );
-          })}
+        <ul className="mt-5 flex flex-1 flex-col gap-2.5">
+          {cluster.features.map((f) => (
+            <li key={f.label} className="flex items-baseline gap-2.5 text-[14px] leading-snug">
+              <span
+                className="mt-[1px] size-[5px] shrink-0 translate-y-[-2px] rounded-full bg-[var(--color-lime)]"
+                aria-hidden="true"
+              />
+              <p className="min-w-0">
+                <span className="font-semibold text-[var(--color-foreground)]">{f.label}</span>
+                <span className="text-[var(--color-muted-foreground)]"> — {f.desc}</span>
+              </p>
+            </li>
+          ))}
         </ul>
-      </GlowCard>
+      </article>
     </Reveal.Item>
   );
 }
@@ -275,57 +193,22 @@ export function FeaturesDetailed() {
           One app, <GradientText>every part</GradientText> of your day
         </>
       }
-      subtitle="From AI coaching and chrono-nutrition to wearables, community and your cycle — here's the whole toolkit, grouped so you can see it all."
-      decoration={
-        <>
-          <div
-            className="glow"
-            style={{ width: 620, height: 620, top: -160, left: -180 }}
-            aria-hidden="true"
-          />
-          <div
-            className="glow glow-cyan"
-            style={{ width: 520, height: 520, bottom: -140, right: -160 }}
-            aria-hidden="true"
-          />
-          <div className="dot-bg" aria-hidden="true" />
-        </>
-      }
+      subtitle="AI coaching, chrono-nutrition, training, your cycle, wearables and community — the whole toolkit, at a glance."
     >
       <Reveal
         as="ul"
         stagger
-        className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:gap-6"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5"
       >
         {CLUSTERS.map((cluster) => (
           <ClusterCard key={cluster.id} cluster={cluster} />
         ))}
       </Reveal>
 
-      {/* the auto-shuffling real-screens grid */}
-      <Reveal y={28} className="mt-16 md:mt-24">
-        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
-          <div className="order-2 lg:order-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-lime-light)]">
-              See it live
-            </p>
-            <h3 className="mt-3 [font-family:var(--font-display)] text-3xl font-bold uppercase leading-[0.98] md:text-4xl lg:text-5xl">
-              {totalFeatures}+ features,{' '}
-              <GradientText>one dark-and-lime home</GradientText>
-            </h3>
-            <p className="mt-4 max-w-md text-[15px] leading-relaxed text-[var(--color-muted-foreground)]">
-              Every screen here is the real Zeitra app — the same coaching, logging,
-              cycle and analytics surfaces you get on day one. No mockups, no
-              stock photography.
-            </p>
-          </div>
-
-          <div className="order-1 lg:order-2">
-            <div className="glass gradient-border rounded-[var(--radius-2xl)] p-3 md:p-4">
-              <ShuffleGrid />
-            </div>
-          </div>
-        </div>
+      <Reveal y={12}>
+        <p className="mt-10 text-center text-sm text-[var(--color-muted-foreground)]">
+          {totalFeatures}+ features · one subscription · iOS + Android
+        </p>
       </Reveal>
     </SectionShell>
   );

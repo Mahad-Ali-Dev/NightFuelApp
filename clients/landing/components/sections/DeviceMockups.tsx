@@ -142,7 +142,7 @@ export function DeviceMockups() {
               src="/images/app/recipes.webp"
               alt="Ria’s Kitchen on Android — chef-crafted recipes with calories and macros"
               os="android"
-              glow="cyan"
+              glow="lime"
               className="md:rotate-[2.5deg] [&_.phone-float]:[animation-delay:-3s]"
             />
             <OsLabel>
