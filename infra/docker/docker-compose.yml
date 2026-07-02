@@ -5,7 +5,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
     volumes:
       - ./postgres/init-scripts:/docker-entrypoint-initdb.d
       - postgres_data:/var/lib/postgresql/data
@@ -93,8 +93,8 @@ services:
     ports:
       - "127.0.0.1:3001:3001"
     environment:
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_auth?schema=public
-      DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_auth?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_auth?schema=public
+      DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_auth?schema=public
       REDIS_URL: redis://redis:6379
       AUTH_PORT: 3001
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
@@ -125,8 +125,8 @@ services:
       # F34 #2: localhost-only (reached internally as http://shift-service:3002).
       - "127.0.0.1:3002:3002"
     environment:
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_shifts?schema=public
-      DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_shifts?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_shifts?schema=public
+      DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_shifts?schema=public
       REDIS_URL: redis://redis:6379
       SHIFT_PORT: 3002
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
@@ -220,10 +220,10 @@ services:
       # F34 #2: localhost-only (reached internally as http://plan-service:3005).
       - "127.0.0.1:3005:3005"
     environment:
-      PLAN_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_plans?schema=public
-      PLAN_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_plans?schema=public
+      PLAN_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_plans?schema=public
+      PLAN_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_plans?schema=public
       # @nightfuel/config's loadConfig validates process.env.DATABASE_URL; Prisma reads PLAN_DATABASE_URL.
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_plans?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_plans?schema=public
       REDIS_URL: redis://redis:6379
       PLAN_PORT: 3005
       AI_PIPELINE_URL: http://ai-pipeline:3004
@@ -259,10 +259,10 @@ services:
       # F34 #2: localhost-only (reached internally as http://meal-service:3006).
       - "127.0.0.1:3006:3006"
     environment:
-      MEAL_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_meals?schema=public
-      MEAL_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_meals?schema=public
+      MEAL_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_meals?schema=public
+      MEAL_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_meals?schema=public
       # @nightfuel/config's loadConfig validates process.env.DATABASE_URL; Prisma reads MEAL_DATABASE_URL.
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_meals?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_meals?schema=public
       REDIS_URL: redis://redis:6379
       MEAL_PORT: 3006
       PLAN_SERVICE_URL: http://plan-service:3005
@@ -292,9 +292,9 @@ services:
       # F34 #2: localhost-only (reached internally as http://user-service:3009).
       - "127.0.0.1:3009:3009"
     environment:
-      USER_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_users?schema=public
-      USER_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_users?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_users?schema=public
+      USER_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_users?schema=public
+      USER_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_users?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_users?schema=public
       REDIS_URL: redis://redis:6379
       USER_PORT: 3009
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
@@ -324,9 +324,9 @@ services:
       # F34 #2: localhost-only (reached internally as http://progress-service:3007).
       - "127.0.0.1:3007:3007"
     environment:
-      PROGRESS_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_progress?schema=public
-      PROGRESS_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_progress?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_progress?schema=public
+      PROGRESS_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_progress?schema=public
+      PROGRESS_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_progress?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_progress?schema=public
       REDIS_URL: redis://redis:6379
       PROGRESS_PORT: 3007
       USER_SERVICE_URL: http://user-service:3009
@@ -356,9 +356,9 @@ services:
       # F34 #2: localhost-only (reached internally as http://notification-service:3008).
       - "127.0.0.1:3008:3008"
     environment:
-      NOTIF_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_notifications?schema=public
-      NOTIF_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_notifications?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_notifications?schema=public
+      NOTIF_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_notifications?schema=public
+      NOTIF_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_notifications?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_notifications?schema=public
       REDIS_URL: redis://redis:6379
       NOTIF_PORT: 3008
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
@@ -391,9 +391,9 @@ services:
       # F34 #2: localhost-only (reached internally as http://exercise-service:3011).
       - "127.0.0.1:3011:3011"
     environment:
-      EXERCISE_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_exercise?schema=public
-      EXERCISE_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_exercise?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_exercise?schema=public
+      EXERCISE_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_exercise?schema=public
+      EXERCISE_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_exercise?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_exercise?schema=public
       REDIS_URL: redis://redis:6379
       EXERCISE_PORT: 3011
       AI_PIPELINE_URL: http://ai-pipeline:3004
@@ -422,9 +422,9 @@ services:
       # F34 #2: localhost-only (reached internally as http://sleep-service:3012).
       - "127.0.0.1:3012:3012"
     environment:
-      SLEEP_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_sleep?schema=public
-      SLEEP_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_sleep?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_sleep?schema=public
+      SLEEP_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_sleep?schema=public
+      SLEEP_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_sleep?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_sleep?schema=public
       REDIS_URL: redis://redis:6379
       SLEEP_PORT: 3012
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
@@ -453,9 +453,9 @@ services:
       # F34 #2: localhost-only (reached internally as http://subscription-service:3010).
       - "127.0.0.1:3010:3010"
     environment:
-      SUB_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_subscriptions?schema=public
-      SUB_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_subscriptions?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_subscriptions?schema=public
+      SUB_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_subscriptions?schema=public
+      SUB_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_subscriptions?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_subscriptions?schema=public
       REDIS_URL: redis://redis:6379
       SUB_PORT: 3010
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
@@ -491,9 +491,9 @@ services:
       # F34 #2: localhost-only (reached internally as http://community-service:3013).
       - "127.0.0.1:3013:3013"
     environment:
-      COMMUNITY_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_community?schema=public
-      COMMUNITY_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_community?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_community?schema=public
+      COMMUNITY_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_community?schema=public
+      COMMUNITY_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_community?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_community?schema=public
       REDIS_URL: redis://redis:6379
       COMMUNITY_PORT: 3013
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
@@ -524,9 +524,9 @@ services:
       # F34 #2: localhost-only (reached internally as http://chat-service:3014).
       - "127.0.0.1:3014:3014"
     environment:
-      CHAT_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_chat?schema=public
-      CHAT_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_chat?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_chat?schema=public
+      CHAT_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_chat?schema=public
+      CHAT_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_chat?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_chat?schema=public
       REDIS_URL: redis://redis:6379
       CHAT_PORT: 3014
       AI_PIPELINE_URL: http://ai-pipeline:3004
@@ -555,9 +555,9 @@ services:
       # F34 #2: localhost-only (reached internally as http://state-service:3015).
       - "127.0.0.1:3015:3015"
     environment:
-      STATE_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_state?schema=public
-      STATE_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_state?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_state?schema=public
+      STATE_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_state?schema=public
+      STATE_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_state?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_state?schema=public
       REDIS_URL: redis://redis:6379
       STATE_PORT: 3015
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
@@ -590,7 +590,7 @@ services:
       DECISION_PORT: 3016
       # decision-engine is Redis-only but the shared @nightfuel/config schema
       # requires DATABASE_URL to be present; it is validated, not used.
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_state?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_state?schema=public
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
       LOG_LEVEL: info
     healthcheck:
