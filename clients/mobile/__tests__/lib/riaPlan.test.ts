@@ -15,8 +15,8 @@ describe('parseRiaPlan', () => {
     const { cleanText, plan } = parseRiaPlan(text);
     expect(cleanText).toBe("Here's a light night-shift snack to keep you sharp.");
     expect(cleanText).not.toContain('ZEITRA_PLAN');
-    expect(plan?.meals?.[0].mealType).toBe('SNACK');
-    expect(plan?.meals?.[0].items[0]).toMatchObject({ name: 'Greek yogurt', protein: 17 });
+    expect(plan?.meals?.[0]?.mealType).toBe('SNACK');
+    expect(plan?.meals?.[0]?.items[0]).toMatchObject({ name: 'Greek yogurt', protein: 17 });
     expect(plan?.workout).toBeUndefined();
   });
 
@@ -45,12 +45,26 @@ describe('parseRiaPlan', () => {
     expect(plan).toBeNull();
   });
 
+  it('parses even when the LLM mangles the closing tag ("}/[ZEITRA_PLAN]")', () => {
+    // Verbatim shape observed from the live model (brace-balanced extraction
+    // must ignore the broken close).
+    const text =
+      "I've got just the thing for you. " +
+      '[ZEITRA_PLAN]{"meals":[{"title":"Midnight Protein Boost","mealType":"SNACK","items":[' +
+      '{"name":"Cottage Cheese","amount":"120g","calories":80,"protein":11,"carbs":5,"fat":0}]}]}/[ZEITRA_PLAN]';
+    const { cleanText, plan } = parseRiaPlan(text);
+    expect(cleanText).toBe("I've got just the thing for you.");
+    expect(cleanText).not.toContain('ZEITRA_PLAN');
+    expect(plan?.meals?.[0]?.title).toBe('Midnight Protein Boost');
+    expect(plan?.meals?.[0]?.items[0]?.name).toBe('Cottage Cheese');
+  });
+
   it('defaults an unknown mealType to SNACK and drops empty item lists', () => {
     const text =
       '[ZEITRA_PLAN]{"meals":[{"title":"X","mealType":"BRUNCH","items":[' +
       '{"name":"Oats","calories":150,"protein":5,"carbs":27,"fat":3}]},{"title":"empty","items":[]}]}[/ZEITRA_PLAN]';
     const { plan } = parseRiaPlan(text);
     expect(plan?.meals).toHaveLength(1);
-    expect(plan?.meals?.[0].mealType).toBe('SNACK');
+    expect(plan?.meals?.[0]?.mealType).toBe('SNACK');
   });
 });

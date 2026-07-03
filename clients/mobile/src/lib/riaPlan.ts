@@ -52,7 +52,35 @@ export interface RiaPlan {
 
 const OPEN = '[ZEITRA_PLAN]';
 const CLOSE = '[/ZEITRA_PLAN]';
-const BLOCK_RE = /\[ZEITRA_PLAN\]([\s\S]*?)\[\/ZEITRA_PLAN\]/;
+
+/**
+ * Extract the first balanced JSON object starting at/after `from`, ignoring
+ * braces inside strings. Returns null when the object never closes (a
+ * still-streaming / truncated block). This deliberately does NOT rely on the
+ * closing [/ZEITRA_PLAN] sentinel — LLMs occasionally mangle it (e.g.
+ * "}/[ZEITRA_PLAN]"), but the JSON itself is always self-delimiting.
+ */
+function extractBalancedJson(s: string, from: number): string | null {
+  const start = s.indexOf('{', from);
+  if (start === -1) return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+    } else if (c === '"') inStr = true;
+    else if (c === '{') depth++;
+    else if (c === '}') {
+      depth--;
+      if (depth === 0) return s.slice(start, i + 1);
+    }
+  }
+  return null; // unbalanced → incomplete
+}
 
 const MEAL_TYPES: RiaMealType[] = ['BREAKFAST', 'LUNCH', 'DINNER', 'SNACK'];
 const num = (v: unknown, d = 0): number => (typeof v === 'number' && isFinite(v) ? v : d);
@@ -105,23 +133,24 @@ export interface ParsedRiaMessage {
 }
 
 export function parseRiaPlan(text: string): ParsedRiaMessage {
-  if (!text || text.indexOf(OPEN) === -1) {
+  const openIdx = text ? text.indexOf(OPEN) : -1;
+  if (openIdx === -1) {
     return { cleanText: text ?? '', plan: null };
   }
 
-  const match = text.match(BLOCK_RE);
-  if (!match) {
-    // Opening tag present but not yet closed (mid-stream): hide from the tag on.
-    return { cleanText: text.slice(0, text.indexOf(OPEN)).trimEnd(), plan: null };
-  }
+  // The block is always LAST (per the prompt), so clean prose is everything
+  // before the opening tag — this also hides a half-arrived block mid-stream
+  // and any mangled closing sentinel after the JSON.
+  const cleanText = text.slice(0, openIdx).replace(/\n{3,}/g, '\n\n').trim();
 
-  const cleanText = (text.slice(0, match.index) + text.slice((match.index ?? 0) + match[0].length))
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  const jsonStr = extractBalancedJson(text, openIdx + OPEN.length);
+  if (!jsonStr) {
+    return { cleanText, plan: null }; // JSON not fully arrived yet
+  }
 
   let plan: RiaPlan | null = null;
   try {
-    const raw = JSON.parse((match[1] ?? '').trim());
+    const raw = JSON.parse(jsonStr);
     const meals: RiaMeal[] = Array.isArray(raw?.meals)
       ? raw.meals.map(coerceMeal).filter((m: RiaMeal | null): m is RiaMeal => m !== null).slice(0, 4)
       : [];
