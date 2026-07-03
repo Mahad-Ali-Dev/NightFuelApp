@@ -95,6 +95,10 @@ export default function LogMealScreen() {
         // parseBarcodeMicros and attached to the prefilled plate item so the
         // scan's micros reach the log payload.
         barcodeMicros?: string;
+        // JSON-encoded Ria chat meal: { mealType, items:[{name,calories,protein,
+        // carbs,fat}] }. Ria "picks up" the whole meal and hands it here so the
+        // user reviews the loaded plate and taps Log — no manual food search.
+        riaMeal?: string;
     }>();
     const [mealType, setMealType] = useState('BREAKFAST');
     const [sq, setSq] = useState('');
@@ -169,6 +173,30 @@ export default function LogMealScreen() {
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     },[params.barcodeName]);
+
+    // Pre-populate from a Ria chat meal (multiple foods). Ria resolves the meal
+    // and hands the whole thing here; the user reviews the loaded plate + meal
+    // type, tweaks if they like, then taps Log — no manual searching.
+    React.useEffect(()=>{
+        if(params.riaMeal && plate.length===0){
+            try {
+                const m = JSON.parse(params.riaMeal) as { mealType?:string; items?:any[] };
+                if(m?.mealType && MT.some(x=>x.id===m.mealType)) setMealType(m.mealType);
+                const items = Array.isArray(m?.items) ? m.items.filter((it:any)=>it&&it.name) : [];
+                if(items.length){
+                    setPlate(items.slice(0,12).map((it:any)=>({
+                        name:     String(it.name).slice(0,120),
+                        calories: safeNum(Number(it.calories ?? 0)),
+                        protein:  safeNum(Number(it.protein  ?? 0)),
+                        carbs:    safeNum(Number(it.carbs    ?? 0)),
+                        fat:      safeNum(Number(it.fat      ?? 0)),
+                        qty:      1,
+                    })));
+                }
+            } catch { /* malformed param → leave the plate empty */ }
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    },[params.riaMeal]);
     const mc = MT.find(m=>m.id===mealType)!;
     const handleLog = () => {
         if(!mc||plate.length===0) return;

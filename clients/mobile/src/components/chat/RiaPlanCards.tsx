@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { GlassCard } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
-import { searchFoods, logMeal, deleteMealLog, type FoodItem } from '@/api/meals';
+import { searchFoods, type FoodItem } from '@/api/meals';
 import { searchLibrary, createRoutine } from '@/api/exercises';
 import type { RiaPlan, RiaMeal, RiaWorkout, RiaMealItem } from '@/lib/riaPlan';
 
@@ -101,65 +101,36 @@ function MealItemRow({ item }: { item: RiaMealItem }) {
 
 function MealCard({ meal }: { meal: RiaMeal }) {
   const { colors, typography, borderRadius } = useTheme();
-  const queryClient = useQueryClient();
-  // The just-logged meal-log id (enables Undo). null = not logged yet.
-  const [loggedId, setLoggedId] = useState<string | null>(null);
+  const router = useRouter();
 
   const totals = useMemo(
     () =>
       meal.items.reduce(
-        (t, i) => ({
-          kcal: t.kcal + i.calories,
-          p: t.p + i.protein,
-          c: t.c + i.carbs,
-          f: t.f + i.fat,
-        }),
+        (t, i) => ({ kcal: t.kcal + i.calories, p: t.p + i.protein, c: t.c + i.carbs, f: t.f + i.fat }),
         { kcal: 0, p: 0, c: 0, f: 0 },
       ),
     [meal.items],
   );
 
-  const log = useMutation({
-    mutationFn: async () => {
-      // Resolve every item to its DB food (canonical macros + id); fall back to
-      // Ria's estimate when there's no match so nothing is dropped.
-      const foodItems = await Promise.all(
-        meal.items.map(async (it) => {
-          let db: FoodItem | null = null;
-          try {
-            db = (await searchFoods({ q: it.name, limit: 1 }))?.[0] ?? null;
-          } catch {
-            /* fall back to AI macros */
-          }
-          return {
-            foodId: db?.id,
-            name: db?.name ?? it.name,
-            quantity: 1,
-            calories: db?.calories ?? it.calories,
-            protein: db?.protein ?? it.protein,
-            carbs: db?.carbs ?? it.carbs,
-            fat: db?.fat ?? it.fat,
-          };
+  // Ria "picks up" the whole meal and hands it to the review/add screen with
+  // the plate PRE-LOADED — the user reviews the macros, tweaks quantities if
+  // they like, then taps Log there. No manual food search.
+  const openReview = () =>
+    router.push({
+      pathname: '/(meals)/log-meal',
+      params: {
+        riaMeal: JSON.stringify({
+          mealType: meal.mealType,
+          items: meal.items.map((i) => ({
+            name: i.name,
+            calories: i.calories,
+            protein: i.protein,
+            carbs: i.carbs,
+            fat: i.fat,
+          })),
         }),
-      );
-      return logMeal({ mealType: meal.mealType, foodItems });
-    },
-    onSuccess: (res: any) => {
-      setLoggedId(res?.id ?? 'logged');
-      queryClient.invalidateQueries({ queryKey: ['meal-logs'] });
-      queryClient.invalidateQueries({ queryKey: ['today-progress'] });
-    },
-  });
-
-  const undo = useMutation({
-    mutationFn: () =>
-      loggedId && loggedId !== 'logged' ? deleteMealLog(loggedId) : Promise.resolve({ deleted: false }),
-    onSuccess: () => {
-      setLoggedId(null);
-      queryClient.invalidateQueries({ queryKey: ['meal-logs'] });
-      queryClient.invalidateQueries({ queryKey: ['today-progress'] });
-    },
-  });
+      },
+    } as never);
 
   return (
     <GlassCard radius={borderRadius.lg} style={styles.card}>
@@ -186,50 +157,17 @@ function MealCard({ meal }: { meal: RiaMeal }) {
         </Text>
       </View>
 
-      {loggedId ? (
-        // Logged state → confirmation + Undo (deletes the just-created log).
-        <View style={styles.doneRow}>
-          <View style={styles.doneLeft}>
-            <Ionicons name="checkmark-circle" size={18} color={CORAL} />
-            <Text style={[typography.bodySm, { color: colors.text.secondary, fontWeight: '600' }]}>
-              {undo.isPending ? 'Removing…' : 'Logged to today'}
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => { if (!undo.isPending) undo.mutate(); }}
-            disabled={undo.isPending}
-            accessibilityRole="button"
-            accessibilityLabel="Undo — remove this meal from today"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={[typography.bodySm, { color: CORAL, fontWeight: '700' }]}>Undo</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <Pressable
-          onPress={() => { if (!log.isPending) log.mutate(); }}
-          disabled={log.isPending}
-          accessibilityRole="button"
-          accessibilityLabel={`Log ${meal.title}`}
-          style={({ pressed }) => [styles.cta, { backgroundColor: CORAL, opacity: pressed ? 0.85 : 1 }]}
-        >
-          {log.isPending ? (
-            <ActivityIndicator size="small" color={colors.text.inverse} />
-          ) : (
-            <>
-              <Ionicons name="add" size={17} color={colors.text.inverse} />
-              <Text style={[typography.bodyMedium, { color: colors.text.inverse, fontWeight: '700' }]}>
-                Log this meal
-              </Text>
-            </>
-          )}
-        </Pressable>
-      )}
-      {log.isError ? (
-        <Text style={[typography.caption, { color: colors.error, marginTop: 6, textAlign: 'center' }]}>
-          Couldn't log — try again.
+      <Pressable
+        onPress={openReview}
+        accessibilityRole="button"
+        accessibilityLabel={`Review and add ${meal.title}`}
+        style={({ pressed }) => [styles.cta, { backgroundColor: CORAL, opacity: pressed ? 0.85 : 1 }]}
+      >
+        <Ionicons name="add" size={17} color={colors.text.inverse} />
+        <Text style={[typography.bodyMedium, { color: colors.text.inverse, fontWeight: '700' }]}>
+          Add meal
         </Text>
-      ) : null}
+      </Pressable>
     </GlassCard>
   );
 }
