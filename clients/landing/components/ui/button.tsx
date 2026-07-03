@@ -26,10 +26,10 @@ const variants: Record<ButtonVariant, string> = {
     'bg-[var(--color-lime)] text-[var(--color-ink)] shadow-[0_10px_30px_-10px_rgba(168,204,60,0.6)] ' +
     'hover:bg-[var(--color-lime-light)] hover:-translate-y-0.5 hover:shadow-[0_16px_40px_-12px_rgba(168,204,60,0.75)]',
   secondary:
-    'border border-[var(--color-border-strong)] bg-white/[0.03] text-[var(--color-foreground)] ' +
-    'backdrop-blur hover:bg-white/[0.07] hover:border-[var(--color-lime)]/50 hover:-translate-y-0.5',
+    'border border-[var(--color-border-strong)] bg-[var(--control-surface)] text-[var(--color-foreground)] ' +
+    'backdrop-blur hover:bg-[var(--control-surface-hover)] hover:border-[var(--color-lime)]/50 hover:-translate-y-0.5',
   ghost:
-    'text-[var(--color-foreground)]/80 hover:text-[var(--color-foreground)] hover:bg-white/[0.05]',
+    'text-[var(--color-foreground)]/80 hover:text-[var(--color-foreground)] hover:bg-[var(--control-surface-hover)]',
 };
 
 const sizes: Record<ButtonSize, string> = {

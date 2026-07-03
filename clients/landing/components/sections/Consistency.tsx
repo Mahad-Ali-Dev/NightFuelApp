@@ -156,7 +156,7 @@ export function Consistency() {
                   Jan – Jun 2026 · chrono-nutrition &amp; workout adherence
                 </p>
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-lime)]/30 bg-[var(--color-lime)]/10 px-3 py-1.5 text-sm font-semibold text-[var(--color-lime-light)]">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[var(--color-lime)]/30 bg-[var(--color-lime)]/10 px-3 py-1.5 text-sm font-semibold text-[var(--color-lime-dark)] dark:text-[var(--color-lime-light)]">
                 <Flame className="size-4" aria-hidden="true" />
                 41-day best streak
               </div>

@@ -4,7 +4,6 @@ import { Sparkles, ShieldCheck } from 'lucide-react';
 import { SectionShell } from '@/components/ui/section-shell';
 import { Reveal } from '@/components/ui/reveal';
 import { Badge } from '@/components/ui/badge';
-import { GradientText } from '@/components/ui/gradient-text';
 import { AppBadges } from '@/components/ui/app-badges';
 import { DotPattern } from '@/components/ui/dot-pattern';
 import { PricingComparison } from '@/components/ui/pricing-comparison';
@@ -22,13 +21,6 @@ export function PricingSection() {
   return (
     <SectionShell
       id="pricing"
-      eyebrow="Pricing"
-      title={
-        <>
-          One plan. <GradientText>Every feature.</GradientText>
-        </>
-      }
-      subtitle="No confusing tiers, no paywalled essentials. Start with a 7-day free trial, then unlock everything Zeitra does for the price of a couple of coffees."
       decoration={
         <>
           {/* Ambient DotPattern texture (theme-aware fill already). */}

@@ -191,8 +191,8 @@ export function Faq() {
                       'text-lg font-semibold leading-snug tracking-tight md:text-xl',
                       'text-[var(--color-foreground)]',
                       'transition-colors duration-200',
-                      'hover:text-[var(--color-lime-light)]',
-                      'data-[state=open]:text-[var(--color-lime)]',
+                      'hover:text-[var(--color-lime-dark)] dark:hover:text-[var(--color-lime-light)]',
+                      'data-[state=open]:text-[var(--color-lime-dark)] dark:data-[state=open]:text-[var(--color-lime)]',
                       'rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-lime)]',
                     )}
                   >
