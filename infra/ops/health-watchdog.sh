@@ -40,16 +40,30 @@ send_mail() { # subject, body
         && echo "  alert sent: $1"
 }
 
+# Single probe → returns 0 if healthy: a 2xx/3xx status AND the expected marker
+# present in the body. --compressed decompresses any Cloudflare gzip/brotli so
+# the marker grep works on real HTML. Sets $PROBE_CODE for the message.
+probe() {
+    local url="$1" want="$2" b c
+    b="$(curl -sS --compressed -m 20 -o - -w '\n%{http_code}' "$url" 2>/dev/null || true)"
+    c="$(printf '%s' "$b" | tail -1)"
+    PROBE_CODE="$c"
+    case "$c" in 2*|3*) printf '%s' "$b" | grep -qi "$want" && return 0 ;; esac
+    return 1
+}
+
 for entry in "${TARGETS[@]}"; do
     name="${entry%%|*}"; rest="${entry#*|}"
     url="${rest%%|*}"; want="${rest#*|}"
     down_file="$STATE_DIR/$name.down"
     lastalert_file="$STATE_DIR/$name.lastalert"
 
-    body="$(curl -sS -m 20 -o - -w '\n%{http_code}' "$url" 2>/dev/null || true)"
-    code="$(printf '%s' "$body" | tail -1)"
+    # CONFIRM before treating as down: a single transient blip (edge hiccup,
+    # origin reload, brief timeout) must NOT page — only a SECOND failure ~6s
+    # later counts. A real outage (down >6s) still alerts on this tick.
     ok=0
-    case "$code" in 2*|3*) printf '%s' "$body" | grep -qi "$want" && ok=1 ;; esac
+    if probe "$url" "$want"; then ok=1; else sleep 6; probe "$url" "$want" && ok=1; fi
+    code="$PROBE_CODE"
 
     now="$(date +%s)"
     if [ "$ok" = "1" ]; then
