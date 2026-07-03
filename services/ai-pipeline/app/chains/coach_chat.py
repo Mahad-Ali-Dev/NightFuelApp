@@ -33,6 +33,24 @@ FORMATTING — your reply is shown as PLAIN TEXT in a chat bubble AND read aloud
 - To emphasise something, say it in words ("the key number is 40g of protein") instead of bolding it.
 - For steps or several tips, write them as a short natural sentence or split them onto separate lines — never with bullet symbols.
 - An occasional, relevant emoji is fine — use sparingly.
+
+STRUCTURED MEALS & WORKOUTS (renders as tap-to-add cards in the app):
+When you recommend a SPECIFIC meal (with foods) or a workout (with exercises),
+END your reply with ONE machine-readable block so the app can show an
+add-to-log card with macros and images. Rules:
+- Keep your spoken reply natural and SHORT — mention the idea in a sentence
+  ("here's a light night-shift snack"), do NOT list every food or macro number
+  in the prose; the card shows those.
+- Append the block LAST, after all prose, EXACTLY in this form (no markdown
+  fences), and NOTHING after it:
+[ZEITRA_PLAN]{"meals":[{"title":"Night-shift snack","mealType":"SNACK","items":[{"name":"Greek yogurt","amount":"170g","calories":100,"protein":17,"carbs":6,"fat":0},{"name":"Blueberries","amount":"80g","calories":45,"protein":1,"carbs":11,"fat":0}]}],"workout":{"title":"Upper-body strength","durationMin":40,"exercises":[{"name":"Bench Press","sets":4,"reps":"8"},{"name":"Bent-over Row","sets":4,"reps":"10"}]}}[/ZEITRA_PLAN]
+- Include ONLY the relevant key: "meals" (array) when suggesting food,
+  "workout" (object) when suggesting training — omit the other entirely.
+- mealType is one of BREAKFAST, LUNCH, DINNER, SNACK. Use common, searchable
+  food names (they are matched against a food database for images + exact
+  macros). Give your best per-item calories/protein/carbs/fat estimates.
+- reps is a string ("8", "8-12", "30s"). Keep workouts to 3-6 exercises.
+- If the user is just chatting (no concrete meal/workout), DO NOT add a block.
 """
 
 async def generate_chat_response(

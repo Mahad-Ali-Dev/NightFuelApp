@@ -20,6 +20,8 @@ import { GlassCard, CtaButton, KeyboardAvoidingWrapper } from '@/components/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getRiaMessages, sendRiaMessage, type RiaMessage } from '@/api/chat';
 import { getCycleSymptoms } from '@/api/cycle';
+import { parseRiaPlan } from '@/lib/riaPlan';
+import { RiaPlanCards } from '@/components/chat/RiaPlanCards';
 import { streamChat } from '@/api/ai';
 import { useAuth } from '@/hooks/useAuth';
 import { apiClient } from '@/api/client';
@@ -1464,8 +1466,14 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
     // already a lime-on-lime tint, so re-colouring its times would be invisible —
     // we pass its own text colour there (a visual no-op) to keep the prose uniform.
     const timeColor = isAI ? colors.accent.lime : colors.accent.limeLight;
+    // Ria may append a structured [ZEITRA_PLAN]…[/ZEITRA_PLAN] block (meals /
+    // workout). Split it off so the bubble shows CLEAN prose (also what TTS
+    // reads) and we render tap-to-add cards from the parsed plan below. For the
+    // user's own bubbles there's never a plan — pass the text straight through.
+    const parsed = isAI ? parseRiaPlan(msg.text) : { cleanText: msg.text, plan: null };
+    const displayText = parsed.cleanText;
     // Compute the spans once so we can both render them and detect tappable links.
-    const spans = linkify(msg.text);
+    const spans = linkify(displayText);
     const hasLinks = spans.some((s) => s.type === 'link');
     // a11y: when a bubble contains tappable link spans, we must NOT collapse the
     // row into ONE screen-reader node (`accessible`) — doing so swallows the
@@ -1477,20 +1485,21 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
     // replies) is applied either way.
     const rowAccessibilityProps = hasLinks
         ? {}
-        : { accessible: true, accessibilityRole: 'text' as const, accessibilityLabel: `${isAI ? 'Ria' : 'You'}: ${msg.text}` };
-    // Show the inline "Add this meal" chip under a SETTLED Ria bubble that is
-    // clearly suggesting food (not while it's still streaming). Presentational
-    // affordance only — it never alters the bubble itself or its a11y label.
-    const showAddMeal = isAI && !msg.streaming && isMealSuggestion(msg.text);
+        : { accessible: true, accessibilityRole: 'text' as const, accessibilityLabel: `${isAI ? 'Ria' : 'You'}: ${displayText}` };
+    // Structured plan (meal/workout) → rich tap-to-add cards below the bubble,
+    // once the reply has SETTLED (never mid-stream, when the block is partial).
+    // Replaces the old keyword-heuristic "Add this meal" chip that just sent the
+    // user to a manual search screen — now Ria's picks add in one tap.
+    const showPlan = isAI && !msg.streaming && !!parsed.plan;
     const row = (
         <Reanimated.View
             entering={FadeInDown.springify().damping(20).mass(0.6)}
             style={[
                 styles.messageRow,
                 isAI ? { justifyContent: 'flex-start' } : { justifyContent: 'flex-end' },
-                // Drop the row's own bottom gap when the chip follows it so the chip
-                // hugs the bubble (the row+chip column owns the spacing instead).
-                showAddMeal ? { marginBottom: 0 } : null,
+                // Drop the row's own bottom gap when cards follow it so they hug
+                // the bubble (the row+cards column owns the spacing instead).
+                showPlan ? { marginBottom: 0 } : null,
             ]}
             {...rowAccessibilityProps}
             accessibilityLiveRegion={msg.streaming ? 'polite' : 'none'}
@@ -1550,11 +1559,11 @@ const MessageBubble = React.memo(function MessageBubble({ msg, colors, typograph
     // change for the common case). With a chip, the row + chip share a column
     // wrapper (no a11y props on it, so the row stays the single labelled node and
     // the bubble count is unchanged).
-    if (!showAddMeal) return row;
+    if (!showPlan) return row;
     return (
         <View style={styles.bubbleGroup}>
             {row}
-            <AddMealChip colors={colors} typography={typography} onPress={onAddMeal} />
+            {parsed.plan ? <RiaPlanCards plan={parsed.plan} /> : null}
         </View>
     );
 });
