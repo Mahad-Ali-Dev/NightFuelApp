@@ -103,3 +103,14 @@ app_images/
 _gen-tiles.js
 _gen.log
 _gen2.log
+
+# ── Bloat lockout (2026-07-03): screenshots + generated assets never belong in
+# the repo. Exercise VIDEOS are covered above; add images + the loose dirs here.
+Screenshots/
+current_state/
+docs/store-assets/
+exercises/**/*.png
+exercises/**/*.jpg
+exercises/**/*.jpeg
+exercises/**/*.gif
+exercises/**/*.webp
