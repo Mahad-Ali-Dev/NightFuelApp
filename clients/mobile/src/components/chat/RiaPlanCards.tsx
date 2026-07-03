@@ -2,11 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { GlassCard } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
-import { searchFoods, logMeal, type FoodItem } from '@/api/meals';
+import { searchFoods, logMeal, deleteMealLog, type FoodItem } from '@/api/meals';
 import { searchLibrary, createRoutine } from '@/api/exercises';
 import type { RiaPlan, RiaMeal, RiaWorkout, RiaMealItem } from '@/lib/riaPlan';
 
@@ -101,7 +102,8 @@ function MealItemRow({ item }: { item: RiaMealItem }) {
 function MealCard({ meal }: { meal: RiaMeal }) {
   const { colors, typography, borderRadius } = useTheme();
   const queryClient = useQueryClient();
-  const [done, setDone] = useState(false);
+  // The just-logged meal-log id (enables Undo). null = not logged yet.
+  const [loggedId, setLoggedId] = useState<string | null>(null);
 
   const totals = useMemo(
     () =>
@@ -142,8 +144,18 @@ function MealCard({ meal }: { meal: RiaMeal }) {
       );
       return logMeal({ mealType: meal.mealType, foodItems });
     },
+    onSuccess: (res: any) => {
+      setLoggedId(res?.id ?? 'logged');
+      queryClient.invalidateQueries({ queryKey: ['meal-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['today-progress'] });
+    },
+  });
+
+  const undo = useMutation({
+    mutationFn: () =>
+      loggedId && loggedId !== 'logged' ? deleteMealLog(loggedId) : Promise.resolve({ deleted: false }),
     onSuccess: () => {
-      setDone(true);
+      setLoggedId(null);
       queryClient.invalidateQueries({ queryKey: ['meal-logs'] });
       queryClient.invalidateQueries({ queryKey: ['today-progress'] });
     },
@@ -174,24 +186,45 @@ function MealCard({ meal }: { meal: RiaMeal }) {
         </Text>
       </View>
 
-      <Pressable
-        onPress={() => { if (!log.isPending && !done) log.mutate(); }}
-        disabled={log.isPending || done}
-        accessibilityRole="button"
-        accessibilityLabel={`Log ${meal.title}`}
-        style={({ pressed }) => [styles.cta, { backgroundColor: done ? withAlpha(CORAL, 0.3) : CORAL, opacity: pressed ? 0.85 : 1 }]}
-      >
-        {log.isPending ? (
-          <ActivityIndicator size="small" color={colors.text.inverse} />
-        ) : (
-          <>
-            <Ionicons name={done ? 'checkmark' : 'add'} size={17} color={colors.text.inverse} />
-            <Text style={[typography.bodyMedium, { color: colors.text.inverse, fontWeight: '700' }]}>
-              {done ? 'Logged to today' : 'Log this meal'}
+      {loggedId ? (
+        // Logged state → confirmation + Undo (deletes the just-created log).
+        <View style={styles.doneRow}>
+          <View style={styles.doneLeft}>
+            <Ionicons name="checkmark-circle" size={18} color={CORAL} />
+            <Text style={[typography.bodySm, { color: colors.text.secondary, fontWeight: '600' }]}>
+              {undo.isPending ? 'Removing…' : 'Logged to today'}
             </Text>
-          </>
-        )}
-      </Pressable>
+          </View>
+          <Pressable
+            onPress={() => { if (!undo.isPending) undo.mutate(); }}
+            disabled={undo.isPending}
+            accessibilityRole="button"
+            accessibilityLabel="Undo — remove this meal from today"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={[typography.bodySm, { color: CORAL, fontWeight: '700' }]}>Undo</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable
+          onPress={() => { if (!log.isPending) log.mutate(); }}
+          disabled={log.isPending}
+          accessibilityRole="button"
+          accessibilityLabel={`Log ${meal.title}`}
+          style={({ pressed }) => [styles.cta, { backgroundColor: CORAL, opacity: pressed ? 0.85 : 1 }]}
+        >
+          {log.isPending ? (
+            <ActivityIndicator size="small" color={colors.text.inverse} />
+          ) : (
+            <>
+              <Ionicons name="add" size={17} color={colors.text.inverse} />
+              <Text style={[typography.bodyMedium, { color: colors.text.inverse, fontWeight: '700' }]}>
+                Log this meal
+              </Text>
+            </>
+          )}
+        </Pressable>
+      )}
       {log.isError ? (
         <Text style={[typography.caption, { color: colors.error, marginTop: 6, textAlign: 'center' }]}>
           Couldn't log — try again.
@@ -230,7 +263,9 @@ function ExerciseRow({ ex }: { ex: RiaWorkout['exercises'][number] }) {
 function WorkoutCard({ workout }: { workout: RiaWorkout }) {
   const { colors, typography, borderRadius } = useTheme();
   const queryClient = useQueryClient();
-  const [done, setDone] = useState(false);
+  const router = useRouter();
+  // The saved routine id (enables "Start now"). null = not saved yet.
+  const [routineId, setRoutineId] = useState<string | null>(null);
 
   const add = useMutation({
     mutationFn: () =>
@@ -245,8 +280,8 @@ function WorkoutCard({ workout }: { workout: RiaWorkout }) {
           reps: parseInt(String(e.reps), 10) || 0,
         })),
       }),
-    onSuccess: () => {
-      setDone(true);
+    onSuccess: (r: any) => {
+      setRoutineId(r?.id ?? 'added');
       queryClient.invalidateQueries({ queryKey: ['routines'] });
     },
   });
@@ -271,24 +306,46 @@ function WorkoutCard({ workout }: { workout: RiaWorkout }) {
       ))}
       <View style={styles.divider} />
 
-      <Pressable
-        onPress={() => { if (!add.isPending && !done) add.mutate(); }}
-        disabled={add.isPending || done}
-        accessibilityRole="button"
-        accessibilityLabel={`Add ${workout.title} to my routines`}
-        style={({ pressed }) => [styles.cta, { backgroundColor: done ? withAlpha(LIME, 0.3) : LIME, opacity: pressed ? 0.85 : 1 }]}
-      >
-        {add.isPending ? (
-          <ActivityIndicator size="small" color={colors.text.inverse} />
-        ) : (
-          <>
-            <Ionicons name={done ? 'checkmark' : 'add'} size={17} color={colors.text.inverse} />
-            <Text style={[typography.bodyMedium, { color: colors.text.inverse, fontWeight: '700' }]}>
-              {done ? 'Added to My Routines' : 'Add workout'}
+      {routineId ? (
+        // Saved → confirmation + a "Start now" for the at-the-gym case.
+        <View style={styles.doneRow}>
+          <View style={styles.doneLeft}>
+            <Ionicons name="checkmark-circle" size={18} color={LIME} />
+            <Text style={[typography.bodySm, { color: colors.text.secondary, fontWeight: '600' }]}>
+              Added to My Routines
             </Text>
-          </>
-        )}
-      </Pressable>
+          </View>
+          {routineId !== 'added' ? (
+            <Pressable
+              onPress={() => router.push({ pathname: '/training/workout', params: { routineId } } as never)}
+              accessibilityRole="button"
+              accessibilityLabel={`Start ${workout.title} now`}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={[typography.bodySm, { color: colors.text.primary, fontWeight: '700' }]}>Start now →</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : (
+        <Pressable
+          onPress={() => { if (!add.isPending) add.mutate(); }}
+          disabled={add.isPending}
+          accessibilityRole="button"
+          accessibilityLabel={`Add ${workout.title} to my routines`}
+          style={({ pressed }) => [styles.cta, { backgroundColor: LIME, opacity: pressed ? 0.85 : 1 }]}
+        >
+          {add.isPending ? (
+            <ActivityIndicator size="small" color={colors.text.inverse} />
+          ) : (
+            <>
+              <Ionicons name="add" size={17} color={colors.text.inverse} />
+              <Text style={[typography.bodyMedium, { color: colors.text.inverse, fontWeight: '700' }]}>
+                Add workout
+              </Text>
+            </>
+          )}
+        </Pressable>
+      )}
       {add.isError ? (
         <Text style={[typography.caption, { color: colors.error, marginTop: 6, textAlign: 'center' }]}>
           Couldn't add — try again.
@@ -341,6 +398,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 11,
   },
+  doneRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
+  doneLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
 });
 
 export default RiaPlanCards;

@@ -175,6 +175,18 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
         return reply.status(200).send(logs as any);
     });
 
+    // DELETE /logs/:id — remove one of the user's OWN meal logs (chat Undo +
+    // mis-log correction). Scoped by userId in the service; a missing/other-user
+    // id returns { deleted: false } rather than erroring.
+    fastify.delete('/logs/:id', {
+        preHandler: [(fastify as any).authenticate],
+    }, async (request, reply) => {
+        const userId = (request.user as any).id || (request.user as any).userId;
+        const { id } = request.params as { id: string };
+        const result = await mealService.deleteMealLog(userId, id);
+        return reply.status(200).send(result);
+    });
+
     // ── GET /v1/meals/grocery-list ────────────────────────────────────────────
     // Generates a grocery list based on the user's active plan.
     fastify.get('/grocery-list', {

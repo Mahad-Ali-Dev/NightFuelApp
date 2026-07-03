@@ -368,6 +368,18 @@ export class MealService {
     }
 
     /**
+     * Delete a meal log the user owns. Scoped by userId so a user can only
+     * remove their OWN rows (deleteMany with both id + userId = no cross-user
+     * delete, and a non-existent/other-user id is a no-op, not an error). Backs
+     * the chat "Undo" on a just-logged Ria meal + general mis-log correction.
+     */
+    async deleteMealLog(userId: string, id: string): Promise<{ deleted: boolean }> {
+        const res = await this.prisma.mealLog.deleteMany({ where: { id, userId } });
+        logger.info({ userId, id, deleted: res.count }, 'Meal log delete');
+        return { deleted: res.count > 0 };
+    }
+
+    /**
      * generateGroceryList
      * Fetches the active day plan and extracts all unique food items.
      */

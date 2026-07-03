@@ -250,6 +250,12 @@ export const getMealLogs = async (date?: string, limit?: number) => {
   return data;
 };
 
+/** Delete one of the user's own meal logs (chat Undo / mis-log correction). */
+export const deleteMealLog = async (id: string): Promise<{ deleted: boolean }> => {
+  const { data } = await apiClient.delete<{ deleted: boolean }>(`/v1/meals/logs/${id}`);
+  return data;
+};
+
 /**
  * Photo food recognition — POST a base64 JPEG data URL to the /food-vision
  * gateway (the Next.js route that calls the Groq vision model server-side; the
