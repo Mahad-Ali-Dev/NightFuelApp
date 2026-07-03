@@ -114,3 +114,10 @@ exercises/**/*.jpg
 exercises/**/*.jpeg
 exercises/**/*.gif
 exercises/**/*.webp
+
+# The exercise image directories ARE the ~345MB (46M+45M+... per group) — ignore
+# the dirs wholesale (extension patterns missed uppercase/mixed types). The
+# *_catalog.json data stays tracked; the rest of exercises/ is generation scratch.
+exercises/**/images/
+exercises/**/*.bak
+exercises/_*
