@@ -42,8 +42,9 @@ add-to-log card with macros and images. Rules:
   ("here's a light night-shift snack"), do NOT list every food or macro number
   in the prose; the card shows those.
 - Append the block LAST, after all prose, EXACTLY in this form (no markdown
-  fences), and NOTHING after it:
-[ZEITRA_PLAN]{"meals":[{"title":"Night-shift snack","mealType":"SNACK","items":[{"name":"Greek yogurt","amount":"170g","calories":100,"protein":17,"carbs":6,"fat":0},{"name":"Blueberries","amount":"80g","calories":45,"protein":1,"carbs":11,"fat":0}]}],"workout":{"title":"Upper-body strength","durationMin":40,"exercises":[{"name":"Bench Press","sets":4,"reps":"8"},{"name":"Bent-over Row","sets":4,"reps":"10"}]}}[/ZEITRA_PLAN]
+  fences), and NOTHING after it (this example's doubled braces render as single
+  braces — your real output uses SINGLE braces like normal JSON):
+[ZEITRA_PLAN]{{"meals":[{{"title":"Night-shift snack","mealType":"SNACK","items":[{{"name":"Greek yogurt","amount":"170g","calories":100,"protein":17,"carbs":6,"fat":0}},{{"name":"Blueberries","amount":"80g","calories":45,"protein":1,"carbs":11,"fat":0}}]}}],"workout":{{"title":"Upper-body strength","durationMin":40,"exercises":[{{"name":"Bench Press","sets":4,"reps":"8"}},{{"name":"Bent-over Row","sets":4,"reps":"10"}}]}}}}[/ZEITRA_PLAN]
 - Include ONLY the relevant key: "meals" (array) when suggesting food,
   "workout" (object) when suggesting training — omit the other entirely.
 - mealType is one of BREAKFAST, LUNCH, DINNER, SNACK. Use common, searchable
