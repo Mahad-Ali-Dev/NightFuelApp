@@ -40,15 +40,17 @@ send_mail() { # subject, body
         && echo "  alert sent: $1"
 }
 
-# Single probe → returns 0 if healthy: a 2xx/3xx status AND the expected marker
-# present in the body. --compressed decompresses any Cloudflare gzip/brotli so
-# the marker grep works on real HTML. Sets $PROBE_CODE for the message.
+# Single probe → returns 0 if healthy (HTTP 2xx/3xx). Behind Cloudflare the
+# status code IS the reliable up/down signal — CF returns 5xx/52x when the
+# origin is down and 2xx when it's serving — so we don't grep the body (which
+# was fragile: CF's zstd/brotli compression + shell command-substitution
+# garble the captured HTML and produced false "200 but down" alarms). The
+# `want` arg is kept for call-site compatibility but no longer used.
 probe() {
-    local url="$1" want="$2" b c
-    b="$(curl -sS --compressed -m 20 -o - -w '\n%{http_code}' "$url" 2>/dev/null || true)"
-    c="$(printf '%s' "$b" | tail -1)"
+    local url="$1" c
+    c="$(curl -sS --compressed -m 20 -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || echo 000)"
     PROBE_CODE="$c"
-    case "$c" in 2*|3*) printf '%s' "$b" | grep -qi "$want" && return 0 ;; esac
+    case "$c" in 2*|3*) return 0 ;; esac
     return 1
 }
 
