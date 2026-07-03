@@ -121,3 +121,5 @@ exercises/**/*.webp
 exercises/**/images/
 exercises/**/*.bak
 exercises/_*
+exercises/exercises_images_urls/
+exercises/missing-exercise-images.*
