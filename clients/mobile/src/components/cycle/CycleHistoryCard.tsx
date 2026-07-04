@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
+import { useCycleAccents } from '@/theme/useCycleAccents';
 import { GlassCard } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import type { CycleHistoryResponse, CycleHistoryEntry } from '@/api/cycle';
@@ -21,9 +22,8 @@ import type { CycleHistoryResponse, CycleHistoryEntry } from '@/api/cycle';
  * fabricated average.
  */
 
-// Coral period/cycle accent (the brand `accent.coral` token resolves to LIME
-// post-rebrand, so coral is an explicit literal here).
-const CORAL = '#FF7A90';
+// The coral period accent is theme-aware — see useCycleAccents (dark #FF7A90,
+// darkened on light); sourced per-render inside the component.
 
 export interface CycleHistoryCardProps {
     history?: CycleHistoryResponse;
@@ -57,6 +57,7 @@ function cycleLengthRange(cycles: CycleHistoryEntry[]): string | null {
 
 export function CycleHistoryCard({ history }: CycleHistoryCardProps) {
     const { colors, typography, borderRadius } = useTheme();
+    const { coral: CORAL } = useCycleAccents();
 
     const cycles = history?.cycles ?? [];
     const averages = history?.averages;

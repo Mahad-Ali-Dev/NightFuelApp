@@ -21,6 +21,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { enforceScanQuota } from '@/lib/scanQuota';
 
 // Vision inference can take a while on a cold model — give the route room.
 export const runtime = 'nodejs';
@@ -287,6 +288,17 @@ function parseVision(obj: any): VisionParse {
 // ─── Route Handler ────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+    // 0. Daily scan quota — gated BEFORE any upstream vision call (the expensive,
+    //    billable step). Reuses the shared @nightfuel/config AI-quota policy
+    //    (AI_LIMITS[plan].scans, resolvePlan, assertWithinDailyLimit,
+    //    AI_QUOTA_EXCEEDED). Over cap → 429 with the standard body; missing/invalid
+    //    JWT → 401. The `scans` unit is consumed via quota.commit() only when we
+    //    actually return a recognized food below (a no-food/low-confidence/error
+    //    result does NOT burn a scan — same rule exercise-service applies to
+    //    AI generations).
+    const quota = await enforceScanQuota(req);
+    if (!quota.ok) return quota.response;
+
     // 1. Env / key — the call is server-side only; without a key we can't run.
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -382,21 +394,30 @@ export async function POST(req: NextRequest) {
     if (!result.ok) {
         // no_food / low_confidence / parse_failed — all 200-shaped client errors
         // (NOT 500s): the camera should stay usable and offer try-again / manual.
+        // No usable food was returned, so we do NOT consume a scan (quota.commit
+        // is skipped) — the user isn't billed for a miss. We still echo the quota
+        // headers so the client can surface "N left" even on a miss.
         return NextResponse.json(
             {
                 error: result.error,
                 ...(result.confidence != null ? { confidence: result.confidence } : {}),
             },
-            { status: 200 },
+            { status: 200, headers: quota.headers },
         );
     }
 
-    // 5. Success — the SAME `{ food }` shape food-search returns, plus the vision
-    //    provenance the client badges as an estimate.
-    return NextResponse.json({
-        food: result.food,
-        source: 'vision-estimate',
-        confidence: result.confidence,
-        portionNote: result.portionNote,
-    });
+    // 5. Success — a real recognized food. Consume ONE scan from the daily quota
+    //    (best-effort; a Redis hiccup never fails the response the client is
+    //    waiting on) and echo the remaining balance in the response headers.
+    await quota.commit();
+    const remainingAfter = Math.max(0, quota.remaining - 1);
+    return NextResponse.json(
+        {
+            food: result.food,
+            source: 'vision-estimate',
+            confidence: result.confidence,
+            portionNote: result.portionNote,
+        },
+        { headers: { ...quota.headers, 'X-Scan-Remaining': String(remainingAfter) } },
+    );
 }

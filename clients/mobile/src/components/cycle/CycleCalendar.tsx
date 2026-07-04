@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
+import { useCycleAccents } from '@/theme/useCycleAccents';
 import { GlassCard } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import type { CyclePhase, Confidence, ForecastDay } from '@/api/cycle';
@@ -29,10 +30,9 @@ import type { CyclePhase, Confidence, ForecastDay } from '@/api/cycle';
  * render as plain (no phase) cells.
  */
 
-// Coral period/cycle accent (the brand `accent.coral` token resolves to LIME
-// post-rebrand, so coral is an explicit literal here). Logged period days, the
-// fertile/ovulation overlays and the legend all read in this period accent.
-const CORAL = '#FF7A90';
+// The coral period accent is theme-aware — see useCycleAccents (dark #FF7A90,
+// darkened on light for contrast). Logged period days, the fertile/ovulation
+// overlays and the legend all read in it; sourced per-render in the component.
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTH_NAMES = [
@@ -96,6 +96,7 @@ export function CycleCalendar({
     initialMonth,
 }: CycleCalendarProps) {
     const { colors, typography, borderRadius } = useTheme();
+    const { coral: CORAL } = useCycleAccents();
 
     // Index the forecast days by ISO date for O(1) cell lookup.
     const byDate = useMemo(() => {

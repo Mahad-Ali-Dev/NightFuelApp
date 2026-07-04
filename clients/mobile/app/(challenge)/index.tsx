@@ -46,6 +46,10 @@ export default function ChallengeListScreen() {
                     <Ionicons name="flash" size={18} color={D.ink} />
                     <Text style={st.ctaTxt}>Build my plan</Text>
                 </TouchableOpacity>
+                <TouchableOpacity onPress={() => router.push('/(challenge)/gallery' as any)} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel="Browse ready-made challenges" style={st.browse}>
+                    <Ionicons name="grid-outline" size={16} color={D.text} />
+                    <Text style={st.browseTxt}>Browse challenges</Text>
+                </TouchableOpacity>
             </View>
         );
     }
@@ -65,6 +69,9 @@ export default function ChallengeListScreen() {
                     <Text style={st.hTitle}>{GOAL_LABELS[plan.inputs.goal]}</Text>
                     <Text style={st.hSub}>{plan.durationDays}-day challenge · {done}/{plan.durationDays} done</Text>
                 </View>
+                <TouchableOpacity onPress={() => router.push('/(challenge)/gallery' as any)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Browse ready-made challenges" style={st.back}>
+                    <Ionicons name="grid-outline" size={20} color={D.text} />
+                </TouchableOpacity>
                 <TouchableOpacity onPress={onTest} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Test a reminder (notification, vibrate, flashlight)" style={st.back}>
                     <Ionicons name="notifications-outline" size={20} color={D.lime} />
                 </TouchableOpacity>
@@ -130,4 +137,6 @@ const makeStyles = (D: ThemedPalette) => StyleSheet.create({
     continueTxt: { color: D.ink, fontSize: 12, fontWeight: '600' },
     cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: D.lime, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 22, marginTop: 14 },
     ctaTxt: { color: D.ink, fontSize: 15, fontWeight: '600' },
+    browse: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderColor: D.border, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 20, marginTop: 10 },
+    browseTxt: { color: D.text, fontSize: 14, fontWeight: '600' },
 });

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
+import { useCycleAccents } from '@/theme/useCycleAccents';
 import { GlassCard } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import type { UserStatus } from '@/api/profile';
@@ -27,8 +28,6 @@ import type { UserStatus } from '@/api/profile';
 
 type Phase = NonNullable<UserStatus['cyclePhase']>;
 type ConcretePhase = Exclude<Phase, 'UNKNOWN'>;
-
-const CORAL = '#FF7A90';
 
 interface PhaseCoach {
     /** Human phase label used in copy + the prefilled prompt. */
@@ -73,6 +72,7 @@ export interface PhaseCoachCardProps {
 
 export function PhaseCoachCard({ phase }: PhaseCoachCardProps) {
     const { colors, typography, borderRadius } = useTheme();
+    const { coral: CORAL } = useCycleAccents();
     const router = useRouter();
 
     // Hooks run unconditionally (rules of hooks) — the render gate sits below.

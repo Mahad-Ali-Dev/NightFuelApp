@@ -2,7 +2,11 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme';
+import { useCycleAccents } from '@/theme/useCycleAccents';
+import { phaseArt } from '@/features/cycle/phaseArt';
 import { GlassCard } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import type { CycleForecast } from '@/api/cycle';
@@ -39,9 +43,9 @@ import type { UserStatus } from '@/api/profile';
 type Phase = NonNullable<UserStatus['cyclePhase']>;
 type ConcretePhase = Exclude<Phase, 'UNKNOWN'>;
 
-// Coral is the period/cycle accent for this screen (the brand `accent.coral`
-// token resolves to LIME post-rebrand, so the coral here is an explicit literal).
-const CORAL = '#FF7A90';
+// Coral is the period/cycle accent for this screen; it's theme-aware — see
+// useCycleAccents (dark #FF7A90, darkened on light). CycleRing receives it (and
+// the lime ovulation-marker colour) as props; the card sources it per-render.
 
 /** Phase descriptor: ordered position + a gentle, non-prescriptive line. */
 const PHASE_META: Record<
@@ -99,6 +103,8 @@ function CycleRing({
     progress,
     ovulationFraction,
     trackColor,
+    arcColor,
+    markerColor,
 }: {
     size: number;
     /** 0..1 fraction of the cycle elapsed (coral arc length). null => no arc. */
@@ -106,6 +112,10 @@ function CycleRing({
     /** 0..1 position of the ovulation marker. null => no marker. */
     ovulationFraction: number | null;
     trackColor: string;
+    /** Period/elapsed arc colour (theme-aware coral). */
+    arcColor: string;
+    /** Ovulation-marker colour (theme-aware lime). */
+    markerColor: string;
 }) {
     const strokeWidth = 11;
     const radius = (size - strokeWidth) / 2;
@@ -140,7 +150,7 @@ function CycleRing({
                     cx={center}
                     cy={center}
                     r={radius}
-                    stroke={CORAL}
+                    stroke={arcColor}
                     strokeWidth={strokeWidth}
                     strokeLinecap="round"
                     fill="none"
@@ -156,7 +166,7 @@ function CycleRing({
                     cx={center}
                     cy={center}
                     r={radius}
-                    stroke="#A8CC3C"
+                    stroke={markerColor}
                     strokeWidth={strokeWidth}
                     strokeLinecap="round"
                     fill="none"
@@ -179,6 +189,7 @@ export function CyclePhaseHero({
     ovulationDayOfCycle,
 }: CyclePhaseHeroProps) {
     const { colors, typography, borderRadius } = useTheme();
+    const { coral: CORAL, lime: LIME } = useCycleAccents();
 
     // Opt-in gate — identical to CyclePhaseCard: render nothing with no phase.
     const isUnknown = cyclePhase === 'UNKNOWN';
@@ -220,6 +231,24 @@ export function CyclePhaseHero({
             style={styles.card}
             testID="cycle-phase-hero"
         >
+            {/* Phase-art backdrop — a subtle on-brand photo behind the ring, under a
+                scrim so the DAY number + phase name stay fully legible. Concrete
+                phases only (UNKNOWN has no art). */}
+            {concrete && phaseArt(concrete) ? (
+                <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+                    <Image
+                        source={phaseArt(concrete)}
+                        style={[StyleSheet.absoluteFillObject, { opacity: 0.2 }]}
+                        contentFit="cover"
+                        transition={200}
+                    />
+                    <LinearGradient
+                        colors={[withAlpha(colors.background.secondary, 0.2), colors.background.secondary]}
+                        style={StyleSheet.absoluteFillObject}
+                    />
+                </View>
+            ) : null}
+
             {/* Calm coral wash — the surface carries a faint period tint. */}
             <View
                 pointerEvents="none"
@@ -234,6 +263,8 @@ export function CyclePhaseHero({
                         progress={progress}
                         ovulationFraction={ovulationFraction}
                         trackColor={withAlpha(colors.text.primary, 0.08)}
+                        arcColor={CORAL}
+                        markerColor={LIME}
                     />
                     <View style={styles.ringCenter} pointerEvents="none">
                         {showDay ? (

@@ -11,6 +11,9 @@ import {
     cycleForecastQuerySchema,
     logSymptomsSchema,
     symptomsQuerySchema,
+    updateCycleHealthSchema,
+    logPillSchema,
+    cycleShareCodeParamsSchema,
 } from './schemas';
 import { z } from 'zod';
 import { UserService } from './user.service';
@@ -546,6 +549,110 @@ export const userRoutes = async (
         }
     );
 
+    // ── Partner cycle-sharing (owner-managed, self-only) ─────────────────────
+    // GET/POST/DELETE the caller's OWN revocable partner-share code. Same self-only
+    // identity contract as every other cycle route (extractUserId is the only
+    // identity source). The partner READ path is the separate PUBLIC route below.
+
+    // GET /v1/users/me/cycle/share — the caller's active share, or { share: null }.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/cycle/share',
+        {
+            onRequest: [(fastify as any).authenticate],
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const share = await service.getActiveCycleShare(userId);
+                return reply.code(200).send({ share });
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // POST /v1/users/me/cycle/share — generate a share code (idempotent: returns
+    // the existing active one rather than minting a duplicate).
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/me/cycle/share',
+        {
+            onRequest: [(fastify as any).authenticate],
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const share = await service.createCycleShare(userId);
+                return reply.code(201).send({ share });
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // DELETE /v1/users/me/cycle/share — revoke the caller's active share(s).
+    fastify.withTypeProvider<ZodTypeProvider>().delete(
+        '/me/cycle/share',
+        {
+            onRequest: [(fastify as any).authenticate],
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const result = await service.revokeCycleShare(userId);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── PUBLIC partner read (no auth) ────────────────────────────────────────
+    // GET /v1/users/cycle-share/:code — resolve a partner-presented code to the
+    // owner's SANITIZED, summary-only cycle view. Deliberately UNAUTHENTICATED (the
+    // partner holds only the opaque code, not the owner's session), so:
+    //   * NO `authenticate` hook — the code itself is the bearer credential.
+    //   * TIGHT per-IP rate limit on top of the global cap — brute-forcing a
+    //     192-bit code is already infeasible; this also stops scraping/abuse.
+    //   * an unknown OR revoked code returns a plain 404 (service -> null); the
+    //     high-entropy code space makes enumeration pointless either way.
+    // It sits under the already-routed `/v1/users` prefix (NOT `/me/...`), so the
+    // existing gateway/nginx routing covers it with no infra change. The sanitizer
+    // guarantees only summary fields are ever emitted (never symptom/activity/notes).
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/cycle-share/:code',
+        {
+            config: {
+                // 20 resolves/min/IP — plenty for a partner refreshing the view.
+                rateLimit: { max: 20, timeWindow: '1 minute' },
+            },
+            schema: { params: cycleShareCodeParamsSchema },
+        },
+        async (request, reply) => {
+            try {
+                const { code } = request.params as { code: string };
+                const summary = await service.resolveSharedCycleSummary(code);
+                if (!summary) {
+                    // Same generic body for unknown vs revoked — reveal nothing.
+                    return reply.code(404).send({ error: 'Share not found' });
+                }
+                return reply.code(200).send(summary);
+            } catch (err: any) {
+                // Never echo the code or the error detail.
+                request.log.error({ err }, 'Failed to resolve cycle share');
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
     // POST /v1/users/me/cycle/symptoms — per-day symptom quick-log (mood /
     // cramps / energy / flow / notes). Upserts on (user, day): re-logging the
     // same day merges fields. Same self-only identity contract as the other
@@ -584,6 +691,71 @@ export const userRoutes = async (
 
                 const { days } = request.query as { days?: number };
                 const result = await service.getCycleSymptoms(userId, days ?? 35);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // PATCH /v1/users/me/cycle/health — pregnancy mode + birth-control/pill config
+    // (Period P2). Partial update; self-only identity contract as the other cycle routes.
+    fastify.withTypeProvider<ZodTypeProvider>().patch(
+        '/me/cycle/health',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { body: updateCycleHealthSchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const row = await service.updateCycleHealth(userId, request.body as any);
+                return reply.code(200).send(row);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // POST /v1/users/me/cycle/pill — log today's (or a given day's) pill adherence.
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/me/cycle/pill',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { body: logPillSchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const row = await service.logPill(userId, request.body as any);
+                return reply.code(201).send(row);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/cycle/pill?days=35 — trailing pill-log window, newest first.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/cycle/pill',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { querystring: symptomsQuerySchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const { days } = request.query as { days?: number };
+                const result = await service.getPillLogs(userId, days ?? 35);
                 return reply.code(200).send(result);
             } catch (err: any) {
                 request.log.error(err);

@@ -138,18 +138,38 @@ export interface VisionFoodResult extends FoodItemMicros {
 }
 
 /**
+ * The shared daily-scan-quota signal, mirrored from the same `ai_quota_exceeded`
+ * 429 contract chat-service uses for Ria (see ai-coach.tsx QuotaState). The web
+ * food gateway (/food-vision + /food-search barcode) returns HTTP 429 with
+ * `{ error:'ai_quota_exceeded', limit, plan, resetsAt }` once the user is at/over
+ * their daily scan cap (free 3 / pro 30, counted since UTC midnight). Surfaced so
+ * the camera screens can show a friendly "limit reached — upgrade" state.
+ */
+export interface ScanQuotaInfo {
+  limit: number;
+  plan: 'free' | 'pro';
+  resetsAt: string;
+}
+
+/**
  * Outcome of a /food-vision call. On a confident hit `food` is set; otherwise
  * `error` carries a token the UI maps to a recoverable message (no_food /
- * low_confidence / rate_limited / timeout / vision_failed …). The gateway
- * returns its non-result errors as HTTP 200 with `{ error }` (so a missed plate
- * is not a thrown 5xx), and on a transport/5xx failure we still resolve a
- * `{ error: 'vision_failed' }` so the camera stays usable.
+ * low_confidence / rate_limited / quota_exceeded / timeout / vision_failed …).
+ * The gateway returns its non-result errors as HTTP 200 with `{ error }` (so a
+ * missed plate is not a thrown 5xx), and on a transport/5xx failure we still
+ * resolve a `{ error: 'vision_failed' }` so the camera stays usable.
+ *
+ * `quota_exceeded` is DISTINCT from `rate_limited`: the former is the per-user
+ * DAILY scan cap (upgrade to fix) — the latter is the vision provider being
+ * momentarily busy (retry to fix). When `error === 'quota_exceeded'`, `quota`
+ * carries the plan/limit/reset for the upsell UI.
  */
 export interface VisionRecognizeResult {
   food: VisionFoodResult | null;
   confidence?: number;
   portionNote?: string;
   error?: string;
+  quota?: ScanQuotaInfo;
 }
 
 export interface MealLog {
@@ -272,6 +292,23 @@ export const deleteMealLog = async (id: string): Promise<{ deleted: boolean }> =
  *     can always offer "try again / add manually" and keep the camera usable.
  * A longer per-request timeout is used because vision inference can be slow.
  */
+/**
+ * Recognise the shared daily-scan-quota 429 from a thrown axios error and pull
+ * its typed body. Returns the quota info only for a 429 whose body `error` is
+ * exactly `ai_quota_exceeded` (the shared @nightfuel/config contract); any other
+ * error returns null so the caller falls through to its generic handling.
+ * Mirrors ai-coach.tsx's parseQuotaError.
+ */
+export const parseScanQuotaError = (err: any): ScanQuotaInfo | null => {
+  const status = err?.response?.status;
+  const body = err?.response?.data;
+  if (status !== 429 || !body || body.error !== 'ai_quota_exceeded') return null;
+  const plan: 'free' | 'pro' = body.plan === 'pro' ? 'pro' : 'free';
+  const limit = Number.isFinite(body.limit) ? Number(body.limit) : plan === 'pro' ? 30 : 3;
+  const resetsAt = typeof body.resetsAt === 'string' ? body.resetsAt : '';
+  return { limit, plan, resetsAt };
+};
+
 export const recognizeFoodPhoto = async (imageBase64: string): Promise<VisionRecognizeResult> => {
   try {
     const { data } = await apiClient.post<VisionRecognizeResult>(
@@ -286,6 +323,13 @@ export const recognizeFoodPhoto = async (imageBase64: string): Promise<VisionRec
       error: data?.food ? undefined : (data?.error ?? 'vision_failed'),
     };
   } catch (err: any) {
+    // Daily scan quota reached — distinct from the vision provider's own 429
+    // rate-limit. Surface it as `quota_exceeded` with the plan/limit so the
+    // camera screen can offer the upgrade path instead of "try again".
+    const quota = parseScanQuotaError(err);
+    if (quota) {
+      return { food: null, error: 'quota_exceeded', quota };
+    }
     const status: number | undefined = err?.response?.status;
     const serverError: string | undefined = err?.response?.data?.error;
     const isTimeout = err?.code === 'ECONNABORTED';
@@ -295,6 +339,50 @@ export const recognizeFoodPhoto = async (imageBase64: string): Promise<VisionRec
         serverError ??
         (isTimeout ? 'timeout' : status === 429 ? 'rate_limited' : 'vision_failed'),
     };
+  }
+};
+
+/**
+ * Result of a barcode lookup via the /food-search gateway. On a hit `food` is
+ * set; `notFound` is true when the product isn't in Open Food Facts (a 404);
+ * `quota` is set (and `error === 'quota_exceeded'`) when the daily scan cap is
+ * hit; otherwise `error` marks a transport/lookup failure. Structured so the
+ * barcode screen can branch to the upgrade path on a quota cap vs. the
+ * try-again/manual path on a not-found or network error.
+ */
+export interface BarcodeLookupResult {
+  food: FoodItemMicros & {
+    name: string;
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  } | null;
+  notFound?: boolean;
+  error?: 'quota_exceeded' | 'lookup_failed';
+  quota?: ScanQuotaInfo;
+}
+
+/**
+ * Look up a scanned barcode against the /food-search gateway. Errors are
+ * normalized (never throws) so the scanner UI can branch cleanly:
+ *   • 429 ai_quota_exceeded → { error:'quota_exceeded', quota } (offer upgrade)
+ *   • 404                    → { food:null, notFound:true }      (offer manual)
+ *   • any other failure      → { error:'lookup_failed' }         (offer retry)
+ * The un-versioned /food-search path mirrors how the barcode scanner already
+ * calls it (the /v1 prefix policy doesn't apply to the food gateway).
+ */
+export const lookupFoodBarcode = async (code: string): Promise<BarcodeLookupResult> => {
+  try {
+    const { data } = await apiClient.get<{ food: BarcodeLookupResult['food'] }>('/food-search', {
+      params: { barcode: code },
+    });
+    return { food: data?.food ?? null };
+  } catch (err: any) {
+    const quota = parseScanQuotaError(err);
+    if (quota) return { food: null, error: 'quota_exceeded', quota };
+    if (err?.response?.status === 404) return { food: null, notFound: true };
+    return { food: null, error: 'lookup_failed' };
   }
 };
 

@@ -1,7 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
-  output   = "../src/generated/prisma"
+  output        = "../src/generated/prisma"
 }
 
 datasource db {
@@ -11,19 +11,19 @@ datasource db {
 }
 
 model UserProfile {
-  id                  String        @id @default(uuid())
-  userId              String        @unique @map("user_id")
-  displayName         String        @map("display_name")
-  avatarUrl           String?       @map("avatar_url")
-  dateOfBirth         DateTime?     @map("date_of_birth") @db.Date
-  heightCm            Float?        @map("height_cm")
-  weightKg            Float?        @map("weight_kg")
-  biologicalSex       String?       @map("biological_sex")
-  timezone            String        @default("UTC")
-  region              String        @default("us") // 'us', 'eu', 'ap'
-  onboardingCompleted Boolean       @default(false) @map("onboarding_completed")
-  onboardingStep      Int           @default(0) @map("onboarding_step")
-  isPrivate           Boolean       @default(false) @map("is_private")
+  id                  String    @id @default(uuid())
+  userId              String    @unique @map("user_id")
+  displayName         String    @map("display_name")
+  avatarUrl           String?   @map("avatar_url")
+  dateOfBirth         DateTime? @map("date_of_birth") @db.Date
+  heightCm            Float?    @map("height_cm")
+  weightKg            Float?    @map("weight_kg")
+  biologicalSex       String?   @map("biological_sex")
+  timezone            String    @default("UTC")
+  region              String    @default("us") // 'us', 'eu', 'ap'
+  onboardingCompleted Boolean   @default(false) @map("onboarding_completed")
+  onboardingStep      Int       @default(0) @map("onboarding_step")
+  isPrivate           Boolean   @default(false) @map("is_private")
 
   // ── Menstrual-cycle tracking inputs (track-first, suggestion-second) ──────────
   // All nullable/defaulted so `prisma db push --accept-data-loss` applies them to
@@ -39,8 +39,28 @@ model UserProfile {
   cycleRegularity       String?   @map("cycle_regularity") // REGULAR | IRREGULAR | UNKNOWN
   hormonalContraception Boolean   @default(false) @map("hormonal_contraception")
 
-  createdAt           DateTime      @default(now()) @map("created_at")
-  updatedAt           DateTime      @updatedAt @map("updated_at")
+  // ── Period P2: pregnancy mode ────────────────────────────────────────────────
+  // When on, the cycle hub becomes a pregnancy tracker (week N of 40) and cycle
+  // predictions pause. dueDate drives the countdown; startDate (LMP or confirmed)
+  // anchors the week count. All nullable so db push is data-loss-free.
+  pregnancyMode      Boolean   @default(false) @map("pregnancy_mode")
+  pregnancyDueDate   DateTime? @map("pregnancy_due_date") @db.Date
+  pregnancyStartDate DateTime? @map("pregnancy_start_date") @db.Date
+  // Period P3 conception mode: highlights the fertile window + surfaces LH-test logging.
+  tryingToConceive   Boolean   @default(false) @map("trying_to_conceive")
+
+  // ── Period P2: birth-control / pill tracking ─────────────────────────────────
+  // Method: PILL | PATCH | RING | INJECTION | IUD | IMPLANT | NONE. pillReminderTime
+  // is a local "HH:MM"; pillPackStartDate anchors pill-pack position; the daily
+  // taken/skipped/late log lives in PillLog. lastPillReminderAt de-dupes the nudge.
+  birthControlMethod  String?   @map("birth_control_method")
+  pillReminderEnabled Boolean   @default(false) @map("pill_reminder_enabled")
+  pillReminderTime    String?   @map("pill_reminder_time")
+  pillPackStartDate   DateTime? @map("pill_pack_start_date") @db.Date
+  lastPillReminderAt  DateTime? @map("last_pill_reminder_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   preferences UserPreferences?
   status      UserStatus?
@@ -49,30 +69,30 @@ model UserProfile {
 }
 
 model UserPreferences {
-  id                String   @id @default(uuid())
-  userId            String   @unique @map("user_id")
-  primaryGoal       String   @default("GENERAL_HEALTH") @map("primary_goal")   // FitnessGoal enum
-  dietaryPreference String   @default("NONE") @map("dietary_preference")        // DietaryPreference enum
-  targetCalories    Float?   @map("target_calories")
-  targetProteinG    Float?   @map("target_protein_g")
-  targetCarbsG      Float?   @map("target_carbs_g")
-  targetFatG        Float?   @map("target_fat_g")
-  activityLevel     String   @default("MODERATELY_ACTIVE") @map("activity_level") // ActivityLevel enum
-  experienceLevel   String   @default("BEGINNER") @map("experience_level")        // ExperienceLevel enum
-  lifestyleType     String   @default("OFFICE_WORKER") @map("lifestyle_type")     // LifestyleType enum
-  sleepWindowStart  String?  @map("sleep_window_start")
-  sleepWindowEnd    String?  @map("sleep_window_end")
-  allergies         String[] @default([])
-  healthConditions  String[] @default([]) @map("health_conditions")
-  dietMode          String   @default("BALANCED") @map("diet_mode") // BUDGET, ACNE_SAFE, RAMADAN, MASS_GAIN, CUTTING, BALANCED
-  workoutEnvironment String?  @default("GYM") @map("workout_environment")
-  availableEquipment String[] @default([]) @map("available_equipment")
-  isBodybuilderMode  Boolean  @default(false) @map("is_bodybuilder_mode")
-  isInjurySafeMode   Boolean  @default(false) @map("is_injury_safe_mode")
-  workoutDurationPreference Int @default(60) @map("workout_duration_preference")
-  splitPreference    String   @default("FULL_BODY") @map("split_preference")
-  activeProtocolId   String?  @map("active_protocol_id")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id                        String   @id @default(uuid())
+  userId                    String   @unique @map("user_id")
+  primaryGoal               String   @default("GENERAL_HEALTH") @map("primary_goal") // FitnessGoal enum
+  dietaryPreference         String   @default("NONE") @map("dietary_preference") // DietaryPreference enum
+  targetCalories            Float?   @map("target_calories")
+  targetProteinG            Float?   @map("target_protein_g")
+  targetCarbsG              Float?   @map("target_carbs_g")
+  targetFatG                Float?   @map("target_fat_g")
+  activityLevel             String   @default("MODERATELY_ACTIVE") @map("activity_level") // ActivityLevel enum
+  experienceLevel           String   @default("BEGINNER") @map("experience_level") // ExperienceLevel enum
+  lifestyleType             String   @default("OFFICE_WORKER") @map("lifestyle_type") // LifestyleType enum
+  sleepWindowStart          String?  @map("sleep_window_start")
+  sleepWindowEnd            String?  @map("sleep_window_end")
+  allergies                 String[] @default([])
+  healthConditions          String[] @default([]) @map("health_conditions")
+  dietMode                  String   @default("BALANCED") @map("diet_mode") // BUDGET, ACNE_SAFE, RAMADAN, MASS_GAIN, CUTTING, BALANCED
+  workoutEnvironment        String?  @default("GYM") @map("workout_environment")
+  availableEquipment        String[] @default([]) @map("available_equipment")
+  isBodybuilderMode         Boolean  @default(false) @map("is_bodybuilder_mode")
+  isInjurySafeMode          Boolean  @default(false) @map("is_injury_safe_mode")
+  workoutDurationPreference Int      @default(60) @map("workout_duration_preference")
+  splitPreference           String   @default("FULL_BODY") @map("split_preference")
+  activeProtocolId          String?  @map("active_protocol_id")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
 
   profile UserProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
@@ -80,15 +100,15 @@ model UserPreferences {
 }
 
 model CoachProfile {
-  id               String   @id @default(uuid())
-  userId           String   @unique @map("user_id")
-  specializations  String[] @default([]) // e.g. ['nutrition', 'strength', 'night-shift']
-  bio              String?
-  certifications   String[] @default([])
-  isAvailable      Boolean  @default(false) @map("is_available")
-  monthlyRateUsd   Float?   @map("monthly_rate_usd")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id              String   @id @default(uuid())
+  userId          String   @unique @map("user_id")
+  specializations String[] @default([]) // e.g. ['nutrition', 'strength', 'night-shift']
+  bio             String?
+  certifications  String[] @default([])
+  isAvailable     Boolean  @default(false) @map("is_available")
+  monthlyRateUsd  Float?   @map("monthly_rate_usd")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   clients CoachClientRelation[] @relation("CoachRelations")
 
@@ -96,13 +116,13 @@ model CoachProfile {
 }
 
 model CoachClientRelation {
-  id            String    @id @default(uuid())
-  coachUserId   String    @map("coach_user_id")
-  clientUserId  String    @map("client_user_id")
-  status        String    @default("PENDING") // CoachRelationStatus enum
-  startedAt     DateTime  @default(now()) @map("started_at")
-  endedAt       DateTime? @map("ended_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
+  id           String    @id @default(uuid())
+  coachUserId  String    @map("coach_user_id")
+  clientUserId String    @map("client_user_id")
+  status       String    @default("PENDING") // CoachRelationStatus enum
+  startedAt    DateTime  @default(now()) @map("started_at")
+  endedAt      DateTime? @map("ended_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
   coach CoachProfile @relation("CoachRelations", fields: [coachUserId], references: [userId], onDelete: Cascade)
 
@@ -156,29 +176,29 @@ model PeriodLog {
 }
 
 model UserStatus {
-  id                String   @id @default(uuid())
-  userId            String   @unique @map("user_id")
-  
+  id     String @id @default(uuid())
+  userId String @unique @map("user_id")
+
   // Biological State
-  fatigueScore      Float    @default(0) @map("fatigue_score")
-  circadianPeakTime String?  @map("circadian_peak_time")
-  circadianLowTime  String?  @map("circadian_low_time")
+  fatigueScore      Float   @default(0) @map("fatigue_score")
+  circadianPeakTime String? @map("circadian_peak_time")
+  circadianLowTime  String? @map("circadian_low_time")
   // Derived menstrual-cycle phase (computeCyclePhase). One of MENSTRUAL |
   // FOLLICULAR | OVULATORY | LUTEAL | UNKNOWN. UNKNOWN is the safe default for
   // every non-tracking / degradation case (no phase-syncing applied).
-  cyclePhase        String?  @map("cycle_phase")
-  
+  cyclePhase        String? @map("cycle_phase")
+
   // Adherence & Performance
-  adherenceRate     Float    @default(0) @map("adherence_rate")
-  currentStreak     Int      @default(0) @map("current_streak")
-  
+  adherenceRate Float @default(0) @map("adherence_rate")
+  currentStreak Int   @default(0) @map("current_streak")
+
   // Metabolism
-  currentTdee       Float?   @map("current_tdee")
-  weightTrend       String?  @map("weight_trend") // "STABLE", "UP", "DOWN"
-  
+  currentTdee Float?  @map("current_tdee")
+  weightTrend String? @map("weight_trend") // "STABLE", "UP", "DOWN"
+
   // Operation Context
-  lastUpdatedBy     String?  @map("last_updated_by")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  lastUpdatedBy String?  @map("last_updated_by")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   profile UserProfile @relation(fields: [userId], references: [userId], onDelete: Cascade)
 
@@ -190,7 +210,7 @@ model UserStatus {
 model WaitlistEntry {
   id        String   @id @default(uuid())
   email     String   @unique
-  source    String?  // e.g. "landing-finalcta"
+  source    String? // e.g. "landing-finalcta"
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("waitlist_entries")
@@ -200,18 +220,84 @@ model WaitlistEntry {
 // user per calendar day, upserted. Sensitive health data: purged on account
 // deletion and included in the GDPR export like PeriodLog.
 model CycleSymptomLog {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  date          DateTime @map("date") @db.Date
+  mood          Int? // 1 (low) … 5 (great)
+  cramps        Int? // 0 (none) … 3 (strong)
+  energy        Int? // 1 (drained) … 5 (energized)
+  flow          String? // NONE | SPOTTING | LIGHT | MEDIUM | HEAVY
+  notes         String?
+  // ── Period P1 additions (expanded logging, parity with Flo/Period Calendar) ──
+  // A flat list of selected symptom keys from the categorized library (physical
+  // / mood / discharge / digestion / skin) — stored as a text[] so the set can
+  // grow without a migration per symptom. e.g. ["cramps","bloating","acne"].
+  symptoms      String[] @default([])
+  // Cervical mucus / discharge (fertility signal): DRY|STICKY|CREAMY|EGG_WHITE|WATERY|SPOTTING
+  discharge     String?
+  // Sexual activity + protection (private): NONE|PROTECTED|UNPROTECTED|HIGH_DRIVE
+  activity      String?
+  // Water intake for the day, in glasses (0..N). Distinct from the meal-log hydration.
+  water         Int?
+  // ── Period P3 additions (advanced fertility logging) ─────────────────────────
+  // Basal body temperature (°C, ~35–38) for the BBT coverline chart; weight (kg)
+  // for the in-cycle weight trend; ovulation (LH) test result for conception mode.
+  bbt           Float? // basal body temperature in °C
+  weight        Float? // daily weight in kg (cycle-context trend)
+  ovulationTest String?  @map("ovulation_test") // POSITIVE | NEGATIVE
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@map("cycle_symptom_logs")
+}
+
+// Per-day pill / birth-control adherence log (Period P2). One row per user per
+// calendar day, upserted. status: TAKEN | SKIPPED | LATE. Sensitive health data:
+// purged on account deletion and included in the GDPR export like PeriodLog.
+model PillLog {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
   date      DateTime @map("date") @db.Date
-  mood      Int?     // 1 (low) … 5 (great)
-  cramps    Int?     // 0 (none) … 3 (strong)
-  energy    Int?     // 1 (drained) … 5 (energized)
-  flow      String?  // NONE | SPOTTING | LIGHT | MEDIUM | HEAVY
-  notes     String?
+  status    String // TAKEN | SKIPPED | LATE
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([userId, date])
   @@index([userId])
-  @@map("cycle_symptom_logs")
+  @@map("pill_logs")
+}
+
+// ── CycleShare — user-initiated, revocable "share with partner" grant (Period P3) ─
+// A user GENERATES one of these to let a partner see a READ-ONLY, SANITIZED cycle
+// summary (current phase + next-period / fertile-window PREDICTIONS only) via an
+// opaque code — NEVER the raw symptom / discharge / sexual-activity / notes logs.
+//
+// PRIVACY DESIGN (this row grants access to GDPR Art.9 health data via a bearer
+// code, so every field is a privacy control):
+//   * code      — LONG, OPAQUE, high-entropy (base64url of 24 random bytes = 192
+//                 bits); @unique so it resolves to exactly one owner. Un-guessable.
+//   * scopes    — what the code may expose; DEFAULTS to summary-only. The resolver
+//                 only ever emits the sanitized summary, so a wider scope is inert
+//                 unless a future feature explicitly opts in (never symptoms/notes).
+//   * revokedAt — REVOCABLE: null = active, a timestamp = revoked. The public
+//                 resolver matches `revokedAt: null`, so revoking instantly and
+//                 permanently kills the code (soft-delete keeps an audit trail).
+//
+// All sharing is user-initiated (the owner creates the code and hands it over);
+// the app never auto-shares. Purged on account deletion; included (as the owner's
+// own data) in the GDPR export. All columns nullable/defaulted so the brand-new
+// table applies via the owner-gated `prisma db push` without touching any row.
+model CycleShare {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id") // the OWNER whose cycle summary this exposes
+  code      String    @unique // opaque, high-entropy, URL-safe bearer code
+  scopes    String[]  @default(["summary"]) // exposure scope; summary-only by default
+  revokedAt DateTime? @map("revoked_at") // null = active; set = revoked (revocable)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("cycle_shares")
 }

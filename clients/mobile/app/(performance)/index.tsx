@@ -123,6 +123,7 @@ export default function DailyReportScreen() {
     // (a secondary destination, not a primary action) was on full lime; it now
     // uses blue so saturated lime stops competing across the screen.
     const NAV_ITEMS = [
+        { label: 'Heart Rate', icon: 'heart', color: colors.accent.red, route: '/(performance)/heart-rate', value: 'Live · zones' },
         { label: 'Hydration', icon: 'water', color: colors.accent.cyan, route: '/(performance)/hydration', value: `${progress?.hydrationActual || 0}ml` },
         { label: 'Body Metrics', icon: 'speedometer', color: colors.accent.purple, route: '/(performance)/body-metrics', value: 'Update' },
         { label: 'AI Reports', icon: 'sparkles', color: colors.accent.amber, route: '/(performance)/reports', value: 'Weekly' },

@@ -16,6 +16,14 @@ export type CoachLevel = 'beginner' | 'intermediate' | 'advanced';
 export type CoachDiet = 'balanced' | 'keto' | 'vegan' | 'high-protein';
 export type CoachGender = 'Male' | 'Female';
 export type PlanDuration = 3 | 7 | 15 | 30;
+/** Themed-challenge day-split selector (see plan.ts). Absent on the generic
+ * AI-Coach build flow, which keeps the goal-based split unchanged. */
+export type PlanSplit = 'circadian' | 'cycle-sync';
+/** Menstrual-cycle phase (client-side, lowercase). Mirrors the server enum
+ * (services/user-service/src/utils/cyclePhase.ts) minus UNKNOWN — an unknown
+ * phase is represented by its absence, so the cycle-sync split falls back to a
+ * default progression rather than guessing. */
+export type MenstrualPhase = 'menstrual' | 'follicular' | 'ovulatory' | 'luteal';
 
 /** What the user picks on the "Build my plan" screen. */
 export interface CoachInputs {
@@ -24,6 +32,9 @@ export interface CoachInputs {
   goal: CoachGoal;
   diet: CoachDiet;
   duration: PlanDuration;
+  /** Optional themed-challenge split (Night-Shift Reset → 'circadian', Cycle Sync
+   * → 'cycle-sync'). Undefined on the generic build flow → goal-based split. */
+  split?: PlanSplit;
 }
 
 export type DayStatus = 'locked' | 'active' | 'done';
@@ -70,6 +81,9 @@ export interface ChallengeDay {
   icon: string;
   /** Cover-image key → resolved to a bundled day-<key>.jpg via covers.ts. */
   cover: DayCover;
+  /** Optional per-day guidance line (meal/training timing or phase rationale) set
+   * by the themed splits; undefined for goal-based days. */
+  note?: string;
   status: DayStatus;
   exercises: DayExercise[];
   meals: DayMeal[];
@@ -77,7 +91,7 @@ export interface ChallengeDay {
 }
 
 /** The skeleton a split template produces, before days are filled with content. */
-export type DaySkeleton = Pick<ChallengeDay, 'day' | 'title' | 'focus' | 'icon' | 'cover'>;
+export type DaySkeleton = Pick<ChallengeDay, 'day' | 'title' | 'focus' | 'icon' | 'cover' | 'note'>;
 
 export interface CoachPlan {
   id: string;

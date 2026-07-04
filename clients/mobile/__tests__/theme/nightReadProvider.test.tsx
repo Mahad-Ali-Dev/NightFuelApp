@@ -20,8 +20,10 @@
  *
  *   3. The Settings screen exposes a 'Night Read' switch that defaults OFF
  *      (reflecting the persisted flag) and calls `setNightRead(true)` when
- *      flipped, while leaving the existing 'Dark Mode' switch's checked state
- *      intact.
+ *      flipped. The old 'Dark Mode' toggle was retired from THIS screen (commit
+ *      b555fca — "remove the redundant Dark Mode toggle — the 9-theme picker
+ *      covers it"; the toggle still lives on the More tab), so Night Read is now
+ *      the Settings screen's only switch.
  *
  * The Settings-screen `jest.mock` calls below are hoisted above the imports, so
  * they apply to EVERY test in the file. The pure selector/consumer tests don't
@@ -218,8 +220,9 @@ describe('Settings screen — Night Read switch', () => {
   test('renders a labelled "Night Read" switch that defaults OFF', () => {
     render(<SettingsIndexScreen />);
 
-    // Two switches share-label by design (Dark Mode + Night Read); query the
-    // Night Read one specifically. Both expose accessibilityRole="switch".
+    // Night Read is the screen's only switch (Dark Mode was retired — see the
+    // final test in this block); query it by label. It exposes
+    // accessibilityRole="switch".
     const nightSwitches = screen
       .getAllByLabelText('Night Read')
       .filter((n) => n.props.accessibilityRole === 'switch');
@@ -253,25 +256,30 @@ describe('Settings screen — Night Read switch', () => {
 
     expect(mockSetNightRead).toHaveBeenCalledTimes(1);
     expect(mockSetNightRead).toHaveBeenCalledWith(true);
-    // The Dark Mode switch must be unaffected by toggling Night Read.
+    // Night Read must never route to setTheme — no Dark-Mode-style toggle lives
+    // on this screen anymore.
     expect(mockSetTheme).not.toHaveBeenCalled();
   });
 
-  test('the existing Dark Mode switch is unaffected — still checked when theme==="dark"', () => {
+  test('the Dark Mode switch was retired from Settings — Night Read is now the only switch (the 9-theme picker covers dark mode)', () => {
     render(<SettingsIndexScreen />);
 
-    const darkSwitch = screen
-      .getAllByLabelText('Dark Mode')
-      .find((n) => n.props.accessibilityRole === 'switch')!;
-    // theme is 'dark' in this test → Dark Mode reads checked, independent of
-    // Night Read being OFF.
-    expect(darkSwitch.props.value).toBe(true);
-    expect(darkSwitch.props.accessibilityState).toMatchObject({ checked: true });
+    // Dark Mode was intentionally dropped from THIS screen in commit b555fca
+    // ("remove the redundant Dark Mode toggle — the 9-theme picker covers it";
+    // the toggle still lives on the More tab). It must NOT resurface here, so no
+    // switch carries its label. queryAll* (never getAll*) so a clean absence is
+    // 0 matches rather than a throw.
+    expect(
+      screen
+        .queryAllByLabelText('Dark Mode')
+        .filter((n) => n.props.accessibilityRole === 'switch'),
+    ).toHaveLength(0);
 
-    // Toggling Dark Mode still routes to setTheme (its placeholder semantics
-    // are untouched), not setNightRead.
-    fireEvent(darkSwitch, 'valueChange', false);
-    expect(mockSetTheme).toHaveBeenCalledWith('light');
-    expect(mockSetNightRead).not.toHaveBeenCalled();
+    // With Dark Mode gone, Night Read is the screen's single switch — so nothing
+    // on this screen is wired to setTheme (dark/light now lives in the Theme
+    // picker + the More tab).
+    const switches = screen.getAllByRole('switch');
+    expect(switches).toHaveLength(1);
+    expect(switches[0]!.props.accessibilityLabel).toBe('Night Read');
   });
 });

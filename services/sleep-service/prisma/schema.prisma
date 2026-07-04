@@ -56,7 +56,8 @@ model HealthSample {
   userId        String   @map("user_id")
   // 'sleep' | 'steps' | 'heartRate' | 'restingHeartRate' | 'hrv' | 'activeEnergy' | 'workout'
   kind          String
-  // 'apple_health' | 'google_fit' | 'generic_ble' (the HealthSource that read it).
+  // 'apple_health' | 'google_fit' | 'generic_ble' | 'camera_ppg' (the HealthSource
+  // that read it). Plain string, not a DB enum — new sources need no migration.
   source        String   @default("apple_health")
   // Sample interval. For point readings start == end.
   startTime     DateTime @map("start_time")

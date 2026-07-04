@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
+import { useCycleAccents } from '@/theme/useCycleAccents';
 import { GlassCard, CtaButton, DateTimeField, nowDateString } from '@/components/ui';
 import { logPeriod } from '@/api/cycle';
 import type { LogPeriodBody, CycleStatsResponse } from '@/api/cycle';
@@ -45,9 +46,8 @@ export function localMidnightFromDateString(value: string): Date | undefined {
     return Number.isNaN(d.getTime()) ? undefined : d;
 }
 
-// Coral period/cycle accent (the brand `accent.coral` token resolves to LIME
-// post-rebrand, so coral is an explicit literal here).
-const CORAL = '#FF7A90';
+// The coral period accent is theme-aware — see useCycleAccents (dark #FF7A90,
+// darkened on light); sourced per-render inside the component.
 
 export interface LogPeriodCardProps {
     /** Called after a successful log (e.g. to surface a toast at the screen level). */
@@ -56,6 +56,7 @@ export interface LogPeriodCardProps {
 
 export function LogPeriodCard({ onLogged }: LogPeriodCardProps) {
     const { colors, typography, borderRadius } = useTheme();
+    const { coral: CORAL } = useCycleAccents();
     const queryClient = useQueryClient();
 
     const [startDate, setStartDate] = useState<string>(nowDateString());

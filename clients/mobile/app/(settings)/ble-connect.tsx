@@ -9,13 +9,14 @@
  * pipeline (generic_ble source) so it lands in the digital twin.
  */
 import React, { useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
 import { spacing, borderRadius as br } from '@/theme/spacing';
+import { withAlpha } from '@/theme/utils';
 import { GlassCard, CtaButton, EmptyState } from '@/components/ui';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { useBle } from '@/lib/ble/useBle';
@@ -32,12 +33,44 @@ export default function BleConnectScreen() {
   const { colors, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { state, supported, scanning, results, startScan, stopScan, connect, disconnect } = useBle();
+  const {
+    state, supported, scanning, adapterState, results,
+    startScan, stopScan, connect, disconnect, enableAdapter,
+  } = useBle();
 
   const connected = state.status === 'connected';
   const connecting = state.status === 'connecting';
+  // The adapter is OFF (or the app isn't authorized to use it) — scanning can't
+  // work until the user turns Bluetooth on, so we lead with an enable banner.
+  const adapterOff = adapterState === 'off';
+  const adapterUnauthorized = adapterState === 'unauthorized';
 
   const onConnect = useCallback((id: string, name: string) => { void connect(id, name); }, [connect]);
+
+  // Turn Bluetooth on. Android shows the system enable prompt (ble-plx
+  // manager.enable()); iOS can't enable programmatically, so we direct the user
+  // to Control Center / Settings via an Alert. Runs a scan straight after a
+  // successful Android enable so the flow feels like one tap.
+  const onEnableBluetooth = useCallback(async () => {
+    if (Platform.OS !== 'android') {
+      Alert.alert(
+        'Turn on Bluetooth',
+        'Open Control Center (swipe down from the top-right) or Settings › Bluetooth and switch Bluetooth on, then come back to scan.',
+        [{ text: 'OK' }],
+      );
+      return;
+    }
+    const ok = await enableAdapter();
+    if (ok) startScan();
+  }, [enableAdapter, startScan]);
+
+  // Tapping "Scan" while the adapter is off routes to the enable flow instead of
+  // silently failing; otherwise it starts (or stops) the scan.
+  const onScanPress = useCallback(() => {
+    if (adapterOff || adapterUnauthorized) { void onEnableBluetooth(); return; }
+    if (scanning) { stopScan(); return; }
+    startScan();
+  }, [adapterOff, adapterUnauthorized, scanning, onEnableBluetooth, startScan, stopScan]);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background.primary }]}>
@@ -125,6 +158,46 @@ export default function BleConnectScreen() {
         ) : (
           /* ── Not connected: scan + results ───────────────────────────── */
           <>
+            {/* Bluetooth-off / unauthorized banner — leads the screen with a
+                clear "turn it on" prompt + enable button when the adapter can't
+                scan. On Android the button fires the system enable prompt; on
+                iOS it opens an Alert pointing to Control Center / Settings. */}
+            {(adapterOff || adapterUnauthorized) ? (
+              <View
+                style={[
+                  styles.btOffCard,
+                  { backgroundColor: withAlpha(colors.warning, 0.1), borderColor: withAlpha(colors.warning, 0.3) },
+                ]}
+                accessible
+                accessibilityRole="alert"
+                accessibilityLabel={
+                  adapterOff
+                    ? 'Bluetooth is off. Turn it on to connect a device.'
+                    : 'Bluetooth permission is off. Enable it in Settings to connect.'
+                }
+              >
+                <View style={styles.btOffHead}>
+                  <Ionicons name="bluetooth" size={20} color={colors.warning} />
+                  <Text style={[typography.body, { color: colors.text.primary, flex: 1 }]}>
+                    {adapterOff ? 'Bluetooth is off' : 'Bluetooth permission needed'}
+                  </Text>
+                </View>
+                <Text style={[typography.bodySm, { color: colors.text.secondary, marginTop: spacing.xs }]}>
+                  {adapterOff
+                    ? 'Turn on Bluetooth to find and connect your watch, band, or heart-rate strap.'
+                    : 'Allow Bluetooth in Settings so Zeitra can find nearby devices.'}
+                </Text>
+                <CtaButton
+                  label={adapterOff ? 'Turn on Bluetooth' : 'Open settings'}
+                  icon="bluetooth"
+                  size="sm"
+                  onPress={onEnableBluetooth}
+                  style={{ marginTop: spacing.md }}
+                  accessibilityLabel={adapterOff ? 'Turn on Bluetooth' : 'Open Bluetooth settings'}
+                />
+              </View>
+            ) : null}
+
             <GlassCard radius={br.xl} style={styles.introCard}>
               <Ionicons name="bluetooth" size={22} color={colors.accent.cyan} />
               <Text style={[typography.body, { color: colors.text.primary, marginTop: spacing.xs }]}>
@@ -135,11 +208,18 @@ export default function BleConnectScreen() {
               </Text>
             </GlassCard>
 
+            {/* Scan button. When the adapter is off it routes to the enable flow
+                (never a silent no-op); the first tap also surfaces the runtime
+                permission prompt with a friendly rationale (see bleManager). */}
             <CtaButton
-              label={scanning ? 'Scanning…' : 'Scan for devices'}
+              label={
+                adapterOff || adapterUnauthorized
+                  ? 'Turn on Bluetooth to scan'
+                  : scanning ? 'Scanning…' : 'Scan for devices'
+              }
               icon="search"
               loading={scanning}
-              onPress={scanning ? stopScan : startScan}
+              onPress={onScanPress}
               style={{ marginTop: spacing.md }}
             />
 
@@ -187,6 +267,9 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
   back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  // Bluetooth-off / unauthorized banner (warning-tint card + enable button)
+  btOffCard: { padding: spacing.lg, marginTop: spacing.md, borderRadius: br.xl, borderWidth: 1 },
+  btOffHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   introCard: { padding: spacing.lg, marginTop: spacing.md },
   liveCard: { padding: spacing.lg, marginTop: spacing.md, alignItems: 'center' },
   liveHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },

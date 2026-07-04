@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import { uploadImage } from './community';
 import { User } from '@/store/authStore';
+import type { BirthControlMethod } from './cycle';
 
 export interface UserProfile extends User {
     // The user-service profile row carries displayName/avatarUrl/timezone (see
@@ -11,6 +12,21 @@ export interface UserProfile extends User {
     avatarUrl: string | null;
     preferences?: UserPreferences;
     status?: UserStatus;
+
+    // ── Cycle health: pregnancy mode + birth-control / pill tracking (Period P2)
+    // The owner read (GET /v1/users/me) returns the FULL profile row, so these
+    // already come down the wire — they are declared here so the cycle UI can read
+    // the persisted state (initial toggle/method/reminder values). All are OPT-IN,
+    // written via PATCH /v1/users/me/cycle/health (see api/cycle.ts). Nullable /
+    // optional throughout: absent = the user never turned that surface on.
+    pregnancyMode?: boolean;
+    pregnancyDueDate?: string | null;      // YYYY-MM-DD
+    pregnancyStartDate?: string | null;    // YYYY-MM-DD
+    tryingToConceive?: boolean;
+    birthControlMethod?: BirthControlMethod | null;
+    pillReminderEnabled?: boolean;
+    pillReminderTime?: string | null;      // 'HH:MM' (24h)
+    pillPackStartDate?: string | null;     // YYYY-MM-DD
 }
 
 // Shape PUT /v1/users/me actually accepts (server: updateProfileSchema in

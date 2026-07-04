@@ -62,6 +62,11 @@ export const HEALTH_SAMPLE_SOURCES = [
     'apple_health',
     'google_fit',
     'generic_ble',
+    // Camera-based PPG (finger-over-lens + torch). A consumer-grade wellness
+    // ESTIMATE, distinct from a spec-compliant BLE strap read (generic_ble), so
+    // the archive can tell the two apart. Persisted as a plain string — no
+    // migration (the `source` column is String, not a DB enum).
+    'camera_ppg',
 ] as const;
 
 export type HealthSampleSource = (typeof HEALTH_SAMPLE_SOURCES)[number];

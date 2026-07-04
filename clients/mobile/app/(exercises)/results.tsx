@@ -32,20 +32,46 @@ export default function ResultsScreen() {
   const { colors, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ gender?: string; muscle?: string; category?: string; level?: string }>();
+  const params = useLocalSearchParams<{
+    gender?: string; muscle?: string; category?: string; level?: string;
+    // Additive params so a "Body Focus" program card (src/features/train) can land
+    // on this same list with its own ready-made searchLibrary filter. Existing
+    // muscle/category callers (target.tsx, level.tsx) never pass these, so they're
+    // unaffected. `title` overrides the header label when provided.
+    bodyPart?: string; muscleGroup?: string; equipment?: string; query?: string; title?: string;
+  }>();
   const gender: 'Male' | 'Female' = params.gender === 'Female' ? 'Female' : 'Male';
   const level = typeof params.level === 'string' ? params.level : null;
   const category = typeof params.category === 'string' ? params.category : null;
-  const muscle = !category ? ((params.muscle as MuscleGroup) || 'chest') : null;
-  // Category browse → filter by category; muscle browse → bodyPart/muscleGroup.
-  const filter = category ? { category } : (GROUP_FILTER[muscle as MuscleGroup] ?? { bodyPart: 'chest' });
-  const title = category ? (CATEGORY_LABELS[category] ?? category) : GROUP_LABELS[muscle as MuscleGroup];
+  // A program card passes an explicit filter (bodyPart/muscleGroup/equipment/query)
+  // — take that verbatim; otherwise fall back to the guided muscle/category flow.
+  const explicitFilter: { bodyPart?: string; muscleGroup?: string; equipment?: string; query?: string } = {};
+  if (typeof params.bodyPart === 'string') explicitFilter.bodyPart = params.bodyPart;
+  if (typeof params.muscleGroup === 'string') explicitFilter.muscleGroup = params.muscleGroup;
+  if (typeof params.equipment === 'string') explicitFilter.equipment = params.equipment;
+  if (typeof params.query === 'string') explicitFilter.query = params.query;
+  const hasExplicit = Object.keys(explicitFilter).length > 0;
+  const muscle = !category && !hasExplicit ? ((params.muscle as MuscleGroup) || 'chest') : null;
+  // Program filter → use it; category browse → filter by category; muscle browse →
+  // bodyPart/muscleGroup.
+  const filter = hasExplicit
+    ? explicitFilter
+    : category
+      ? { category }
+      : (GROUP_FILTER[muscle as MuscleGroup] ?? { bodyPart: 'chest' });
+  const title = typeof params.title === 'string' && params.title
+    ? params.title
+    : category
+      ? (CATEGORY_LABELS[category] ?? category)
+      : GROUP_LABELS[muscle as MuscleGroup];
 
   // Gender is filtered here (the user explicitly picked it in the flow): the
   // backend matches the chosen gender + unisex rows, so Female no longer sees
   // Male-only-demo exercises.
   const q = useQuery({
-    queryKey: ['exercise-results', category, muscle, gender, level],
+    // Serialize the resolved filter into the key so two Body-Focus programs with
+    // different filters (e.g. glute vs waist) never collide on the same cache slot.
+    queryKey: ['exercise-results', category, muscle, JSON.stringify(filter), gender, level],
     queryFn: () => searchLibrary({ ...filter, gender, difficulty: level, limit: 1000 }),
     staleTime: 5 * 60 * 1000,
   });

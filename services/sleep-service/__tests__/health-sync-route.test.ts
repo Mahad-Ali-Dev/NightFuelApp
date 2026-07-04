@@ -146,6 +146,38 @@ describe('POST /v1/sleep/health-sync — input-bounds', () => {
         expect(res.statusCode).toBe(400);
     });
 
+    it('accepts a camera_ppg heart-rate sample with 201 (the new HealthSource)', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/v1/sleep/health-sync',
+            payload: {
+                samples: [
+                    {
+                        kind: 'heartRate',
+                        source: 'camera_ppg',
+                        startTime: '2026-06-20T08:00:00.000Z',
+                        value: 72,
+                        unit: 'bpm',
+                    },
+                ],
+            },
+        });
+        expect(res.statusCode).toBe(201);
+    });
+
+    it('rejects an unknown source with 400', async () => {
+        const res = await app.inject({
+            method: 'POST',
+            url: '/v1/sleep/health-sync',
+            payload: {
+                samples: [
+                    { kind: 'heartRate', source: 'palm_reading', startTime: '2026-06-20T08:00:00.000Z', value: 72 },
+                ],
+            },
+        });
+        expect(res.statusCode).toBe(400);
+    });
+
     it('rejects an unknown kind with 400', async () => {
         const res = await app.inject({
             method: 'POST',

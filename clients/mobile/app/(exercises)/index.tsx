@@ -34,6 +34,12 @@ const CAT_RECOVERY_IMG = require('../../assets/images/cat-recovery.png');
 // Step-1 gender-gate art (full-body athlete renders).
 const GENDER_MALE_IMG = require('../../assets/images/hero-male-1.png');
 const GENDER_FEMALE_IMG = require('../../assets/images/hero-female-1.png');
+// "Body Focus" (women's body-area workouts) feature-banner hero. Reuses the
+// full-body tone hero from the Body Focus gallery so the entry previews it.
+const BODY_FOCUS_IMG = require('../../assets/images/women-tone.jpg');
+// "30-Day Challenges" feature-banner hero. Reuses a challenge hero so the entry
+// previews the day-by-day gender-specific plans.
+const CHALLENGES_30_IMG = require('../../assets/images/c30-fullbody-male.jpg');
 
 const CATEGORY_IMAGES = [
     { key: 'gym', label: 'Gym', image: CAT_GYM_IMG, color: '#A8CC3C', description: 'Barbell · Dumbbell · Machines' },
@@ -401,8 +407,100 @@ export default function ExerciseLibraryScreen() {
                     contentContainerStyle={{ padding: 20, paddingTop: 12, paddingBottom: TAB_BAR_H + 40 }}
                     showsVerticalScrollIndicator={false}
                 >
+                    {/* Body Focus — curated women's body-area workout programs. Surfaced
+                        first (a wide hero banner) so it reads as a headline feature. It's
+                        framed for her when the profile is female, but reachable by all. */}
+                    <Animated.View entering={FadeInDown.duration(420)}>
+                        <TouchableOpacity
+                            style={styles.bodyFocusCard}
+                            activeOpacity={0.9}
+                            accessibilityRole="button"
+                            accessibilityLabel="Body Focus — women's body-area workouts"
+                            onPress={() => router.push('/(exercises)/women' as any)}
+                        >
+                            <Image
+                                source={BODY_FOCUS_IMG}
+                                style={StyleSheet.absoluteFillObject}
+                                contentFit="cover"
+                                contentPosition="top"
+                                cachePolicy="memory-disk"
+                            />
+                            <LinearGradient
+                                colors={['rgba(10,12,18,0.15)', 'rgba(10,12,18,0.55)', 'rgba(10,12,18,0.96)']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 0, y: 1 }}
+                                style={StyleSheet.absoluteFillObject}
+                            />
+                            <View style={[styles.catAccentRail, { backgroundColor: colors.accent.coral }]} />
+                            <View style={styles.bodyFocusContent}>
+                                <View style={[styles.bodyFocusTag, { backgroundColor: withAlpha(colors.accent.coral, 0.18), borderColor: withAlpha(colors.accent.coral, 0.5) }]}>
+                                    <Ionicons name="sparkles" size={11} color={colors.accent.coral} />
+                                    <Text style={[typography.caption, { color: colors.accent.coral, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.8 }]}>
+                                        {effectiveGender === 'Female' ? 'MADE FOR YOU' : 'BODY FOCUS'}
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1 }} />
+                                <Text style={[typography.heading, { color: '#FFF', fontSize: 24, fontWeight: '900' }]}>
+                                    Body Focus
+                                </Text>
+                                <Text style={[typography.body, { color: 'rgba(255,255,255,0.82)', fontSize: 13, marginTop: 3 }]}>
+                                    Glutes · Abs · Waist · Hips & more — curated by area
+                                </Text>
+                            </View>
+                            <View style={[styles.catArrow, { backgroundColor: withAlpha(colors.accent.coral, 0.2), borderColor: withAlpha(colors.accent.coral, 0.55) }]}>
+                                <Ionicons name="arrow-forward" size={14} color={colors.accent.coral} />
+                            </View>
+                        </TouchableOpacity>
+                    </Animated.View>
+
+                    {/* 30-Day Challenges — Leap-style gated, gender-specific day-by-day
+                        plans built over the existing library. Sits beside Body Focus as
+                        a second headline feature. */}
+                    <Animated.View entering={FadeInDown.delay(60).duration(420)}>
+                        <TouchableOpacity
+                            style={[styles.bodyFocusCard, { marginTop: 14 }]}
+                            activeOpacity={0.9}
+                            accessibilityRole="button"
+                            accessibilityLabel="30-Day Challenges — day-by-day gender-specific plans"
+                            onPress={() => router.push('/(exercises)/challenges-30' as any)}
+                        >
+                            <Image
+                                source={CHALLENGES_30_IMG}
+                                style={StyleSheet.absoluteFillObject}
+                                contentFit="cover"
+                                contentPosition="top"
+                                cachePolicy="memory-disk"
+                            />
+                            <LinearGradient
+                                colors={['rgba(10,12,18,0.15)', 'rgba(10,12,18,0.55)', 'rgba(10,12,18,0.96)']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 0, y: 1 }}
+                                style={StyleSheet.absoluteFillObject}
+                            />
+                            <View style={[styles.catAccentRail, { backgroundColor: colors.accent.lime }]} />
+                            <View style={styles.bodyFocusContent}>
+                                <View style={[styles.bodyFocusTag, { backgroundColor: withAlpha(colors.accent.lime, 0.18), borderColor: withAlpha(colors.accent.lime, 0.5) }]}>
+                                    <Ionicons name="flame" size={11} color={colors.accent.lime} />
+                                    <Text style={[typography.caption, { color: colors.accent.lime, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.8 }]}>
+                                        30-DAY CHALLENGE
+                                    </Text>
+                                </View>
+                                <View style={{ flex: 1 }} />
+                                <Text style={[typography.heading, { color: '#FFF', fontSize: 24, fontWeight: '900' }]}>
+                                    30-Day Challenges
+                                </Text>
+                                <Text style={[typography.body, { color: 'rgba(255,255,255,0.82)', fontSize: 13, marginTop: 3 }]}>
+                                    Abs · Glutes · Chest · Arms & more — one day at a time
+                                </Text>
+                            </View>
+                            <View style={[styles.catArrow, { backgroundColor: withAlpha(colors.accent.lime, 0.2), borderColor: withAlpha(colors.accent.lime, 0.55) }]}>
+                                <Ionicons name="arrow-forward" size={14} color={colors.accent.lime} />
+                            </View>
+                        </TouchableOpacity>
+                    </Animated.View>
+
                     {/* Category Cards */}
-                    <View style={styles.sectionHeader}>
+                    <View style={[styles.sectionHeader, { marginTop: spacing['3xl'] }]}>
                         <View style={[styles.sectionBar, { backgroundColor: colors.accent.coral }]} />
                         <Text style={[typography.overline, { color: colors.text.secondary }]}>
                             Categories
@@ -564,6 +662,25 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         alignItems: 'center',
         justifyContent: 'center',
+    },
+    // Body Focus feature banner (wide hero → women's body-area programs)
+    bodyFocusCard: {
+        width: '100%',
+        height: 172,
+        borderRadius: 20,
+        borderCurve: 'continuous',
+        overflow: 'hidden',
+        justifyContent: 'flex-end',
+    },
+    bodyFocusContent: { padding: 16, alignItems: 'flex-start' },
+    bodyFocusTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        borderWidth: 1,
+        borderRadius: 999,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
     },
     // Section headers (accent rail + overline)
     sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },

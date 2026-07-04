@@ -91,8 +91,31 @@ jest.mock('@tanstack/react-query', () => ({
 }));
 
 jest.mock('@/api/profile', () => ({ getMyProfile: jest.fn(), getStatus: jest.fn() }));
-jest.mock('@/api/cycle', () => ({ getCycleForecast: jest.fn(), getCycleHistory: jest.fn(), logPeriod: jest.fn() }));
+jest.mock('@/api/cycle', () => ({
+  getCycleForecast: jest.fn(),
+  getCycleHistory: jest.fn(),
+  logPeriod: jest.fn(),
+  logCycleSymptoms: jest.fn(),
+  getCycleSymptoms: jest.fn(),
+  updateCycleHealth: jest.fn(),
+  logPill: jest.fn(),
+  getPillLogs: jest.fn(),
+}));
 jest.mock('@/api/meals', () => ({ getPhaseFoods: jest.fn() }));
+
+// Period-P3 privacy gate (CycleLockGate) reads a secure-store flag async on mount;
+// mock it to "lock off" so the gate resolves straight to 'unlocked' deterministically.
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(() => Promise.resolve(null)),
+  setItemAsync: jest.fn(() => Promise.resolve()),
+  deleteItemAsync: jest.fn(() => Promise.resolve()),
+}));
+jest.mock('@/lib/biometric', () => ({
+  authenticateBiometric: jest.fn(() => Promise.resolve({ success: false })),
+  getBiometricCapability: jest.fn(() =>
+    Promise.resolve({ kind: 'none', hardwarePresent: false, enrolled: false }),
+  ),
+}));
 
 import React from 'react';
 import { render, screen } from '@testing-library/react-native';
@@ -181,7 +204,7 @@ describe('CycleScreen (F28) — eligibility gate', () => {
     expect(screen.queryByText('LOG PERIOD')).toBeNull();
   });
 
-  test('ELIGIBLE user (tracking on + female) sees calendar, log, history + disclaimer', () => {
+  test('ELIGIBLE user (tracking on + female) sees calendar, log, history + disclaimer', async () => {
     mockProfile.data = { cycleTrackingEnabled: true, biologicalSex: 'FEMALE' };
     mockStatus.data = { cyclePhase: 'FOLLICULAR' };
     mockForecast.data = FORECAST;
@@ -189,9 +212,10 @@ describe('CycleScreen (F28) — eligibility gate', () => {
     mockPhaseFoods.data = PHASE_FOODS;
     renderScreen();
 
+    // The lock gate (Period P3) resolves the persisted lock flag async before it
+    // renders the sensitive body — await the first surface, then assert the rest.
+    expect(await screen.findByText('LOG PERIOD')).toBeTruthy();
     expect(screen.queryByTestId('cycle-not-enabled')).toBeNull();
-    // Feature surfaces present.
-    expect(screen.getByText('LOG PERIOD')).toBeTruthy();
     expect(screen.getByText('CYCLE HISTORY')).toBeTruthy();
     // Calendar mounted (current month header).
     const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -209,7 +233,7 @@ describe('CycleScreen (F28) — eligibility gate', () => {
     expect(screen.getAllByText(/not medical advice/i).length).toBeGreaterThan(0);
   });
 
-  test('ELIGIBLE but UNKNOWN phase: the phase-foods section is hidden (no concrete focus)', () => {
+  test('ELIGIBLE but UNKNOWN phase: the phase-foods section is hidden (no concrete focus)', async () => {
     mockProfile.data = { cycleTrackingEnabled: true, biologicalSex: 'FEMALE' };
     mockStatus.data = { cyclePhase: 'UNKNOWN' };
     mockForecast.data = FORECAST;
@@ -217,8 +241,8 @@ describe('CycleScreen (F28) — eligibility gate', () => {
     mockPhaseFoods.data = PHASE_FOODS; // even if data exists, the gate hides it
     renderScreen();
 
-    // The rest of the feature still shows…
-    expect(screen.getByText('LOG PERIOD')).toBeTruthy();
+    // The rest of the feature still shows (await the lock gate resolving)…
+    expect(await screen.findByText('LOG PERIOD')).toBeTruthy();
     // …but the best-foods section is gated out for UNKNOWN.
     expect(screen.queryByTestId('phase-foods-card')).toBeNull();
     expect(screen.queryByText(/BEST FOODS FOR YOUR/i)).toBeNull();

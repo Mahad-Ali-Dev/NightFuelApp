@@ -14,6 +14,12 @@ import {
     PeriodLogInput,
 } from './utils/cycleHistory';
 import { computeCycleForecast, ForecastInput } from './utils/cycleForecast';
+import {
+    generateShareCode,
+    sanitizeSharedCycleSummary,
+    SharedCycleSummary,
+    DEFAULT_CYCLE_SHARE_SCOPES,
+} from './utils/cycleShare';
 import { LogPeriodBody } from './schemas';
 
 const logger = createLogger('user-service:service');
@@ -1238,6 +1244,109 @@ export class UserService {
         return computeCycleForecast(input, windowStart, windowEnd, now);
     }
 
+    // ── Partner cycle-sharing (Period P3 tail) ────────────────────────────────
+    // A user GENERATES an opaque, revocable code that lets a partner read a
+    // SANITIZED, summary-only view of their cycle (current phase + next-period /
+    // fertile-window PREDICTIONS) — never the raw symptom / activity / notes logs.
+    // All four methods use the `(prisma as any).cycleShare` shim (same precedent as
+    // periodLog / cycleSymptomLog / pillLog: the checked-in generated client may
+    // predate the model; `prisma db push` + `prisma generate` own the runtime).
+
+    /** Owner-facing view of their OWN share row (safe to return to the owner). */
+    private toOwnerShareView(share: any) {
+        return {
+            code: share.code as string,
+            scopes: (share.scopes as string[]) ?? DEFAULT_CYCLE_SHARE_SCOPES,
+            createdAt: share.createdAt as Date,
+            active: share.revokedAt == null,
+        };
+    }
+
+    /** The owner's current ACTIVE (non-revoked) share, or null if none exists. */
+    async getActiveCycleShare(userId: string) {
+        const share = await (this.prisma as any).cycleShare.findFirst({
+            where: { userId, revokedAt: null },
+            orderBy: { createdAt: 'desc' },
+        });
+        return share ? this.toOwnerShareView(share) : null;
+    }
+
+    /**
+     * Generate a partner-share code for the caller. IDEMPOTENT by design: if an
+     * active share already exists we RETURN IT rather than minting a second one —
+     * so tapping "generate" twice never silently invalidates a code already handed
+     * to a partner, and a user never accumulates multiple live codes. To rotate a
+     * code the client revokes then generates. Retries on the (astronomically
+     * unlikely) unique-code collision.
+     */
+    async createCycleShare(userId: string) {
+        await this.ensureProfileExists(userId);
+
+        const existing = await (this.prisma as any).cycleShare.findFirst({
+            where: { userId, revokedAt: null },
+            orderBy: { createdAt: 'desc' },
+        });
+        if (existing) return this.toOwnerShareView(existing);
+
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                const created = await (this.prisma as any).cycleShare.create({
+                    data: { userId, code: generateShareCode(), scopes: DEFAULT_CYCLE_SHARE_SCOPES },
+                });
+                logger.info({ userId }, 'Cycle share created');
+                return this.toOwnerShareView(created);
+            } catch (err: any) {
+                // P2002 = unique-code collision: regenerate and retry a few times.
+                if (err?.code === 'P2002' && attempt < 4) continue;
+                throw err;
+            }
+        }
+        throw new Error('Failed to generate a unique share code');
+    }
+
+    /**
+     * Revoke the caller's active share(s) (soft-delete: stamps revokedAt). The
+     * public resolver matches `revokedAt: null`, so this INSTANTLY and permanently
+     * kills the code. Idempotent — revoking with nothing active succeeds (count 0).
+     */
+    async revokeCycleShare(userId: string) {
+        const res = await (this.prisma as any).cycleShare.updateMany({
+            where: { userId, revokedAt: null },
+            data: { revokedAt: new Date() },
+        });
+        logger.info({ userId, revoked: res.count }, 'Cycle share(s) revoked');
+        return { revoked: res.count > 0, count: res.count as number };
+    }
+
+    /**
+     * Resolve a partner-presented code -> the owner's SANITIZED cycle summary, or
+     * null if the code is unknown or revoked (route -> 404). Reuses getStatus (for
+     * the current phase) + getCycleForecast (for the predictions) and runs the
+     * result through the ALLOW-LIST sanitizer, which copies out ONLY the safe
+     * summary fields. This path NEVER reads CycleSymptomLog, so the raw symptom /
+     * discharge / sexual-activity / notes data is structurally unreachable here.
+     */
+    async resolveSharedCycleSummary(code: string): Promise<SharedCycleSummary | null> {
+        const share = await (this.prisma as any).cycleShare.findFirst({
+            where: { code, revokedAt: null },
+        });
+        if (!share) return null;
+
+        const ownerId = share.userId as string;
+        const [status, forecast, profile] = await Promise.all([
+            this.getStatus(ownerId),
+            this.getCycleForecast(ownerId, 1),
+            this.prisma.userProfile.findUnique({ where: { userId: ownerId } }),
+        ]);
+
+        return sanitizeSharedCycleSummary({
+            displayName: (profile as any)?.displayName ?? null,
+            cyclePhase: (status as any)?.cyclePhase ?? null,
+            forecast,
+            scopes: share.scopes as string[] | null,
+        });
+    }
+
     /**
      * Upsert the per-day symptom quick-log (mood / cramps / energy / flow /
      * notes). One row per user per calendar day — re-logging the same day
@@ -1250,6 +1359,13 @@ export class UserService {
         energy?: number;
         flow?: string;
         notes?: string;
+        symptoms?: string[];
+        discharge?: string;
+        activity?: string;
+        water?: number;
+        bbt?: number;
+        weight?: number;
+        ovulationTest?: string;
     }) {
         await this.ensureProfileExists(userId);
         const day = new Date(`${body.date ?? new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
@@ -1262,6 +1378,16 @@ export class UserService {
         if (body.energy != null) fields.energy = body.energy;
         if (body.flow != null) fields.flow = body.flow;
         if (body.notes != null) fields.notes = body.notes;
+        // Period P1: expanded logging. `symptoms` is set-replaced (the client
+        // always sends the full selected set for the day), the rest are scalar.
+        if (body.symptoms != null) fields.symptoms = body.symptoms.slice(0, 40);
+        if (body.discharge != null) fields.discharge = body.discharge;
+        if (body.activity != null) fields.activity = body.activity;
+        if (body.water != null) fields.water = body.water;
+        // Period P3: advanced fertility logging.
+        if (body.bbt != null) fields.bbt = body.bbt;
+        if (body.weight != null) fields.weight = body.weight;
+        if (body.ovulationTest != null) fields.ovulationTest = body.ovulationTest;
 
         const row = await (this.prisma as any).cycleSymptomLog.upsert({
             where: { userId_date: { userId, date: day } },
@@ -1280,6 +1406,64 @@ export class UserService {
             orderBy: { date: 'desc' },
         });
         return { symptoms: rows ?? [] };
+    }
+
+    /**
+     * Update the user's cycle HEALTH settings (Period P2): pregnancy mode +
+     * birth-control / pill config. All fields optional (partial update). Turning
+     * pregnancy mode ON pauses cycle predictions at the read layer. Date strings
+     * are YYYY-MM-DD → UTC-midnight (matching the rest of the cycle date math).
+     * `as any` shim: the checked-in generated client may predate these columns;
+     * the schema + db push own the runtime table (same precedent as periodLog).
+     */
+    async updateCycleHealth(userId: string, body: {
+        pregnancyMode?: boolean;
+        pregnancyDueDate?: string | null;
+        pregnancyStartDate?: string | null;
+        tryingToConceive?: boolean;
+        birthControlMethod?: string | null;
+        pillReminderEnabled?: boolean;
+        pillReminderTime?: string | null;
+        pillPackStartDate?: string | null;
+    }) {
+        await this.ensureProfileExists(userId);
+        const toDate = (v?: string | null) => (v == null ? null : new Date(`${v}T00:00:00.000Z`));
+        const data: Record<string, unknown> = {};
+        if (body.pregnancyMode != null) data.pregnancyMode = body.pregnancyMode;
+        if (body.tryingToConceive != null) data.tryingToConceive = body.tryingToConceive;
+        if (body.pregnancyDueDate !== undefined) data.pregnancyDueDate = toDate(body.pregnancyDueDate);
+        if (body.pregnancyStartDate !== undefined) data.pregnancyStartDate = toDate(body.pregnancyStartDate);
+        if (body.birthControlMethod !== undefined) data.birthControlMethod = body.birthControlMethod;
+        if (body.pillReminderEnabled != null) data.pillReminderEnabled = body.pillReminderEnabled;
+        if (body.pillReminderTime !== undefined) data.pillReminderTime = body.pillReminderTime;
+        if (body.pillPackStartDate !== undefined) data.pillPackStartDate = toDate(body.pillPackStartDate);
+
+        const row = await (this.prisma as any).userProfile.update({ where: { userId }, data });
+        logger.info({ userId }, 'Cycle health settings updated');
+        return row;
+    }
+
+    /** Upsert today's (or a given day's) pill adherence log (TAKEN|SKIPPED|LATE). */
+    async logPill(userId: string, body: { date?: string; status: string }) {
+        await this.ensureProfileExists(userId);
+        const day = new Date(`${body.date ?? new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+        const row = await (this.prisma as any).pillLog.upsert({
+            where: { userId_date: { userId, date: day } },
+            create: { userId, date: day, status: body.status },
+            update: { status: body.status },
+        });
+        logger.info({ userId }, 'Pill logged');
+        return row;
+    }
+
+    /** Pill-log rows for the trailing `days` window (default 35), newest first. */
+    async getPillLogs(userId: string, days = 35) {
+        const cutoff = new Date(Date.now() - days * 86_400_000);
+        const rows = await (this.prisma as any).pillLog.findMany({
+            where: { userId, date: { gte: cutoff } },
+            orderBy: { date: 'desc' },
+        });
+        return { pills: rows ?? [] };
     }
 
     /**
@@ -1396,6 +1580,8 @@ export class UserService {
             coachClientRelations,
             periodLogs,
             cycleSymptomLogs,
+            pillLogs,
+            cycleShares,
             userStatuses,
             userPreferences,
             coachProfiles,
@@ -1408,6 +1594,11 @@ export class UserService {
             p.periodLog.deleteMany({ where: { userId } }),
             // cycle_symptom_logs: GDPR Art.9 special-category health data.
             p.cycleSymptomLog.deleteMany({ where: { userId } }),
+            // pill_logs: GDPR Art.9 special-category health data.
+            p.pillLog.deleteMany({ where: { userId } }),
+            // cycle_shares: partner-share grants pointing at this user's cycle. Must
+            // be purged so a revoked-or-active code can never outlive the account.
+            p.cycleShare.deleteMany({ where: { userId } }),
             this.prisma.userStatus.deleteMany({ where: { userId } }),
             this.prisma.userPreferences.deleteMany({ where: { userId } }),
             p.coachProfile.deleteMany({ where: { userId } }),
@@ -1419,6 +1610,8 @@ export class UserService {
             coach_client_relations: coachClientRelations.count,
             period_logs: periodLogs.count,
             cycle_symptom_logs: cycleSymptomLogs.count,
+            pill_logs: pillLogs.count,
+            cycle_shares: cycleShares.count,
             user_statuses: userStatuses.count,
             user_preferences: userPreferences.count,
             coach_profiles: coachProfiles.count,
@@ -1469,7 +1662,7 @@ export class UserService {
             }
         };
 
-        const [profile, preferences, status, coachProfile, coachClientRelations, periodLogs, cycleSymptomLogs, cycleHistory, cycleForecast] =
+        const [profile, preferences, status, coachProfile, coachClientRelations, periodLogs, cycleSymptomLogs, pillLogs, cycleShares, cycleHistory, cycleForecast] =
             await Promise.all([
                 safe('profile', () => this.prisma.userProfile.findUnique({ where: { userId } })),
                 safe('preferences', () => this.prisma.userPreferences.findUnique({ where: { userId } })),
@@ -1487,6 +1680,14 @@ export class UserService {
                 safe('cycleSymptomLogs', () =>
                     p.cycleSymptomLog.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
                 ),
+                safe('pillLogs', () =>
+                    p.pillLog.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
+                ),
+                // cycle_shares: the user's OWN partner-share grants (their data, so
+                // the code IS included in their own portable export).
+                safe('cycleShares', () =>
+                    p.cycleShare.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+                ),
                 // Read-only derived views the user sees in-app.
                 safe('cycleHistory', () => this.getCycleHistory(userId)),
                 safe('cycleForecast', () => this.getCycleForecast(userId, 1)),
@@ -1501,6 +1702,8 @@ export class UserService {
             coachClientRelations,
             periodLogs,
             cycleSymptomLogs,
+            pillLogs,
+            cycleShares,
             cycleHistory,
             cycleForecast,
         };

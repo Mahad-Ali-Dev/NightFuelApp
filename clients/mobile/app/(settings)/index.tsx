@@ -168,6 +168,10 @@ export default function SettingsIndexScreen() {
             title: 'Support',
             icon: 'help-buoy-outline',
             items: [
+                // In-app "How to use Zeitra" guide (app/(settings)/guide.tsx) — a
+                // book/help row leading the Support group. Follow-up idea (not built):
+                // a first-run "Take a tour" hook that deep-links here on first launch.
+                { label: 'How to use Zeitra', icon: 'book-outline', route: '/(settings)/guide' },
                 { label: 'Help Center', icon: 'help-circle-outline', url: 'https://zeitra.app/support' },
                 { label: 'Terms of Service', icon: 'document-text-outline', url: 'https://zeitra.app/terms' },
                 { label: 'Privacy Policy', icon: 'lock-closed-outline', url: 'https://zeitra.app/privacy' },

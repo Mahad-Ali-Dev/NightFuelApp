@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/theme';
+import { useCycleAccents } from '@/theme/useCycleAccents';
 import { GlassCard } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import type { UserStatus } from '@/api/profile';
@@ -30,10 +31,8 @@ import type { UserStatus } from '@/api/profile';
 type Phase = NonNullable<UserStatus['cyclePhase']>;
 type ConcretePhase = Exclude<Phase, 'UNKNOWN'>;
 
-// Coral period/cycle accent (the brand `accent.coral` token resolves to LIME
-// post-rebrand, so coral is an explicit literal here).
-const CORAL = '#FF7A90';
-const LIME = '#A8CC3C';
+// Coral period accent + lime brand accent are theme-aware — see useCycleAccents
+// (dark #FF7A90 / #A8CC3C, darkened on light); sourced per-render below.
 
 interface PhaseRec {
     training: { icon: keyof typeof Ionicons.glyphMap; title: string; body: string };
@@ -99,6 +98,7 @@ export interface PhaseRecommendationCardsProps {
 
 export function PhaseRecommendationCards({ phase }: PhaseRecommendationCardsProps) {
     const { colors, typography, borderRadius } = useTheme();
+    const { coral: CORAL, lime: LIME } = useCycleAccents();
 
     // GATE: only concrete phases get advice (null/undefined/'UNKNOWN' → nothing).
     if (phase == null || phase === 'UNKNOWN') return null;

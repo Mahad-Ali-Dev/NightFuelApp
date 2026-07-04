@@ -39,6 +39,8 @@ export const DEEP_LINK_ROUTES: Array<{
   { pattern: /^\/subscription\/return\/?$/i, target: '/(settings)/subscription' },
   // Shared workout
   { pattern: /^\/share\/workout\/([^/]+)\/?$/i, target: '/(exercises)/$1' },
+  // Cycle screen — opened from the Android home-screen widget (zeitra://cycle)
+  { pattern: /^\/cycle\/?$/i, target: '/(performance)/cycle' },
 ];
 
 export interface DeepLinkResolution {

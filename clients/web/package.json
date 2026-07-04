@@ -13,10 +13,12 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
+    "@nightfuel/config": "*",
     "@repo/ui": "*",
     "@tanstack/react-query": "^5.90.21",
     "@zxing/library": "^0.21.3",
     "axios": "^1.13.5",
+    "ioredis": "^5.11.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.34.3",
     "lucide-react": "^0.575.0",

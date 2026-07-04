@@ -77,6 +77,13 @@ const nextConfig = {
     // ─── Standalone output for Docker (copies only required files) ────────────
     output: 'standalone',
 
+    // ─── Server-only externals ────────────────────────────────────────────────
+    // ioredis is a native Node client used exclusively in server route handlers
+    // (the food-scan daily-quota counter in lib/scanQuota.ts). Keep it external so
+    // Next treats it as a runtime require instead of pulling it (and its Node
+    // built-ins) into the webpack bundle.
+    serverExternalPackages: ['ioredis'],
+
     // ─── External image domains ───────────────────────────────────────────────
     images: {
         remotePatterns: [

@@ -15,7 +15,7 @@ import { withAlpha } from '@/theme/utils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { recognizeFoodPhoto, VisionFoodResult } from '@/api/meals';
+import { recognizeFoodPhoto, VisionFoodResult, ScanQuotaInfo } from '@/api/meals';
 import { EmptyState, GlassCard } from '@/components/ui';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { CtaButton } from '@/components/ui/CtaButton';
@@ -197,6 +197,23 @@ export default function FoodPhotoModal() {
         ]);
     };
 
+    // Daily scan cap reached (shared AI quota) — offer the upgrade path instead of
+    // a retry (retrying can't help until the quota resets). Mirrors Ria's
+    // limit-reached → premium upsell in ai-coach.tsx. Manual entry stays free.
+    const offerUpgrade = (quota?: ScanQuotaInfo) => {
+        const plan = quota?.plan === 'pro' ? 'Pro ' : '';
+        const limit = quota?.limit;
+        const detail =
+            limit != null
+                ? `You've used all ${limit} of today's ${plan}AI plate scans. It resets at midnight UTC.`
+                : "You've reached today's AI plate-scan limit. It resets at midnight UTC.";
+        Alert.alert('Daily scan limit reached', `${detail}\n\nUpgrade for more scans, or add this meal manually.`, [
+            { text: 'Add manually', onPress: () => router.navigate('/(meals)/log-meal' as any) },
+            { text: 'Upgrade', onPress: () => router.push('/(modals)/premium' as any) },
+            { text: 'Not now', style: 'cancel', onPress: resetScan },
+        ]);
+    };
+
     const capture = async () => {
         if (analyzing || result) return;
         const cam = cameraRef.current;
@@ -215,13 +232,15 @@ export default function FoodPhotoModal() {
                 return;
             }
 
-            const { food, confidence: conf, portionNote: note, error } =
+            const { food, confidence: conf, portionNote: note, error, quota } =
                 await recognizeFoodPhoto(`data:image/jpeg;base64,${b64}`);
 
             if (food) {
                 setResult(food);
                 setConfidence(typeof conf === 'number' ? conf : 0);
                 setPortionNote(note ?? '');
+            } else if (error === 'quota_exceeded') {
+                offerUpgrade(quota);
             } else if (error === 'no_food') {
                 offerRetryOrManual(
                     'No food found',

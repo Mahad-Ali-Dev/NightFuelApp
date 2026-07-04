@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 
 import { useTheme } from '@/theme';
+import { useCycleAccents } from '@/theme/useCycleAccents';
 import { GlassCard, Skeleton } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import { getPhaseFoods, type CyclePhaseName, type FoodItem } from '@/api/meals';
@@ -25,9 +26,8 @@ import { getMicronutrientMeta, formatMicroAmount } from '@/lib/micronutrients';
  * the rationale is shown verbatim from the backend, which is worded that way.
  */
 
-// Coral period/cycle accent (the brand `accent.coral` token resolves to LIME
-// post-rebrand, so coral is an explicit literal here).
-const CORAL = '#FF7A90';
+// The coral period accent is theme-aware — see useCycleAccents (dark #FF7A90,
+// darkened on light); sourced per-render in both components below.
 
 /** Phase as it arrives from the status query — may be absent or 'UNKNOWN'. */
 type IncomingPhase = CyclePhaseName | 'UNKNOWN' | null | undefined;
@@ -51,6 +51,7 @@ export interface PhaseFoodsCardProps {
 
 export function PhaseFoodsCard({ phase }: PhaseFoodsCardProps) {
     const { colors, typography, borderRadius } = useTheme();
+    const { coral: CORAL } = useCycleAccents();
 
     const concrete = isConcretePhase(phase) ? phase : null;
 
@@ -132,6 +133,7 @@ export function PhaseFoodsCard({ phase }: PhaseFoodsCardProps) {
 /** A single food tile in the horizontal scroll: image + name + focus amount. */
 function PhaseFoodCard({ food, focusNutrient }: { food: FoodItem; focusNutrient: string }) {
     const { colors, typography } = useTheme();
+    const { coral: CORAL } = useCycleAccents();
 
     // The focus amount is the food's value for the phase's focus micronutrient
     // (e.g. ironMg → "Iron 6.4 mg"). Render it only when both the field is a

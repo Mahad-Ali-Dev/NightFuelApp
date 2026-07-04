@@ -64,6 +64,12 @@ module.exports = {
       // and constructs `new BleManager()`. The stub's constructor throws → the
       // manager's try/catch yields isSupported()=false → honest no-op in the gate.
       [`^react-native-ble-plx${END}`]: '<rootDir>/src/mocks/react-native-ble-plx-stub.js',
+      // Camera-PPG native packages (react-native-vision-camera V5 + its -worklets
+      // companion): ppgCamera.ts lazy-requires vision-camera and probes its
+      // exports. The stub exposes none as functions → isPpgSupported()=false →
+      // the measure screen shows the honest "needs a build" state in the gate.
+      [`^react-native-vision-camera${END}`]: '<rootDir>/src/mocks/react-native-vision-camera-stub.js',
+      [`^react-native-vision-camera-worklets${END}`]: '<rootDir>/src/mocks/react-native-vision-camera-stub.js',
       [`^@/(.*)${END}`]: '<rootDir>/src/$1',
     };
   })(),

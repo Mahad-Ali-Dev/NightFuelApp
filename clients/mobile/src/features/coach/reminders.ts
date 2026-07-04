@@ -86,6 +86,82 @@ export async function cancelCoachReminders(): Promise<void> {
     } catch { /* best-effort */ }
 }
 
+// ── Birth-control PILL reminder (Period P2) ─────────────────────────────────────
+// A single DAILY local notification at the user's chosen 'HH:MM'. Reuses the EXACT
+// expo-notifications path as the coach reminders (perm gate → Android channel →
+// cancel-then-schedule with a DAILY trigger), but tagged separately so it can be
+// (re)scheduled / cancelled WITHOUT touching the coach's schedule. The cycle UI
+// calls scheduleDailyPillReminder on enable/time-change and cancelDailyPillReminder
+// on disable.
+const PILL_TAG = 'nfPillReminderId';
+const PILL_ID = 'pill-daily';
+
+/**
+ * (Re)schedule the daily pill reminder at { hour, minute }. Cancels any existing
+ * pill reminder first (so a time change replaces rather than stacks). Returns true
+ * when a notification was scheduled, false when it no-oped (Expo Go / permission
+ * denied / bad time). Mirrors scheduleCoachReminders' permission + channel dance.
+ */
+export async function scheduleDailyPillReminder(hour: number, minute: number): Promise<boolean> {
+    if (IS_EXPO_GO) return false;
+    if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+        return false;
+    }
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const Notifications = require('expo-notifications');
+
+        const perm = await Notifications.getPermissionsAsync();
+        let status = perm.status;
+        if (status !== 'granted') status = (await Notifications.requestPermissionsAsync()).status;
+        if (status !== 'granted') return false;
+
+        if (Platform.OS === 'android') {
+            await Notifications.setNotificationChannelAsync('pill', {
+                name: 'Pill reminder',
+                importance: Notifications.AndroidImportance.HIGH,
+                vibrationPattern: [0, 300, 200, 300],
+            });
+        }
+
+        // Replace, don't stack: clear the previous pill reminder before scheduling.
+        await cancelDailyPillReminder();
+
+        await Notifications.scheduleNotificationAsync({
+            content: {
+                title: 'Pill reminder',
+                body: "Time to take today's pill.",
+                sound: 'default',
+                data: { [PILL_TAG]: PILL_ID, url: '/(performance)/cycle' },
+            },
+            trigger: {
+                type: Notifications.SchedulableTriggerInputTypes.DAILY,
+                hour,
+                minute,
+                channelId: 'pill',
+            },
+        });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** Cancel only the pill reminder (tagged), leaving coach + other schedules intact. */
+export async function cancelDailyPillReminder(): Promise<void> {
+    if (IS_EXPO_GO) return;
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const Notifications = require('expo-notifications');
+        const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+        await Promise.all(
+            scheduled
+                .filter((n: any) => typeof n?.content?.data?.[PILL_TAG] === 'string')
+                .map((n: any) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
+        );
+    } catch { /* best-effort */ }
+}
+
 /** A buzz for the in-app/foreground nudge (a scheduled notification vibrates on its own). */
 export async function nudgeHaptic(): Promise<void> {
     try { await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch { /* unsupported */ }

@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useMemo } from 'react';
+import React, { useRef, useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 
 import { useTheme } from '@/theme';
+import { useCycleAccents } from '@/theme/useCycleAccents';
 import { EmptyState, Skeleton, CtaButton } from '@/components/ui';
 import { withAlpha } from '@/theme/utils';
 import { CyclePhaseHero } from '@/components/cycle/CyclePhaseHero';
@@ -16,16 +17,22 @@ import { PhaseCoachCard } from '@/components/cycle/PhaseCoachCard';
 import { CyclePhaseCard } from '@/components/CyclePhaseCard';
 import { CycleCalendar } from '@/components/cycle/CycleCalendar';
 import { CycleHistoryCard } from '@/components/cycle/CycleHistoryCard';
+import { CycleStatsCard } from '@/components/cycle/CycleStatsCard';
 import { PhaseFoodsCard } from '@/components/cycle/PhaseFoodsCard';
 import { LogPeriodCard } from '@/components/cycle/LogPeriodCard';
 import { SymptomQuickLogCard } from '@/components/cycle/SymptomQuickLogCard';
+import { FertilityLogCard } from '@/components/cycle/FertilityLogCard';
+import { PregnancyCard } from '@/components/cycle/PregnancyCard';
+import { BirthControlCard } from '@/components/cycle/BirthControlCard';
+import { PartnerShareCard } from '@/components/cycle/PartnerShareCard';
+import { CycleLockGate, CycleLockToggle } from '@/components/cycle/CycleLockGate';
 import { MedicalDisclaimerBanner } from '@/components/MedicalDisclaimer';
 import { getMyProfile, getStatus, updateProfile } from '@/api/profile';
 import { getCycleForecast, getCycleHistory } from '@/api/cycle';
+import { pushCycleWidgetFromData } from '@/widgets/sync';
 
-// Coral period/cycle accent for this screen (the brand `accent.coral` token
-// resolves to LIME post-rebrand, so coral is an explicit literal here).
-const CORAL = '#FF7A90';
+// The coral period accent is theme-aware — see useCycleAccents (dark #FF7A90,
+// darkened on light); sourced per-render in the screen component.
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** Parse a 'YYYY-MM-DD' to UTC-midnight ms, or null if malformed. Matches the
@@ -71,6 +78,7 @@ const enter = (i: number) => FadeInDown.delay(70 + i * 50).springify().damping(1
 
 export default function CycleScreen() {
     const { colors, typography, spacing } = useTheme();
+    const { coral: CORAL, isLight } = useCycleAccents();
     const insets = useSafeAreaInsets();
     const router = useRouter();
 
@@ -92,6 +100,11 @@ export default function CycleScreen() {
     const statusQuery = useQuery({ queryKey: ['my-status'], queryFn: getStatus });
     const queryClient = useQueryClient();
 
+    // Privacy lock (Period P3): bumped whenever the CycleLockToggle flips, so the
+    // CycleLockGate re-reads the persisted `cycleLockEnabled` flag and re-gates
+    // (locking straight away when the user turns it on).
+    const [lockRefresh, setLockRefresh] = useState(0);
+
     // Inline opt-in from the gated state. The old CTA did router.back() — a
     // no-op/wrong hop when the user arrived via the + FAB. Female users now
     // enable tracking right here (one tap, screen unlocks in place); users
@@ -110,6 +123,11 @@ export default function CycleScreen() {
     const trackingEnabled = profile?.cycleTrackingEnabled === true;
     const isFemale = (profile?.biologicalSex ?? '').toString().toUpperCase() === 'FEMALE';
     const eligible = trackingEnabled && isFemale;
+
+    // Period P2: when pregnancy mode is ON we PAUSE the period-prediction surfaces
+    // (the plan pauses forecasting during pregnancy) and lead with the pregnancy
+    // tracker. Period logging + birth-control tracking stay available below.
+    const pregnancyMode = profile?.pregnancyMode === true;
 
     // Only fetch the cycle data when the user is actually eligible.
     const forecastQuery = useQuery({
@@ -175,6 +193,22 @@ export default function CycleScreen() {
         return { cycleDay, cycleLengthDays, daysUntilNextPeriod, daysUntilOvulation, ovulationDayOfCycle };
     }, [profile, forecastQuery.data, historyQuery.data]);
 
+    // Mirror what this screen shows onto the Android home-screen widget, using the
+    // data already fetched here (no extra request). Android-only — a no-op on iOS /
+    // web (see src/widgets/sync.ts). Re-runs whenever the underlying profile /
+    // status / forecast / history changes, e.g. right after the user logs a period.
+    useEffect(() => {
+        if (!profile) return; // wait for the profile so we don't briefly push "tracking off"
+        const histStart =
+            historyQuery.data?.cycles?.find((c) => c.cycleLengthDays == null)?.startDate ?? null;
+        void pushCycleWidgetFromData({
+            profile,
+            status: eligible ? statusQuery.data : null,
+            forecast: eligible ? forecastQuery.data : null,
+            cycleStartDate: profile?.lastPeriodStartDate ?? histStart,
+        });
+    }, [eligible, profile, statusQuery.data, forecastQuery.data, historyQuery.data]);
+
     const Header = (
         <View style={styles.header}>
             <TouchableOpacity
@@ -199,7 +233,7 @@ export default function CycleScreen() {
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
-            <StatusBar style="light" />
+            <StatusBar style={isLight ? 'dark' : 'light'} />
             {/* Calm coral ambient wash behind the header — the period/cycle accent,
                 signalling the gentler, sensitive treatment of this space. */}
             <View
@@ -263,92 +297,151 @@ export default function CycleScreen() {
                     </Animated.View>
                 </View>
             ) : (
+                // Privacy lock (Period P3) wraps the ENTIRE eligible screen body —
+                // when the user has enabled it, everything below (predictions,
+                // logging, history) is hidden behind an auth prompt until they
+                // unlock (once per app session). Off → renders straight through.
+                <CycleLockGate refreshKey={lockRefresh}>
                 <>
                 <ScrollView
                     ref={scrollRef}
                     contentContainerStyle={{ padding: spacing.xl, paddingTop: spacing.md, paddingBottom: insets.bottom + 96 }}
                     showsVerticalScrollIndicator={false}
                 >
-                    {/* Phase-aware HERO — the big cycle ring (coral elapsed arc +
-                        lime ovulation marker) wrapping the DAY/phase readout, the
-                        "next period / ovulation" line, and the 4-phase strip. Reads
-                        cyclePhase from status + soft predictions from the already-
-                        fetched forecast, plus ring scalars DERIVED above from the
-                        profile/forecast/history the screen already holds (no new
-                        request). Self-gates on null / UNKNOWN exactly like the card. */}
+                    {/* Lock toggle (Period P3) — a slim opt-in row that gates this
+                        whole screen behind biometrics / a PIN on each open. Sits at
+                        the very top so it's reachable without a scroll; flipping it
+                        bumps lockRefresh so the gate above re-reads the flag. */}
                     <Animated.View entering={enter(0)}>
-                        <CyclePhaseHero
-                            cyclePhase={cyclePhase}
-                            forecast={forecastQuery.data}
-                            cycleDay={ringData.cycleDay}
-                            cycleLengthDays={ringData.cycleLengthDays}
-                            daysUntilNextPeriod={ringData.daysUntilNextPeriod}
-                            daysUntilOvulation={ringData.daysUntilOvulation}
-                            ovulationDayOfCycle={ringData.ovulationDayOfCycle}
+                        <CycleLockToggle onChange={() => setLockRefresh((n) => n + 1)} />
+                    </Animated.View>
+
+                    {/* Pregnancy mode (Period P2) — mounted FIRST so it crowns the
+                        screen when active. When ON it renders the weekly tracker
+                        (week / trimester / due-date countdown) and the prediction
+                        surfaces below PAUSE; when OFF it's a slim enable toggle that
+                        sits quietly above the hero. Reads its initial state from the
+                        profile row the screen already fetched. */}
+                    <Animated.View entering={enter(0)}>
+                        <PregnancyCard
+                            pregnancyMode={profile?.pregnancyMode}
+                            pregnancyDueDate={profile?.pregnancyDueDate}
                         />
                     </Animated.View>
 
-                    {/* "Tuned to your phase today" — two recommendation cards
-                        (training + nutrition). Self-gates on null / UNKNOWN. */}
-                    <Animated.View entering={enter(1)}>
-                        <PhaseRecommendationCards phase={cyclePhase} />
-                    </Animated.View>
-
-                    {/* Dedicated phase-coaching section — states what Ria adapts
-                        for today's phase + one-tap "Plan today with Ria" (opens
-                        the chat modal pre-filled). Self-gates like its siblings. */}
-                    <Animated.View entering={enter(2)}>
-                        <PhaseCoachCard phase={cyclePhase} />
-                    </Animated.View>
-
-                    {/* Phase guidance card (reused) — tip + how today's plan adjusts. */}
-                    <Animated.View entering={enter(2)}>
-                        <CyclePhaseCard cyclePhase={cyclePhase} />
-                    </Animated.View>
-
-                    {/* Best foods for the user's CONCRETE phase. Self-gates: renders
-                        nothing for null / 'UNKNOWN', exactly like CyclePhaseCard. */}
-                    <Animated.View entering={enter(3)}>
-                        <PhaseFoodsCard phase={cyclePhase} />
-                    </Animated.View>
-
-                    {/* Calendar — logged-vs-predicted + confidence-aware. */}
-                    <Animated.View entering={enter(4)}>
-                        {forecastQuery.isLoading ? (
-                            <View style={{ marginTop: 12 }}><Skeleton height={320} radius={24} /></View>
-                        ) : forecastQuery.isError ? (
-                            <View style={{ marginTop: 12 }}>
-                                <EmptyState
-                                    icon="cloud-offline-outline"
-                                    title="Couldn't load calendar"
-                                    subtitle="Something went wrong loading your cycle forecast. Check your connection and try again."
-                                    actionLabel="Try Again"
-                                    onAction={() => forecastQuery.refetch()}
+                    {/* PREDICTION SURFACES — paused entirely while pregnancy mode is
+                        on (the plan pauses forecasting during pregnancy). Hidden
+                        rather than dimmed so the pregnancy tracker leads cleanly. */}
+                    {!pregnancyMode ? (
+                        <>
+                            {/* Phase-aware HERO — the big cycle ring (coral elapsed arc
+                                + lime ovulation marker) wrapping the DAY/phase readout,
+                                the "next period / ovulation" line, and the 4-phase
+                                strip. Reads cyclePhase from status + soft predictions
+                                from the already-fetched forecast, plus ring scalars
+                                DERIVED above (no new request). Self-gates on null /
+                                UNKNOWN exactly like the card. */}
+                            <Animated.View entering={enter(1)}>
+                                <CyclePhaseHero
+                                    cyclePhase={cyclePhase}
+                                    forecast={forecastQuery.data}
+                                    cycleDay={ringData.cycleDay}
+                                    cycleLengthDays={ringData.cycleLengthDays}
+                                    daysUntilNextPeriod={ringData.daysUntilNextPeriod}
+                                    daysUntilOvulation={ringData.daysUntilOvulation}
+                                    ovulationDayOfCycle={ringData.ovulationDayOfCycle}
                                 />
-                            </View>
-                        ) : forecastQuery.data ? (
-                            <CycleCalendar
-                                days={forecastQuery.data.days}
-                                confidence={forecastQuery.data.confidence}
-                                trackingOnly={forecastQuery.data.trackingOnly}
-                            />
-                        ) : null}
-                    </Animated.View>
+                            </Animated.View>
+
+                            {/* "Tuned to your phase today" — two recommendation cards
+                                (training + nutrition). Self-gates on null / UNKNOWN. */}
+                            <Animated.View entering={enter(2)}>
+                                <PhaseRecommendationCards phase={cyclePhase} />
+                            </Animated.View>
+
+                            {/* Dedicated phase-coaching section — states what Ria adapts
+                                for today's phase + one-tap "Plan today with Ria" (opens
+                                the chat modal pre-filled). Self-gates like its siblings. */}
+                            <Animated.View entering={enter(3)}>
+                                <PhaseCoachCard phase={cyclePhase} />
+                            </Animated.View>
+
+                            {/* Phase guidance card (reused) — tip + plan adjustments. */}
+                            <Animated.View entering={enter(3)}>
+                                <CyclePhaseCard cyclePhase={cyclePhase} />
+                            </Animated.View>
+
+                            {/* Best foods for the user's CONCRETE phase. Self-gates:
+                                renders nothing for null / 'UNKNOWN'. */}
+                            <Animated.View entering={enter(4)}>
+                                <PhaseFoodsCard phase={cyclePhase} />
+                            </Animated.View>
+
+                            {/* Calendar — logged-vs-predicted + confidence-aware. */}
+                            <Animated.View entering={enter(5)}>
+                                {forecastQuery.isLoading ? (
+                                    <View style={{ marginTop: 12 }}><Skeleton height={320} radius={24} /></View>
+                                ) : forecastQuery.isError ? (
+                                    <View style={{ marginTop: 12 }}>
+                                        <EmptyState
+                                            icon="cloud-offline-outline"
+                                            title="Couldn't load calendar"
+                                            subtitle="Something went wrong loading your cycle forecast. Check your connection and try again."
+                                            actionLabel="Try Again"
+                                            onAction={() => forecastQuery.refetch()}
+                                        />
+                                    </View>
+                                ) : forecastQuery.data ? (
+                                    <CycleCalendar
+                                        days={forecastQuery.data.days}
+                                        confidence={forecastQuery.data.confidence}
+                                        trackingOnly={forecastQuery.data.trackingOnly}
+                                    />
+                                ) : null}
+                            </Animated.View>
+                        </>
+                    ) : null}
 
                     {/* Log a period (today or a past day) — the primary action.
-                        Measured so the thumb-zone anchor can scroll straight to it. */}
-                    <Animated.View entering={enter(5)} onLayout={onLogCardLayout}>
+                        Measured so the thumb-zone anchor can scroll straight to it.
+                        Kept available in pregnancy mode too (logging never pauses). */}
+                    <Animated.View entering={enter(6)} onLayout={onLogCardLayout}>
                         <LogPeriodCard />
                     </Animated.View>
 
-                    {/* Per-day symptom quick log (mood / cramps / energy) —
-                        one-tap chips, upserts today's row. */}
-                    <Animated.View entering={enter(5)}>
+                    {/* Birth control + pill tracking (Period P2) — method picker and,
+                        when PILL, take-today + adherence + a daily reminder. Sits in
+                        the logging area beside the period/symptom cards. */}
+                    <Animated.View entering={enter(6)}>
+                        <BirthControlCard
+                            birthControlMethod={profile?.birthControlMethod}
+                            pillReminderEnabled={profile?.pillReminderEnabled}
+                            pillReminderTime={profile?.pillReminderTime}
+                        />
+                    </Animated.View>
+
+                    {/* Full per-day log (Period P1) — flow, mood / cramps / energy,
+                        the categorized symptom multi-select, discharge, activity, a
+                        water stepper and notes. Prefills from today's row, upserts
+                        the whole day on save. */}
+                    <Animated.View entering={enter(7)}>
                         <SymptomQuickLogCard />
                     </Animated.View>
 
+                    {/* Advanced fertility log (Period P3) — BBT (°C) + weight (kg)
+                        steppers, LH ovulation-test chips, a BBT coverline chart, and
+                        the "trying to conceive" toggle that surfaces the fertile
+                        window. Hidden in pregnancy mode (fertility signals are
+                        irrelevant then), matching the paused prediction surfaces.
+                        Reads tryingToConceive from the already-fetched profile row. */}
+                    {!pregnancyMode ? (
+                        <Animated.View entering={enter(7)}>
+                            <FertilityLogCard tryingToConceive={profile?.tryingToConceive} />
+                        </Animated.View>
+                    ) : null}
+
                     {/* History + averages + variability range. */}
-                    <Animated.View entering={enter(6)}>
+                    <Animated.View entering={enter(8)}>
                         {historyQuery.isLoading ? (
                             <View style={{ marginTop: 12 }}><Skeleton height={160} radius={24} /></View>
                         ) : historyQuery.isError ? (
@@ -366,8 +459,25 @@ export default function CycleScreen() {
                         )}
                     </Animated.View>
 
+                    {/* Stats dashboard — metric tiles + a cycle-length bar chart +
+                        the most-logged symptoms. Sits right beside the history card;
+                        it self-fetches history + a 90-day symptom window (sharing the
+                        'cycle-history' cache key with the card above). */}
+                    <Animated.View entering={enter(9)}>
+                        <CycleStatsCard />
+                    </Animated.View>
+
+                    {/* Share with partner (Period P3 tail) — generate / copy / share
+                        / revoke a read-only code that lets a partner see this user's
+                        SANITIZED cycle summary (phase + predictions only, never the
+                        raw logs). Shown for all eligible users (incl. pregnancy mode)
+                        so an active code can always be managed / revoked from here. */}
+                    <Animated.View entering={enter(10)}>
+                        <PartnerShareCard />
+                    </Animated.View>
+
                     {/* Consent-aware wellness disclaimer. */}
-                    <Animated.View entering={enter(7)}>
+                    <Animated.View entering={enter(10)}>
                         <MedicalDisclaimerBanner
                             text="Cycle phases and predictions are wellness estimates, not medical advice. They are not a contraceptive method or a substitute for professional care."
                             style={{ marginTop: 16 }}
@@ -375,7 +485,7 @@ export default function CycleScreen() {
                     </Animated.View>
 
                     {/* ENDING — a quiet, human affirmation closes the screen. */}
-                    <Animated.View entering={enter(8)}>
+                    <Animated.View entering={enter(11)}>
                         <Text style={[typography.bodySm, styles.affirmation, { color: colors.text.tertiary }]}>
                             Your body, your pace. Tracking is just for you.
                         </Text>
@@ -419,6 +529,7 @@ export default function CycleScreen() {
                         </Pressable>
                     </Animated.View>
                 </>
+                </CycleLockGate>
             )}
         </View>
     );

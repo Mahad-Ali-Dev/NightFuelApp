@@ -26,8 +26,10 @@ export type AiPlan = 'free' | 'pro';
 
 /** A metered AI capability. `riaMessages` is the user's own daily Ria sends (the
  *  cap chat-service already enforces); `generations` is the daily AI-generation
- *  budget (e.g. plan/recipe generation) gated by the same policy. */
-export type AiFeature = 'riaMessages' | 'generations';
+ *  budget (e.g. plan/recipe generation) gated by the same policy; `scans` is the
+ *  daily food-scan budget (AI meal-photo recognition + product barcode lookups),
+ *  gated by the same policy on the web food gateway. */
+export type AiFeature = 'riaMessages' | 'generations' | 'scans';
 
 /**
  * Read a non-negative integer limit from the environment, falling back to a
@@ -58,23 +60,27 @@ function intFromEnv(name: string, fallback: number): number {
  * and the table is then a constant lookup.
  *
  * Defaults (when the matching env var is unset/non-numeric):
- *   free  → { riaMessages: 5,  generations: 3  }
- *   pro   → { riaMessages: 20, generations: 30 }
+ *   free  → { riaMessages: 5,  generations: 3,  scans: 3  }
+ *   pro   → { riaMessages: 20, generations: 30, scans: 30 }
  *
  * Env overrides (ops can tune without a redeploy):
  *   AI_FREE_DAILY             → free.riaMessages
  *   AI_PRO_DAILY              → pro.riaMessages
  *   AI_FREE_GENERATIONS_DAILY → free.generations
  *   AI_PRO_GENERATIONS_DAILY  → pro.generations
+ *   AI_FREE_SCANS_DAILY       → free.scans
+ *   AI_PRO_SCANS_DAILY        → pro.scans
  */
 export const AI_LIMITS: Record<AiPlan, Record<AiFeature, number>> = {
     free: {
         riaMessages: intFromEnv('AI_FREE_DAILY', 5),
         generations: intFromEnv('AI_FREE_GENERATIONS_DAILY', 3),
+        scans: intFromEnv('AI_FREE_SCANS_DAILY', 3),
     },
     pro: {
         riaMessages: intFromEnv('AI_PRO_DAILY', 20),
         generations: intFromEnv('AI_PRO_GENERATIONS_DAILY', 30),
+        scans: intFromEnv('AI_PRO_SCANS_DAILY', 30),
     },
 };
 

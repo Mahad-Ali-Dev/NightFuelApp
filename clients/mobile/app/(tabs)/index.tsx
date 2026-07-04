@@ -47,6 +47,7 @@ import { getMyProfile } from '@/api/profile';
 import { safeImageUri } from '@/lib/imageUrl';
 import { useThemedPalette, type ThemedPalette } from '@/theme/useThemedPalette';
 import { isLightHex } from '@/theme/utils';
+import { usePedometerSteps } from '@/lib/pedometer';
 import { TAB_BAR_H } from './_layout';
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -199,6 +200,11 @@ export default function DashboardScreen() {
     // avatar shows on Home with no extra fetch.
     const { data: profile } = useQuery({ queryKey: ['my-profile'], queryFn: getMyProfile, retry: 1 });
 
+    // Phone pedometer — the "no wearable" step source. Best-effort + honest: on
+    // Expo Go / an unavailable sensor it yields { steps:0, available:false } and
+    // never throws. Used ONLY as a fallback below when health-sync has no steps.
+    const { steps: phoneSteps, available: pedometerAvailable } = usePedometerSteps();
+
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         // Scope to this screen's queries (not the whole app cache).
@@ -251,10 +257,15 @@ export default function DashboardScreen() {
     const hydL = (hydMl / 1000).toFixed(1);
     const hydPct = Math.min((hydMl / 2500) * 100, 100);
     const kcal = progress ? String(Math.round(progress.caloriesActual || 0)) : '0';
-    const steps = progress
-        ? (progress.stepCount >= 1000 ? (progress.stepCount / 1000).toFixed(1) + 'k' : String(progress.stepCount))
-        : '0';
-    const stepsDone = !!progress && progress.stepCount >= (((progress as any)?.stepGoal) ?? 10000);
+    // Steps: health sync (wearable / phone health app) is PRIMARY; when it has
+    // nothing (no device synced yet), fall back to the on-device pedometer so a
+    // user with no wearable still sees a live count. Label/behaviour unchanged —
+    // this only swaps the number's SOURCE when the primary is absent/zero.
+    const healthSteps = progress?.stepCount ?? 0;
+    const stepCount = healthSteps > 0 ? healthSteps : (pedometerAvailable ? phoneSteps : 0);
+    const steps = stepCount >= 1000 ? (stepCount / 1000).toFixed(1) + 'k' : String(stepCount);
+    const stepGoal = ((progress as any)?.stepGoal) ?? 10000;
+    const stepsDone = stepCount >= stepGoal;
     // Sleep has no backend field today → honest "—" (tile keeps its shape).
     const sleepH = useMemo(() => {
         const p = progress as any;

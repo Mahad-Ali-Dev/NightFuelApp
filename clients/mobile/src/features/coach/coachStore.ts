@@ -11,8 +11,13 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CoachInputs, CoachPlan, ChallengeDay } from './types';
-import { buildDaySplit } from './plan';
+import { buildDaySplit, type SplitContext } from './plan';
 import { fillDayExercises, fillDayMeals } from './fill';
+
+/** Already-resolved personalization for the themed splits (see challengeContext.ts).
+ * The `split` discriminator itself rides on CoachInputs; this is just the anchoring
+ * data (sleep window / per-day cycle phases). Absent → plan.ts uses its defaults. */
+export type CoachPersonalization = Pick<SplitContext, 'sleepWindow' | 'cyclePhases'>;
 
 interface CoachState {
   plan: CoachPlan | null;
@@ -20,7 +25,7 @@ interface CoachState {
   /** ISO timestamps of every plan generation (for the monthly quota). */
   generations: string[];
   /** Returns false when the monthly generation limit is reached (no new plan). */
-  generate: (inputs: CoachInputs) => Promise<boolean>;
+  generate: (inputs: CoachInputs, personalization?: CoachPersonalization) => Promise<boolean>;
   ensureDayFilled: (day: number) => Promise<void>;
   toggleExercise: (day: number, exerciseId: string) => void;
   addMeal: (day: number, recipeId: string) => void;
@@ -41,8 +46,13 @@ export function generationsThisMonth(generations: string[], now: Date = new Date
   }).length;
 }
 
-function newPlan(inputs: CoachInputs): CoachPlan {
-  const days: ChallengeDay[] = buildDaySplit(inputs.goal, inputs.duration).map((s) => ({
+function newPlan(inputs: CoachInputs, personalization?: CoachPersonalization): CoachPlan {
+  // `split` (from the template) picks the themed builder; `personalization` (from
+  // challengeContext) anchors it to the user. Both absent → goal-based split.
+  const days: ChallengeDay[] = buildDaySplit(inputs.goal, inputs.duration, {
+    split: inputs.split,
+    ...personalization,
+  }).map((s) => ({
     ...s,
     status: s.day === 1 ? 'active' : 'locked',
     exercises: [],
@@ -64,13 +74,13 @@ export const useCoachStore = create<CoachState>()(
       status: 'idle',
       generations: [],
 
-      generate: async (inputs) => {
+      generate: async (inputs, personalization) => {
         // Monthly quota: 3 generations per calendar month. At the limit the user
         // keeps their existing plan (no new generation).
         if (generationsThisMonth(get().generations) >= MONTHLY_PLAN_LIMIT) return false;
         set((st) => ({
           status: 'generating',
-          plan: newPlan(inputs),
+          plan: newPlan(inputs, personalization),
           generations: [...st.generations, new Date().toISOString()],
         }));
         await get().ensureDayFilled(1);

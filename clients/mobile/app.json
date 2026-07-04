@@ -25,8 +25,9 @@
         "com.apple.developer.healthkit.access": []
       },
       "infoPlist": {
-        "NSCameraUsageDescription": "Zeitra needs camera access for barcode food scanning.",
+        "NSCameraUsageDescription": "Zeitra needs camera access for barcode food scanning and camera-based heart-rate measurement (place your fingertip over the camera).",
         "NSHealthShareUsageDescription": "Zeitra reads sleep, heart rate, HRV and activity data to optimize your chrono-nutrition plan.",
+        "NSMotionUsageDescription": "Zeitra reads your step count from the phone's motion sensor so you can track daily activity without a wearable.",
         "NSMicrophoneUsageDescription": "Zeitra uses the microphone so you can talk to Ria, your AI coach, by voice.",
         "NSSpeechRecognitionUsageDescription": "Zeitra uses speech recognition to turn what you say to Ria into text.",
         "NSAppTransportSecurity": {
@@ -69,6 +70,7 @@
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
         "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACTIVITY_RECOGNITION",
         "android.permission.health.READ_SLEEP",
         "android.permission.health.READ_STEPS",
         "android.permission.health.READ_HEART_RATE",
@@ -97,7 +99,15 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Zeitra to use the camera for barcode scanning."
+          "cameraPermission": "Allow Zeitra to use the camera for barcode scanning and camera-based heart-rate measurement."
+        }
+      ],
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "Allow Zeitra to use the camera for camera-based heart-rate measurement (place your fingertip over the camera and flash).",
+          "enableMicrophonePermission": false,
+          "enableCodeScanner": false
         }
       ],
       [
@@ -141,6 +151,25 @@
         "@react-native-google-signin/google-signin",
         {
           "iosUrlScheme": "com.googleusercontent.apps.REPLACE-WITH-IOS-REVERSED-CLIENT-ID"
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "CyclePhase",
+              "label": "Zeitra Cycle",
+              "minWidth": "150dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "description": "Your cycle phase and days until your next period",
+              "previewImage": "./assets/widget-preview/cycle.png",
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical"
+            }
+          ]
         }
       ]
     ],

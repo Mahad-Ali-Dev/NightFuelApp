@@ -634,8 +634,21 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.groq.com/openai/v1}
       FOOD_VISION_MODEL: ${FOOD_VISION_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
+      # ── Food-scan daily quota (lib/scanQuota.ts) ──────────────────────────
+      # The /api/food-vision + /api/food-search(barcode) routes enforce the shared
+      # per-user daily `scans` quota (@nightfuel/config). They need: the shared HS256
+      # secret to verify the caller's Bearer token → userId; the subscription-service
+      # to resolve free/pro tier; and Redis for the per-user/per-UTC-day counter.
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:3010
+      REDIS_URL: redis://redis:6379
+      # Optional per-plan overrides (defaults free:3 / pro:30 live in @nightfuel/config).
+      AI_FREE_SCANS_DAILY: ${AI_FREE_SCANS_DAILY:-3}
+      AI_PRO_SCANS_DAILY: ${AI_PRO_SCANS_DAILY:-30}
     depends_on:
       - nginx
+      - redis
+      - subscription-service
     restart: unless-stopped
 
 volumes:

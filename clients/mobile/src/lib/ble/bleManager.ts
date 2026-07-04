@@ -21,7 +21,7 @@
  */
 import { Platform, PermissionsAndroid } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { BleManager as RnBleManager, Device, Subscription } from 'react-native-ble-plx';
+import type { BleManager as RnBleManager, Device, Subscription, State } from 'react-native-ble-plx';
 import { ingestHealthSamples } from '../../api/health';
 
 // ── Standard GATT identifiers ────────────────────────────────────────────────
@@ -38,6 +38,18 @@ const SCAN_TIMEOUT_MS = 12_000;
 
 export type BleStatus = 'idle' | 'unsupported' | 'scanning' | 'connecting' | 'connected';
 
+/**
+ * Coarse power state of the phone's Bluetooth ADAPTER, distinct from our own
+ * connection {@link BleStatus}. Drives the "Bluetooth is off — turn it on"
+ * banner + enable button on the connect screen.
+ *   - 'unknown'      — not probed yet (or the radio is resetting/initialising)
+ *   - 'on'           — PoweredOn: ready to scan/connect
+ *   - 'off'          — PoweredOff: the user must enable Bluetooth
+ *   - 'unauthorized' — the app lacks Bluetooth authorization (iOS)
+ *   - 'unsupported'  — the device has no BLE (e.g. iOS simulator) / no native module
+ */
+export type BleAdapterState = 'unknown' | 'on' | 'off' | 'unauthorized' | 'unsupported';
+
 export interface BleScanResult {
   id: string;
   name: string;
@@ -46,6 +58,8 @@ export interface BleScanResult {
 
 export interface BleState {
   status: BleStatus;
+  /** Coarse power state of the phone's Bluetooth adapter (on/off/…). */
+  adapterState: BleAdapterState;
   /** The connected (or last-known) device, else null. */
   device: { id: string; name: string } | null;
   /** Latest live heart rate in BPM, else null. */
@@ -86,16 +100,34 @@ function parseHeartRate(bytes: Uint8Array): number | null {
   return bpm > 0 && bpm < 300 ? bpm : null;
 }
 
+/**
+ * Map ble-plx's fine-grained {@link State} to our coarse {@link BleAdapterState}.
+ * Compared by string VALUE (the enum members are string literals: 'PoweredOn'
+ * etc.) so we don't need the runtime enum object. Resetting/Unknown collapse to
+ * 'unknown' (a transient state the UI treats as "checking…").
+ */
+function mapAdapterState(s: State): BleAdapterState {
+  switch (s) {
+    case 'PoweredOn': return 'on';
+    case 'PoweredOff': return 'off';
+    case 'Unauthorized': return 'unauthorized';
+    case 'Unsupported': return 'unsupported';
+    default: return 'unknown'; // Unknown | Resetting
+  }
+}
+
 class BleWearableManager {
   private manager: RnBleManager | null = null;
   private loaded = false;
   private hrSub: Subscription | null = null;
+  private stateSub: Subscription | null = null;
   private scanTimer: ReturnType<typeof setTimeout> | null = null;
   private lastIngestAt = 0;
   private readonly listeners = new Set<Listener>();
 
   private state: BleState = {
     status: 'idle',
+    adapterState: 'unknown',
     device: null,
     heartRate: null,
     battery: null,
@@ -111,8 +143,15 @@ class BleWearableManager {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const lib = require('react-native-ble-plx') as typeof import('react-native-ble-plx');
       this.manager = new lib.BleManager();
+      // Start observing adapter power state so the connect screen can show the
+      // "Bluetooth is off" banner + enable button live. `emitCurrentState:true`
+      // pushes the current State immediately, so the first subscriber sees it.
+      this.stateSub = this.manager.onStateChange((s) => {
+        this.set({ adapterState: mapAdapterState(s) });
+      }, true);
     } catch {
       this.manager = null; // no native module → unsupported, honest no-op
+      this.state = { ...this.state, adapterState: 'unsupported' };
     }
     return this.manager;
   }
@@ -153,6 +192,49 @@ class BleWearableManager {
     }
   }
 
+  // ── adapter power state ──────────────────────────────────────────────────────
+  /** Re-read the adapter's current power state on demand (e.g. when the connect
+   *  screen mounts). Safe no-op → 'unsupported' when there's no native module. */
+  async refreshAdapterState(): Promise<BleAdapterState> {
+    const mgr = this.getManager();
+    if (!mgr) { this.set({ adapterState: 'unsupported' }); return 'unsupported'; }
+    try {
+      const s = await mgr.state();
+      const mapped = mapAdapterState(s);
+      this.set({ adapterState: mapped });
+      return mapped;
+    } catch {
+      return this.state.adapterState;
+    }
+  }
+
+  /**
+   * Ask the OS to turn Bluetooth ON.
+   *   - Android: ble-plx's `manager.enable()` shows the system enable prompt and
+   *     resolves once the adapter reaches PoweredOn. Returns true on success.
+   *   - iOS: there is NO programmatic enable (Apple forbids it) — this resolves
+   *     false so the caller shows an Alert directing the user to Control Center /
+   *     Settings. Never throws (a user-cancelled enable resolves false).
+   */
+  async enableAdapter(): Promise<boolean> {
+    const mgr = this.getManager();
+    if (!mgr) {
+      this.set({ status: 'unsupported', error: 'Bluetooth needs a native build — unavailable in Expo Go.' });
+      return false;
+    }
+    if (Platform.OS !== 'android') return false; // iOS: caller shows a Settings Alert
+    try {
+      await mgr.enable();
+      // enable() resolves at PoweredOn; refresh so the banner clears immediately.
+      await this.refreshAdapterState();
+      return this.state.adapterState === 'on';
+    } catch {
+      // User declined the system prompt (or the transition failed) — leave the
+      // adapter state as-is; the caller keeps showing the "turn it on" banner.
+      return false;
+    }
+  }
+
   // ── scan ────────────────────────────────────────────────────────────────────
   /** Start scanning. Calls onDevice for each unique peripheral found. */
   async startScan(onDevice: (d: BleScanResult) => void): Promise<void> {
@@ -161,9 +243,21 @@ class BleWearableManager {
       this.set({ status: 'unsupported', error: 'Bluetooth needs a native build — unavailable in Expo Go.' });
       return;
     }
+    // Guard: if the adapter is off, don't silently fail a scan — surface the
+    // honest reason so the screen's "turn it on" banner + enable button drive
+    // the fix. (The screen also gates its Scan button on this.)
+    const adapter = await this.refreshAdapterState();
+    if (adapter === 'off') {
+      this.set({ error: 'Bluetooth is off — turn it on to scan for devices.' });
+      return;
+    }
+    if (adapter === 'unauthorized') {
+      this.set({ error: 'Bluetooth permission is off — enable it in Settings to scan.' });
+      return;
+    }
     const granted = await this.ensurePermissions();
     if (!granted) {
-      this.set({ error: 'Bluetooth permission was denied.' });
+      this.set({ error: 'Zeitra needs Bluetooth permission to find nearby devices. Enable it in Settings to scan for your watch or band.' });
       return;
     }
     this.set({ status: 'scanning', error: null });

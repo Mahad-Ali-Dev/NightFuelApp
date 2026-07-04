@@ -15,7 +15,7 @@ import { withAlpha } from '@/theme/utils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { apiClient } from '@/api/client';
+import { lookupFoodBarcode, type ScanQuotaInfo } from '@/api/meals';
 import { EmptyState, GlassCard } from '@/components/ui';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { CtaButton } from '@/components/ui/CtaButton';
@@ -126,13 +126,6 @@ const getPresentBarcodeMicros = (food: FoodResult | null): PresentMicro[] => {
 const formatMicroValue = (value: number): string =>
     String(value < 10 ? Math.round(value * 10) / 10 : Math.round(value));
 
-const lookupBarcode = async (code: string): Promise<FoodResult | null> => {
-    const { data } = await apiClient.get<{ food: FoodResult }>('/food-search', {
-        params: { barcode: code },
-    });
-    return data.food ?? null;
-};
-
 // ---------------------------------------------------------------------------
 // Screen
 // ---------------------------------------------------------------------------
@@ -237,41 +230,57 @@ export default function BarcodeScannerModal() {
         setLookingUp(false);
     };
 
+    // Daily scan cap reached (shared AI quota, free 3 / pro 30). Offer the upgrade
+    // path — a re-scan can't help until the quota resets at midnight UTC. Mirrors
+    // Ria's limit-reached → premium upsell. Manual entry stays free.
+    const offerUpgrade = (quota?: ScanQuotaInfo) => {
+        const plan = quota?.plan === 'pro' ? 'Pro ' : '';
+        const limit = quota?.limit;
+        const detail =
+            limit != null
+                ? `You've used all ${limit} of today's ${plan}barcode scans. It resets at midnight UTC.`
+                : "You've reached today's barcode-scan limit. It resets at midnight UTC.";
+        Alert.alert('Daily scan limit reached', `${detail}\n\nUpgrade for more scans, or enter this food manually.`, [
+            { text: 'Enter Manually', onPress: () => router.navigate('/(meals)/log-meal' as any) },
+            { text: 'Upgrade', onPress: () => router.push('/(modals)/premium' as any) },
+            { text: 'Not now', style: 'cancel', onPress: resetScan },
+        ]);
+    };
+
     const handleBarcodeScanned = async ({ data }: { type: string; data: string }) => {
         if (scanned || lookingUp) return;
         setScanned(true);
         setLookingUp(true);
 
-        try {
-            const food = await lookupBarcode(data);
+        // lookupFoodBarcode never throws — it returns a structured result so we can
+        // branch cleanly between a hit, the daily-scan-quota cap, a not-found, and a
+        // transport failure.
+        const { food, notFound, error, quota } = await lookupFoodBarcode(data);
+        setLookingUp(false);
 
-            if (food) {
-                // Surface the result as a slide-up card; CTA performs the navigation.
-                setResult(food);
-            } else {
-                Alert.alert(
-                    'Product Not Found',
-                    `Barcode "${data}" wasn't found in the database. You can search for it manually.`,
-                    [
-                        { text: 'Search Manually', onPress: () => router.navigate('/(meals)/log-meal' as any) },
-                        { text: 'Scan Again', onPress: () => { setScanned(false); setLookingUp(false); } },
-                    ]
-                );
-            }
-        } catch (err: any) {
-            const isNotFound = err?.response?.status === 404;
+        if (food) {
+            // Surface the result as a slide-up card; CTA performs the navigation.
+            setResult(food);
+        } else if (error === 'quota_exceeded') {
+            offerUpgrade(quota);
+        } else if (notFound) {
             Alert.alert(
-                isNotFound ? 'Product Not Found' : 'Lookup Failed',
-                isNotFound
-                    ? `Barcode "${data}" wasn't found in the database. You can search for it manually.`
-                    : 'Could not reach the food database. Check your connection and try again.',
+                'Product Not Found',
+                `Barcode "${data}" wasn't found in the database. You can search for it manually.`,
                 [
                     { text: 'Search Manually', onPress: () => router.navigate('/(meals)/log-meal' as any) },
                     { text: 'Scan Again', onPress: () => { setScanned(false); setLookingUp(false); } },
                 ]
             );
-        } finally {
-            setLookingUp(false);
+        } else {
+            Alert.alert(
+                'Lookup Failed',
+                'Could not reach the food database. Check your connection and try again.',
+                [
+                    { text: 'Search Manually', onPress: () => router.navigate('/(meals)/log-meal' as any) },
+                    { text: 'Scan Again', onPress: () => { setScanned(false); setLookingUp(false); } },
+                ]
+            );
         }
     };
 

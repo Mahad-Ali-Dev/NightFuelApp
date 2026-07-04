@@ -105,6 +105,8 @@ export default function DayDetailScreen() {
                 </View>
             </View>
 
+            {day.note ? <Text style={st.note}>{day.note}</Text> : null}
+
             {!filling && total > 0 ? (
                 <>
                     <View style={st.progRow}>
@@ -212,6 +214,7 @@ const makeStyles = (D: ThemedPalette) => StyleSheet.create({
     back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     hTitle: { color: D.text, fontSize: 18, fontWeight: '700', letterSpacing: -0.3 },
     hSub: { color: D.muted, fontSize: 12, marginTop: 1 },
+    note: { color: D.muted, fontSize: 12.5, lineHeight: 17, paddingHorizontal: 18, marginTop: 2, marginBottom: 4 },
     progRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 18, marginTop: 2, marginBottom: 6 },
     barTrack: { height: 6, borderRadius: 3, backgroundColor: D.tile, marginHorizontal: 18 },
     barFill: { height: '100%', borderRadius: 3, backgroundColor: D.lime },

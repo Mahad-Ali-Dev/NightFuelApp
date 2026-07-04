@@ -26,6 +26,7 @@ import { getErrorMessage } from '@/utils/validation';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useCircadianReminders } from '@/hooks/useCircadianReminders';
+import { useCycleWidgetSync } from '@/widgets/sync';
 import { wrap as sentryWrap, setUser as sentrySetUser, captureException } from '@/lib/sentry';
 import * as Linking from 'expo-linking';
 import { resolveDeepLink } from '@/lib/deepLinks';
@@ -122,6 +123,7 @@ function RootLayout() {
   useOfflineSync();    // Drains offline queue when connectivity is restored
   useNotifications(); // Registers push token with backend
   useCircadianReminders(); // Schedules shift-timed circadian local reminders (eat / caffeine / wind-down / log sleep)
+  useCycleWidgetSync(); // Keeps the Android home-screen cycle widget's cached snapshot fresh (Android-only no-op elsewhere)
 
   useEffect(() => {
     loadSession();

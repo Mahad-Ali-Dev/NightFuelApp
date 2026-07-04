@@ -210,6 +210,10 @@ export default function ProfileScreen() {
                         <MenuRow icon="color-palette-outline" label="Appearance & theme" onPress={() => router.push('/(settings)' as any)} />
                         <MenuRow icon="notifications-outline" label="Notifications" onPress={() => router.push('/(settings)/notifications' as any)} />
                         <MenuRow icon="person-circle-outline" label="Account & settings" onPress={() => router.push('/(settings)' as any)} />
+                        {/* Ungated: a partner viewing a shared cycle code may be any
+                            user (not necessarily cycle-eligible), so the read-only
+                            viewer lives here rather than behind the cycle screen gate. */}
+                        <MenuRow icon="heart-outline" label="View a partner's cycle" onPress={() => router.push('/(performance)/cycle-viewer' as any)} />
                         {!isCoach && !isAdmin && <MenuRow icon="ribbon-outline" label="Become a coach" onPress={() => router.push('/(coach)/apply' as any)} last />}
                         {isCoach && <MenuRow icon="people-outline" label="Coach Hub" onPress={() => router.push('/(coach)/dashboard' as any)} last={!isAdmin} />}
                         {isAdmin && <MenuRow icon="shield-outline" label="Admin Dashboard" onPress={() => router.push('/(admin)' as any)} last />}

@@ -32,8 +32,18 @@ export type HealthSampleKind =
   | 'activeEnergy'
   | 'workout';
 
-/** The HealthSource that produced a sample (matches the mobile seam). */
-export type HealthSampleSource = 'apple_health' | 'google_fit' | 'generic_ble';
+/**
+ * The HealthSource that produced a sample. `apple_health` / `google_fit` /
+ * `generic_ble` mirror the mobile health-sync seam; `camera_ppg` is the
+ * camera-based PPG estimate (finger-over-lens + torch) — a consumer-grade
+ * wellness reading kept distinct from a BLE strap read. MUST stay in lockstep
+ * with the server's HEALTH_SAMPLE_SOURCES (sleep-service/health-sync.service.ts).
+ */
+export type HealthSampleSource =
+  | 'apple_health'
+  | 'google_fit'
+  | 'generic_ble'
+  | 'camera_ppg';
 
 /** One sample on the wire. A given kind uses a subset of the optional fields. */
 export interface HealthSample {
