@@ -24,6 +24,11 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
 ENV NEXT_TELEMETRY_DISABLED=1
+# Root tsconfig for the @nightfuel/* workspace packages that `extends` it (config,
+# etc.) — `turbo prune` omits it, so their tsc falls back to broken defaults
+# (no skipLibCheck/esModuleInterop) and the build fails. Mirrors the backend
+# Dockerfiles (e.g. user-service), which copy it in for exactly this reason.
+COPY --from=pruner /app/tsconfig.json ./tsconfig.json
 RUN turbo run build --filter=web
 
 FROM node:22-alpine AS runner
