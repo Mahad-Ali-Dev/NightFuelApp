@@ -3,7 +3,9 @@ module.exports = function (api) {
   return {
     presets: ['babel-preset-expo'],
     plugins: [
-      'react-native-reanimated/plugin',
+      // Reanimated 4 + react-native-worklets 0.8: the worklet Babel transform now
+      // lives in react-native-worklets (the legacy reanimated/plugin is deprecated).
+      'react-native-worklets/plugin',
       [
         'module-resolver',
         {

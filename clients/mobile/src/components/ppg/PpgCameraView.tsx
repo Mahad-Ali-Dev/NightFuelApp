@@ -119,8 +119,9 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
       } catch {
         // Never throw out of a frame processor — a bad frame is just skipped.
       } finally {
-        // V5 in-memory frames are disposed explicitly (guarded for API drift).
-        frame.dispose?.();
+        // The CameraFrameOutput pipeline manages frame lifecycle, but if a build
+        // exposes an explicit dispose we call it (cast: not on the Frame type).
+        (frame as { dispose?: () => void }).dispose?.();
       }
     },
   });
