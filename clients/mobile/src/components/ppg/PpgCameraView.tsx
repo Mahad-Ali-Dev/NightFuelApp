@@ -38,8 +38,7 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
-import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
-import { useFrameOutput } from 'react-native-vision-camera-worklets';
+import { Camera, useCameraDevice, useCameraPermission, useFrameOutput } from 'react-native-vision-camera';
 import { SAMPLE_POLL_MS } from '@/lib/ppg/ppgCamera';
 
 /** Why the camera couldn't run — the screen maps these to user-facing coaching. */
@@ -101,7 +100,7 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
       try {
         const w = frame.width;
         const h = frame.height;
-        const ab = frame.toArrayBuffer();
+        const ab = frame.getPixelBuffer();
         const data = new Uint8Array(ab);
         // Y (luma) plane = first w*h bytes for 8-bit YUV. With torch + fingertip
         // the whole frame IS the finger, so a whole-plane mean is a valid PPG.
@@ -154,8 +153,7 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
       style={style ?? StyleSheet.absoluteFill}
       device={device}
       isActive
-      torch="on"
-      pixelFormat="yuv"
+      torchMode="on"
       outputs={[frameOutput]}
     />
   );

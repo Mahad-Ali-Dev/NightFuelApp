@@ -103,14 +103,6 @@
         }
       ],
       [
-        "react-native-vision-camera",
-        {
-          "cameraPermissionText": "Allow Zeitra to use the camera for camera-based heart-rate measurement (place your fingertip over the camera and flash).",
-          "enableMicrophonePermission": false,
-          "enableCodeScanner": false
-        }
-      ],
-      [
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
