@@ -54,10 +54,10 @@
  *     the JS side), and writing a reanimated shared value from the frame worklet
  *     propagates to JS in the unified react-native-worklets runtime.
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
-import { Camera, useCameraDevice, useCameraPermission, useFrameOutput } from 'react-native-vision-camera';
+import { Camera, useCameraDevices, useCameraPermission, useFrameOutput } from 'react-native-vision-camera';
 import { SAMPLE_POLL_MS } from '@/lib/ppg/ppgCamera';
 
 /** Why the camera couldn't run — the screen maps these to user-facing coaching. */
@@ -87,12 +87,18 @@ const READS_PER_FRAME = 2000;
 const PPG_TARGET_RESOLUTION = { width: 480, height: 640 } as const;
 
 export default function PpgCameraView({ collecting, onSample, onError, style }: PpgCameraViewProps) {
-  // Use the DEFAULT logical back camera. On-device adb showed the torch is owned by
-  // the logical device — the wide-angle physical sub-device reported hasTorch=false,
-  // so the flash never lit. Session stability comes from the tiny frame-output
-  // resolution below (the real fix for the earlier GRAPH_STOPPED collapse), NOT the
-  // device pick, so the logical device is both stable AND has the torch.
-  const device = useCameraDevice('back');
+  // Pick the back camera that ACTUALLY HAS THE FLASH LED. On multi-lens phones the
+  // default back pick can resolve to an ultra-wide / telephoto lens with NO torch —
+  // on-device adb showed this Sony Xperia opening "device 2" (a lens with no LED), so
+  // torchMode='on' was accepted (value=1) but no light appeared. Enumerate the back
+  // cameras and prefer one whose `hasTorch` is true (the main lens the flash sits on);
+  // fall back to any back camera. Session stability comes from the tiny frame-output
+  // resolution below, not the device pick.
+  const devices = useCameraDevices();
+  const device = useMemo(() => {
+    const back = devices.filter((d) => d.position === 'back');
+    return back.find((d) => d.hasTorch) ?? back[0];
+  }, [devices]);
   const { hasPermission, requestPermission } = useCameraPermission();
 
   // Cross-thread bridge: the frame worklet writes the latest brightness + a frame
