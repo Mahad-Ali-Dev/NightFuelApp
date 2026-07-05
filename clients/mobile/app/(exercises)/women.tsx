@@ -17,14 +17,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { withAlpha } from '@/theme/utils';
+import { withAlpha, isLightHex } from '@/theme/utils';
+import { heroCardTint } from '@/theme/heroCard';
 import { getMyProfile } from '@/api/profile';
-import { WOMENS_PROGRAMS, type WomensProgram } from '@/features/train/womensPrograms';
+import { WOMENS_PROGRAMS, womensHero, type WomensProgram } from '@/features/train/womensPrograms';
 
 const { width } = Dimensions.get('window');
 
 export default function WomensFocusScreen() {
   const { colors, typography } = useTheme();
+  const isLight = isLightHex(colors.background.primary);
+  const tint = heroCardTint(isLight);
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -93,14 +96,14 @@ export default function WomensFocusScreen() {
               style={[styles.card, { borderColor: withAlpha(p.accent, 0.45) }]}
             >
               <Image
-                source={p.hero}
+                source={womensHero(p, isLight)}
                 style={StyleSheet.absoluteFillObject}
                 contentFit="cover"
                 cachePolicy="memory-disk"
                 transition={150}
               />
               <LinearGradient
-                colors={['rgba(10,12,18,0.2)', 'rgba(10,12,18,0.94)']}
+                colors={tint.scrim}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0.4, y: 1 }}
                 style={StyleSheet.absoluteFillObject}
@@ -112,9 +115,9 @@ export default function WomensFocusScreen() {
                   <Text style={[styles.tagTxt, { color: p.accent }]}>{p.tag}</Text>
                 </View>
                 <View style={{ flex: 1 }} />
-                <Text style={styles.cardTitle} numberOfLines={1}>{p.title}</Text>
-                <Text style={styles.cardSub} numberOfLines={1}>{p.subtitle}</Text>
-                <Text style={styles.cardBlurb} numberOfLines={2}>{p.blurb}</Text>
+                <Text style={[styles.cardTitle, { color: tint.title }]} numberOfLines={1}>{p.title}</Text>
+                <Text style={[styles.cardSub, { color: tint.sub }]} numberOfLines={1}>{p.subtitle}</Text>
+                <Text style={[styles.cardBlurb, { color: tint.sub }]} numberOfLines={2}>{p.blurb}</Text>
               </View>
               <View style={[styles.arrow, { backgroundColor: withAlpha(p.accent, 0.18), borderColor: withAlpha(p.accent, 0.5) }]}>
                 <Ionicons name="arrow-forward" size={14} color={p.accent} />

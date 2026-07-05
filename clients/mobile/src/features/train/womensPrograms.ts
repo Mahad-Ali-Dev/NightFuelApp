@@ -160,3 +160,21 @@ export const WOMENS_PROGRAMS: WomensProgram[] = [
     filter: { category: 'cardio' },
   },
 ];
+
+/** Bright/airy light-theme hero per program id — used on light themes (pair with
+ *  `heroCardTint(true)` for the matching light scrim + dark text). */
+export const WOMENS_HERO_LIGHT: Record<string, ImageSourcePropType> = {
+  glutes: require('../../../assets/images/women-glutes-light.jpg'),
+  abs: require('../../../assets/images/women-abs-light.jpg'),
+  waist: require('../../../assets/images/women-waist-light.jpg'),
+  hips: require('../../../assets/images/women-hips-light.jpg'),
+  chest: require('../../../assets/images/women-chest-light.jpg'),
+  belly: require('../../../assets/images/women-belly-light.jpg'),
+  kegel: require('../../../assets/images/women-kegel-light.jpg'),
+  flexibility: require('../../../assets/images/women-flexibility-light.jpg'),
+  tone: require('../../../assets/images/women-tone-light.jpg'),
+};
+
+/** Program hero; `light` picks the bright variant, falling back to the dark hero. */
+export const womensHero = (p: WomensProgram, light = false): ImageSourcePropType =>
+  (light ? WOMENS_HERO_LIGHT[p.id] : undefined) ?? p.hero;

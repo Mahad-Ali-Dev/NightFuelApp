@@ -8,7 +8,7 @@ import { useTheme } from '@/theme';
 import { useCycleAccents } from '@/theme/useCycleAccents';
 import { phaseArt } from '@/features/cycle/phaseArt';
 import { GlassCard } from '@/components/ui';
-import { withAlpha } from '@/theme/utils';
+import { withAlpha, isLightHex } from '@/theme/utils';
 import type { CycleForecast } from '@/api/cycle';
 import type { UserStatus } from '@/api/profile';
 
@@ -189,6 +189,7 @@ export function CyclePhaseHero({
     ovulationDayOfCycle,
 }: CyclePhaseHeroProps) {
     const { colors, typography, borderRadius } = useTheme();
+    const isLight = isLightHex(colors.background.primary);
     const { coral: CORAL, lime: LIME } = useCycleAccents();
 
     // Opt-in gate — identical to CyclePhaseCard: render nothing with no phase.
@@ -237,7 +238,7 @@ export function CyclePhaseHero({
             {concrete && phaseArt(concrete) ? (
                 <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
                     <Image
-                        source={phaseArt(concrete)}
+                        source={phaseArt(concrete, isLight)}
                         style={[StyleSheet.absoluteFillObject, { opacity: 0.2 }]}
                         contentFit="cover"
                         transition={200}

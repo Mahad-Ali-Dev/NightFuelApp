@@ -15,7 +15,8 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useThemedPalette, type ThemedPalette } from '@/theme/useThemedPalette';
-import { withAlpha } from '@/theme/utils';
+import { withAlpha, isLightHex } from '@/theme/utils';
+import { heroCardTint } from '@/theme/heroCard';
 import { useCoachStore, MONTHLY_PLAN_LIMIT, generationsThisMonth } from '@/features/coach/coachStore';
 import { dayCover, challengeHero } from '@/features/coach/covers';
 import { CHALLENGE_TEMPLATES, challengeInputs, type ChallengeTemplate } from '@/features/coach/challengeTemplates';
@@ -24,6 +25,8 @@ import { loadSplitContext } from '@/features/coach/challengeContext';
 export default function ChallengeGalleryScreen() {
     const D = useThemedPalette();
     const st = useMemo(() => makeStyles(D), [D]);
+    const isLight = isLightHex(D.bg);
+    const tint = heroCardTint(isLight);
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const generate = useCoachStore((s) => s.generate);
@@ -70,16 +73,16 @@ export default function ChallengeGalleryScreen() {
                         onPress={() => onStart(t)}
                         style={[st.card, { borderColor: withAlpha(t.accent, 0.45) }, (busy || atLimit) && { opacity: 0.45 }]}
                     >
-                        <Image source={challengeHero(t.id) ?? dayCover(t.heroCover)} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={150} />
-                        <LinearGradient colors={['rgba(10,12,18,0.25)', 'rgba(10,12,18,0.94)']} start={{ x: 0, y: 0 }} end={{ x: 0.4, y: 1 }} style={StyleSheet.absoluteFillObject} />
+                        <Image source={challengeHero(t.id, isLight) ?? dayCover(t.heroCover)} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={150} />
+                        <LinearGradient colors={tint.scrim} start={{ x: 0, y: 0 }} end={{ x: 0.4, y: 1 }} style={StyleSheet.absoluteFillObject} />
                         <View style={st.cardInner}>
                             <View style={[st.tag, { backgroundColor: withAlpha(t.accent, 0.18), borderColor: withAlpha(t.accent, 0.5) }]}>
                                 <Text style={[st.tagTxt, { color: t.accent }]}>{t.tag}</Text>
                             </View>
                             <View style={{ flex: 1 }} />
-                            <Text style={st.cardTitle} numberOfLines={1}>{t.title}</Text>
-                            <Text style={st.cardSub} numberOfLines={1}>{t.subtitle}</Text>
-                            <Text style={st.cardBlurb} numberOfLines={2}>{t.blurb}</Text>
+                            <Text style={[st.cardTitle, { color: tint.title }]} numberOfLines={1}>{t.title}</Text>
+                            <Text style={[st.cardSub, { color: tint.sub }]} numberOfLines={1}>{t.subtitle}</Text>
+                            <Text style={[st.cardBlurb, { color: tint.sub }]} numberOfLines={2}>{t.blurb}</Text>
                         </View>
                     </TouchableOpacity>
                 ))}

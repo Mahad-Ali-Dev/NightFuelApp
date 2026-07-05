@@ -19,9 +19,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { withAlpha } from '@/theme/utils';
+import { withAlpha, isLightHex } from '@/theme/utils';
+import { heroCardTint } from '@/theme/heroCard';
 import { getMyProfile } from '@/api/profile';
-import { THIRTY_DAY_CHALLENGES, type ThirtyDayChallenge } from '@/features/train/thirtyDayChallenges';
+import { THIRTY_DAY_CHALLENGES, thirtyDayHero, type ThirtyDayChallenge } from '@/features/train/thirtyDayChallenges';
 import {
   useThirtyDayStore,
   getProgress,
@@ -31,6 +32,8 @@ import {
 
 export default function ThirtyDayGalleryScreen() {
   const { colors, typography } = useTheme();
+  const isLight = isLightHex(colors.background.primary);
+  const tint = heroCardTint(isLight);
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -128,14 +131,14 @@ export default function ThirtyDayGalleryScreen() {
                 style={[styles.card, { borderColor: withAlpha(c.accent, 0.45) }]}
               >
                 <Image
-                  source={c.hero}
+                  source={thirtyDayHero(c, isLight)}
                   style={StyleSheet.absoluteFillObject}
                   contentFit="cover"
                   cachePolicy="memory-disk"
                   transition={150}
                 />
                 <LinearGradient
-                  colors={['rgba(10,12,18,0.2)', 'rgba(10,12,18,0.94)']}
+                  colors={tint.scrim}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 0.4, y: 1 }}
                   style={StyleSheet.absoluteFillObject}
@@ -147,16 +150,16 @@ export default function ThirtyDayGalleryScreen() {
                     <Text style={[styles.tagTxt, { color: c.accent }]}>{c.tag}</Text>
                   </View>
                   <View style={{ flex: 1 }} />
-                  <Text style={styles.cardTitle} numberOfLines={1}>{c.title}</Text>
-                  <Text style={styles.cardSub} numberOfLines={2}>{c.blurb}</Text>
+                  <Text style={[styles.cardTitle, { color: tint.title }]} numberOfLines={1}>{c.title}</Text>
+                  <Text style={[styles.cardSub, { color: tint.sub }]} numberOfLines={2}>{c.blurb}</Text>
 
                   {/* Progress rail — only once started. */}
                   {started && (
                     <View style={styles.progWrap}>
-                      <View style={styles.progTrack}>
+                      <View style={[styles.progTrack, isLight && { backgroundColor: 'rgba(20,23,30,0.14)' }]}>
                         <View style={[styles.progFill, { width: `${pct}%`, backgroundColor: c.accent }]} />
                       </View>
-                      <Text style={styles.progTxt}>{pct}% · {doneCount}/{WORKOUT_DAY_COUNT} days</Text>
+                      <Text style={[styles.progTxt, { color: tint.sub }]}>{pct}% · {doneCount}/{WORKOUT_DAY_COUNT} days</Text>
                     </View>
                   )}
                 </View>

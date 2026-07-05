@@ -7,10 +7,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme } from '@/theme';
 import { useCycleAccents } from '@/theme/useCycleAccents';
 import { GlassCard, CtaButton, DateTimeField, nowDateString } from '@/components/ui';
-import { withAlpha } from '@/theme/utils';
+import { withAlpha, isLightHex } from '@/theme/utils';
 import { updateCycleHealth } from '@/api/cycle';
 import type { CycleHealthBody } from '@/api/cycle';
-import { PREGNANCY_HERO } from '@/features/cycle/phaseArt';
+import { pregnancyHero } from '@/features/cycle/phaseArt';
 
 /**
  * PregnancyCard — the pregnancy-mode surface (Period P2).
@@ -124,6 +124,7 @@ export interface PregnancyCardProps {
 
 export function PregnancyCard({ pregnancyMode, pregnancyDueDate }: PregnancyCardProps) {
     const { colors, typography, borderRadius } = useTheme();
+    const isLight = isLightHex(colors.background.primary);
     const { lime: LIME } = useCycleAccents();
     const queryClient = useQueryClient();
 
@@ -192,7 +193,7 @@ export function PregnancyCard({ pregnancyMode, pregnancyDueDate }: PregnancyCard
                 <View style={styles.inner}>
                     {/* On-brand pregnancy hero banner (dark cinematic), fading into the card. */}
                     <View style={styles.heroBanner}>
-                        <Image source={PREGNANCY_HERO} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
+                        <Image source={pregnancyHero(isLight)} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={200} />
                         <LinearGradient
                             colors={['transparent', withAlpha(colors.background.secondary, 0.7), colors.background.secondary]}
                             style={StyleSheet.absoluteFillObject}

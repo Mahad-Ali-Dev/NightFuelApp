@@ -34,6 +34,7 @@ import { typography } from '@/theme';
 import { WodCarousel, BentoBrowse, MuscleCard, MUSCLE_CARD_W } from '@/components/TrainingCards';
 import { ExerciseRail } from '@/components/exercise/ExerciseRail';
 import { useThemedPalette, type ThemedPalette } from '@/theme/useThemedPalette';
+import { isLightHex } from '@/theme/utils';
 import { TAB_BAR_H } from './_layout';
 
 // Bundled figure art (offline-safe — '@/*' → ./src, required by relative path).
@@ -50,14 +51,19 @@ const CAT_GYM = require('../../assets/images/cat-gym.png');
 const CAT_HOME = require('../../assets/images/cat-home.png');
 const CAT_CARDIO = require('../../assets/images/cat-cardio.png');
 const CAT_RECOVERY = require('../../assets/images/cat-recovery.png');
+// Bright/airy light-theme variants of the category photos.
+const CAT_GYM_L = require('../../assets/images/cat-gym-light.jpg');
+const CAT_HOME_L = require('../../assets/images/cat-home-light.jpg');
+const CAT_CARDIO_L = require('../../assets/images/cat-cardio-light.jpg');
+const CAT_RECOVERY_L = require('../../assets/images/cat-recovery-light.jpg');
 const { width: WIDTH } = Dimensions.get('window');
 
 // Real exercise categories for the "Explore by category" section → guided flow.
 const CATEGORIES = [
-  { key: 'gym', label: 'Gym', desc: 'Barbell · Machines', img: CAT_GYM },
-  { key: 'home', label: 'Home', desc: 'Bodyweight · Anywhere', img: CAT_HOME },
-  { key: 'cardio', label: 'Cardio', desc: 'HIIT · Endurance', img: CAT_CARDIO },
-  { key: 'kegel', label: 'Recovery', desc: 'Mobility · Pelvic floor', img: CAT_RECOVERY },
+  { key: 'gym', label: 'Gym', desc: 'Barbell · Machines', img: CAT_GYM, imgLight: CAT_GYM_L },
+  { key: 'home', label: 'Home', desc: 'Bodyweight · Anywhere', img: CAT_HOME, imgLight: CAT_HOME_L },
+  { key: 'cardio', label: 'Cardio', desc: 'HIIT · Endurance', img: CAT_CARDIO, imgLight: CAT_CARDIO_L },
+  { key: 'kegel', label: 'Recovery', desc: 'Mobility · Pelvic floor', img: CAT_RECOVERY, imgLight: CAT_RECOVERY_L },
 ];
 
 // ─── Design palette — now theme-derived via useThemedPalette() inside the
@@ -104,6 +110,7 @@ export default function TrainingHubScreen() {
     const { user } = useAuthStore();
     const D = useThemedPalette();
     const st = useMemo(() => makeStyles(D), [D]);
+    const isLight = isLightHex(D.bg);
     const initial = (((user as any)?.displayName ?? user?.name ?? 'Z').trim().charAt(0) || 'Z').toUpperCase();
 
     const sessionQ = useQuery({ queryKey: ['active-session'], queryFn: getActiveSession, refetchOnMount: 'always', staleTime: 0 });
@@ -212,11 +219,11 @@ export default function TrainingHubScreen() {
                                 accessibilityRole="button" accessibilityLabel={`${c.label} exercises`}
                                 onPress={() => router.push(`/(exercises)/gender?category=${c.key}` as any)}
                             >
-                                <Image source={c.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" />
-                                <LinearGradient colors={['transparent', 'rgba(10,12,18,0.92)']} style={StyleSheet.absoluteFillObject} />
+                                <Image source={isLight ? c.imgLight : c.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" />
+                                <LinearGradient colors={isLight ? ['transparent', 'rgba(247,249,252,0.94)'] : ['transparent', 'rgba(10,12,18,0.92)']} style={StyleSheet.absoluteFillObject} />
                                 <View style={st.catText}>
-                                    <Text style={st.catLabel}>{c.label}</Text>
-                                    <Text style={st.catDesc}>{c.desc}</Text>
+                                    <Text style={[st.catLabel, isLight && { color: '#15181F' }]}>{c.label}</Text>
+                                    <Text style={[st.catDesc, isLight && { color: 'rgba(21,24,31,0.62)' }]}>{c.desc}</Text>
                                 </View>
                                 <View style={st.catArrow}><Ionicons name="arrow-forward" size={14} color={D.lime} /></View>
                             </TouchableOpacity>

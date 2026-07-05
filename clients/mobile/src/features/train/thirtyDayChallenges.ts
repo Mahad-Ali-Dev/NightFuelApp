@@ -143,6 +143,23 @@ export const THIRTY_DAY_CHALLENGES: ThirtyDayChallenge[] = [
   },
 ];
 
+/** Bright/airy light-theme hero per challenge id — used on light themes (pair with
+ *  `heroCardTint(true)` for the matching light scrim + dark text). */
+export const C30_HERO_LIGHT: Record<string, ImageSourcePropType> = {
+  'abs-female': require('../../../assets/images/c30-abs-female-light.jpg'),
+  'glutes-female': require('../../../assets/images/c30-glutes-female-light.jpg'),
+  'legs-female': require('../../../assets/images/c30-legs-female-light.jpg'),
+  'fullbody-female': require('../../../assets/images/c30-fullbody-female-light.jpg'),
+  'abs-male': require('../../../assets/images/c30-abs-male-light.jpg'),
+  'chest-male': require('../../../assets/images/c30-chest-male-light.jpg'),
+  'arms-male': require('../../../assets/images/c30-arms-male-light.jpg'),
+  'fullbody-male': require('../../../assets/images/c30-fullbody-male-light.jpg'),
+};
+
+/** Challenge hero; `light` picks the bright variant, falling back to the dark hero. */
+export const thirtyDayHero = (c: ThirtyDayChallenge, light = false): ImageSourcePropType =>
+  (light ? C30_HERO_LIGHT[c.id] : undefined) ?? c.hero;
+
 /** Look a challenge up by its stable id (for the detail screen's route param). */
 export function getChallengeById(id: string | undefined | null): ThirtyDayChallenge | undefined {
   if (!id) return undefined;

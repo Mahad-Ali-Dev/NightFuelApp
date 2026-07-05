@@ -36,4 +36,20 @@ export const CHALLENGE_HEROES: Record<string, ImageSourcePropType> = {
   'core-abs': require('../../../assets/images/challenge-core-abs.jpg'),
 };
 
-export const challengeHero = (id: string): ImageSourcePropType | undefined => CHALLENGE_HEROES[id];
+/**
+ * Light-theme variants (bright/airy) of the same six heroes — used on light
+ * themes so the card is an airy panel rather than a dark slab. Pair with
+ * `heroCardTint(true)` for the matching light scrim + dark text.
+ */
+export const CHALLENGE_HEROES_LIGHT: Record<string, ImageSourcePropType> = {
+  'fat-loss-blitz': require('../../../assets/images/challenge-fat-loss-blitz-light.jpg'),
+  'night-shift-reset': require('../../../assets/images/challenge-night-shift-reset-light.jpg'),
+  'cycle-sync': require('../../../assets/images/challenge-cycle-sync-light.jpg'),
+  'build-muscle': require('../../../assets/images/challenge-build-muscle-light.jpg'),
+  'better-sleep': require('../../../assets/images/challenge-better-sleep-light.jpg'),
+  'core-abs': require('../../../assets/images/challenge-core-abs-light.jpg'),
+};
+
+/** Bespoke hero for a challenge id; `light` picks the bright variant (dark fallback). */
+export const challengeHero = (id: string, light = false): ImageSourcePropType | undefined =>
+  (light ? CHALLENGE_HEROES_LIGHT[id] : undefined) ?? CHALLENGE_HEROES[id];
