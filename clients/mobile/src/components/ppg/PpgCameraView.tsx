@@ -87,10 +87,12 @@ const READS_PER_FRAME = 2000;
 const PPG_TARGET_RESOLUTION = { width: 480, height: 640 } as const;
 
 export default function PpgCameraView({ collecting, onSample, onError, style }: PpgCameraViewProps) {
-  // Prefer the single wide-angle physical device: the docs note it starts up
-  // faster and more reliably than a multi-lens logical device — fewer moving
-  // parts in the session config that was collapsing on-device.
-  const device = useCameraDevice('back', { physicalDevices: ['wide-angle'] });
+  // Use the DEFAULT logical back camera. On-device adb showed the torch is owned by
+  // the logical device — the wide-angle physical sub-device reported hasTorch=false,
+  // so the flash never lit. Session stability comes from the tiny frame-output
+  // resolution below (the real fix for the earlier GRAPH_STOPPED collapse), NOT the
+  // device pick, so the logical device is both stable AND has the torch.
+  const device = useCameraDevice('back');
   const { hasPermission, requestPermission } = useCameraPermission();
 
   // Cross-thread bridge: the frame worklet writes the latest brightness + a frame
@@ -214,10 +216,11 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
       style={style ?? StyleSheet.absoluteFill}
       device={device}
       isActive={true}
-      // TorchMode is 'on' | 'off'. Only request the torch if the device actually
-      // has one (back cameras universally do); with the fingertip pressed to the
-      // lens this is the light source that makes the pulse visible.
-      torchMode={device.hasTorch ? 'on' : 'off'}
+      // The torch is the light source that makes the fingertip pulse visible, so it
+      // MUST be on. Force it rather than gating on a per-device hasTorch flag that
+      // read false for the wide-angle sub-device and left the flash dark — the HAL
+      // confirmed the torch is AVAILABLE on the logical back camera we now use.
+      torchMode="on"
       outputs={[frameOutput]}
       // Surface a session error to the screen (→ honest fallback) instead of
       // sitting on a silently-dead, torch-off camera like the current build did.
