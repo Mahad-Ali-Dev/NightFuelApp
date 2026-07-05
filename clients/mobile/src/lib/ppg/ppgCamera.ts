@@ -26,7 +26,13 @@ export function isPpgSupported(): boolean {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const lib = require('react-native-vision-camera');
-    return typeof lib?.Camera === 'function' && typeof lib?.useCameraDevice === 'function';
+    // Check the exports EXIST, not that they are typed `function`. VisionCamera V5
+    // exports `Camera` as a forwardRef component (a plain object, NOT a function),
+    // so the old `typeof … === 'function'` test failed on a real build and wrongly
+    // showed the "needs the app build" fallback. A truthy check passes for a class,
+    // a function, or a forwardRef; if the native side is still missing, the actual
+    // <Camera> mount is caught by the screen's ErrorBoundary → camera fallback.
+    return !!(lib?.Camera && lib?.useCameraDevice && lib?.useCameraPermission);
   } catch {
     return false;
   }

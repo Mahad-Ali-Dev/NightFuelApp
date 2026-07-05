@@ -46,10 +46,14 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useTheme } from '@/theme';
-import { withAlpha } from '@/theme/utils';
+import { withAlpha, isLightHex } from '@/theme/utils';
 import { CtaButton } from '@/components/ui';
 
 const { width } = Dimensions.get('window');
+/** Graphite gradient base for Train cards on DARK themes (mockup #2b303a→#14171e). */
+const CARD_BASE_DARK = ['#2B303A', '#14171E'] as const;
+/** Airy light-slate gradient base for the same cards on LIGHT themes. */
+const CARD_BASE_LIGHT = ['#E9EDF3', '#D5DBE5'] as const;
 /** Two-column grid card width (20px page padding both sides, 12px gutter). */
 export const GRID_CARD_W = (width - 52) / 2;
 /** Carousel routine card width — peeks the next card a touch. */
@@ -348,6 +352,7 @@ const WOD_PAGE_W = width - PAGE_PAD * 2;
  */
 export function WodCarousel({ items, onStart }: WodCarouselProps) {
   const { colors, typography } = useTheme();
+  const isLight = isLightHex(colors.background.primary);
   const [page, setPage] = useState(0);
   const listRef = useRef<FlatList>(null);
   const pausedRef = useRef(false);
@@ -391,10 +396,10 @@ export function WodCarousel({ items, onStart }: WodCarouselProps) {
         renderItem={({ item, index }) => (
           <Animated.View entering={FadeInDown.delay(80 + index * 40).springify().damping(18)} style={{ width: WOD_PAGE_W }}>
             <PressableScale onPress={onStart} accessibilityLabel={`${item.title}, ${item.meta}. Start workout`} scaleTo={0.985}>
-              <View style={[st.wodCard, { borderRadius: 18, backgroundColor: '#14171E' }]}>
+              <View style={[st.wodCard, { borderRadius: 18, backgroundColor: isLight ? CARD_BASE_LIGHT[1] : '#14171E' }]}>
                 {/* 150° graphite gradient base (mockup: #2b303a → #14171e), no glow. */}
                 <LinearGradient
-                  colors={['#2B303A', '#14171E']}
+                  colors={isLight ? CARD_BASE_LIGHT : CARD_BASE_DARK}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 0.8, y: 1 }}
                   style={StyleSheet.absoluteFillObject}
@@ -402,7 +407,7 @@ export function WodCarousel({ items, onStart }: WodCarouselProps) {
                 <Image source={item.img} style={st.wodFigure} contentFit="contain" cachePolicy="memory-disk" transition={200} />
                 {/* Left→right scrim (#1b1e25 34% → transparent 84%) keeps the copy legible. */}
                 <LinearGradient
-                  colors={['#1B1E25', '#1B1E25', 'transparent']}
+                  colors={isLight ? ['#E9EDF3', '#E9EDF3', 'transparent'] : ['#1B1E25', '#1B1E25', 'transparent']}
                   locations={[0, 0.34, 0.84]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0.06 }}
@@ -412,10 +417,10 @@ export function WodCarousel({ items, onStart }: WodCarouselProps) {
                   <View style={[st.wodEyebrow, { backgroundColor: colors.accent.lime }]}>
                     <Text style={[st.wodEyebrowTxt, { color: colors.text.inverse }]} maxFontSizeMultiplier={1.2}>WORKOUT OF THE DAY</Text>
                   </View>
-                  <Text style={[typography.h2, { color: '#FFF', fontSize: 22, fontWeight: '600', letterSpacing: -0.4, marginTop: 8 }]} numberOfLines={1}>{item.title}</Text>
+                  <Text style={[typography.h2, { color: isLight ? '#15181F' : '#FFF', fontSize: 22, fontWeight: '600', letterSpacing: -0.4, marginTop: 8 }]} numberOfLines={1}>{item.title}</Text>
                   <View style={st.wodMetaRow}>
                     <Ionicons name="time-outline" size={13} color={colors.accent.lime} />
-                    <Text style={[typography.caption, { color: '#CFD4DD', fontSize: 12.5, marginLeft: 5 }]} numberOfLines={1}>{item.meta}</Text>
+                    <Text style={[typography.caption, { color: isLight ? 'rgba(21,24,31,0.7)' : '#CFD4DD', fontSize: 12.5, marginLeft: 5 }]} numberOfLines={1}>{item.meta}</Text>
                   </View>
                   <CtaButton
                     label="Start workout"
@@ -562,6 +567,7 @@ function BentoRect({
   anchor?: 'center' | 'right';
 }) {
   const { colors, typography, shadows } = useTheme();
+  const isLight = isLightHex(colors.background.primary);
   const iconInk = withAlpha(colors.accent.limeDark, 0.18);
   const iconBorder = withAlpha(colors.accent.lime, 0.32);
   return (
@@ -575,7 +581,7 @@ function BentoRect({
             // Train: graphite gradient base + contained, dimmed figure.
             <>
               <LinearGradient
-                colors={['#2B303A', '#14171E']}
+                colors={isLight ? CARD_BASE_LIGHT : CARD_BASE_DARK}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 0.8, y: 1 }}
                 style={StyleSheet.absoluteFillObject}
@@ -599,8 +605,8 @@ function BentoRect({
             end={item.cover ? { x: 0.85, y: 0.1 } : { x: 1, y: 1 }}
             style={StyleSheet.absoluteFillObject}
           />
-          <Text style={[typography.heading, st.bentoTitle, { fontSize: big ? 16 : 15 }]} numberOfLines={1}>{item.title}</Text>
-          {item.subtitle ? <Text style={st.bentoSubtitle} numberOfLines={1}>{item.subtitle}</Text> : null}
+          <Text style={[typography.heading, st.bentoTitle, { fontSize: big ? 16 : 15 }, isLight && { color: '#15181F', textShadowColor: 'transparent' }]} numberOfLines={1}>{item.title}</Text>
+          {item.subtitle ? <Text style={[st.bentoSubtitle, isLight && { color: 'rgba(21,24,31,0.66)' }]} numberOfLines={1}>{item.subtitle}</Text> : null}
           <View style={st.bentoIconWrap}>
             <BentoIcon icon={item.icon} color={colors.accent.lime} ink={iconInk} border={iconBorder} />
           </View>
@@ -659,6 +665,7 @@ function StrengthCard({
   top: number;
 }) {
   const { colors, typography, shadows } = useTheme();
+  const isLight = isLightHex(colors.background.primary);
   const d = strengthPath(w, h);
   const iconInk = withAlpha(colors.accent.limeDark, 0.18);
   const iconBorder = withAlpha(colors.accent.lime, 0.32);
@@ -680,10 +687,11 @@ function StrengthCard({
                 <Stop offset="0.55" stopColor={colors.background.primary} stopOpacity={0.12} />
                 <Stop offset="1" stopColor={colors.background.primary} stopOpacity={0} />
               </SvgLinearGradient>
-              {/* Graphite 150° base — matches the mockup's sgA + every other Train tile. */}
+              {/* Graphite 150° base — matches the mockup's sgA + every other Train tile.
+                  Light themes swap to the airy light-slate base so the L reads on white. */}
               <SvgLinearGradient id="strengthBase" x1="0" y1="0" x2="0.8" y2="1">
-                <Stop offset="0" stopColor="#2B303A" />
-                <Stop offset="1" stopColor="#14171E" />
+                <Stop offset="0" stopColor={isLight ? CARD_BASE_LIGHT[0] : CARD_BASE_DARK[0]} />
+                <Stop offset="1" stopColor={isLight ? CARD_BASE_LIGHT[1] : CARD_BASE_DARK[1]} />
               </SvgLinearGradient>
             </Defs>
             {/* Everything below is clipped to the L silhouette. Train uses the
@@ -704,8 +712,8 @@ function StrengthCard({
             <Path d={d} fill="none" stroke={item.cover ? colors.border.default : colors.accent.lime} strokeWidth={1.5} />
           </Svg>
           {/* Title + icon overlays (crisp, outside the SVG clip) */}
-          <Text style={[typography.heading, st.strengthTitle]} numberOfLines={1}>{item.title}</Text>
-          {item.subtitle ? <Text style={st.strengthSubtitle} numberOfLines={1}>{item.subtitle}</Text> : null}
+          <Text style={[typography.heading, st.strengthTitle, isLight && { color: '#15181F', textShadowColor: 'transparent' }]} numberOfLines={1}>{item.title}</Text>
+          {item.subtitle ? <Text style={[st.strengthSubtitle, isLight && { color: 'rgba(21,24,31,0.66)' }]} numberOfLines={1}>{item.subtitle}</Text> : null}
           <View style={st.strengthIcon}>
             <BentoIcon icon={item.icon} color={colors.accent.lime} ink={iconInk} border={iconBorder} />
           </View>

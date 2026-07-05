@@ -9,7 +9,7 @@ import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { getRecent } from '@/api/exercises';
-import { withAlpha } from '@/theme/utils';
+import { withAlpha, isLightHex } from '@/theme/utils';
 import { localDateKey } from '@/components/activityHeatmapDate';
 
 const CELL   = 10;   // px per cell
@@ -28,6 +28,10 @@ const INTENSITY_COLORS: string[] = [
 
 // Brand-lime ramp for the embedded "Consistency" grid (Zeitra You/Profile mockup).
 const LIME_RAMP: string[] = ['#1A1E26', '#2E3B17', '#5D8120', '#92BB2F', '#C2F03C'];
+// Light-theme ramps — on a near-white card the empty cell must NOT be a dark slab
+// (the old #1A1E26 rendered the whole grid black for a new user on a light theme).
+const LIME_RAMP_LIGHT: string[] = ['rgba(20,23,31,0.06)', '#DCEBB0', '#B4D861', '#8FC236', '#6E9C22'];
+const INTENSITY_COLORS_LIGHT: string[] = ['rgba(20,23,31,0.06)', 'rgba(16,185,129,0.25)', 'rgba(16,185,129,0.5)', 'rgba(16,185,129,0.78)', '#0E9E70'];
 
 function getIntensity(minutes: number): number {
     if (minutes === 0)  return 0;
@@ -52,6 +56,8 @@ interface CellData {
 
 export function ActivityHeatmap({ embedded = false }: { embedded?: boolean } = {}) {
     const { colors } = useTheme();
+    const isLight = isLightHex(colors.background.primary);
+    const intensityRamp = isLight ? INTENSITY_COLORS_LIGHT : INTENSITY_COLORS;
 
     // Fetch recent workout logs (same endpoint as web component)
     const { data: workouts = [] } = useQuery({
@@ -159,13 +165,14 @@ export function ActivityHeatmap({ embedded = false }: { embedded?: boolean } = {
     // Embedded variant (You/Profile "Consistency") — a BARE lime grid with no card
     // chrome / header / legend / labels; the screen supplies the surrounding card.
     if (embedded) {
+        const ramp = isLight ? LIME_RAMP_LIGHT : LIME_RAMP;
         return (
             <View style={s.bareGrid}>
                 {weekGroups.map((weekCells, weekIdx) => (
                     <View key={weekIdx} style={s.bareCol}>
                         {Array.from({ length: 7 }).map((_, dayIdx) => {
                             const cell = weekCells?.find((c) => c.day === dayIdx);
-                            const bg = LIME_RAMP[cell?.intensity ?? 0] ?? LIME_RAMP[0]!;
+                            const bg = ramp[cell?.intensity ?? 0] ?? ramp[0]!;
                             return <View key={dayIdx} style={[s.bareCell, { backgroundColor: bg }]} />;
                         })}
                     </View>
@@ -196,7 +203,7 @@ export function ActivityHeatmap({ embedded = false }: { embedded?: boolean } = {
                 {/* Legend */}
                 <View style={s.legend}>
                     <Text style={[s.legendTxt, { color: colors.text.tertiary }]}>Less</Text>
-                    {INTENSITY_COLORS.map((c, i) => (
+                    {intensityRamp.map((c, i) => (
                         <View key={i} style={[s.legendCell, { backgroundColor: c }]} />
                     ))}
                     <Text style={[s.legendTxt, { color: colors.text.tertiary }]}>More</Text>
@@ -239,7 +246,7 @@ export function ActivityHeatmap({ embedded = false }: { embedded?: boolean } = {
                                         return <View key={dayIdx} style={{ width: CELL, height: CELL }} />;
                                     }
                                     const isToday   = cell.date === todayStr;
-                                    const bgColor   = INTENSITY_COLORS[cell.intensity] ?? INTENSITY_COLORS[0]!;
+                                    const bgColor   = intensityRamp[cell.intensity] ?? intensityRamp[0]!;
                                     return (
                                         <View
                                             key={dayIdx}

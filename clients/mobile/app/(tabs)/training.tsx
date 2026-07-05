@@ -35,6 +35,10 @@ import { WodCarousel, BentoBrowse, MuscleCard, MUSCLE_CARD_W } from '@/component
 import { ExerciseRail } from '@/components/exercise/ExerciseRail';
 import { useThemedPalette, type ThemedPalette } from '@/theme/useThemedPalette';
 import { isLightHex } from '@/theme/utils';
+import { heroCardTint } from '@/theme/heroCard';
+import { challengeHero } from '@/features/coach/covers';
+import { thirtyDayHero, THIRTY_DAY_CHALLENGES } from '@/features/train/thirtyDayChallenges';
+import { womensHero, WOMENS_PROGRAMS } from '@/features/train/womensPrograms';
 import { TAB_BAR_H } from './_layout';
 
 // Bundled figure art (offline-safe — '@/*' → ./src, required by relative path).
@@ -96,6 +100,16 @@ const MUSCLES = [
     { id: 'core', label: 'Core', img: MUSCLE_CORE_M, count: 776, bodyPart: 'waist' },
 ];
 
+// "Challenges" section — three discovery cards surfacing the (otherwise buried)
+// themed AI plans, 30-day challenges and women's Body Focus gallery. Hero art is
+// resolved per-theme inside the component (light vs dark variant); each card
+// deep-links to its gallery/list route.
+const CHALLENGE_CARDS = [
+    { key: 'themed', label: 'Themed plans', subtitle: 'AI-built · 7–30 days', route: '/(challenge)/gallery' },
+    { key: '30day', label: '30-day challenges', subtitle: 'Abs · glutes · more', route: '/(exercises)/challenges-30' },
+    { key: 'body-focus', label: 'Body Focus', subtitle: 'Curated by area', route: '/(exercises)/women' },
+];
+
 // Workout-of-the-Day pages (no WOD API yet → curated; Start routes to onboarding).
 const WODS = [
     { id: 'wod-fullbody', title: 'Full Body Blast', meta: '45 min · 8 exercises', img: MUSCLE_CHEST_M },
@@ -111,6 +125,16 @@ export default function TrainingHubScreen() {
     const D = useThemedPalette();
     const st = useMemo(() => makeStyles(D), [D]);
     const isLight = isLightHex(D.bg);
+    const heroTint = heroCardTint(isLight);
+    // Resolve the three Challenges-card heroes for the active theme (light/dark art).
+    // The [0] guards satisfy noUncheckedIndexedAccess (both arrays are non-empty).
+    const firstC30 = THIRTY_DAY_CHALLENGES[0];
+    const firstWomen = WOMENS_PROGRAMS[0];
+    const challengeImgs: Record<string, any> = {
+        themed: challengeHero('fat-loss-blitz', isLight),
+        '30day': firstC30 ? thirtyDayHero(firstC30, isLight) : undefined,
+        'body-focus': firstWomen ? womensHero(firstWomen, isLight) : undefined,
+    };
     const initial = (((user as any)?.displayName ?? user?.name ?? 'Z').trim().charAt(0) || 'Z').toUpperCase();
 
     const sessionQ = useQuery({ queryKey: ['active-session'], queryFn: getActiveSession, refetchOnMount: 'always', staleTime: 0 });
@@ -163,6 +187,28 @@ export default function TrainingHubScreen() {
                 <Animated.View entering={FadeInDown.delay(60).duration(440)}>
                     <Text style={st.sectionTitle}>Workout of the Day</Text>
                     <WodCarousel items={WODS} onStart={() => router.push('/training/onboarding' as any)} />
+                </Animated.View>
+
+                {/* ══ CHALLENGES — discovery cards → themed plans / 30-day / Body Focus ══ */}
+                <Animated.View entering={FadeInDown.delay(90).duration(440)}>
+                    <Text style={st.sectionTitle}>Challenges</Text>
+                    <View style={st.catGrid}>
+                        {CHALLENGE_CARDS.map((c) => (
+                            <TouchableOpacity
+                                key={c.key} style={st.catCard} activeOpacity={0.85}
+                                accessibilityRole="button" accessibilityLabel={`${c.label}, ${c.subtitle}`}
+                                onPress={() => router.push(c.route as any)}
+                            >
+                                <Image source={challengeImgs[c.key]} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" />
+                                <LinearGradient colors={heroTint.scrim} style={StyleSheet.absoluteFillObject} />
+                                <View style={st.catText}>
+                                    <Text style={[st.catLabel, { color: heroTint.title }]}>{c.label}</Text>
+                                    <Text style={[st.catDesc, { color: heroTint.sub }]}>{c.subtitle}</Text>
+                                </View>
+                                <View style={st.catArrow}><Ionicons name="arrow-forward" size={14} color={D.lime} /></View>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
                 </Animated.View>
 
                 {/* ══ POPULAR MOVES — image cards → tap for how-to ════════ */}
