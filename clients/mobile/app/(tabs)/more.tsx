@@ -68,6 +68,18 @@ const makeSettingsSections = (
         ]
     },
     {
+        title: 'Health & Vitals',
+        icon: 'pulse-outline',
+        items: [
+            // The Vitals health hub — heart rate (incl. camera measurement), steps,
+            // sleep, hydration, body metrics + cycle. Previously only reachable by
+            // tapping the Steps number on Home; this is a clear top-level entry.
+            { label: 'Health & Vitals', icon: 'pulse-outline', route: '/(performance)', tint: colors.accent.coral },
+            { label: 'Heart Rate', icon: 'heart-outline', route: '/(performance)/heart-rate', tint: colors.accent.red },
+            { label: 'Sleep & Circadian', icon: 'moon-outline', route: '/(tabs)/circadian', tint: colors.accent.blue },
+        ]
+    },
+    {
         title: 'Insights & Tools',
         icon: 'bulb-outline',
         items: [

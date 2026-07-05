@@ -561,13 +561,13 @@ function BentoRect({
   big?: boolean;
   anchor?: 'center' | 'right';
 }) {
-  const { colors, typography } = useTheme();
+  const { colors, typography, shadows } = useTheme();
   const iconInk = withAlpha(colors.accent.limeDark, 0.18);
   const iconBorder = withAlpha(colors.accent.lime, 0.32);
   return (
     <View style={[st.bentoAbs, { left, top, width: w, height: h }]}>
       <PressableScale onPress={item.onPress} accessibilityLabel={`${item.title} workouts`} style={StyleSheet.absoluteFill}>
-        <View style={[st.bentoRect, { width: w, height: h, borderColor: item.cover ? colors.border.default : colors.accent.lime }, item.cover ? null : colorGlow(colors.accent.lime)]}>
+        <View style={[st.bentoRect, { width: w, height: h, borderColor: item.cover ? colors.border.default : colors.accent.lime }, item.cover ? null : shadows.glow(colors.accent.lime)]}>
           {item.cover ? (
             // Meals: full-bleed cover food photo.
             <Image source={item.img} style={StyleSheet.absoluteFillObject} contentFit="cover" cachePolicy="memory-disk" transition={200} />
@@ -658,7 +658,7 @@ function StrengthCard({
   left: number;
   top: number;
 }) {
-  const { colors, typography } = useTheme();
+  const { colors, typography, shadows } = useTheme();
   const d = strengthPath(w, h);
   const iconInk = withAlpha(colors.accent.limeDark, 0.18);
   const iconBorder = withAlpha(colors.accent.lime, 0.32);
@@ -669,7 +669,7 @@ function StrengthCard({
   return (
     <View style={[st.bentoAbs, { left, top, width: w, height: h }]}>
       <PressableScale onPress={item.onPress} accessibilityLabel={`${item.title} workouts`} style={StyleSheet.absoluteFill}>
-        <View style={[StyleSheet.absoluteFill, item.cover ? null : colorGlow(colors.accent.lime)]}>
+        <View style={[StyleSheet.absoluteFill, item.cover ? null : shadows.glow(colors.accent.lime)]}>
           <Svg width={w} height={h} style={StyleSheet.absoluteFill}>
             <Defs>
               <ClipPath id="strengthClip">
@@ -713,17 +713,6 @@ function StrengthCard({
       </PressableScale>
     </View>
   );
-}
-
-/** Soft lime halo shadow for the bento cards (matches `shadows.glow`). */
-function colorGlow(color: string) {
-  return {
-    shadowColor: color,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 9,
-    elevation: 4,
-  };
 }
 
 const st = StyleSheet.create({

@@ -53,6 +53,11 @@ import { TAB_BAR_H } from './_layout';
 const { width: SCREEN_W } = Dimensions.get('window');
 const H_PAD = 16;          // mockup body padding
 const CARD_GAP = 11;       // mockup grid gap
+// Fixed semantic hues for the Vitals block — heart-rate red + cycle coral, in the
+// same spirit as the theme's fixed sleep-blue / water-cyan (a data category keeps
+// its colour across themes). Decorative accents only; readable on dark + light.
+const HEART = '#FF6B81';
+const CYCLE = '#FF7A90';
 
 // Bottom inset clearing the floating tab bar + the global Ria FAB.
 const BOTTOM_CLEARANCE = TAB_BAR_H + 96;
@@ -226,6 +231,8 @@ export default function DashboardScreen() {
     // The user's real avatar (https-trust-gated); falls back to the initial disc
     // when null/non-https. Mirrors the Profile screen's avatar pattern.
     const avatarUrl = safeImageUri((profile as any)?.avatarUrl ?? (user as any)?.avatarUrl ?? undefined);
+    // Female users get the Cycle tile in the Vitals block; everyone else gets Body.
+    const isFemale = ((profile as any)?.biologicalSex ?? '').toString().toUpperCase() === 'FEMALE';
 
     const shiftElapsed = useMemo(() => {
         const start = shift?.startTime ? parseTimeStr(shift.startTime) : null;
@@ -512,6 +519,78 @@ export default function DashboardScreen() {
                     </View>
                 </Animated.View>
 
+                {/* ══ VITALS — heart rate (camera + live) & body tracking ═══════ */}
+                <Animated.View entering={FadeInDown.delay(190).duration(460)} style={[st.section, { marginTop: 22 }]}>
+                    <View style={[st.sectionRow, { marginBottom: 11 }]}>
+                        <Text style={st.sectionTitle}>Vitals</Text>
+                        <TouchableOpacity
+                            style={st.vSeeAll} activeOpacity={0.7} hitSlop={8}
+                            onPress={() => router.push('/(performance)' as any)}
+                            accessibilityRole="button" accessibilityLabel="View all vitals"
+                        >
+                            <Text style={st.vSeeAllTxt}>View all</Text>
+                            <Ionicons name="chevron-forward" size={14} color={D.muted} />
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Camera heart-rate — the hero action: one tap, no wearable needed */}
+                    <TouchableOpacity
+                        style={st.hrHero} activeOpacity={0.9}
+                        onPress={() => router.push('/(performance)/heart-rate-measure' as any)}
+                        accessibilityRole="button"
+                        accessibilityLabel="Measure your heart rate with the camera. No device needed."
+                    >
+                        <View style={st.hrHeroIcon}>
+                            <Ionicons name="heart" size={24} color={HEART} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <View style={st.hrHeroTitleRow}>
+                                <Text style={st.hrHeroTitle}>Measure heart rate</Text>
+                                <View style={st.hrHeroBadge}>
+                                    <Text style={st.hrHeroBadgeTxt}>No device</Text>
+                                </View>
+                            </View>
+                            <Text style={st.hrHeroSub}>Finger on the camera + flash · ~30s</Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={D.muted} />
+                    </TouchableOpacity>
+
+                    {/* Quick vitals tiles */}
+                    <View style={st.vRow}>
+                        <TouchableOpacity
+                            style={st.vTile} activeOpacity={0.85}
+                            onPress={() => router.push('/(performance)/heart-rate' as any)}
+                            accessibilityRole="button" accessibilityLabel="Heart rate. Live monitor, zones and history."
+                        >
+                            <Ionicons name="pulse" size={20} color={HEART} />
+                            <Text style={st.vTileVal}>Heart rate</Text>
+                            <Text style={st.vTileLbl}>Live · zones · history</Text>
+                        </TouchableOpacity>
+
+                        {isFemale ? (
+                            <TouchableOpacity
+                                style={st.vTile} activeOpacity={0.85}
+                                onPress={() => router.push('/(performance)/cycle' as any)}
+                                accessibilityRole="button" accessibilityLabel="Cycle. Phase and predictions."
+                            >
+                                <Ionicons name="flower" size={20} color={CYCLE} />
+                                <Text style={st.vTileVal}>Cycle</Text>
+                                <Text style={st.vTileLbl}>Phase · predictions</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                style={st.vTile} activeOpacity={0.85}
+                                onPress={() => router.push('/(performance)/body-metrics' as any)}
+                                accessibilityRole="button" accessibilityLabel="Body metrics. Weight and measurements."
+                            >
+                                <Ionicons name="body" size={20} color={D.lime} />
+                                <Text style={st.vTileVal}>Body</Text>
+                                <Text style={st.vTileLbl}>Weight · measurements</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </Animated.View>
+
                 {/* ══ STREAK ══════════════════════════════════════════════════ */}
                 <Animated.View entering={FadeInDown.delay(200).duration(460)} style={[st.section, { marginTop: 18 }]}>
                     <View style={st.streakCard}>
@@ -663,6 +742,22 @@ const makeStyles = (D: ThemedPalette) => StyleSheet.create({
     tileLbl: [typography.caption, { color: D.muted, fontSize: 11 }] as any,
     barBg: { height: 4, borderRadius: 3, backgroundColor: D.border, marginTop: 7, overflow: 'hidden' },
     barFill: { height: '100%', borderRadius: 3 },
+
+    // Vitals section — dedicated heart-rate + tracking block
+    vSeeAll: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+    vSeeAllTxt: [typography.caption, { color: D.muted, fontSize: 12 }] as any,
+    // Camera-HR hero: red-tinted border + icon disc for prominence, on the theme card
+    hrHero: { backgroundColor: D.card, borderWidth: 1, borderColor: 'rgba(255,107,129,0.34)', borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 13 },
+    hrHeroIcon: { width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(255,107,129,0.14)', alignItems: 'center', justifyContent: 'center' },
+    hrHeroTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    hrHeroTitle: [typography.subtitle, { color: D.text, fontSize: 16 }] as any,
+    hrHeroBadge: { backgroundColor: 'rgba(255,107,129,0.16)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7 },
+    hrHeroBadgeTxt: [typography.captionMedium, { color: HEART, fontSize: 10 }] as any,
+    hrHeroSub: [typography.caption, { color: D.muted, fontSize: 12, marginTop: 2 }] as any,
+    vRow: { flexDirection: 'row', gap: CARD_GAP, marginTop: CARD_GAP },
+    vTile: { flex: 1, backgroundColor: D.card, borderWidth: 1, borderColor: D.border, borderRadius: 16, padding: 13, minHeight: 84 },
+    vTileVal: [typography.subtitle, { color: D.text, fontSize: 15, marginTop: 8 }] as any,
+    vTileLbl: [typography.caption, { color: D.muted, fontSize: 11, marginTop: 2 }] as any,
 
     // Streak
     streakCard: { backgroundColor: D.card, borderWidth: 1, borderColor: D.border, borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

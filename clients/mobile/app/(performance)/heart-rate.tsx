@@ -12,8 +12,10 @@
  *     (src/api/health.ts only INGESTS samples), so we honestly show only what
  *     we can observe live and note that a longer history needs the read API.
  *   - No device connected → a calm empty state with a "Connect a device" button
- *     routing to the BLE connect screen, plus a note that camera-based (no
- *     device) measurement is coming soon.
+ *     routing to the BLE connect screen, plus a camera-based (no device)
+ *     measurement path (finger-over-lens + torch) via the CameraMeasureCard →
+ *     (performance)/heart-rate-measure. Camera measurement is SHIPPED, not a
+ *     placeholder, and is also surfaced one tap from the Vitals dashboard.
  *
  * Wellness tone; a small "estimate, not a medical device" disclaimer. Theme-aware
  * via {@link useTheme}. Mirrors the layout language of (performance)/hydration.tsx
