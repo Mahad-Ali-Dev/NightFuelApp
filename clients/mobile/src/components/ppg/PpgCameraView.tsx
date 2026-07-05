@@ -18,22 +18,41 @@
  *     rather than a crash; and
  *   - adapting to the exact installed V5 API is a small, localized edit.
  *
- * ┌─ DEV-BUILD VERIFY (do this in the EAS dev build, not on the gate) ──────────┐
- * │ This is written against the V5 frame-output API as documented:             │
- * │   useFrameOutput({ pixelFormat, onFrame(frame){'worklet' …} })             │
- * │   <Camera outputs={[frameOutput]} … />                                     │
- * │ Confirm against the INSTALLED version:                                     │
- * │  1. `useFrameOutput` import path (here: 'react-native-vision-camera-       │
- * │     worklets'). If the installed build exports it from the core package,   │
- * │     or still uses `useFrameProcessor((frame)=>{'worklet'…},[])` +          │
- * │     `<Camera frameProcessor={fp} />`, switch to that — the averaging body  │
- * │     and the shared-value bridge below are unchanged either way.            │
- * │  2. `frame.toArrayBuffer()` exists and returns the pixel bytes (Y plane    │
- * │     first for 8-bit YUV). If not, read planes via the V5 planar API.       │
- * │  3. Writing a reanimated shared value FROM the camera worklet runtime      │
- * │     propagates to JS (it does in the unified react-native-worklets world). │
- * │     If not, replace the shared-value writes with a runOnJS callback.       │
- * └────────────────────────────────────────────────────────────────────────────┘
+ * ── V5.0.7 API FACTS this file is written against (from the installed .d.ts) ──
+ * These were verified against node_modules/react-native-vision-camera/lib — the
+ * previous author guessed several and produced a session that opened then died
+ * (GRAPH_STOPPED + dropped-buffer errors) with the torch forced OFF:
+ *
+ *  1. TORCH: the prop is `torchMode` and its type is `TorchMode = 'on' | 'off'`
+ *     (specs/common-types/TorchMode). So `torchMode="on"` is correct — the log's
+ *     `torch=0` was NOT a wrong value, it was the SIDE EFFECT of the session
+ *     collapsing (a dead session forces the torch off). Fix the session and the
+ *     torch stays lit. We additionally gate on `device.hasTorch`.
+ *
+ *  2. SESSION STABILITY: a heavy full-resolution frame-output buffer is a known
+ *     cause of the buffer-error / GRAPH_STOPPED collapse. `FrameOutputOptions`
+ *     (specs/outputs/CameraFrameOutput.nitro) exposes `targetResolution: Size`
+ *     and `enablePreviewSizedOutputBuffers`, so we request a tiny YUV buffer.
+ *     We also pick the single `wide-angle` physical device, which the docs note
+ *     starts up faster / more reliably than a multi-lens logical device.
+ *
+ *  3. FRAME LIFECYCLE: `Frame` is a Nitro HybridObject whose `dispose()` is a
+ *     REAL, REQUIRED method — the docs say an undisposed Frame stalls the
+ *     pipeline (exactly the "A frame is dropped … buffer error" in the log).
+ *     The old code treated dispose as an optional cast; we now call it
+ *     unconditionally in `finally`.
+ *
+ *  4. PIXELS: for a planar YUV Frame the docs state `getPixelBuffer()` is
+ *     UNDEFINED behaviour — you must read `getPlanes()[0]` (the full-res Y/luma
+ *     plane) and call its `getPixelBuffer()`. The old code called the Frame-level
+ *     `getPixelBuffer()` on a YUV frame, i.e. garbage/empty data. The Y plane is
+ *     a single-channel luma buffer — ideal (and cheap) for a brightness mean —
+ *     and we honour the plane's `bytesPerRow` to skip row padding.
+ *
+ *  5. `useFrameOutput` / `useCameraPermission` are exported from the CORE package
+ *     `react-native-vision-camera` in V5.0.7 (not a separate worklets package on
+ *     the JS side), and writing a reanimated shared value from the frame worklet
+ *     propagates to JS in the unified react-native-worklets runtime.
  */
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
@@ -42,7 +61,7 @@ import { Camera, useCameraDevice, useCameraPermission, useFrameOutput } from 're
 import { SAMPLE_POLL_MS } from '@/lib/ppg/ppgCamera';
 
 /** Why the camera couldn't run — the screen maps these to user-facing coaching. */
-export type PpgCameraError = 'permission-denied' | 'no-camera';
+export type PpgCameraError = 'permission-denied' | 'no-camera' | 'session-error';
 
 export interface PpgCameraViewProps {
   /** When true, brightness samples are drained to `onSample` (~SAMPLE_POLL_MS). */
@@ -58,8 +77,20 @@ export interface PpgCameraViewProps {
 /** ~how many bytes to average per frame — enough to be stable, cheap to loop. */
 const READS_PER_FRAME = 2000;
 
+/**
+ * Target frame-output resolution. Deliberately tiny: PPG only needs a whole-frame
+ * brightness mean, and a small buffer is the single biggest lever against the
+ * full-res session collapse (buffer error / GRAPH_STOPPED) seen on-device. The
+ * session negotiates the closest supported size to this target (aspect ratio is
+ * prioritised over exact pixel count), and 4:3 matches the sensor's native step.
+ */
+const PPG_TARGET_RESOLUTION = { width: 480, height: 640 } as const;
+
 export default function PpgCameraView({ collecting, onSample, onError, style }: PpgCameraViewProps) {
-  const device = useCameraDevice('back');
+  // Prefer the single wide-angle physical device: the docs note it starts up
+  // faster and more reliably than a multi-lens logical device — fewer moving
+  // parts in the session config that was collapsing on-device.
+  const device = useCameraDevice('back', { physicalDevices: ['wide-angle'] });
   const { hasPermission, requestPermission } = useCameraPermission();
 
   // Cross-thread bridge: the frame worklet writes the latest brightness + a frame
@@ -93,35 +124,64 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
   // render, which would otherwise fire a false error).
 
   // Per-frame worklet: average the luma (Y) plane over a downsampled stride.
+  //
+  // `targetResolution` + `enablePreviewSizedOutputBuffers` request the smallest
+  // possible buffers so the session doesn't collapse under a full-res stream, and
+  // `dropFramesWhileBusy` (the default, set explicitly) means a slow drain skips
+  // frames instead of queuing them and exhausting the buffer pool.
   const frameOutput = useFrameOutput({
     pixelFormat: 'yuv',
+    targetResolution: PPG_TARGET_RESOLUTION,
+    enablePreviewSizedOutputBuffers: true,
+    dropFramesWhileBusy: true,
     onFrame: (frame) => {
       'worklet';
       try {
-        const w = frame.width;
-        const h = frame.height;
-        const ab = frame.getPixelBuffer();
-        const data = new Uint8Array(ab);
-        // Y (luma) plane = first w*h bytes for 8-bit YUV. With torch + fingertip
-        // the whole frame IS the finger, so a whole-plane mean is a valid PPG.
-        const yLen = Math.min(data.length, w * h) || data.length;
-        const step = Math.max(1, Math.floor(yLen / READS_PER_FRAME));
-        let sum = 0;
-        let count = 0;
-        for (let i = 0; i < yLen; i += step) {
-          sum += data[i]!;
-          count += 1;
-        }
-        if (count > 0) {
-          latest.value = sum / count;
-          frameTick.value = frameTick.value + 1;
+        // A 'yuv' Frame is PLANAR, so its top-level getPixelBuffer() is undefined
+        // behaviour — read the Y (luma) plane directly. getPlanes()[0] is the
+        // full-resolution single-channel luma plane; with torch + fingertip the
+        // whole frame IS the finger, so a whole-plane mean is a valid PPG signal.
+        const planes = frame.getPlanes();
+        const yPlane = planes[0];
+        if (yPlane) {
+          const data = new Uint8Array(yPlane.getPixelBuffer());
+          const width = yPlane.width;
+          const height = yPlane.height;
+          // Rows can be padded (bytesPerRow >= width), so walk row-by-row and only
+          // read the valid `width` luma bytes, skipping the trailing stride pad.
+          const stride = yPlane.bytesPerRow > 0 ? yPlane.bytesPerRow : width;
+          const validPixels = width * height;
+          // Downsample to ~READS_PER_FRAME samples: keep the per-frame work light
+          // so the drain thread never lags (which would drop frames / stall).
+          const pixelStep = Math.max(1, Math.floor(validPixels / READS_PER_FRAME));
+          let sum = 0;
+          let count = 0;
+          for (let row = 0; row < height; row += 1) {
+            const rowStart = row * stride;
+            for (let col = 0; col < width; col += pixelStep) {
+              sum += data[rowStart + col]!;
+              count += 1;
+            }
+          }
+          if (count > 0) {
+            latest.value = sum / count;
+            frameTick.value = frameTick.value + 1;
+          }
         }
       } catch {
         // Never throw out of a frame processor — a bad frame is just skipped.
       } finally {
-        // The CameraFrameOutput pipeline manages frame lifecycle, but if a build
-        // exposes an explicit dispose we call it (cast: not on the Frame type).
-        (frame as { dispose?: () => void }).dispose?.();
+        // REQUIRED: Frame is a Nitro HybridObject; an undisposed Frame stalls the
+        // pipeline and causes the dropped-buffer errors seen on-device. Always
+        // release it, even if reading the planes above threw.
+        //
+        // `dispose()` is declared on the nitro `HybridObject` base that `Frame`
+        // extends, but VisionCamera is hoisted to the monorepo-root node_modules
+        // where `react-native-nitro-modules` doesn't resolve for tsc — so the
+        // inherited members (dispose/equals/name) don't appear on the `Frame`
+        // type here. Assert the one method we need (the .d.ts guarantees it) and
+        // call it unconditionally so a stalled pipeline can never happen.
+        (frame as unknown as { dispose: () => void }).dispose();
       }
     },
   });
@@ -153,9 +213,15 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
     <Camera
       style={style ?? StyleSheet.absoluteFill}
       device={device}
-      isActive
-      torchMode="on"
+      isActive={true}
+      // TorchMode is 'on' | 'off'. Only request the torch if the device actually
+      // has one (back cameras universally do); with the fingertip pressed to the
+      // lens this is the light source that makes the pulse visible.
+      torchMode={device.hasTorch ? 'on' : 'off'}
       outputs={[frameOutput]}
+      // Surface a session error to the screen (→ honest fallback) instead of
+      // sitting on a silently-dead, torch-off camera like the current build did.
+      onError={() => onError?.('session-error')}
     />
   );
 }

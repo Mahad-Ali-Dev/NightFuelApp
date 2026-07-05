@@ -85,6 +85,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withMedia3Force.js",
       [
         "expo-build-properties",
         {
