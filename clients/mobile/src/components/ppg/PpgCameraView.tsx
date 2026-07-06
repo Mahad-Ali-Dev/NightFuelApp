@@ -54,10 +54,10 @@
  *     the JS side), and writing a reanimated shared value from the frame worklet
  *     propagates to JS in the unified react-native-worklets runtime.
  */
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
-import { Camera, useCameraDevices, useCameraPermission, useFrameOutput } from 'react-native-vision-camera';
+import { Camera, type CameraRef, useCameraDevices, useCameraPermission, useFrameOutput } from 'react-native-vision-camera';
 import { SAMPLE_POLL_MS } from '@/lib/ppg/ppgCamera';
 
 /** Why the camera couldn't run — the screen maps these to user-facing coaching. */
@@ -108,6 +108,7 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
   const latest = useSharedValue(0);
   const frameTick = useSharedValue(0);
   const lastTickRef = useRef(-1);
+  const cameraRef = useRef<CameraRef | null>(null);
 
   // Request camera permission on mount if we don't already have it.
   useEffect(() => {
@@ -125,6 +126,45 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
       cancelled = true;
     };
   }, [hasPermission, requestPermission, onError]);
+
+  // Force the torch to FULL brightness through the CameraController.
+  //
+  // The `<Camera torchMode="on">` prop only sets the torch MODE — internally it
+  // calls the controller's setTorchMode('on') with NO strength, so the HAL uses
+  // its DEFAULT torch level. On-device adb on a Samsung Galaxy A22 (MediaTek)
+  // showed that default is `duty(6)` of `maxDuty(60)` — roughly 10% — which is
+  // "on" as far as the flash driver is concerned but BELOW the LED's visible
+  // turn-on threshold (so the flash looks dead to the eye) and far too weak to
+  // trans-illuminate a fingertip for a PPG pulse. The controller exposes
+  // setTorchMode('on', strength) with strength 0..1; forcing 1.0 drives the LED
+  // at maximum, which both lights it visibly and gives a strong red signal.
+  //
+  // `controller` only exists after the session has started, so callers assert
+  // this on `onStarted` and again when a measurement begins.
+  const forceTorchMax = useCallback((): boolean => {
+    const controller = cameraRef.current?.controller;
+    if (!controller) return false;
+    try {
+      // Fire-and-forget: returns a Promise, but we don't need to await it and a
+      // rejection (e.g. transient reconfigure) is retried by the callers below.
+      void controller.setTorchMode('on', 1);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // The session has started → the controller is (about to be) available. Assert
+  // full-strength torch, retrying briefly until the controller accepts it.
+  const handleStarted = useCallback(() => {
+    let tries = 0;
+    const tick = () => {
+      if (forceTorchMax() || tries >= 6) return;
+      tries += 1;
+      setTimeout(tick, 200);
+    };
+    tick();
+  }, [forceTorchMax]);
 
   // A missing back camera (rare) is handled by the render guard below + the
   // screen's "no frames delivered" watchdog, so there's no separate device
@@ -194,6 +234,21 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
     },
   });
 
+  // When a measurement actually starts, hammer the torch to full strength a few
+  // times over the first ~1.5s. This also overrides the default-strength torch
+  // that VisionCamera's internal prop updater sets when the controller first
+  // appears, guaranteeing the LED is at 100% for the whole capture window.
+  useEffect(() => {
+    if (!collecting) return;
+    forceTorchMax();
+    const timers = [
+      setTimeout(forceTorchMax, 250),
+      setTimeout(forceTorchMax, 700),
+      setTimeout(forceTorchMax, 1400),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [collecting, forceTorchMax]);
+
   // Drain the latest brightness on a steady timer while collecting.
   useEffect(() => {
     if (!collecting) return;
@@ -219,15 +274,16 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
 
   return (
     <Camera
+      ref={cameraRef}
       style={style ?? StyleSheet.absoluteFill}
       device={device}
       isActive={true}
-      // The torch is the light source that makes the fingertip pulse visible, so it
-      // MUST be on. Force it rather than gating on a per-device hasTorch flag that
-      // read false for the wide-angle sub-device and left the flash dark — the HAL
-      // confirmed the torch is AVAILABLE on the logical back camera we now use.
+      // `torchMode="on"` gets the torch on immediately at the HAL default level;
+      // `onStarted` then bumps it to FULL strength via the controller (the prop
+      // alone left the LED at ~10% — invisible + too weak for PPG on some phones).
       torchMode="on"
       outputs={[frameOutput]}
+      onStarted={handleStarted}
       // Surface a session error to the screen (→ honest fallback) instead of
       // sitting on a silently-dead, torch-off camera like the current build did.
       onError={() => onError?.('session-error')}
