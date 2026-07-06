@@ -163,27 +163,6 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
     }
   }, []);
 
-  // "Kick" the torch: force it OFF, then back ON at full strength a beat later.
-  // A plain 'on' set while the frame-output stream is (re)configuring is silently
-  // dropped on many Android devices; a delayed off->on toggle once the camera is
-  // actually delivering frames reliably latches the LED on. Harmless if already on.
-  const kickTorch = useCallback(() => {
-    const controller = cameraRef.current?.controller;
-    if (!controller) return;
-    try {
-      void controller.setTorchMode('off');
-      setTimeout(() => {
-        try {
-          void controller.setTorchMode('on', TORCH_STRENGTH);
-        } catch {
-          // ignore — a later kick / assert will retry
-        }
-      }, 140);
-    } catch {
-      // ignore — a later kick / assert will retry
-    }
-  }, []);
-
   // The session has started → the controller is (about to be) available. Assert
   // torch, retrying briefly until the controller accepts it.
   const handleStarted = useCallback(() => {
@@ -264,21 +243,17 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
     },
   });
 
-  // When a measurement starts, drive the torch to full brightness — but because
-  // Android silently drops a torch set during stream (re)config, do it in stages:
-  // an immediate assert, then delayed off->on "kicks" AFTER frames are flowing
-  // (first frame lands ~0.5s in), then a final assert. This staged sequence is
-  // what makes torch + frameProcessor actually coexist on Android.
+  // When a measurement starts, assert the torch ON and re-assert a couple of times
+  // in case the controller settled late. The native patch (withTorchFix.js) forces
+  // FLASH_MODE_TORCH onto the repeating request, so a single stable 'on' keeps the
+  // LED lit for the whole window. We deliberately do NOT toggle it off→on: a flicker
+  // would break the PPG pulse signal mid-measurement and gave inconsistent readings.
   useEffect(() => {
     if (!collecting) return;
     torchOn();
-    const timers = [
-      setTimeout(kickTorch, 600),
-      setTimeout(kickTorch, 1500),
-      setTimeout(torchOn, 2500),
-    ];
+    const timers = [setTimeout(torchOn, 500), setTimeout(torchOn, 1200)];
     return () => timers.forEach(clearTimeout);
-  }, [collecting, torchOn, kickTorch]);
+  }, [collecting, torchOn]);
 
   // Drain the latest brightness on a steady timer while collecting.
   useEffect(() => {

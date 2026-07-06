@@ -86,6 +86,7 @@
     },
     "plugins": [
       "./plugins/withMedia3Force.js",
+      "./plugins/withTorchFix.js",
       [
         "expo-build-properties",
         {
