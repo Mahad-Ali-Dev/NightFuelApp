@@ -127,26 +127,23 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
     };
   }, [hasPermission, requestPermission, onError]);
 
-  // Force the torch to FULL brightness through the CameraController.
+  // Turn the torch ON at FULL strength through the CameraController.
   //
-  // The `<Camera torchMode="on">` prop only sets the torch MODE — internally it
-  // calls the controller's setTorchMode('on') with NO strength, so the HAL uses
-  // its DEFAULT torch level. On-device adb on a Samsung Galaxy A22 (MediaTek)
-  // showed that default is `duty(6)` of `maxDuty(60)` — roughly 10% — which is
-  // "on" as far as the flash driver is concerned but BELOW the LED's visible
-  // turn-on threshold (so the flash looks dead to the eye) and far too weak to
-  // trans-illuminate a fingertip for a PPG pulse. The controller exposes
-  // setTorchMode('on', strength) with strength 0..1; forcing 1.0 drives the LED
-  // at maximum, which both lights it visibly and gives a strong red signal.
-  //
-  // `controller` only exists after the session has started, so callers assert
-  // this on `onStarted` and again when a measurement begins.
-  const forceTorchMax = useCallback((): boolean => {
+  // Two things learned on-device + from VisionCamera's Android issues
+  // (#1687 "flash turns off when used with a frameProcessor", #2838 "torch
+  // doesn't always work"):
+  //  1. STRENGTH: the `<Camera torchMode="on">` prop calls setTorchMode('on')
+  //     with NO strength, so a MediaTek HAL (Samsung Galaxy A22) defaults to
+  //     ~10% — on-device adb showed `duty(6)` of `maxDuty(60)`: below the LED's
+  //     visible threshold and too weak for PPG. Passing strength 1.0 forces max.
+  //  2. TIMING: on Android a torch set during/just-after session configuration is
+  //     frequently overridden by the frame-output stream, so it must be
+  //     (re)asserted AFTER the camera is actually delivering frames (see kickTorch).
+  const torchOn = useCallback((): boolean => {
     const controller = cameraRef.current?.controller;
     if (!controller) return false;
     try {
-      // Fire-and-forget: returns a Promise, but we don't need to await it and a
-      // rejection (e.g. transient reconfigure) is retried by the callers below.
+      // Fire-and-forget; rejections (transient reconfigure) are retried by callers.
       void controller.setTorchMode('on', 1);
       return true;
     } catch {
@@ -154,17 +151,38 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
     }
   }, []);
 
+  // "Kick" the torch: force it OFF, then back ON at full strength a beat later.
+  // A plain 'on' set while the frame-output stream is (re)configuring is silently
+  // dropped on many Android devices; a delayed off->on toggle once the camera is
+  // actually delivering frames reliably latches the LED on. Harmless if already on.
+  const kickTorch = useCallback(() => {
+    const controller = cameraRef.current?.controller;
+    if (!controller) return;
+    try {
+      void controller.setTorchMode('off');
+      setTimeout(() => {
+        try {
+          void controller.setTorchMode('on', 1);
+        } catch {
+          // ignore — a later kick / assert will retry
+        }
+      }, 140);
+    } catch {
+      // ignore — a later kick / assert will retry
+    }
+  }, []);
+
   // The session has started → the controller is (about to be) available. Assert
-  // full-strength torch, retrying briefly until the controller accepts it.
+  // torch, retrying briefly until the controller accepts it.
   const handleStarted = useCallback(() => {
     let tries = 0;
     const tick = () => {
-      if (forceTorchMax() || tries >= 6) return;
+      if (torchOn() || tries >= 6) return;
       tries += 1;
       setTimeout(tick, 200);
     };
     tick();
-  }, [forceTorchMax]);
+  }, [torchOn]);
 
   // A missing back camera (rare) is handled by the render guard below + the
   // screen's "no frames delivered" watchdog, so there's no separate device
@@ -234,20 +252,21 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
     },
   });
 
-  // When a measurement actually starts, hammer the torch to full strength a few
-  // times over the first ~1.5s. This also overrides the default-strength torch
-  // that VisionCamera's internal prop updater sets when the controller first
-  // appears, guaranteeing the LED is at 100% for the whole capture window.
+  // When a measurement starts, drive the torch to full brightness — but because
+  // Android silently drops a torch set during stream (re)config, do it in stages:
+  // an immediate assert, then delayed off->on "kicks" AFTER frames are flowing
+  // (first frame lands ~0.5s in), then a final assert. This staged sequence is
+  // what makes torch + frameProcessor actually coexist on Android.
   useEffect(() => {
     if (!collecting) return;
-    forceTorchMax();
+    torchOn();
     const timers = [
-      setTimeout(forceTorchMax, 250),
-      setTimeout(forceTorchMax, 700),
-      setTimeout(forceTorchMax, 1400),
+      setTimeout(kickTorch, 600),
+      setTimeout(kickTorch, 1500),
+      setTimeout(torchOn, 2500),
     ];
     return () => timers.forEach(clearTimeout);
-  }, [collecting, forceTorchMax]);
+  }, [collecting, torchOn, kickTorch]);
 
   // Drain the latest brightness on a steady timer while collecting.
   useEffect(() => {
