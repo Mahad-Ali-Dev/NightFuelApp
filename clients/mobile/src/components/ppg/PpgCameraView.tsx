@@ -86,6 +86,16 @@ const READS_PER_FRAME = 2000;
  */
 const PPG_TARGET_RESOLUTION = { width: 480, height: 640 } as const;
 
+/**
+ * Torch strength (0–1) requested from the CameraController. Deliberately just
+ * under 1.0: VisionCamera computes the CameraX torch level as
+ * `1 + strength * maxTorchStrengthLevel`, so an exact 1.0 overflows the device
+ * maximum and setTorchStrengthLevel() throws (leaving the torch off). 0.98 maps
+ * to the top valid level after truncation on every device (single-level chips
+ * clamp to their only level; variable-strength chips reach maximum brightness).
+ */
+const TORCH_STRENGTH = 0.98;
+
 export default function PpgCameraView({ collecting, onSample, onError, style }: PpgCameraViewProps) {
   // Pick the back camera that ACTUALLY HAS THE FLASH LED. On multi-lens phones the
   // default back pick can resolve to an ultra-wide / telephoto lens with NO torch —
@@ -127,24 +137,26 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
     };
   }, [hasPermission, requestPermission, onError]);
 
-  // Turn the torch ON at FULL strength through the CameraController.
+  // Turn the torch ON at (near-)max strength through the CameraController.
   //
-  // Two things learned on-device + from VisionCamera's Android issues
-  // (#1687 "flash turns off when used with a frameProcessor", #2838 "torch
-  // doesn't always work"):
-  //  1. STRENGTH: the `<Camera torchMode="on">` prop calls setTorchMode('on')
-  //     with NO strength, so a MediaTek HAL (Samsung Galaxy A22) defaults to
-  //     ~10% — on-device adb showed `duty(6)` of `maxDuty(60)`: below the LED's
-  //     visible threshold and too weak for PPG. Passing strength 1.0 forces max.
-  //  2. TIMING: on Android a torch set during/just-after session configuration is
-  //     frequently overridden by the frame-output stream, so it must be
-  //     (re)asserted AFTER the camera is actually delivering frames (see kickTorch).
+  // THE KEY BUG (found in VisionCamera's HybridCameraController.kt): setTorchMode
+  // maps strength→level as `level = 1 + strength * maxTorchStrengthLevel`, then
+  // calls CameraX setTorchStrengthLevel(level). At strength **1.0** that yields
+  // `1 + max`, which EXCEEDS the device maximum, so setTorchStrengthLevel REJECTS
+  // and the promise throws BEFORE enableTorch() is ever called. So every
+  // `setTorchMode('on', 1.0)` we issued silently threw (we catch it) and did
+  // nothing — which is exactly why on-device logs showed no torch change from our
+  // calls, only the prop's plain enableTorch at the chip default (duty 6).
+  //
+  // Passing strength just under 1.0 keeps `1 + s*max` within range after toInt(),
+  // so on a device with variable torch strength (max > 1) this actually drives the
+  // LED to its top level; on a single-level chip it's a harmless no-worse default.
   const torchOn = useCallback((): boolean => {
     const controller = cameraRef.current?.controller;
     if (!controller) return false;
     try {
       // Fire-and-forget; rejections (transient reconfigure) are retried by callers.
-      void controller.setTorchMode('on', 1);
+      void controller.setTorchMode('on', TORCH_STRENGTH);
       return true;
     } catch {
       return false;
@@ -162,7 +174,7 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
       void controller.setTorchMode('off');
       setTimeout(() => {
         try {
-          void controller.setTorchMode('on', 1);
+          void controller.setTorchMode('on', TORCH_STRENGTH);
         } catch {
           // ignore — a later kick / assert will retry
         }
