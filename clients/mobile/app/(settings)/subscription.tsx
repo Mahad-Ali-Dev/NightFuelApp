@@ -55,7 +55,9 @@ export function SubscriptionScreenContent() {
   const renewalDate = formatRenewal((sub as { expiresAt?: string | null } | undefined)?.expiresAt);
   const planName = isPaid ? 'Pro' : 'Free';
 
-  const openPaywall = useCallback(() => router.push('/paywall' as never), [router]);
+  // The Zeitra Premium modal is the single RevenueCat paywall (reached from every
+  // Pro gate); the Settings upgrade action opens the same screen.
+  const openPaywall = useCallback(() => router.push('/(modals)/premium' as never), [router]);
 
   const handleRestore = useCallback(async () => {
     setRestoreInFlight(true);

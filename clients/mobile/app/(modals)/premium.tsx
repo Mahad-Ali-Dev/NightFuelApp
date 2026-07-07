@@ -15,30 +15,37 @@
  * ink-on-lime) drives the trial, with a subscription disclaimer and a subdued
  * Restore · Terms · Privacy footer.
  *
- * RE-SKIN ONLY — EVERY data hook / mutation / nav / a11y label / accessibilityState
- * is preserved exactly: the `upgrade` mutation (tier mapping PRO_ANNUAL/PRO,
- * success/error Alerts, qc invalidations, router.back), the `selectedPlan` toggle
- * and its plan a11y labels, the close handler (router.back), the Restore link
- * (router.push subscription) and the Terms/Privacy Linking.openURL handlers. The
- * displayed prices ($9.99/mo · $4.99/mo yearly = $59.99/year · 7-day trial) match the
- * locked pricing + the mockup — display-only text (real billing is the upgrade({tier})
- * call, not these strings). The benefit/plan lists are static consts (never async)
- * so the screen can never be empty; no empty/destructive state is required.
+ * BILLING = RevenueCat (StoreKit / Play Billing). The CTA runs a real store
+ * purchase on the selected package from the live RevenueCat offering: on success
+ * the `pro` entitlement flips immediately (client) and the subscription-service
+ * webhook confirms the tier authoritatively, then we invalidate the cached
+ * ['subscription-status'] / ['user-profile'] and router.back. When the offering
+ * isn't configured yet (dashboard products not set up / Expo Go), the screen
+ * degrades to an honest "Available soon" (CTA disabled) rather than a broken
+ * purchase — it never crashes. The retired custom `upgrade({tier})` backend call
+ * is gone (that was the free tier-flip we replaced). The `selectedPlan` toggle,
+ * plan a11y labels, the close handler and Terms/Privacy Linking.openURL handlers
+ * are preserved. The displayed prices ($9.99/mo · $4.99/mo yearly = $59.99/year ·
+ * 7-day trial) match the locked pricing + the mockup; the real charged price is
+ * whatever the store returns for the package. The benefit/plan lists are static
+ * consts (never async) so the screen can never be empty.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as Haptics from 'expo-haptics';
+import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { CtaButton } from '@/components/ui/CtaButton';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { withAlpha } from '@/theme/utils';
-import { upgrade } from '@/api/subscriptions';
+import { getCurrentOffering, purchase, restorePurchases, isPurchasesReady } from '@/lib/purchases/revenueCat';
 
 type Plan = 'annual' | 'monthly';
 
@@ -64,27 +71,72 @@ export default function PremiumScreen() {
     const qc = useQueryClient();
 
     const [selectedPlan, setSelectedPlan] = useState<Plan>('annual');
+    const [offering, setOffering] = useState<PurchasesOffering | null>(null);
+    const [purchasing, setPurchasing] = useState(false);
+    const [restoring, setRestoring] = useState(false);
 
-    const upgradeMutation = useMutation({
-        mutationFn: () =>
-            upgrade({ tier: selectedPlan === 'annual' ? 'PRO_ANNUAL' : 'PRO' }),
-        onSuccess: () => {
-            // Refresh subscription status everywhere it's used
+    // Load the live RevenueCat offering for real store packages. Stays null when
+    // products aren't configured yet (dashboard not set up / Expo Go) → the CTA
+    // degrades to an honest "Available soon"; the screen never breaks.
+    useEffect(() => {
+        let alive = true;
+        getCurrentOffering().then((o) => { if (alive) setOffering(o); });
+        return () => { alive = false; };
+    }, []);
+
+    const annualPkg = useMemo(
+        () => offering?.availablePackages.find((p) => p.packageType === 'ANNUAL') ?? null,
+        [offering],
+    );
+    const monthlyPkg = useMemo(
+        () => offering?.availablePackages.find((p) => p.packageType === 'MONTHLY') ?? null,
+        [offering],
+    );
+    const selectedPkg: PurchasesPackage | null = selectedPlan === 'annual' ? annualPkg : monthlyPkg;
+    const canBuy = isPurchasesReady() && !!selectedPkg;
+
+    // Real store purchase via RevenueCat. On success the `pro` entitlement flips
+    // immediately (client) and the subscription-service webhook confirms the tier
+    // authoritatively; we refresh the cached status everywhere and pop back.
+    const onSubscribe = async () => {
+        if (!selectedPkg) {
+            Alert.alert('Almost ready', 'Subscriptions are being set up — please check back shortly.');
+            return;
+        }
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        setPurchasing(true);
+        const res = await purchase(selectedPkg);
+        setPurchasing(false);
+        if (res.pro) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
             qc.invalidateQueries({ queryKey: ['subscription-status'] });
             qc.invalidateQueries({ queryKey: ['user-profile'] });
             Alert.alert(
                 '🎉 Welcome to Zeitra Pro!',
                 'Your 7-day free trial has started. Enjoy all premium features.',
-                [{ text: "Let's Go!", onPress: () => router.back() }]
+                [{ text: "Let's Go!", onPress: () => router.back() }],
             );
-        },
-        onError: (err: any) => {
-            Alert.alert(
-                'Upgrade Failed',
-                err?.response?.data?.message ?? err?.message ?? 'Something went wrong. Please try again.'
-            );
-        },
-    });
+        } else if (!res.cancelled) {
+            Alert.alert('Purchase didn’t complete', 'No charge was made. Please try again.');
+        }
+    };
+
+    const onRestore = async () => {
+        setRestoring(true);
+        const pro = await restorePurchases();
+        setRestoring(false);
+        if (pro) {
+            qc.invalidateQueries({ queryKey: ['subscription-status'] });
+            qc.invalidateQueries({ queryKey: ['user-profile'] });
+        }
+        Alert.alert(
+            pro ? 'Restored ✓' : 'Nothing to restore',
+            pro
+                ? 'Your Pro subscription is active again.'
+                : 'We couldn’t find an active subscription for this account.',
+            pro ? [{ text: 'Great', onPress: () => router.back() }] : undefined,
+        );
+    };
 
     const annualSelected  = selectedPlan === 'annual';
     const monthlySelected = selectedPlan === 'monthly';
@@ -260,12 +312,15 @@ export default function PremiumScreen() {
                     <CtaButton
                         size="lg"
                         flat
-                        label="Start 7-day free trial"
-                        loading={upgradeMutation.isPending}
-                        onPress={() => upgradeMutation.mutate()}
+                        label={canBuy ? 'Start 7-day free trial' : 'Available soon'}
+                        loading={purchasing}
+                        disabled={!canBuy || purchasing}
+                        onPress={onSubscribe}
                     />
                     <Text style={[typography.caption, { color: colors.text.tertiary, textAlign: 'center', marginTop: spacing.md }]}>
-                        {annualSelected ? 'Then $59.99/year · cancel anytime' : 'Then $9.99/month · cancel anytime'}
+                        {!canBuy
+                            ? 'Subscriptions activate once the store products are live.'
+                            : annualSelected ? 'Then $59.99/year · cancel anytime' : 'Then $9.99/month · cancel anytime'}
                     </Text>
 
                     {/* Restore · Terms · Privacy — subdued, non-destructive links */}
@@ -274,9 +329,10 @@ export default function PremiumScreen() {
                             accessibilityRole="button"
                             accessibilityLabel="Restore purchases"
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            onPress={() => router.push('/(settings)/subscription')}
+                            disabled={restoring}
+                            onPress={onRestore}
                         >
-                            <Text style={[typography.captionMedium, { color: colors.text.tertiary }]}>Restore</Text>
+                            <Text style={[typography.captionMedium, { color: colors.text.tertiary }]}>{restoring ? 'Restoring…' : 'Restore'}</Text>
                         </TouchableOpacity>
                         <Text style={[typography.caption, { color: colors.text.tertiary }]}>·</Text>
                         <TouchableOpacity
