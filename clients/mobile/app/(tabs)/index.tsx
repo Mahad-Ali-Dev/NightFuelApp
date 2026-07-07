@@ -41,14 +41,25 @@ import { getCurrent as getCurrentShift } from '@/api/shifts';
 import { getToday as getTodayPlan, PlanMeal } from '@/api/plans';
 import { getToday as getTodayProgress, getStreak } from '@/api/progress';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuthStore } from '@/store/authStore';
 import { getMyProfile } from '@/api/profile';
 import { safeImageUri } from '@/lib/imageUrl';
 import { useThemedPalette, type ThemedPalette } from '@/theme/useThemedPalette';
 import { isLightHex } from '@/theme/utils';
 import { usePedometerSteps } from '@/lib/pedometer';
+import { listMeasurements, type HrMeasurement } from '@/lib/ppg/measurementStore';
 import { TAB_BAR_H } from './_layout';
+
+/** Compact "how long ago" label for the last heart-rate reading on Home. */
+function hrAgo(iso: string): string {
+    const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+    if (!Number.isFinite(min) || min < 1) return 'just now';
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.round(min / 60);
+    if (hr < 24) return `${hr}h ago`;
+    return `${Math.round(hr / 24)}d ago`;
+}
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const H_PAD = 16;          // mockup body padding
@@ -204,6 +215,18 @@ export default function DashboardScreen() {
     // Shared cache key with the Profile screen + post-detail, so the freshest
     // avatar shows on Home with no extra fetch.
     const { data: profile } = useQuery({ queryKey: ['my-profile'], queryFn: getMyProfile, retry: 1 });
+
+    // Last camera heart-rate reading, surfaced on the Vitals hero (all users — not
+    // sex-gated). Reloaded on focus so a fresh measurement shows the moment you
+    // return to Home. Local + best-effort → resolves to null if none/unreadable.
+    const [lastHr, setLastHr] = useState<HrMeasurement | null>(null);
+    useFocusEffect(
+        useCallback(() => {
+            let alive = true;
+            listMeasurements().then((list) => { if (alive) setLastHr(list[0] ?? null); });
+            return () => { alive = false; };
+        }, []),
+    );
 
     // Phone pedometer — the "no wearable" step source. Best-effort + honest: on
     // Expo Go / an unavailable sensor it yields { steps:0, available:false } and
@@ -550,8 +573,16 @@ export default function DashboardScreen() {
                                     <Text style={st.hrHeroBadgeTxt}>No device</Text>
                                 </View>
                             </View>
-                            <Text style={st.hrHeroSub}>Finger on the camera + flash · ~30s</Text>
+                            <Text style={st.hrHeroSub}>
+                                {lastHr ? `Last reading · ${hrAgo(lastHr.ts)}` : 'Finger on the camera + flash · ~30s'}
+                            </Text>
                         </View>
+                        {lastHr ? (
+                            <View style={st.hrHeroLast}>
+                                <Text style={st.hrHeroLastVal}>{lastHr.bpm}</Text>
+                                <Text style={st.hrHeroLastUnit}>bpm</Text>
+                            </View>
+                        ) : null}
                         <Ionicons name="chevron-forward" size={20} color={D.muted} />
                     </TouchableOpacity>
 
@@ -754,6 +785,9 @@ const makeStyles = (D: ThemedPalette) => StyleSheet.create({
     hrHeroBadge: { backgroundColor: 'rgba(255,107,129,0.16)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7 },
     hrHeroBadgeTxt: [typography.captionMedium, { color: HEART, fontSize: 10 }] as any,
     hrHeroSub: [typography.caption, { color: D.muted, fontSize: 12, marginTop: 2 }] as any,
+    hrHeroLast: { alignItems: 'flex-end', marginRight: 2 },
+    hrHeroLastVal: [typography.subtitle, { color: HEART, fontSize: 22, lineHeight: 24, fontWeight: '800' }] as any,
+    hrHeroLastUnit: [typography.caption, { color: D.muted, fontSize: 10, marginTop: -2 }] as any,
     vRow: { flexDirection: 'row', gap: CARD_GAP, marginTop: CARD_GAP },
     vTile: { flex: 1, backgroundColor: D.card, borderWidth: 1, borderColor: D.border, borderRadius: 16, padding: 13, minHeight: 84 },
     vTileVal: [typography.subtitle, { color: D.text, fontSize: 15, marginTop: 8 }] as any,
