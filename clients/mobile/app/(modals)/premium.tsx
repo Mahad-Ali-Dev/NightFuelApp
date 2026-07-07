@@ -46,6 +46,7 @@ import { CtaButton } from '@/components/ui/CtaButton';
 import { PressableScale } from '@/components/ui/PressableScale';
 import { withAlpha } from '@/theme/utils';
 import { getCurrentOffering, purchase, restorePurchases, isPurchasesReady } from '@/lib/purchases/revenueCat';
+import { useSubscription } from '@/hooks/useSubscription';
 
 type Plan = 'annual' | 'monthly';
 
@@ -69,6 +70,9 @@ export default function PremiumScreen() {
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const qc = useQueryClient();
+    // Already-Pro users see a confirmation instead of the plans/CTA — never sell
+    // to someone who already has it.
+    const { isPro } = useSubscription();
 
     const [selectedPlan, setSelectedPlan] = useState<Plan>('annual');
     const [offering, setOffering] = useState<PurchasesOffering | null>(null);
@@ -221,6 +225,16 @@ export default function PremiumScreen() {
                     ))}
                 </Animated.View>
 
+                {isPro ? (
+                    <ProActive
+                        colors={colors}
+                        spacing={spacing}
+                        lime={lime}
+                        ink={ink}
+                        onManage={() => router.push('/(settings)/subscription')}
+                    />
+                ) : (
+                <>
                 {/* ── TRUST LINE ───────────────────────────────────────────── */}
                 <Animated.View entering={FadeInDown.duration(420).delay(120)} style={styles.trustLine}>
                     <Text style={[typography.caption, { color: lime, letterSpacing: 1.5 }]}>★★★★★</Text>
@@ -354,7 +368,45 @@ export default function PremiumScreen() {
                         </TouchableOpacity>
                     </View>
                 </Animated.View>
+                </>
+                )}
             </ScrollView>
+        </View>
+    );
+}
+
+/**
+ * The "already Pro" state — shown in place of the plans/CTA when useSubscription
+ * reports an active entitlement, so a subscriber is thanked + routed to manage
+ * rather than sold the plan again.
+ */
+function ProActive({
+    colors,
+    spacing,
+    lime,
+    ink,
+    onManage,
+}: {
+    colors: ReturnType<typeof useTheme>['colors'];
+    spacing: ReturnType<typeof useTheme>['spacing'];
+    lime: string;
+    ink: string;
+    onManage: () => void;
+}) {
+    return (
+        <View style={styles.proWrap}>
+            <View style={[styles.proCheck, { backgroundColor: lime }]}>
+                <Ionicons name="checkmark" size={34} color={ink} />
+            </View>
+            <Text style={{ color: colors.text.primary, fontSize: 22, fontWeight: '800', marginTop: spacing.md, textAlign: 'center' }}>
+                You’re on Zeitra Premium
+            </Text>
+            <Text style={{ color: colors.text.secondary, fontSize: 14, marginTop: spacing.xs, textAlign: 'center', lineHeight: 20 }}>
+                Every feature is unlocked. Thanks for supporting Zeitra 💚
+            </Text>
+            <View style={{ width: '100%', marginTop: spacing.xl }}>
+                <CtaButton size="lg" flat label="Manage subscription" onPress={onManage} />
+            </View>
         </View>
     );
 }
@@ -487,6 +539,20 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
         paddingVertical: 3,
         borderRadius: 10,
+    },
+
+    // Already-Pro confirmation (shown instead of plans/CTA).
+    proWrap: {
+        paddingHorizontal: 22,
+        paddingTop: 24,
+        alignItems: 'center',
+    },
+    proCheck: {
+        width: 68,
+        height: 68,
+        borderRadius: 34,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
 
     // CTA + footer.
