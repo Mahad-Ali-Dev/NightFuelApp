@@ -23,6 +23,7 @@ import { SubscriptionService } from './subscription.service';
 import { subscriptionRoutes } from './routes';
 import { setupEventSubscribers, type EventBus } from './events';
 import { registerStripeRoutes } from './stripe';
+import { registerRevenueCatWebhook } from './revenuecat';
 
 
 
@@ -224,6 +225,12 @@ export async function buildApp(): Promise<ReturnType<typeof Fastify>> {
 
   // ── Stripe Checkout + Webhook routes ────────────────────────────────────────
   registerStripeRoutes(app, subscriptionService, rootLogger);
+
+  // ── RevenueCat webhook (store purchases → backend tier sync) ─────────────────
+  // Authoritative source for mobile IAP: RevenueCat verifies the receipt and
+  // POSTs here so server-enforced Pro features stay in sync. Auth via the
+  // REVENUECAT_WEBHOOK_AUTH shared header secret (fail-closed when unset).
+  registerRevenueCatWebhook(app, subscriptionService, eventBus, rootLogger);
 
   // ── Global error handler ────────────────────────────────────────────────────
   // Converged onto the shared @nightfuel/config redactor (wraps the pure
