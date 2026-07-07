@@ -163,6 +163,30 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
     }
   }, []);
 
+  // Re-trigger the torch by toggling OFF→ON once, a beat after frames start. On
+  // this MediaTek chip the native FLASH_MODE_TORCH set at session-start doesn't
+  // reliably latch until the repeating request is re-submitted; clearing then
+  // re-setting forces that re-submit AND re-locks auto-exposure onto the torch-lit
+  // fingertip → a stronger pulse. Fired INSIDE the discarded warm-up window, so its
+  // brief dark blink never reaches the analysed signal. (Removing this regressed
+  // readings from "works sometimes" to "never" on-device — it earns its keep.)
+  const kickTorch = useCallback(() => {
+    const controller = cameraRef.current?.controller;
+    if (!controller) return;
+    try {
+      void controller.setTorchMode('off');
+      setTimeout(() => {
+        try {
+          void controller.setTorchMode('on', TORCH_STRENGTH);
+        } catch {
+          // ignore — the re-assert below retries
+        }
+      }, 140);
+    } catch {
+      // ignore — the re-assert below retries
+    }
+  }, []);
+
   // The session has started → the controller is (about to be) available. Assert
   // torch, retrying briefly until the controller accepts it.
   const handleStarted = useCallback(() => {
@@ -243,17 +267,17 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
     },
   });
 
-  // When a measurement starts, assert the torch ON and re-assert a couple of times
-  // in case the controller settled late. The native patch (withTorchFix.js) forces
-  // FLASH_MODE_TORCH onto the repeating request, so a single stable 'on' keeps the
-  // LED lit for the whole window. We deliberately do NOT toggle it off→on: a flicker
-  // would break the PPG pulse signal mid-measurement and gave inconsistent readings.
+  // When a measurement starts: assert torch immediately, re-trigger it once with an
+  // off→on kick at 700ms (forces the FLASH_MODE_TORCH repeating request to re-submit
+  // + re-locks exposure on the lit fingertip), then a final assert at 1500ms — all
+  // inside the 2s warm-up window that finalize() discards, so the kick's blink never
+  // touches the analysed pulse. This is the sequence that produced real readings.
   useEffect(() => {
     if (!collecting) return;
     torchOn();
-    const timers = [setTimeout(torchOn, 500), setTimeout(torchOn, 1200)];
+    const timers = [setTimeout(kickTorch, 700), setTimeout(torchOn, 1500)];
     return () => timers.forEach(clearTimeout);
-  }, [collecting, torchOn]);
+  }, [collecting, torchOn, kickTorch]);
 
   // Drain the latest brightness on a steady timer while collecting.
   useEffect(() => {

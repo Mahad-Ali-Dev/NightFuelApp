@@ -39,8 +39,13 @@ export function isPpgSupported(): boolean {
 }
 
 // ── Capture tuning (shared by the screen + the camera view) ──────────────────
-/** How long a measurement runs, in seconds. ~15 s ≈ 10–25 beats at rest. */
-export const CAPTURE_SECONDS = 15;
+/**
+ * How long a measurement runs, in seconds. Longer than the textbook ~15s on
+ * purpose: on phones with a dim torch (e.g. budget MediaTek chips) the pulse
+ * signal is weak and the peak-detector misses beats, so a longer window gives it
+ * more chances to accumulate the ~9 clean beats it needs before reporting.
+ */
+export const CAPTURE_SECONDS = 22;
 /**
  * Seconds of samples to DISCARD at the start while the camera's auto-exposure /
  * white-balance settle and the finger stabilises — otherwise the first beats sit
