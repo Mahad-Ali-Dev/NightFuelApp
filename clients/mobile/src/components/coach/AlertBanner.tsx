@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/theme';
 
 interface AlertBannerProps {
     title: string;
@@ -17,7 +18,8 @@ const SEVERITY = {
     low: { bg: '#4FC3F720', border: '#4FC3F7', icon: 'information-circle' as const, color: '#4FC3F7' },
 };
 
-export function AlertBanner({ title, message, severity = 'high', onDismiss, onAction, actionLabel = 'View' }: AlertBannerProps) {
+function AlertBannerComponent({ title, message, severity = 'high', onDismiss, onAction, actionLabel = 'View' }: AlertBannerProps) {
+    const { colors } = useTheme();
     const s = SEVERITY[severity];
 
     return (
@@ -26,20 +28,26 @@ export function AlertBanner({ title, message, severity = 'high', onDismiss, onAc
                 <Ionicons name={s.icon} size={20} color={s.color} />
                 <Text style={[styles.title, { color: s.color }]}>{title}</Text>
                 {onDismiss && (
-                    <TouchableOpacity onPress={onDismiss} style={{ marginLeft: 'auto' }}>
-                        <Ionicons name="close" size={18} color="#8B949E" />
+                    <TouchableOpacity onPress={onDismiss} style={{ marginLeft: 'auto' }} activeOpacity={0.85}>
+                        <Ionicons name="close" size={18} color={colors.text.secondary} />
                     </TouchableOpacity>
                 )}
             </View>
             <Text style={styles.message}>{message}</Text>
             {onAction && (
-                <TouchableOpacity style={[styles.actionBtn, { borderColor: s.color }]} onPress={onAction}>
+                <TouchableOpacity style={[styles.actionBtn, { borderColor: s.color }]} onPress={onAction} activeOpacity={0.85}>
                     <Text style={[styles.actionText, { color: s.color }]}>{actionLabel}</Text>
                 </TouchableOpacity>
             )}
         </View>
     );
 }
+
+/**
+ * Memoized: primitive props plus stable `onDismiss`/`onAction` callbacks, no
+ * internal state.
+ */
+export const AlertBanner = React.memo(AlertBannerComponent);
 
 const styles = StyleSheet.create({
     container: { borderRadius: 16, padding: 16, borderWidth: 1, marginBottom: 12 },

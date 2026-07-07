@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Food Encyclopedia</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar,.mscroll::-webkit-scrollbar{display:none}
+  .mscroll{overflow-x:auto;scrollbar-width:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .glow{border:1.5px solid var(--lm);box-shadow:0 0 14px #C2F03C44;background:linear-gradient(150deg,#2b303a,#14171e)}
+  .cat{position:relative;border-radius:16px;background:var(--cd);border:1px solid var(--bd);overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:13px}
+  .cat .stage{position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 50% 30%,#1c2a0e55,transparent 62%)}
+  .cat .food{position:absolute;width:74%;height:58%;left:13%;top:9%;object-fit:contain;filter:drop-shadow(0 8px 14px #0007)}
+  .cat .ttl{position:relative;color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px;z-index:1}
+  .cat .sub{position:relative;font-size:11px;font-weight:500;color:var(--mu);z-index:1;margin-top:1px}
+  .cat .cnt{position:absolute;top:11px;right:12px;z-index:1;font-size:12px;font-weight:600;color:var(--lm)}
+</style>
+</head>
+<body>
+<div class="frame"><div class="scroll" style="padding-bottom:24px">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+  <!-- back-chevron header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px 4px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:38px;height:38px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:21px"></i></div>
+      <span style="color:var(--tx);font-size:19px;font-weight:600;letter-spacing:-0.3px">Food library</span>
+    </div>
+    <div style="width:38px;height:38px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-barcode" style="color:var(--tx);font-size:20px"></i></div>
+  </div>
+
+  <!-- search -->
+  <div style="padding:10px 16px 2px">
+    <div style="display:flex;align-items:center;gap:9px;height:44px;background:var(--cd);border:1px solid var(--bd);border-radius:14px;padding:0 14px">
+      <i class="ti ti-search" style="color:var(--mu);font-size:19px"></i>
+      <span style="color:var(--mu);font-size:14px;font-weight:400">Search 760 foods</span>
+    </div>
+  </div>
+
+  <!-- FOOD OF THE DAY: cutout floats on a lime stage -->
+  <div style="padding:14px 16px 0"><div class="glow" style="position:relative;overflow:hidden;height:176px;border-radius:18px">
+    <div style="position:absolute;inset:0;background:radial-gradient(ellipse 70% 70% at 74% 42%,#C2F03C22,transparent 62%)"></div>
+    <img src="ready/food-fruits.png" alt="" style="position:absolute;right:2px;top:18px;width:150px;height:150px;object-fit:contain;filter:drop-shadow(0 14px 22px #0008)">
+    <div style="position:absolute;top:14px;left:14px;display:inline-flex;align-items:center;gap:6px;background:var(--lm);color:#13200a;border-radius:8px;padding:4px 10px;font-size:10px;font-weight:600;letter-spacing:0.3px">FOOD OF THE DAY</div>
+    <div style="position:absolute;left:16px;bottom:16px;right:148px">
+      <div style="color:#fff;font-size:24px;font-weight:600;letter-spacing:-0.5px">Banana</div>
+      <div style="color:#cfd4dd;font-size:12.5px;font-weight:400;margin-top:1px">Fruits · per 100g</div>
+      <div style="display:flex;gap:16px;margin-top:13px">
+        <div><div style="color:var(--lm);font-size:18px;font-weight:600;line-height:1;letter-spacing:-0.3px">89</div><div style="color:var(--mu);font-size:9.5px;font-weight:500;letter-spacing:0.4px;margin-top:2px">KCAL</div></div>
+        <div><div style="color:#fff;font-size:18px;font-weight:600;line-height:1;letter-spacing:-0.3px">23<span style="font-size:12px;color:var(--mu)">g</span></div><div style="color:var(--mu);font-size:9.5px;font-weight:500;letter-spacing:0.4px;margin-top:2px">CARBS</div></div>
+        <div><div style="color:#fff;font-size:18px;font-weight:600;line-height:1;letter-spacing:-0.3px">3.1</div><div style="color:var(--mu);font-size:9.5px;font-weight:500;letter-spacing:0.4px;margin-top:2px">FIBER</div></div>
+      </div>
+    </div>
+  </div></div>
+
+  <!-- filter chips -->
+  <div class="mscroll" style="display:flex;gap:8px;padding:14px 16px 2px">
+    <span style="flex-shrink:0;font-size:13px;font-weight:600;color:#13200a;background:var(--lm);padding:8px 15px;border-radius:11px">All</span>
+    <span style="flex-shrink:0;font-size:13px;font-weight:500;color:var(--tx);background:var(--cd);border:1px solid var(--bd);padding:7px 14px;border-radius:11px">High protein</span>
+    <span style="flex-shrink:0;font-size:13px;font-weight:500;color:var(--tx);background:var(--cd);border:1px solid var(--bd);padding:7px 14px;border-radius:11px">Low carb</span>
+    <span style="flex-shrink:0;font-size:13px;font-weight:500;color:var(--tx);background:var(--cd);border:1px solid var(--bd);padding:7px 14px;border-radius:11px">Pre-shift</span>
+  </div>
+
+  <!-- categories -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:22px 18px 12px">
+    <span style="color:var(--tx);font-size:16px;font-weight:600">Browse categories</span>
+    <span style="color:var(--mu);font-size:12.5px">8 groups</span>
+  </div>
+
+  <!-- bento grid -->
+  <div style="padding:0 16px"><div style="display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:114px;gap:11px">
+    <div class="cat" style="grid-row:span 2">
+      <div class="stage"></div>
+      <img class="food" src="ready/food-vegetables.png" alt="" style="width:84%;height:52%;left:8%;top:10%">
+      <div class="cnt">128</div>
+      <div class="ttl">Vegetables</div>
+      <div class="sub">Low cal · high fiber</div>
+    </div>
+    <div class="cat">
+      <div class="stage"></div>
+      <img class="food" src="ready/food-fruits.png" alt="">
+      <div class="cnt">94</div>
+      <div class="ttl">Fruits</div>
+    </div>
+    <div class="cat">
+      <div class="stage"></div>
+      <img class="food" src="ready/food-meat.png" alt="">
+      <div class="cnt">76</div>
+      <div class="ttl">Proteins</div>
+    </div>
+    <div class="cat">
+      <div class="stage"></div>
+      <img class="food" src="ready/food-seafood.png" alt="">
+      <div class="cnt">52</div>
+      <div class="ttl">Seafood</div>
+    </div>
+    <div class="cat">
+      <div class="stage"></div>
+      <img class="food" src="ready/food-grains.png" alt="">
+      <div class="cnt">63</div>
+      <div class="ttl">Grains</div>
+    </div>
+    <div class="cat">
+      <div class="stage"></div>
+      <img class="food" src="ready/food-dairy.png" alt="">
+      <div class="cnt">41</div>
+      <div class="ttl">Dairy</div>
+    </div>
+    <div class="cat">
+      <div class="stage"></div>
+      <img class="food" src="ready/food-nuts-seeds.png" alt="">
+      <div class="cnt">38</div>
+      <div class="ttl">Nuts &amp; Seeds</div>
+    </div>
+  </div></div>
+
+  <!-- popular -->
+  <div style="color:var(--tx);font-size:16px;font-weight:600;padding:24px 18px 12px">Popular this week</div>
+  <div style="padding:0 16px;display:flex;flex-direction:column;gap:11px">
+    <div class="zc" style="display:flex;align-items:center;gap:13px;padding:11px 14px">
+      <div style="width:56px;height:56px;border-radius:14px;background:#1c2a0e;border:1px solid #2e3a16;flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="ready/food-meat.png" alt="" style="width:48px;height:48px;object-fit:contain"></div>
+      <div style="flex:1">
+        <div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Grilled chicken breast</div>
+        <div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Proteins · 100g</div>
+        <div style="display:flex;gap:12px;margin-top:6px"><span style="color:var(--mu);font-size:12px;font-weight:500">31g P</span><span style="color:var(--mu);font-size:12px;font-weight:500">0g C</span><span style="color:var(--mu);font-size:12px;font-weight:500">4g F</span></div>
+      </div>
+      <div style="text-align:right"><div style="color:var(--tx);font-size:19px;font-weight:600;letter-spacing:-0.3px">165</div><div style="color:var(--mu);font-size:11px;font-weight:400">kcal</div></div>
+    </div>
+    <div class="zc" style="display:flex;align-items:center;gap:13px;padding:11px 14px">
+      <div style="width:56px;height:56px;border-radius:14px;background:#1c2a0e;border:1px solid #2e3a16;flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden"><img src="ready/food-seafood.png" alt="" style="width:48px;height:48px;object-fit:contain"></div>
+      <div style="flex:1">
+        <div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Atlantic salmon</div>
+        <div style="color:var(--mu);font-size:12px;font-weight:400;margin-top:1px">Seafood · 100g</div>
+        <div style="display:flex;gap:12px;margin-top:6px"><span style="color:var(--mu);font-size:12px;font-weight:500">20g P</span><span style="color:var(--mu);font-size:12px;font-weight:500">0g C</span><span style="color:var(--mu);font-size:12px;font-weight:500">13g F</span></div>
+      </div>
+      <div style="text-align:right"><div style="color:var(--tx);font-size:19px;font-weight:600;letter-spacing:-0.3px">208</div><div style="color:var(--mu);font-size:11px;font-weight:400">kcal</div></div>
+    </div>
+  </div>
+  <div style="height:14px"></div>
+</div></div>
+</body>
+</html>

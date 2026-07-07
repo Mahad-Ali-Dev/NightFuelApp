@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
   output   = "../src/generated/prisma"
 }
 
@@ -23,10 +24,15 @@ model DayPlan {
   generationTokens    Int?       @map("generation_tokens")
   userRating          Int?       @map("user_rating")
   status              PlanStatus @default(ACTIVE)
+  aiGenerated         Boolean    @default(false) @map("ai_generated")
   createdAt           DateTime   @default(now()) @map("created_at")
   updatedAt           DateTime   @updatedAt @map("updated_at")
 
-  protocol ProtocolTemplate? @relation(fields: [protocolId], references: [id])
+  // onDelete: SetNull — when a coach account is erased (F36 GDPR purge deletes their
+  // protocol_templates by creator_id), other users' day_plans that referenced a deleted
+  // protocol have protocol_id nulled instead of the delete aborting on an FK violation.
+  // protocolId is already nullable and the engine treats null as "no protocol".
+  protocol ProtocolTemplate? @relation(fields: [protocolId], references: [id], onDelete: SetNull)
 
   @@unique([userId, planDate, planVersion])
   @@index([userId, planDate(sort: Desc)])

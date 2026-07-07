@@ -1,6 +1,14 @@
+/**
+ * VoiceInput — a mic toggle for the chat composer. `isRecording` is genuine
+ * ground truth (a real on/off state, not a derived visual — per state-ground-
+ * truth), so it stays in useState. Theme-driven (Aurora tokens) with an a11y
+ * role/label/state and a >=44px touch target.
+ */
 import React, { useState } from 'react';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/theme';
+import { withAlpha } from '@/theme/utils';
 
 interface VoiceInputProps {
     onRecordStart?: () => void;
@@ -8,6 +16,7 @@ interface VoiceInputProps {
 }
 
 export function VoiceInput({ onRecordStart, onRecordEnd }: VoiceInputProps) {
+    const { colors, typography } = useTheme();
     const [isRecording, setIsRecording] = useState(false);
 
     const toggleRecording = () => {
@@ -22,15 +31,22 @@ export function VoiceInput({ onRecordStart, onRecordEnd }: VoiceInputProps) {
 
     return (
         <TouchableOpacity
-            style={[styles.btn, isRecording && styles.btnRecording]}
+            style={[
+                styles.btn,
+                { backgroundColor: colors.background.secondary },
+                isRecording && [styles.btnRecording, { backgroundColor: withAlpha(colors.error, 0.16) }],
+            ]}
             onPress={toggleRecording}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={isRecording ? 'Stop recording' : 'Record a voice message'}
+            accessibilityState={{ selected: isRecording }}
         >
-            <Ionicons name={isRecording ? 'stop-circle' : 'mic'} size={22} color={isRecording ? '#FF4444' : '#8B949E'} />
+            <Ionicons name={isRecording ? 'stop-circle' : 'mic'} size={22} color={isRecording ? colors.error : colors.text.secondary} />
             {isRecording && (
                 <View style={styles.recordingIndicator}>
-                    <View style={styles.dot} />
-                    <Text style={styles.recordingText}>Recording...</Text>
+                    <View style={[styles.dot, { backgroundColor: colors.error }]} />
+                    <Text style={[typography.caption, { color: colors.error, fontWeight: '700' }]}>Recording…</Text>
                 </View>
             )}
         </TouchableOpacity>
@@ -38,9 +54,8 @@ export function VoiceInput({ onRecordStart, onRecordEnd }: VoiceInputProps) {
 }
 
 const styles = StyleSheet.create({
-    btn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#161B22', alignItems: 'center', justifyContent: 'center' },
-    btnRecording: { backgroundColor: '#FF444420', width: 'auto', paddingHorizontal: 16, flexDirection: 'row', gap: 8 },
+    btn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+    btnRecording: { width: 'auto', paddingHorizontal: 16, flexDirection: 'row', gap: 8 },
     recordingIndicator: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF4444' },
-    recordingText: { color: '#FF4444', fontSize: 12, fontWeight: '700' },
+    dot: { width: 8, height: 8, borderRadius: 4 },
 });

@@ -182,7 +182,7 @@ export function StrengthAnalytics() {
                                             <motion.div
                                                 initial={{ width: 0 }}
                                                 animate={{ width: `${percentage}%` }}
-                                                className={`h-full rounded-full ${percentage > 70 ? 'bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.5)]' : percentage > 30 ? 'bg-orange-700' : 'bg-neutral-700'}`}
+                                                className={`h-full rounded-full ${percentage > 70 ? 'bg-orange-500 shadow-[0_0_10px_rgba(168, 204, 60,0.5)]' : percentage > 30 ? 'bg-orange-700' : 'bg-neutral-700'}`}
                                             />
                                         </div>
                                         <div className="text-[10px] text-neutral-500 font-bold w-4">{count}</div>

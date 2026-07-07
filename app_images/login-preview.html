@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Sign in</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--ink:#13200a;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .fld{display:flex;align-items:center;gap:12px;background:var(--cd);border:1px solid var(--bd);border-radius:14px;padding:15px 16px;margin-top:12px}
+  .fld i{color:var(--mu);font-size:20px}
+  .fld .ph{color:#5a5f6a;font-size:15px;font-weight:400;flex:1}
+  .soc{flex:1;display:flex;align-items:center;justify-content:center;gap:9px;background:var(--cd);border:1px solid var(--bd);border-radius:14px;padding:14px;color:var(--tx);font-size:15px;font-weight:500}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll" style="padding-bottom:30px">
+    <!-- status bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+    <!-- soft stage with model cutout -->
+    <div style="position:relative;height:212px;margin-top:6px;overflow:hidden">
+      <div style="position:absolute;left:50%;top:14px;transform:translateX(-50%);width:210px;height:210px;border-radius:50%;background:radial-gradient(circle,#222a14 0%,#15181F 62%,transparent 72%)"></div>
+      <img src="ready/hero-female-1.png" style="position:absolute;left:50%;transform:translateX(-50%);top:-18px;height:300px;width:auto;object-fit:contain">
+      <div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 55%,var(--bg) 100%)"></div>
+      <!-- back button -->
+      <div style="position:absolute;top:8px;left:18px;width:38px;height:38px;border-radius:50%;background:#15181Fcc;border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:20px"></i></div>
+    </div>
+
+    <div style="padding:0 24px">
+      <!-- title -->
+      <div style="color:var(--tx);font-size:28px;font-weight:700;letter-spacing:-0.5px">Welcome back</div>
+      <div style="color:var(--mu);font-size:15px;font-weight:400;margin-top:4px">Sign in to keep your streak going.</div>
+
+      <div class="fld"><i class="ti ti-mail"></i><span class="ph">Email address</span></div>
+      <div class="fld"><i class="ti ti-lock"></i><span class="ph">Password</span><i class="ti ti-eye" style="font-size:20px"></i></div>
+      <div style="text-align:right;margin-top:13px"><span style="color:var(--lm);font-size:14px;font-weight:500">Forgot password?</span></div>
+
+      <div style="background:var(--lm);color:var(--ink);font-size:16px;font-weight:600;padding:16px;border-radius:15px;text-align:center;margin-top:18px">Sign in</div>
+
+      <div style="display:flex;align-items:center;gap:12px;margin:22px 0 16px"><div style="flex:1;height:1px;background:var(--bd)"></div><span style="color:var(--mu);font-size:13px;font-weight:400">or continue with</span><div style="flex:1;height:1px;background:var(--bd)"></div></div>
+      <div style="display:flex;gap:12px"><div class="soc"><i class="ti ti-brand-apple" style="font-size:20px"></i>Apple</div><div class="soc"><i class="ti ti-brand-google" style="font-size:18px"></i>Google</div></div>
+    </div>
+  </div>
+
+  <div style="position:absolute;bottom:30px;left:0;right:0;text-align:center;color:var(--mu);font-size:14px;font-weight:400">New to Zeitra? <span style="color:var(--lm);font-weight:600">Create account</span></div>
+</div>
+</body>
+</html>

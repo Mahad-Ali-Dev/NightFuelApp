@@ -51,6 +51,19 @@ export interface RegisterExpoPushInput {
   expoPushToken: string; // stored as `endpoint`
 }
 
+/**
+ * Thrown when a push registration would re-point an endpoint / Expo token that
+ * is already owned by a DIFFERENT user (LOW #18 — push-subscription hijack).
+ * Registration is refused rather than silently reassigning ownership.
+ */
+export class PushSubscriptionConflictError extends Error {
+  readonly statusCode = 409;
+  constructor() {
+    super('Push subscription endpoint already registered to another user');
+    this.name = 'PushSubscriptionConflictError';
+  }
+}
+
 // ─── PushService ─────────────────────────────────────────────────────────────
 
 export class PushService {
@@ -67,11 +80,34 @@ export class PushService {
   async registerWebPush(input: RegisterWebPushInput): Promise<{ id: string }> {
     const { userId, endpoint, p256dh, auth } = input;
 
-    const sub = await (this.prisma as any).pushSubscription.upsert({
+    // SECURITY (LOW #18 — push-subscription hijack): `endpoint` is globally
+    // @unique. A blind upsert keyed on `endpoint` with `update: { userId }`
+    // would RE-POINT a subscription owned by another user to the caller — an
+    // attacker who learns/guesses an endpoint could hijack delivery (or steal
+    // an existing device's subscription). We never silently reassign an
+    // endpoint across users: only the SAME owner may update the row in place;
+    // a row owned by a DIFFERENT user is left untouched and the collision is
+    // surfaced safely to the caller.
+    const existing = await (this.prisma as any).pushSubscription.findUnique({
       where: { endpoint },
-      create: { userId, endpoint, p256dh, auth, platform: 'WEB' },
-      update: { userId, p256dh, auth },
     });
+
+    if (existing && existing.userId !== userId) {
+      this.logger.warn(
+        { userId, subId: existing.id },
+        '[push] web push endpoint already owned by another user — refusing cross-user reassignment',
+      );
+      throw new PushSubscriptionConflictError();
+    }
+
+    const sub = existing
+      ? await (this.prisma as any).pushSubscription.update({
+          where: { endpoint },
+          data: { userId, p256dh, auth },
+        })
+      : await (this.prisma as any).pushSubscription.create({
+          data: { userId, endpoint, p256dh, auth, platform: 'WEB' },
+        });
 
     this.logger.info({ userId, subId: sub.id }, '[push] web push subscription registered');
     return { id: sub.id };
@@ -81,11 +117,29 @@ export class PushService {
   async registerExpoPush(input: RegisterExpoPushInput): Promise<{ id: string }> {
     const { userId, expoPushToken } = input;
 
-    const sub = await (this.prisma as any).pushSubscription.upsert({
+    // SECURITY (LOW #18): same cross-user hijack guard as registerWebPush.
+    // `endpoint` (the Expo push token) is @unique; never re-point a token
+    // owned by another user to the caller.
+    const existing = await (this.prisma as any).pushSubscription.findUnique({
       where: { endpoint: expoPushToken },
-      create: { userId, endpoint: expoPushToken, platform: 'EXPO' },
-      update: { userId },
     });
+
+    if (existing && existing.userId !== userId) {
+      this.logger.warn(
+        { userId, subId: existing.id },
+        '[push] expo push token already owned by another user — refusing cross-user reassignment',
+      );
+      throw new PushSubscriptionConflictError();
+    }
+
+    const sub = existing
+      ? await (this.prisma as any).pushSubscription.update({
+          where: { endpoint: expoPushToken },
+          data: { userId },
+        })
+      : await (this.prisma as any).pushSubscription.create({
+          data: { userId, endpoint: expoPushToken, platform: 'EXPO' },
+        });
 
     this.logger.info({ userId, subId: sub.id }, '[push] expo push subscription registered');
     return { id: sub.id };

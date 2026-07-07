@@ -39,6 +39,8 @@ export const DEEP_LINK_ROUTES: Array<{
   { pattern: /^\/subscription\/return\/?$/i, target: '/(settings)/subscription' },
   // Shared workout
   { pattern: /^\/share\/workout\/([^/]+)\/?$/i, target: '/(exercises)/$1' },
+  // Cycle screen — opened from the Android home-screen widget (zeitra://cycle)
+  { pattern: /^\/cycle\/?$/i, target: '/(performance)/cycle' },
 ];
 
 export interface DeepLinkResolution {
@@ -70,12 +72,19 @@ export function resolveDeepLink(rawUrl: string): DeepLinkResolution {
   // Reject anything that's not http(s) or our app scheme.
   // (Linking.parse strips the scheme for us — check the original URL.)
   const scheme = (rawUrl.match(/^([a-z][a-z0-9+.-]*):/i)?.[1] ?? '').toLowerCase();
-  const ALLOWED_SCHEMES = ['https', 'nightfuel'];
+  const ALLOWED_SCHEMES = ['https', 'zeitra'];
   if (scheme && !ALLOWED_SCHEMES.includes(scheme)) {
     return { safe: false, route: '', reason: 'unsafe_scheme', source };
   }
 
-  const path = '/' + (parsed.path ?? '').replace(/^\/+/, '');
+  // For the custom app scheme (e.g. zeitra://reset), expo-linking puts the
+  // first segment in `hostname`, not `path`. Fold it back in so app-launched
+  // URLs resolve the same as their https:// equivalents.
+  let rawPath = parsed.path ?? '';
+  if (scheme === 'zeitra' && parsed.hostname) {
+    rawPath = parsed.hostname + (rawPath ? '/' + rawPath : '');
+  }
+  const path = '/' + rawPath.replace(/^\/+/, '');
   const queryParams = parsed.queryParams ?? {};
 
   for (const entry of DEEP_LINK_ROUTES) {

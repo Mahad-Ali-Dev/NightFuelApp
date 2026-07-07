@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { useTheme } from '@/theme';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Card } from '@/components/ui/Card';
-import { useOnboardingStore } from '@/store/onboardingStore';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/theme';
+import { CtaButton, DateTimeField, GlassCard } from '@/components/ui';
+import { withAlpha } from '@/theme/utils';
+import { SelectionChip } from '@/components/SelectionChip';
+import { useOnboardingStore } from '@/store/onboardingStore';
 import { ShiftType, ActivityLevel, ExperienceLevel, LifestyleType, HealthCondition } from '@/types/enums';
+import { isValidTime } from '@/utils/validation';
 
 const ACTIVITY_LEVELS = [
     { value: ActivityLevel.SEDENTARY, label: 'Sedentary' },
@@ -47,9 +51,16 @@ const HEALTH_CONDITIONS = [
     { value: HealthCondition.HYPERTENSION, label: 'Hypertension' },
 ];
 
+// This screen is the *Lifestyle* step. The onboarding layout's header owns the
+// authoritative "STEP X OF N" counter + progress bar (derived from the route
+// order, including the FEMALE-only conditional cycle step), so this screen no
+// longer renders its own numeric step indicator — it would just duplicate the
+// header. The hero keeps the "YOUR LIFESTYLE" overline + display heading only.
+
 export default function LifestyleScreen() {
     const { colors, typography, spacing, borderRadius } = useTheme();
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const { data, updateData } = useOnboardingStore();
 
     const [shiftType, setShiftType] = useState<ShiftType | null>(data.shiftType);
@@ -68,6 +79,22 @@ export default function LifestyleScreen() {
         }
     };
 
+    // Field-named copy WITH an explicit recovery path: state the expected
+    // format and a concrete 24h example so the fix is obvious (forms guidance:
+    // error below the field, with a recovery path).
+    const startHourError = startHour.length > 0 && !isValidTime(startHour)
+        ? 'Bedtime must be a valid 24h time, e.g. 23:30'
+        : undefined;
+    const endHourError = endHour.length > 0 && !isValidTime(endHour)
+        ? 'Wake up must be a valid 24h time, e.g. 07:00'
+        : undefined;
+
+    // NOTE: no screen-level live-region summary here. DateTimeField already
+    // renders its OWN role="alert" + polite live-region error text directly
+    // below each field (DateTimeField.tsx), so the per-field alerts are the
+    // single announcement surface — adding a second summary alert would make a
+    // screen reader double-speak the same recovery message.
+
     const handleNext = () => {
         updateData({
             shiftType,
@@ -81,85 +108,216 @@ export default function LifestyleScreen() {
         router.push('/(onboarding)/dietary-needs');
     };
 
-    const isValid = shiftType && lifestyle && experience && activity && startHour && endHour;
+    const isValid =
+        !!shiftType &&
+        !!lifestyle &&
+        !!experience &&
+        !!activity &&
+        isValidTime(startHour) &&
+        isValidTime(endHour);
 
-    const SelectionGroup = ({ label, options, selected, onSelect, horizontal = false }: any) => (
-        <View style={{ marginBottom: spacing.lg }}>
-            <Text style={[typography.subhead, { color: colors.text.secondary, marginBottom: spacing.sm }]}>{label}</Text>
-            <View style={[styles.optionsRow, horizontal && { flexWrap: 'wrap' }]}>
-                {options.map((opt: any) => (
-                    <TouchableOpacity
-                        key={opt.value}
-                        onPress={() => onSelect(selected === opt.value ? null : opt.value)}
-                        style={[
-                            styles.chip,
-                            { backgroundColor: colors.background.secondary, borderRadius: borderRadius.full },
-                            selected === opt.value && { backgroundColor: colors.accent.coral }
-                        ]}
-                    >
-                        <Text style={[typography.caption, { color: selected === opt.value ? '#fff' : colors.text.primary }]}>
-                            {opt.label}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-        </View>
-    );
+    // Sleep-window duration (in hours), wrapping past midnight — drives the lime
+    // info hint under the two time cards (mockup: "That's a 7-hour sleep window").
+    // Only computed when both times are valid; otherwise the hint is hidden.
+    const sleepHours = (() => {
+        if (!isValidTime(startHour) || !isValidTime(endHour)) return null;
+        const startParts = startHour.split(':');
+        const endParts = endHour.split(':');
+        const startMins = Number(startParts[0] ?? 0) * 60 + Number(startParts[1] ?? 0);
+        const endMins = Number(endParts[0] ?? 0) * 60 + Number(endParts[1] ?? 0);
+        let mins = endMins - startMins;
+        if (mins <= 0) mins += 24 * 60; // wrap overnight (e.g. 08:00 → 15:00 same day, or 23:00 → 07:00)
+        const hrs = Math.round((mins / 60) * 10) / 10;
+        return Number.isInteger(hrs) ? String(hrs) : hrs.toFixed(1);
+    })();
+
+    // ── Premium section scaffolding ──────────────────────────────────────────
+    // Single-choice chip group: bold overline label with a leading accent icon,
+    // then a wrapping row of lime SelectionChips. Re-tapping the active chip
+    // clears it (onSelect(null)) — preserving the original toggle behaviour.
+    //
+    // Motion: per the skill's "animate only 1–2 KEY elements per view" rule the
+    // entrance lives on the hero + the FIRST group only; the remaining groups
+    // and lower cards are wrapped in ONE parent Animated.View below, so the
+    // screen settles fast and the motion reads as intentional, not a decorative
+    // 7-element cascade. `animate` opts a single group into its own entrance.
+    const SelectionGroup = ({
+        label,
+        icon,
+        options,
+        selected,
+        onSelect,
+        animate = false,
+        delay = 0,
+    }: {
+        label: string;
+        icon: keyof typeof Ionicons.glyphMap;
+        options: { value: any; label: string }[];
+        selected: any;
+        onSelect: (v: any) => void;
+        animate?: boolean;
+        delay?: number;
+    }) => {
+        const Container: any = animate ? Animated.View : View;
+        const containerProps = animate
+            ? { entering: FadeInDown.delay(delay).duration(420).springify() }
+            : {};
+        return (
+            <Container {...containerProps} style={{ marginBottom: spacing['2xl'] }}>
+                <View style={styles.sectionLabelRow}>
+                    <Ionicons name={icon} size={15} color={colors.accent.coral} style={{ marginRight: spacing.sm }} />
+                    <Text style={[typography.overline, { color: colors.text.secondary }]}>{label}</Text>
+                </View>
+                <View style={styles.chipsWrap}>
+                    {options.map((opt) => {
+                        const active = selected === opt.value;
+                        return (
+                            <SelectionChip
+                                key={opt.value}
+                                label={opt.label}
+                                selected={active}
+                                accessibilityLabel={opt.label}
+                                onPress={() => onSelect(active ? null : opt.value)}
+                            />
+                        );
+                    })}
+                </View>
+            </Container>
+        );
+    };
 
     return (
-        <View style={styles.container}>
-            <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
-                <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
-                    Your <Text style={{ color: colors.accent.coral }}>Lifestyle</Text>
-                </Text>
+        <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+            <StatusBar style="light" />
+            <ScrollView
+                contentContainerStyle={{
+                    paddingHorizontal: spacing.xl,
+                    paddingTop: spacing.xl,
+                    // Reserve clearance >= the floating footer's FULL height so
+                    // the last card never hides behind the CTA. Footer ≈
+                    // paddingTop(16) + CtaButton lg minHeight(56) + its own
+                    // bottom padding (max(insets.bottom, 2xl)); we add a 3xl
+                    // breathing gap on top of that.
+                    paddingBottom:
+                        spacing['3xl'] +
+                        spacing.lg +
+                        56 +
+                        Math.max(insets.bottom, Platform.OS === 'ios' ? spacing['2xl'] : spacing.xl),
+                }}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Hero — big display heading (mockup signature). The layout
+                    header already owns the "STEP X OF N" counter + progress bar,
+                    so the hero leads straight with the question + supporting
+                    line. */}
+                <Animated.View entering={FadeInDown.duration(420)} style={{ marginBottom: spacing['2xl'] }}>
+                    <Text style={[typography.display, { color: colors.text.primary, marginBottom: spacing.sm }]}>
+                        How you <Text style={{ color: colors.accent.coral }}>live & work</Text>
+                    </Text>
+                    <Text style={[typography.body, { color: colors.text.secondary }]}>
+                        These signals let us align your meal timing and recovery with how you actually live and work.
+                    </Text>
+                </Animated.View>
 
-                <SelectionGroup label="Shift Work Pattern" options={SHIFT_TYPES} selected={shiftType} onSelect={setShiftType} horizontal />
-                <SelectionGroup label="Primary Lifestyle" options={LIFESTYLE_TYPES} selected={lifestyle} onSelect={setLifestyle} horizontal />
-                <SelectionGroup label="Training Experience" options={EXPERIENCE_LEVELS} selected={experience} onSelect={setExperience} horizontal />
-                <SelectionGroup label="Activity Level" options={ACTIVITY_LEVELS} selected={activity} onSelect={setActivity} horizontal />
+                {/* KEY element #2: only the first group runs its own entrance. */}
+                <SelectionGroup animate label="Shift Work Pattern" icon="moon-outline" options={SHIFT_TYPES} selected={shiftType} onSelect={setShiftType} delay={80} />
 
-                <Text style={[typography.subhead, { color: colors.text.secondary, marginBottom: spacing.sm }]}>Sleep Window</Text>
-                <View style={styles.row}>
-                    <View style={{ flex: 1 }}>
-                        <Input label="Bedtime" placeholder="08:00" value={startHour} onChangeText={setStartHour} />
+                {/* Everything below settles as ONE staggered unit (a single
+                    Animated.View) rather than a per-section cascade, so the
+                    motion reads as intentional. */}
+                <Animated.View entering={FadeInDown.delay(140).duration(420).springify()}>
+                    <SelectionGroup label="Primary Lifestyle" icon="briefcase-outline" options={LIFESTYLE_TYPES} selected={lifestyle} onSelect={setLifestyle} />
+                    <SelectionGroup label="Training Experience" icon="barbell-outline" options={EXPERIENCE_LEVELS} selected={experience} onSelect={setExperience} />
+                    <SelectionGroup label="Activity Level" icon="flame-outline" options={ACTIVITY_LEVELS} selected={activity} onSelect={setActivity} />
+
+                    {/* Sleep window — two big "Sleep at / Wake at" time cards
+                        (mockup language): a lime icon tile + label on the left, the
+                        native time picker's value/trigger on the right. The picker
+                        (DateTimeField) keeps its own validation + 'HH:MM' string
+                        contract + error live-region. A lime info hint below reports
+                        the resulting window length. */}
+                    <View style={{ marginBottom: spacing['2xl'] }}>
+                        <View style={styles.sectionLabelRow}>
+                            <Ionicons name="bed-outline" size={15} color={colors.accent.coral} style={{ marginRight: spacing.sm }} />
+                            <Text style={[typography.overline, { color: colors.text.secondary }]}>Sleep Window</Text>
+                        </View>
+
+                        <GlassCard radius={borderRadius.xl} style={{ padding: spacing.lg, marginBottom: spacing.md }}>
+                            <View style={styles.timeCardRow}>
+                                <View style={[styles.timeIconTile, { backgroundColor: withAlpha(colors.accent.coral, 0.16), borderColor: withAlpha(colors.accent.coral, 0.3) }]}>
+                                    <Ionicons name="bed" size={22} color={colors.accent.coral} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <DateTimeField mode="time" label="Sleep at" value={startHour} onChange={setStartHour} error={startHourError} />
+                                </View>
+                            </View>
+                        </GlassCard>
+
+                        <GlassCard radius={borderRadius.xl} style={{ padding: spacing.lg }}>
+                            <View style={styles.timeCardRow}>
+                                <View style={[styles.timeIconTile, { backgroundColor: withAlpha(colors.accent.coral, 0.16), borderColor: withAlpha(colors.accent.coral, 0.3) }]}>
+                                    <Ionicons name="sunny" size={22} color={colors.accent.coral} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <DateTimeField mode="time" label="Wake at" value={endHour} onChange={setEndHour} error={endHourError} />
+                                </View>
+                            </View>
+                        </GlassCard>
+
+                        {sleepHours ? (
+                            <View style={[styles.sleepHint, { backgroundColor: withAlpha(colors.accent.coral, 0.1), borderColor: withAlpha(colors.accent.coral, 0.3) }]}>
+                                <Ionicons name="bulb" size={18} color={colors.accent.coral} style={{ marginTop: 1 }} />
+                                <Text style={[typography.caption, { flex: 1, color: colors.text.secondary, lineHeight: 18 }]}>
+                                    That's a <Text style={{ color: colors.accent.coral, fontWeight: '600' }}>{sleepHours}-hour</Text> sleep window — we'll protect it from reminders. ✨
+                                </Text>
+                            </View>
+                        ) : null}
                     </View>
-                    <View style={{ width: spacing.md }} />
-                    <View style={{ flex: 1 }}>
-                        <Input label="Wake Up" placeholder="16:00" value={endHour} onChangeText={setEndHour} />
+
+                    {/* Health conditions — OPTIONAL multi-select. The cyan accent
+                        marks it as secondary/optional; the inline caption makes
+                        that distinction self-evident so colour isn't the only
+                        signal of the different treatment. */}
+                    <View>
+                        <View style={styles.sectionLabelRow}>
+                            <Ionicons name="medkit-outline" size={15} color={colors.accent.cyan} style={{ marginRight: spacing.sm }} />
+                            <Text style={[typography.overline, { color: colors.text.secondary }]}>Health Conditions</Text>
+                            <View style={[styles.optionalPill, { backgroundColor: withAlpha(colors.text.primary, 0.06), borderColor: colors.border.default }]}>
+                                <Text style={[typography.caption, { color: colors.text.tertiary, fontSize: 10 }]}>OPTIONAL</Text>
+                            </View>
+                        </View>
+                        <Text style={[typography.caption, { color: colors.text.tertiary, marginTop: -spacing.sm, marginBottom: spacing.md }]}>
+                            Used only to tailor recovery — never shared.
+                        </Text>
+                        <GlassCard radius={borderRadius.xl} style={{ padding: spacing.lg }}>
+                            <View style={styles.chipsWrap}>
+                                {HEALTH_CONDITIONS.map((opt) => {
+                                    const active = conditions.includes(opt.value);
+                                    return (
+                                        <SelectionChip
+                                            key={opt.value}
+                                            label={opt.label}
+                                            selected={active}
+                                            tone="soft"
+                                            accent={colors.accent.cyan}
+                                            accessibilityLabel={opt.label}
+                                            onPress={() => toggleCondition(opt.value)}
+                                        />
+                                    );
+                                })}
+                            </View>
+                        </GlassCard>
                     </View>
-                </View>
-
-                <View style={{ height: spacing.lg }} />
-
-                <Text style={[typography.subhead, { color: colors.text.secondary, marginBottom: spacing.sm }]}>Health Conditions (Optional)</Text>
-                <View style={[styles.optionsRow, { flexWrap: 'wrap' }]}>
-                    {HEALTH_CONDITIONS.map((opt) => (
-                        <TouchableOpacity
-                            key={opt.value}
-                            onPress={() => toggleCondition(opt.value)}
-                            style={[
-                                styles.chip,
-                                { backgroundColor: colors.background.secondary, borderRadius: borderRadius.full },
-                                conditions.includes(opt.value) && { backgroundColor: colors.accent.cyan + '40', borderColor: colors.accent.cyan, borderWidth: 1 }
-                            ]}
-                        >
-                            <Text style={[typography.caption, { color: conditions.includes(opt.value) ? colors.accent.cyan : colors.text.primary }]}>
-                                {opt.label}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-
-                <View style={{ height: 100 }} />
+                </Animated.View>
             </ScrollView>
 
-            <View style={[styles.footer, { paddingHorizontal: spacing.xl, paddingBottom: Platform.OS === 'ios' ? spacing['3xl'] : spacing['2xl'] }]}>
-                <Button
-                    title="Continue"
-                    iconRight={<Ionicons name="arrow-forward" size={20} color="#fff" />}
+            <View style={[styles.footer, { backgroundColor: withAlpha(colors.background.primary, 0.92), borderTopColor: colors.border.default, paddingHorizontal: spacing.xl, paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? spacing['2xl'] : spacing.xl) }]}>
+                <CtaButton
+                    label="Build my plan"
+                    icon="checkmark"
+                    size="lg"
                     onPress={handleNext}
                     disabled={!isValid}
-                    fullWidth
                 />
             </View>
         </View>
@@ -170,25 +328,55 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
+    sectionLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    optionalPill: {
+        marginLeft: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 9999,
+        borderWidth: 1,
+    },
     row: {
         flexDirection: 'row',
     },
-    optionsRow: {
+    timeCardRow: {
         flexDirection: 'row',
-        gap: 8,
-    },
-    chip: {
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        justifyContent: 'center',
         alignItems: 'center',
+        gap: 15,
+    },
+    timeIconTile: {
+        width: 48,
+        height: 48,
+        borderRadius: 14,
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sleepHint: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 9,
+        borderWidth: 1,
+        borderRadius: 13,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
+        marginTop: 18,
+    },
+    chipsWrap: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
     },
     footer: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: 'rgba(0,0,0,0.8)',
+        borderTopWidth: StyleSheet.hairlineWidth,
         paddingTop: 16,
     }
 });

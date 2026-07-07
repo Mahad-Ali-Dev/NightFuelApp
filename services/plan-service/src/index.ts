@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler } from '@nightfuel/config';
+import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized } from '@nightfuel/config';
 import { z } from 'zod';
 import { PlanService } from './plan.service';
 import { PlanWorker } from './worker';
@@ -15,14 +15,24 @@ import fastifyRateLimit from '@fastify/rate-limit';
 
 const envSchema = z.object({
     PLAN_PORT: z.string().default('3005'),
-    JWT_SECRET: z.string(),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     AI_PIPELINE_URL: z.string().url(),
     USER_SERVICE_URL: z.string().url(),
+    // Resolves the caller's plan for the AI daily-generation quota on
+    // POST /v1/plans/generate. Defaulted so a missing env doesn't fail boot;
+    // the route degrades to plan=free if the subscription-service is
+    // unreachable. routes.ts reads process.env.SUBSCRIPTION_SERVICE_URL
+    // directly (mirroring chat-service), so this entry just validates/defaults
+    // the value at boot — no other index.ts wiring is required.
+    SUBSCRIPTION_SERVICE_URL: z.string().url().default('http://subscription-service:3015'),
     STATE_SERVICE_URL: z.string().url(),
     DECISION_ENGINE_URL: z.string().url(),
     MEAL_SERVICE_URL: z.string().url(),
     EXERCISE_SERVICE_URL: z.string().url(),
     REDIS_URL: z.string().url(),
+    // F22 #8: shared token for the server-to-server call to ai-pipeline
+    // (X-Internal-Token). Defaulted so boot doesn't break; prod must set it.
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -39,6 +49,7 @@ const planService = new PlanService(
         DECISION_ENGINE_URL: config.DECISION_ENGINE_URL,
         MEAL_SERVICE_URL: config.MEAL_SERVICE_URL,
         EXERCISE_SERVICE_URL: config.EXERCISE_SERVICE_URL,
+        INTERNAL_SERVICE_TOKEN: config.INTERNAL_SERVICE_TOKEN,
     }
 );
 
@@ -72,7 +83,7 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
     try {
         await request.jwtVerify();
     } catch (err) {
-        reply.send(err);
+        return sendUnauthorized(reply, request, err);
     }
 });
 
@@ -81,7 +92,7 @@ fastify.get('/health', async () => {
 });
 
 fastify.register(async (instance) => {
-    await planRoutes(instance, { planService });
+    await planRoutes(instance, { planService, internalServiceToken: config.INTERNAL_SERVICE_TOKEN });
 }, { prefix: '/v1/plans' });
 
 const start = async () => {
@@ -92,7 +103,7 @@ const start = async () => {
         await setupEventSubscribers(eventBus, planService);
         logger.info('Subscribed to event bus');
 
-        const worker = new PlanWorker(planService, { USER_SERVICE_URL: config.USER_SERVICE_URL });
+        const worker = new PlanWorker(planService, { USER_SERVICE_URL: config.USER_SERVICE_URL, INTERNAL_SERVICE_TOKEN: config.INTERNAL_SERVICE_TOKEN });
         worker.start();
         logger.info('Background worker started');
 

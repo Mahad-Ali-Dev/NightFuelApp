@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Chat</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{position:absolute;top:108px;bottom:78px;left:0;right:0;overflow-y:auto;padding:8px 16px}.scroll::-webkit-scrollbar{display:none}
+  .them{background:var(--cd);border:1px solid var(--bd);color:#dfe3ea;font-size:13.5px;line-height:1.45;padding:9px 13px;border-radius:16px 16px 16px 5px;max-width:78%}
+  .me{background:#1c2a0e;border:1px solid #2e3a16;color:#dff0c2;font-size:13.5px;line-height:1.45;padding:9px 13px;border-radius:16px 16px 5px 16px;max-width:78%;margin-left:auto;font-weight:500}
+</style>
+</head>
+<body>
+<div class="frame">
+  <!-- chat header (frosted) -->
+  <div style="position:absolute;top:0;left:0;right:0;height:108px;background:rgba(14,16,22,0.86);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid #1a1e26;z-index:2">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+    <div style="display:flex;align-items:center;gap:11px;padding:12px 16px 0">
+      <i class="ti ti-chevron-left" style="color:var(--tx);font-size:25px"></i>
+      <div style="width:40px;height:40px;border-radius:50%;background-image:url('ready/hero-female-2.png');background-size:cover;background-position:center 18%;flex-shrink:0"></div>
+      <div style="flex:1"><div style="color:var(--tx);font-size:16px;font-weight:600;letter-spacing:-0.2px">Jess Miller</div><div style="color:var(--mu);font-size:11.5px;display:flex;align-items:center;gap:5px;margin-top:1px"><span style="width:6px;height:6px;border-radius:50%;background:var(--lm)"></span>Active now</div></div>
+      <div style="width:40px;height:40px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-phone" style="color:var(--tx);font-size:19px"></i></div>
+    </div>
+  </div>
+
+  <div class="scroll">
+    <div style="text-align:center;color:var(--mu);font-size:11px;font-weight:600;margin:6px 0 16px;text-transform:uppercase;letter-spacing:0.6px">Today</div>
+    <div class="them" style="margin-bottom:10px">Crushed leg day! 💪 You training tonight before your shift?</div>
+    <div class="me" style="margin-bottom:10px">Yeah at 23:00 — Ria set me a full body one 🔥</div>
+    <div class="them" style="margin-bottom:8px">Send it over? 👀</div>
+    <div style="max-width:78%;margin-bottom:10px"><div style="background:var(--cd);border:1px solid var(--bd);border-radius:14px;overflow:hidden">
+      <div style="height:84px;background:radial-gradient(circle at 50% 40%,#1c2a0e,#16171d);display:flex;align-items:center;justify-content:center"><i class="ti ti-barbell" style="color:var(--lm);font-size:30px"></i></div>
+      <div style="padding:11px 13px"><div style="color:var(--tx);font-size:14px;font-weight:600;letter-spacing:-0.2px">Full Body Blast</div><div style="color:var(--mu);font-size:12px;margin-top:2px">45 min · 8 exercises</div></div>
+    </div></div>
+    <div class="me" style="margin-bottom:4px">Just shared it 👆 let's go!</div>
+    <div style="text-align:right;color:var(--mu);font-size:10px;font-weight:500;margin:0 4px 10px">Delivered</div>
+    <div class="them">Adding it. See you on the leaderboard 😏</div>
+  </div>
+
+  <!-- input bar -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:11px 14px 16px;background:rgba(14,16,22,0.86);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid #1a1e26;display:flex;align-items:center;gap:9px">
+    <i class="ti ti-circle-plus" style="color:var(--mu);font-size:26px"></i>
+    <div style="flex:1;background:var(--cd);border:1px solid var(--bd);border-radius:18px;padding:10px 15px;color:#5a5f6a;font-size:13.5px">Message…</div>
+    <div style="width:42px;height:42px;border-radius:50%;background:var(--lm);color:#13200a;display:flex;align-items:center;justify-content:center"><i class="ti ti-arrow-up" style="font-size:20px"></i></div>
+  </div>
+</div>
+</body>
+</html>

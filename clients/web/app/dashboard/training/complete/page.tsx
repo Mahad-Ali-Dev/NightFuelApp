@@ -55,7 +55,7 @@ function formatDate(iso: string): string {
 /* ------------------------------------------------------------------ */
 
 const CONFETTI_COLORS = [
-  '#f97316', '#fb923c', '#fdba74', '#a855f7', '#c084fc',
+  '#a8cc3c', '#b6d752', '#c5e06b', '#a855f7', '#c084fc',
   '#e879f9', '#22d3ee', '#34d399', '#fbbf24', '#f472b6',
   '#818cf8', '#38bdf8', '#4ade80', '#facc15', '#fb7185',
 ];
@@ -148,7 +148,7 @@ function UpdateDialog({ changes, onUpdate, onKeep }: UpdateDialogProps) {
           </button>
           <button
             onClick={onUpdate}
-            className="flex-1 py-3 rounded-xl bg-brand-500 text-white font-bold text-sm hover:bg-brand-600 transition-colors shadow-lg shadow-brand-500/25"
+            className="flex-1 py-3 rounded-xl bg-brand-500 text-background font-bold text-sm hover:bg-brand-600 transition-colors shadow-lg shadow-brand-500/25"
           >
             Update all changes
           </button>
@@ -187,7 +187,16 @@ export default function WorkoutCompletePage() {
           return;
         }
 
-        const res = await fetch(`/api/workout/session/${sessionId}`);
+        // `sessionId` comes from the URL query, so it is attacker-controlled.
+        // Reject anything that isn't a plain id token before it reaches the
+        // request path — an unencoded value could inject `../` traversal or a
+        // `//host` segment and redirect the fetch off our API (CodeQL
+        // js/client-side-request-forgery). Session ids are uuids/cuids here.
+        if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
+          setError("No workout session found.");
+          return;
+        }
+        const res = await fetch(`/api/workout/session/${encodeURIComponent(sessionId)}`);
         if (!res.ok) throw new Error('Failed to load session');
         const data = await res.json();
 
@@ -443,7 +452,7 @@ export default function WorkoutCompletePage() {
           >
             <button
               onClick={handleFinished}
-              className="w-full py-4 rounded-2xl bg-brand-500 text-white font-black text-base uppercase tracking-wider hover:bg-brand-600 transition-all shadow-lg shadow-brand-500/25 active:scale-[0.98]"
+              className="w-full py-4 rounded-2xl bg-brand-500 text-background font-black text-base uppercase tracking-wider hover:bg-brand-600 transition-all shadow-lg shadow-brand-500/25 active:scale-[0.98]"
             >
               FINISHED
             </button>

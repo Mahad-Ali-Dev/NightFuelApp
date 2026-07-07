@@ -54,10 +54,19 @@ export function calculateTDEE(bmr: number, activityLevel: string): number {
 }
 
 /**
- * Helper to calculate age from Date of Birth
+ * Helper to calculate age (in whole years) from Date of Birth.
+ *
+ * DOB is stored/parsed as UTC midnight (the `YYYY-MM-DD` profile field is fed
+ * to `new Date(...)`, which interprets that form as UTC), so age is derived with
+ * calendar-field math on the same UTC basis. The previous implementation
+ * reinterpreted an elapsed-duration epoch as a year, which over-counted leap
+ * days and produced an off-by-one on/near birthdays for anyone born after a
+ * Feb 29 — corrupting downstream BMR/TDEE/calorie targets.
  */
 export function calculateAge(dob: Date): number {
-    const diffMs = Date.now() - dob.getTime();
-    const ageDate = new Date(diffMs);
-    return Math.abs(ageDate.getUTCFullYear() - 1970);
+    const now = new Date();
+    let age = now.getUTCFullYear() - dob.getUTCFullYear();
+    const m = now.getUTCMonth() - dob.getUTCMonth();
+    if (m < 0 || (m === 0 && now.getUTCDate() < dob.getUTCDate())) age--;
+    return age;
 }

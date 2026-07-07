@@ -10,7 +10,7 @@ export interface Notification {
   type: string;
   title: string;
   body: string;
-  read: boolean;
+  isRead: boolean;
   data?: Record<string, unknown>;
   createdAt: string;
 }
@@ -21,16 +21,13 @@ export interface Notification {
 
 /** Fetch all notifications for the current user. */
 export async function getAll(): Promise<Notification[]> {
-  const { data } = await apiClient.get<Notification[]>('/v1/notifications');
-  return data;
+  const { data } = await apiClient.get<{ data: Notification[]; count: number }>('/v1/notifications/');
+  return data.data ?? [];
 }
 
 /** Mark a notification as read. */
 export async function markRead(id: string): Promise<Notification> {
-  const { data } = await apiClient.put<Notification>(
-    `/v1/notifications/read`,
-    { id },
-  );
+  const { data } = await apiClient.put<Notification>(`/v1/notifications/${id}/read`);
   return data;
 }
 

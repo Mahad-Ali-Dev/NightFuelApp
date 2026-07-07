@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/theme';
 
 interface QuickAction {
     icon: keyof typeof Ionicons.glyphMap;
@@ -15,12 +16,14 @@ interface QuickActionsProps {
 
 const DEFAULT_ACTIONS: QuickAction[] = [
     { icon: 'water', label: 'Hydrate', color: '#4FC3F7' },
-    { icon: 'restaurant', label: 'Log Meal', color: '#FF6B35' },
+    { icon: 'restaurant', label: 'Log Meal', color: '#A8CC3C' },
     { icon: 'barbell', label: 'Workout', color: '#00D4AA' },
     { icon: 'moon', label: 'Sleep', color: '#A78BFA' },
 ];
 
 export function QuickActions({ actions = DEFAULT_ACTIONS }: QuickActionsProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <View style={styles.grid}>
             {actions.map((action) => (
@@ -35,9 +38,9 @@ export function QuickActions({ actions = DEFAULT_ACTIONS }: QuickActionsProps) {
     );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     grid: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 20 },
     item: { alignItems: 'center', flex: 1 },
     iconBg: { width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-    label: { color: '#8B949E', fontSize: 12, fontWeight: '600' },
+    label: { color: colors.text.secondary, fontSize: 12, fontWeight: '600' },
 });

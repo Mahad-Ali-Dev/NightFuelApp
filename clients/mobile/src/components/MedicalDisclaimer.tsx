@@ -30,7 +30,7 @@ import { useTheme } from '@/theme';
 const DISCLAIMER_ACK_KEY = 'nf_medical_disclaimer_v1_ack';
 
 export const MEDICAL_DISCLAIMER_TEXT =
-    "NightFuel provides general nutrition, exercise, and sleep guidance for healthy adults. " +
+    "Zeitra provides general nutrition, exercise, and sleep guidance for healthy adults. " +
     "It is NOT a substitute for medical advice, diagnosis, or treatment. " +
     "Consult a qualified healthcare provider before starting any new diet, fasting protocol, " +
     "or exercise program — especially if you are pregnant, nursing, have a medical condition, " +
@@ -44,7 +44,7 @@ export const MEDICAL_DISCLAIMER_SHORT =
 // Inline banner — small, dismissable, embeddable above AI content
 // ─────────────────────────────────────────────────────────────────────
 
-export function MedicalDisclaimerBanner({
+function MedicalDisclaimerBannerComponent({
     text = MEDICAL_DISCLAIMER_SHORT,
     style,
 }: {
@@ -77,6 +77,12 @@ export function MedicalDisclaimerBanner({
         </View>
     );
 }
+
+/**
+ * Memoized: the inline banner takes only a `text` string and an optional
+ * `style`, with no internal state — safe to skip re-renders on equal props.
+ */
+export const MedicalDisclaimerBanner = React.memo(MedicalDisclaimerBannerComponent);
 
 // ─────────────────────────────────────────────────────────────────────
 // First-run acknowledgement modal
@@ -153,7 +159,7 @@ export function MedicalDisclaimerScreen({
                         <View style={styles.bulletRow}>
                             <Ionicons name="checkmark-circle" size={18} color={colors.accent.cyan} />
                             <Text style={[typography.caption, { color: colors.text.secondary, marginLeft: 8, flex: 1, lineHeight: 18 }]}>
-                                NightFuel doesn&apos;t replace professional advice
+                                Zeitra doesn&apos;t replace professional advice
                             </Text>
                         </View>
                     </View>
@@ -162,6 +168,7 @@ export function MedicalDisclaimerScreen({
                 <View style={[styles.modalFooter, { paddingBottom: spacing['2xl'] }]}>
                     <TouchableOpacity
                         onPress={handleAck}
+                        activeOpacity={0.85}
                         style={[styles.ackButton, { backgroundColor: colors.accent.coral, borderRadius: borderRadius.lg }]}
                         accessibilityRole="button"
                         accessibilityLabel="I understand and accept"

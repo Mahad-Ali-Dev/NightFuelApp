@@ -199,4 +199,183 @@ export class SleepService {
         logger.info({ userId }, 'Sleep preferences updated');
         return updated;
     }
+
+    // ── Derived analytics (empty-safe; never throws on no data) ──────────────────
+    async getQuality(userId: string) {
+        const sessions = await this.prisma.sleepSession.findMany({
+            where: { userId }, orderBy: { startTime: 'desc' }, take: 30,
+        });
+        if (sessions.length === 0) {
+            return { score: null, avgQuality: null, avgDurationMins: null, sessionsLogged: 0, lastNight: null };
+        }
+        const q = sessions.filter(s => s.quality != null).map(s => s.quality as number);
+        const d = sessions.filter(s => s.durationMins != null).map(s => s.durationMins as number);
+        const avgQuality = q.length ? q.reduce((a, b) => a + b, 0) / q.length : null;
+        const avgDurationMins = d.length ? Math.round(d.reduce((a, b) => a + b, 0) / d.length) : null;
+        // Finite-ness invariant: every sub-score and the final score is either a
+        // finite number or null — a NaN/Infinity (hypothetically from a poisoned
+        // duration/quality value) is collapsed to null rather than escaping into
+        // the analytics summary. Behaviour-preserving for any real history: finite
+        // inputs round exactly as before; only a non-finite intermediate changes.
+        const rawQ = avgQuality != null ? (avgQuality / 10) * 100 : null;
+        const qScore = rawQ != null && Number.isFinite(rawQ) ? rawQ : null;
+        const rawD = avgDurationMins != null ? (avgDurationMins / 480) * 100 : null;
+        const dScore = rawD != null && Number.isFinite(rawD) ? Math.min(100, rawD) : null;
+        const blended = (qScore != null && dScore != null) ? 0.6 * qScore + 0.4 * dScore
+            : (qScore != null ? qScore : dScore);
+        const score = blended != null && Number.isFinite(blended) ? Math.round(blended) : null;
+        const last = sessions[0];
+        return {
+            score,
+            avgQuality: avgQuality != null ? Math.round(avgQuality * 10) / 10 : null,
+            avgDurationMins,
+            sessionsLogged: sessions.length,
+            lastNight: {
+                durationMins: last.durationMins,
+                quality: last.quality,
+                startTime: last.startTime,
+                circadianAlignmentScore: last.circadianAlignmentScore,
+            },
+        };
+    }
+
+    async getAnalytics(userId: string) {
+        // Guarded analytics path: the happy-path return object is byte-identical
+        // to before, but any thrown error (e.g. a Prisma/DB failure in findMany)
+        // is logged server-side with full detail and then re-thrown as a FIXED
+        // generic Error. The thrown message NEVER carries raw err.message, so the
+        // route's catch surfaces only its fixed { error: 'An unexpected error
+        // occurred' } body — no internal detail can leak via the analytics path.
+        try {
+            const sessions = await this.prisma.sleepSession.findMany({
+                where: { userId }, orderBy: { startTime: 'desc' }, take: 30,
+            });
+            const quality = await this.getQuality(userId);
+            const recent = sessions.slice(0, 7).reverse();
+            const chartData = recent.map(s => ({
+                date: s.startTime.toISOString().slice(0, 10),
+                durationMins: s.durationMins ?? 0,
+                quality: s.quality ?? 0,
+                alignmentScore: s.circadianAlignmentScore ?? 0,
+            }));
+            const aligns = sessions.filter(s => s.circadianAlignmentScore != null).map(s => s.circadianAlignmentScore as number);
+            const circadianAlignment = aligns.length ? Math.round(aligns.reduce((a, b) => a + b, 0) / aligns.length) : null;
+            return {
+                qualityScore: quality.score,
+                avgDuration: quality.avgDurationMins,
+                avgQuality: quality.avgQuality,
+                sessionsLogged: sessions.length,
+                circadianAlignment,
+                chartData,
+                summary: sessions.length === 0
+                    ? 'Log your sleep to unlock personalized analytics.'
+                    : `Across ${sessions.length} night(s), average sleep was ${quality.avgDurationMins ?? 0} min at a ${quality.score ?? 0}/100 quality score.`,
+            };
+        } catch (err) {
+            // Log the REAL cause server-side (structured, never on the wire)…
+            logger.error({ err, userId }, 'Failed to compute sleep analytics');
+            // …and re-throw a generic, detail-free error. No raw err.message.
+            throw new Error('Failed to compute sleep analytics');
+        }
+    }
+
+    /**
+     * GDPR purge — PERMANENTLY delete EVERY sleep-service row owned by `userId`.
+     *
+     * Covers all three user-owned tables this service owns through its own Prisma
+     * client: sleep_sessions, sleep_preferences, health_samples (each keyed by a
+     * plain `user_id` column — there are no relation-keyed child tables here, so
+     * deleting by user_id is complete). The cross-service tables merged into the
+     * schema file (meal_logs, workouts, …) are owned by OTHER services and are
+     * deliberately NOT touched here — each service purges only its own rows.
+     *
+     * IDEMPOTENT: deleteMany never throws on zero matches, so purging a user with
+     * no rows returns all-zero counts and re-purging is a safe no-op. All three
+     * deletes run in a single $transaction so the purge is atomic.
+     *
+     * Returns a per-table deletedCounts summary.
+     */
+    async purgeUser(userId: string): Promise<{
+        sleep_sessions: number;
+        sleep_preferences: number;
+        health_samples: number;
+    }> {
+        const [sessions, preferences, samples] = await this.prisma.$transaction([
+            this.prisma.sleepSession.deleteMany({ where: { userId } }),
+            this.prisma.sleepPreference.deleteMany({ where: { userId } }),
+            this.prisma.healthSample.deleteMany({ where: { userId } }),
+        ]);
+
+        return {
+            sleep_sessions: sessions.count,
+            sleep_preferences: preferences.count,
+            health_samples: samples.count,
+        };
+    }
+
+    /**
+     * GDPR data export — READ and return EVERY sleep-service row owned by `userId`.
+     *
+     * Read-only counterpart of purgeUser: it covers the EXACT SAME user-owned table
+     * set the purge erases (sleep_sessions, sleep_preferences, health_samples), keyed
+     * by table name, so right-to-access and right-to-erasure stay in sync. If a table
+     * is ever added to / removed from purgeUser, mirror it here too.
+     *
+     * SECURITY: none of these three tables hold a credential — every column is
+     * health data (sleep timestamps, quality, disturbances, durations, HR/HRV/steps
+     * readings) or a numeric preference. There is NO password/token/secret/raw-key
+     * column to leak (push-endpoint keys live in notification-service, not here), so
+     * the rows are returned verbatim. If a secret/token/key column is EVER added to
+     * any of these tables, it MUST be stripped (or summarized as "present") here
+     * before returning.
+     *
+     * READ-ONLY & IDEMPOTENT: only findMany runs; calling it twice yields identical
+     * output and never mutates state. Bounded: each table is capped at
+     * EXPORT_ROW_LIMIT rows (newest first) so a pathological user cannot force an
+     * unbounded payload; `_meta` flags whether any table was truncated at the cap.
+     */
+    async exportUser(userId: string): Promise<{
+        sleep_sessions: any[];
+        sleep_preferences: any[];
+        health_samples: any[];
+        _meta: {
+            sleepSessionsTruncated: boolean;
+            healthSamplesTruncated: boolean;
+            rowLimit: number;
+        };
+    }> {
+        const cap = EXPORT_ROW_LIMIT;
+        const [sessions, preferences, samples] = await Promise.all([
+            this.prisma.sleepSession.findMany({
+                where: { userId },
+                orderBy: { startTime: 'desc' },
+                take: cap + 1,
+            }),
+            // sleep_preferences is keyed @unique on user_id (at most one row); no cap
+            // needed, but kept as an array for a uniform per-table shape.
+            this.prisma.sleepPreference.findMany({ where: { userId } }),
+            this.prisma.healthSample.findMany({
+                where: { userId },
+                orderBy: { startTime: 'desc' },
+                take: cap + 1,
+            }),
+        ]);
+
+        const sleepSessionsTruncated = sessions.length > cap;
+        const healthSamplesTruncated = samples.length > cap;
+
+        return {
+            sleep_sessions: sleepSessionsTruncated ? sessions.slice(0, cap) : sessions,
+            sleep_preferences: preferences,
+            health_samples: healthSamplesTruncated ? samples.slice(0, cap) : samples,
+            _meta: { sleepSessionsTruncated, healthSamplesTruncated, rowLimit: cap },
+        };
+    }
 }
+
+// Per-table row cap for the GDPR export. Generous enough that a real user's full
+// sleep/health history is returned, but bounds the payload so a pathological user
+// cannot force an unbounded read. `take: cap + 1` lets exportUser detect (and
+// flag) truncation. (sleep_preferences is @unique per user — at most one row — so
+// it is not capped.)
+const EXPORT_ROW_LIMIT = 50_000;

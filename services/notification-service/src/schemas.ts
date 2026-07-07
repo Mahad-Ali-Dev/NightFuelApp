@@ -55,6 +55,35 @@ export const notificationIdParamSchema = z.object({
 export type NotificationIdParam = z.infer<typeof notificationIdParamSchema>;
 
 // ---------------------------------------------------------------------------
+// Push-subscription input bounds (reusable)
+// ---------------------------------------------------------------------------
+// These cap the previously UNBOUNDED write surface on the push handlers so an
+// oversized / poisoned payload can never be persisted. Lengths are generous
+// upper bounds — they accept every realistic real-world value and only reject
+// abuse, so valid behaviour is unchanged.
+
+/**
+ * Expo push token, e.g. `ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]`.
+ * Real tokens are ~40-50 chars; 256 is a safe cap that never rejects a valid
+ * dev or production token. We deliberately ship the length cap WITHOUT a
+ * shape regex so legitimate (and occasionally non-standard dev) tokens are
+ * never spuriously rejected — the cap alone closes the unbounded-write hole.
+ */
+export const expoPushTokenSchema = z.string().min(1).max(256);
+
+/**
+ * Web Push endpoint URL (the push-service URL the browser hands us). It must
+ * be a valid URL and is capped at 2048 chars (a conventional safe URL ceiling).
+ */
+export const webPushEndpointSchema = z.string().url().max(2048);
+
+/**
+ * Web Push key material (p256dh / auth). Base64url-encoded values are short;
+ * 512 is a generous cap that accepts every valid key while bounding the write.
+ */
+export const webPushKeySchema = z.string().min(1).max(512);
+
+// ---------------------------------------------------------------------------
 // Preference schemas
 // ---------------------------------------------------------------------------
 

@@ -1,28 +1,35 @@
 {
   "expo": {
-    "name": "NightFuel",
-    "slug": "nightfuel",
+    "name": "Zeitra",
+    "slug": "zeitra",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "nightfuel",
+    "scheme": "zeitra",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/logo_app.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0D1117"
+      "backgroundColor": "#0A0C10"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nightfuel.app",
+      "bundleIdentifier": "com.zeitra.app",
+      "usesAppleSignIn": true,
       "associatedDomains": [
-        "applinks:nightfuel.app",
-        "applinks:www.nightfuel.app"
+        "applinks:zeitra.app",
+        "applinks:www.zeitra.app"
       ],
+      "entitlements": {
+        "com.apple.developer.healthkit": true,
+        "com.apple.developer.healthkit.access": []
+      },
       "infoPlist": {
-        "NSCameraUsageDescription": "NightFuel needs camera access for barcode food scanning.",
-        "NSHealthShareUsageDescription": "NightFuel reads sleep and activity data to optimize your chrono-nutrition plan.",
-        "NSHealthUpdateUsageDescription": "NightFuel writes workout and nutrition data to Apple Health.",
+        "NSCameraUsageDescription": "Zeitra needs camera access for barcode food scanning and camera-based heart-rate measurement (place your fingertip over the camera).",
+        "NSHealthShareUsageDescription": "Zeitra reads sleep, heart rate, HRV and activity data to optimize your chrono-nutrition plan.",
+        "NSMotionUsageDescription": "Zeitra reads your step count from the phone's motion sensor so you can track daily activity without a wearable.",
+        "NSMicrophoneUsageDescription": "Zeitra uses the microphone so you can talk to Ria, your AI coach, by voice.",
+        "NSSpeechRecognitionUsageDescription": "Zeitra uses speech recognition to turn what you say to Ria into text.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false
         }
@@ -34,18 +41,43 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "package": "com.nightfuel.app",
+      "package": "com.zeitra.app",
+      "googleServicesFile": "./google-services.json",
       "usesCleartextTraffic": false,
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "nightfuel.app" },
-            { "scheme": "https", "host": "www.nightfuel.app" }
+            {
+              "scheme": "https",
+              "host": "zeitra.app"
+            },
+            {
+              "scheme": "https",
+              "host": "www.zeitra.app"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
+      ],
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACTIVITY_RECOGNITION",
+        "android.permission.health.READ_SLEEP",
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_RESTING_HEART_RATE",
+        "android.permission.health.READ_HEART_RATE_VARIABILITY",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+        "android.permission.health.READ_EXERCISE"
       ]
     },
     "web": {
@@ -53,32 +85,104 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withMedia3Force.js",
+      "./plugins/withTorchFix.js",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ],
       "expo-router",
       "expo-secure-store",
       "expo-font",
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow NightFuel to use the camera for barcode scanning."
+          "cameraPermission": "Allow Zeitra to use the camera for barcode scanning and camera-based heart-rate measurement."
         }
       ],
       [
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
-          "color": "#FF6B35"
+          "color": "#A8CC3C"
         }
       ],
       [
-        "@sentry/react-native/expo",
+        "expo-speech-recognition",
         {
-          "organization": "tase-llc",
-          "project": "react-native"
+          "microphonePermission": "Zeitra uses the microphone so you can talk to Ria, your AI coach, by voice.",
+          "speechRecognitionPermission": "Zeitra uses speech recognition to turn what you say to Ria into text.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ],
+      "expo-dev-client",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "Zeitra reads sleep, heart rate, HRV and activity data to optimize your chrono-nutrition plan.",
+          "background": false
+        }
+      ],
+      "react-native-health-connect",
+      "expo-video",
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": [
+            "central"
+          ],
+          "bluetoothAlwaysPermission": "Zeitra uses Bluetooth to connect to your watch or fitness band and read live heart rate and battery."
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.REPLACE-WITH-IOS-REVERSED-CLIENT-ID"
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "CyclePhase",
+              "label": "Zeitra Cycle",
+              "minWidth": "150dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "description": "Your cycle phase and days until your next period",
+              "previewImage": "./assets/widget-preview/cycle.png",
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical"
+            }
+          ]
         }
       ]
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "asyncRoutes": false
+    },
+    "extra": {
+      "router": {},
+      "googleWebClientId": "25511990866-a1t0rjlkbb8lfvu7jbcp9to2qgckro0s.apps.googleusercontent.com",
+      "eas": {
+        "projectId": "7a5e14b1-cbca-4b66-938b-dac339705833"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/7a5e14b1-cbca-4b66-938b-dac339705833"
     }
   }
 }

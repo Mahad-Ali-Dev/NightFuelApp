@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Cycle Calendar</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  /* cycle keeps a rose/coral secondary accent --ro */
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--ro:#FF7A90;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:500;color:#cfd0d6;border-radius:50%}
+  .lg{display:flex;align-items:center;gap:7px;color:var(--mu);font-size:12px;font-weight:500}
+  .lg span{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+  .nbtn{width:36px;height:36px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll" style="padding-bottom:24px">
+    <!-- status bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+    <!-- back header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 2px">
+      <div style="display:flex;align-items:center;gap:10px"><div class="nbtn"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:18px"></i></div><span style="color:var(--tx);font-size:18px;font-weight:600;letter-spacing:-0.3px">Cycle</span></div>
+      <div class="nbtn"><i class="ti ti-chart-donut" style="color:var(--mu);font-size:17px"></i></div>
+    </div>
+
+    <!-- large title -->
+    <div style="padding:8px 18px 0">
+      <div style="color:var(--tx);font-size:26px;font-weight:600;letter-spacing:-0.6px">June 2026</div>
+    </div>
+
+    <!-- calendar card -->
+    <div style="padding:14px 16px 0"><div class="zc" style="padding:16px 14px">
+      <!-- month nav -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:0 6px 14px">
+        <i class="ti ti-chevron-left" style="color:var(--mu);font-size:18px"></i>
+        <span style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">June 2026</span>
+        <i class="ti ti-chevron-right" style="color:var(--mu);font-size:18px"></i>
+      </div>
+      <!-- weekday header -->
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);text-align:center;color:var(--mu);font-size:12px;font-weight:600;margin-bottom:8px"><span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span></div>
+      <!-- grid -->
+      <div id="cal" style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px"></div>
+    </div></div>
+
+    <!-- legend -->
+    <div style="display:flex;flex-wrap:wrap;gap:14px 18px;padding:18px 22px 0">
+      <span class="lg"><span style="background:var(--ro)"></span>Period</span>
+      <span class="lg"><span style="background:rgba(255,122,144,0.22)"></span>Fertile</span>
+      <span class="lg"><span style="background:transparent;border:1.5px solid var(--ro)"></span>Ovulation</span>
+      <span class="lg"><span style="background:transparent;border:1.5px dashed var(--ro)"></span>Predicted</span>
+    </div>
+
+    <!-- status card -->
+    <div style="padding:18px 16px 0"><div class="zc" style="display:flex;gap:13px;align-items:center;padding:15px 16px">
+      <div style="width:46px;height:46px;border-radius:13px;background:#2c1419;border:1px solid #45222a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-flower" style="color:var(--ro);font-size:24px"></i></div>
+      <div style="flex:1"><div style="color:var(--tx);font-size:16px;font-weight:600;letter-spacing:-0.3px">Follicular · Day 9</div><div style="color:var(--mu);font-size:13px;margin-top:2px">Period predicted Jun 28 · cycle avg 28 days</div></div>
+    </div></div>
+
+    <!-- phase insight -->
+    <div style="padding:11px 16px 0"><div class="zc" style="display:flex;gap:11px;align-items:flex-start;padding:14px 16px">
+      <i class="ti ti-bulb" style="color:var(--ro);font-size:19px;margin-top:1px;flex-shrink:0"></i>
+      <span style="color:var(--mu);font-size:13px;line-height:1.5;flex:1">Energy tends to climb through the follicular phase — a good window for harder training and higher volume.</span>
+    </div></div>
+
+    <!-- track CTA -->
+    <div style="padding:18px 16px 0">
+      <div style="height:52px;border-radius:15px;background:var(--ro);display:flex;align-items:center;justify-content:center;gap:8px;color:#2a0d13;font-size:15px;font-weight:600;letter-spacing:-0.2px"><i class="ti ti-plus"></i>Track today</div>
+    </div>
+    <div style="height:24px"></div>
+  </div>
+</div>
+<script>(function(){var c=document.getElementById('cal');if(!c)return;for(var i=0;i<1;i++){c.appendChild(document.createElement('div'));}for(var d=1;d<=30;d++){var e=document.createElement('div');e.className='cell';e.textContent=d;
+  if(d<=5){e.style.background='#FF7A90';e.style.color='#2a0d13';e.style.fontWeight='600';}
+  else if(d>=11&&d<=16){e.style.background='rgba(255,122,144,0.18)';}
+  if(d==14){e.style.background='transparent';e.style.border='1.5px solid #FF7A90';e.style.color='#FF7A90';e.style.fontWeight='600';}
+  if(d>=28){e.style.border='1.5px dashed rgba(255,122,144,0.7)';e.style.color='#FF7A90';e.style.background='transparent';}
+  if(d==9){e.style.boxShadow='inset 0 0 0 2px #F4F6FB';e.style.color='#F4F6FB';e.style.fontWeight='600';}
+  c.appendChild(e);}})();</script>
+</body>
+</html>

@@ -24,7 +24,6 @@ Closes M5 (cost telemetry) and M6 (model version) by including them in
 the `done` event.
 """
 
-import os
 import time
 from json import dumps
 from typing import AsyncIterator, Dict, Any, List
@@ -33,18 +32,12 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import HumanMessage, AIMessage
 
-from .plan_generator import get_llm, LLMProvider
+from .plan_generator import get_llm, LLMProvider, no_live_provider
+from ..llm_config import ANTHROPIC_MODEL_FAST, OPENAI_MODEL_FAST
 from ..prompts.prompts import SYSTEM_PROMPT
 from ..telemetry import TokenTelemetryHandler
 from ..logger import logger
 from .coach_chat import CHAT_PROMPT
-
-
-def _is_mock_key(provider: LLMProvider) -> bool:
-    """Avoid burning Sonnet budget when no real key is configured."""
-    env_var = "ANTHROPIC_API_KEY" if provider == LLMProvider.ANTHROPIC else "OPENAI_API_KEY"
-    key = os.environ.get(env_var, "")
-    return not key or key in ("mock-key", "sk-ant-...", "sk-...")
 
 
 async def generate_chat_response_stream(
@@ -53,17 +46,18 @@ async def generate_chat_response_stream(
     history: List[Dict[str, str]],
     context: Dict[str, Any],
     provider: LLMProvider = LLMProvider.OPENAI,
+    verified_identity: str = None,
 ) -> AsyncIterator[Dict[str, Any]]:
     """
     Stream a coach chat response. Yields {"type": "token"|"done"|"error", ...}.
     """
     started_at = time.perf_counter()
 
-    if _is_mock_key(provider):
+    if no_live_provider():
         # Stream the canned demo reply word-by-word so the UX is consistent.
         # No tokens / cost emitted because nothing was actually billed.
         demo = (
-            "Hey! I'm Ria, your NightFuel coach. I'm currently running in "
+            "Hey! I'm Ria, your Zeitra coach. I'm currently running in "
             "demo mode. Once the AI service is fully configured, I'll be "
             "able to give you personalized advice on nutrition, sleep, and "
             "training based on your shift schedule. Stay consistent!"
@@ -97,7 +91,12 @@ async def generate_chat_response_stream(
             else:
                 langchain_history.append(AIMessage(content=msg.get("content", "")))
 
-        handler = TokenTelemetryHandler(user_id=user_id, action="chat-stream", provider=provider.value)
+        handler = TokenTelemetryHandler(
+            user_id=user_id,
+            action="chat-stream",
+            provider=provider.value,
+            verified_identity=verified_identity,
+        )
 
         async for chunk in chain.astream(
             {
@@ -145,7 +144,11 @@ async def generate_chat_response_stream(
 
 
 def _model_name_for_provider(provider: LLMProvider) -> str:
-    """Best-effort model identity when handler doesn't have one."""
+    """Best-effort model identity when handler doesn't have one.
+
+    Must mirror the model get_llm() actually instantiates (the fast model),
+    otherwise telemetry reports a model that was never called.
+    """
     if provider == LLMProvider.ANTHROPIC:
-        return os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
-    return os.environ.get("OPENAI_MODEL", "gpt-4o")
+        return ANTHROPIC_MODEL_FAST
+    return OPENAI_MODEL_FAST

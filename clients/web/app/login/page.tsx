@@ -5,7 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAuth } from '@/context/auth-context';
-import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,7 +21,6 @@ type LoginValues = z.infer<typeof loginSchema>;
 
 function LoginForm() {
     const { login } = useAuth();
-    const searchParams = useSearchParams();
     const [error, setError] = useState<string | null>(null);
     const [showPassword, setShowPassword] = useState(false);
 
@@ -52,9 +50,9 @@ function LoginForm() {
             {/* Logo */}
             <div className="flex flex-col items-center mb-8">
                 <div className="h-14 w-14 rounded-2xl bg-brand-500 flex items-center justify-center shadow-2xl shadow-brand-500/40 mb-4">
-                    <Zap className="h-7 w-7 text-white" strokeWidth={2.5} />
+                    <Zap className="h-7 w-7 text-background" strokeWidth={2.5} />
                 </div>
-                <h1 className="text-2xl font-black text-white tracking-tight">NightFuel</h1>
+                <h1 className="text-2xl font-black text-white tracking-tight">Zeitra</h1>
                 <p className="text-neutral-500 text-sm mt-1">Chrono-nutrition for shift workers</p>
             </div>
 
@@ -124,7 +122,7 @@ function LoginForm() {
                     <Button
                         type="submit"
                         disabled={isSubmitting}
-                        className="w-full h-11 bg-brand-500 hover:bg-brand-400 text-white font-semibold shadow-lg shadow-brand-500/25 transition-all active:scale-95"
+                        className="w-full h-11 bg-brand-500 hover:bg-brand-400 text-background font-bold shadow-lg shadow-brand-500/25 transition-all active:scale-95"
                     >
                         {isSubmitting ? (
                             <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Signing in...</>
@@ -133,7 +131,7 @@ function LoginForm() {
                 </form>
 
                 <p className="text-center text-sm text-neutral-500">
-                    New to NightFuel?{' '}
+                    New to Zeitra?{' '}
                     <Link href="/register" className="text-brand-400 hover:text-brand-300 font-medium transition-colors">
                         Create an account
                     </Link>

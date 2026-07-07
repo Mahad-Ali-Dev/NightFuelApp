@@ -179,6 +179,12 @@ export class NotificationService {
                 ...(body.mealReminderEnabled !== undefined && {
                     mealReminderEnabled: body.mealReminderEnabled,
                 }),
+                ...(body.workoutReminderEnabled !== undefined && {
+                    workoutReminderEnabled: body.workoutReminderEnabled,
+                }),
+                ...(body.sleepReminderEnabled !== undefined && {
+                    sleepReminderEnabled: body.sleepReminderEnabled,
+                }),
                 ...(body.shiftAlertEnabled !== undefined && {
                     shiftAlertEnabled: body.shiftAlertEnabled,
                 }),
@@ -187,6 +193,15 @@ export class NotificationService {
                 }),
                 ...(body.adherenceAlertEnabled !== undefined && {
                     adherenceAlertEnabled: body.adherenceAlertEnabled,
+                }),
+                ...(body.streakUpdateEnabled !== undefined && {
+                    streakUpdateEnabled: body.streakUpdateEnabled,
+                }),
+                ...(body.weeklyReportEnabled !== undefined && {
+                    weeklyReportEnabled: body.weeklyReportEnabled,
+                }),
+                ...(body.coachMessageEnabled !== undefined && {
+                    coachMessageEnabled: body.coachMessageEnabled,
                 }),
                 ...(body.quietHoursStart !== undefined && {
                     quietHoursStart: body.quietHoursStart,
@@ -232,4 +247,130 @@ export class NotificationService {
                 return true;
         }
     }
+
+    // -----------------------------------------------------------------------
+    // GDPR purge
+    // -----------------------------------------------------------------------
+
+    /**
+     * PERMANENTLY delete EVERY notification-service row owned by `userId`.
+     *
+     * Covers all three user-owned tables in this service's schema
+     * (notification_preferences, notifications, push_subscriptions), each keyed
+     * by the `userId` (user_id) column. There are no relation-keyed tables in
+     * this service, so every delete is a direct `user_id = :userId` match — no
+     * other user's data is ever touched.
+     *
+     * IDEMPOTENT: `deleteMany` never throws on zero matched rows, so purging a
+     * user with no rows returns all-zero counts and re-purging is safe. All
+     * deletes run inside a single `$transaction` so the purge is all-or-nothing
+     * (a mid-purge failure leaves no partially-erased user).
+     */
+    async purgeUser(userId: string): Promise<{
+        notification_preferences: number;
+        notifications: number;
+        push_subscriptions: number;
+    }> {
+        const [preferences, notifications, pushSubscriptions] = await this.prisma.$transaction([
+            this.prisma.notificationPreference.deleteMany({ where: { userId } }),
+            this.prisma.notification.deleteMany({ where: { userId } }),
+            this.prisma.pushSubscription.deleteMany({ where: { userId } }),
+        ]);
+
+        return {
+            notification_preferences: preferences.count,
+            notifications: notifications.count,
+            push_subscriptions: pushSubscriptions.count,
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // GDPR data export (Right of Access — read-only counterpart of purgeUser)
+    // -----------------------------------------------------------------------
+
+    /**
+     * READ (never write) EVERY notification-service row owned by `userId` and
+     * return it as a JSON object keyed by table name.
+     *
+     * MIRRORS purgeUser EXACTLY: the returned key set
+     * (notification_preferences, notifications, push_subscriptions) is the SAME
+     * set of user-owned tables the purge erases, so export and erasure stay in
+     * sync. Each table is matched by the `userId` (user_id) column only — no
+     * other user's data is ever read.
+     *
+     * SECURITY — push_subscriptions carries Web Push *credentials*: the
+     * `endpoint` URL embeds a per-subscription secret token, `auth` is the Web
+     * Push auth secret, and `p256dh` is the client key. These are NOT the user's
+     * personal data and re-exporting them would leak live push credentials, so
+     * they are NEVER returned raw — each is summarized as a presence boolean
+     * (`endpointPresent` / `authPresent` / `p256dhPresent`). Only the
+     * non-secret descriptive columns (id, userId, platform, timestamps) are
+     * returned verbatim.
+     *
+     * READ-ONLY & IDEMPOTENT: only findMany / findUnique run; calling it twice
+     * yields identical output and never mutates state. BOUNDED: the
+     * (potentially large) notifications table is capped at EXPORT_ROW_LIMIT rows
+     * (newest first) so a pathological user cannot force an unbounded payload;
+     * `_meta` flags whether the notifications table was truncated at the cap.
+     * The preferences row (0-or-1, unique on userId) and push_subscriptions
+     * (small, device-count bounded) are not capped.
+     */
+    async exportUser(userId: string): Promise<{
+        notification_preferences: NotificationPreference[];
+        notifications: Notification[];
+        push_subscriptions: Array<{
+            id: string;
+            userId: string;
+            platform: string;
+            endpointPresent: boolean;
+            authPresent: boolean;
+            p256dhPresent: boolean;
+            createdAt: Date;
+            updatedAt: Date;
+        }>;
+        _meta: { notificationsTruncated: boolean; rowLimit: number };
+    }> {
+        const cap = EXPORT_ROW_LIMIT;
+
+        const [preference, notifications, pushSubscriptions] = await Promise.all([
+            this.prisma.notificationPreference.findUnique({ where: { userId } }),
+            this.prisma.notification.findMany({
+                where: { userId },
+                orderBy: { createdAt: 'desc' },
+                take: cap + 1,
+            }),
+            this.prisma.pushSubscription.findMany({
+                where: { userId },
+                orderBy: { createdAt: 'desc' },
+            }),
+        ]);
+
+        const notificationsTruncated = notifications.length > cap;
+
+        return {
+            // 0-or-1 row; `userId` is @unique. Returned as an array so the shape
+            // is uniform across tables and matches the purge's per-table model.
+            notification_preferences: preference ? [preference] : [],
+            notifications: notificationsTruncated ? notifications.slice(0, cap) : notifications,
+            // SECRET-SCRUBBED: never emit endpoint / auth / p256dh raw — only a
+            // presence flag plus the non-sensitive descriptive columns.
+            push_subscriptions: pushSubscriptions.map((s) => ({
+                id: s.id,
+                userId: s.userId,
+                platform: s.platform,
+                endpointPresent: s.endpoint != null && s.endpoint.length > 0,
+                authPresent: s.auth != null && s.auth.length > 0,
+                p256dhPresent: s.p256dh != null && s.p256dh.length > 0,
+                createdAt: s.createdAt,
+                updatedAt: s.updatedAt,
+            })),
+            _meta: { notificationsTruncated, rowLimit: cap },
+        };
+    }
 }
+
+// Per-table row cap for the GDPR export. Generous enough that a real user's full
+// notification history is returned, but bounds the payload so a pathological user
+// cannot force an unbounded read. `take: cap + 1` lets exportUser detect (and
+// flag) truncation at the cap.
+const EXPORT_ROW_LIMIT = 50_000;

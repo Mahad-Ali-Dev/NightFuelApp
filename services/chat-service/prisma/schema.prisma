@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
   output   = "../src/generated/prisma"
 }
 
@@ -26,10 +27,20 @@ model Conversation {
   id        String   @id @default(uuid())
   participantA String @map("participant_a")
   participantB String @map("participant_b")
+  // Instagram-DM-style request gate. A new 1:1 conversation starts 'pending':
+  // the requester (sender of the earliest message) may send exactly one message
+  // until the recipient accepts. Migration backfills all pre-existing rows and
+  // every Ria/coach conversation to 'accepted'. Values: 'pending'|'accepted'|'declined'.
+  requestState String @default("pending") @map("request_state")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   messages  Message[]
 
+  // The inbox query is `OR [{ participantA: me }, { participantB: me }]`.
+  // participantA is covered by the leftmost prefix of the composite @@unique
+  // above, but participantB had no usable index — this adds one so that branch
+  // does an index scan instead of a seq scan.
+  @@index([participantB])
   @@unique([participantA, participantB])
   @@map("conversations")
 }
@@ -40,6 +51,7 @@ model Message {
   senderId       String       @map("sender_id")
   text           String
   isRead         Boolean      @default(false) @map("is_read")
+  readAt         DateTime?    @map("read_at")
   createdAt      DateTime     @default(now()) @map("created_at")
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)

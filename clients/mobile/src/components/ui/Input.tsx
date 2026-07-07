@@ -17,6 +17,20 @@ interface InputProps extends TextInputProps {
   icon?: keyof typeof Ionicons.glyphMap;
   rightIcon?: keyof typeof Ionicons.glyphMap;
   onRightIconPress?: () => void;
+  /**
+   * Accessibility label for the icon-only rightIcon Pressable (e.g. a
+   * password show/hide toggle). Without it the control is silent to assistive
+   * tech. Callers should pass a state-aware value ('Show password' / 'Hide
+   * password').
+   */
+  rightIconAccessibilityLabel?: string;
+  /**
+   * Current on/off state of the rightIcon toggle (e.g. password visible).
+   * Exposed to assistive tech as accessibilityState.expanded so the toggle's
+   * state is announced, not just its flipping label. Optional — when omitted
+   * the toggle is treated as a plain button.
+   */
+  rightIconActive?: boolean;
 }
 
 export function Input({
@@ -25,6 +39,8 @@ export function Input({
   icon,
   rightIcon,
   onRightIconPress,
+  rightIconAccessibilityLabel,
+  rightIconActive,
   style,
   ...props
 }: InputProps) {
@@ -40,12 +56,19 @@ export function Input({
         style={[
           styles.inputContainer,
           {
-            backgroundColor: colors.background.tertiary,
+            backgroundColor: colors.background.secondary,
+            // Focus feedback is COLOR-ONLY. On Android's new architecture,
+            // toggling borderWidth or an elevation/shadow (glow) when the
+            // TextInput gains focus recomposites the native view, which
+            // blurs+refocuses the input in a tight loop — the keyboard flickers
+            // and typing is impossible. Keep border width constant and drop the
+            // focus glow; the border-color change alone gives the focus cue.
             borderColor: error
               ? colors.error
               : focused
               ? colors.accent.coral
               : colors.border.default,
+            borderWidth: error ? 1.5 : 1,
           },
         ]}
       >
@@ -69,7 +92,16 @@ export function Input({
           {...props}
         />
         {rightIcon && (
-          <Pressable onPress={onRightIconPress} style={styles.rightIcon}>
+          <Pressable
+            onPress={onRightIconPress}
+            accessibilityRole="button"
+            accessibilityLabel={rightIconAccessibilityLabel}
+            accessibilityState={
+              rightIconActive === undefined ? undefined : { expanded: rightIconActive }
+            }
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={({ pressed }) => [styles.rightIcon, pressed && styles.rightIconPressed]}
+          >
             <Ionicons name={rightIcon} size={20} color={colors.text.tertiary} />
           </Pressable>
         )}
@@ -93,7 +125,6 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
     borderRadius: br.lg,
     height: 52,
     paddingHorizontal: spacing.lg,
@@ -109,6 +140,10 @@ const styles = StyleSheet.create({
   rightIcon: {
     padding: spacing.xs,
     marginLeft: spacing.sm,
+  },
+  rightIconPressed: {
+    opacity: 0.6,
+    transform: [{ scale: 0.92 }],
   },
   error: {
     fontSize: 12,

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Edit Profile</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px;overflow:hidden}
+  .row{display:flex;align-items:center;padding:13px 15px;min-height:52px}
+  .dv{height:1px;background:#1f232b;margin-left:15px}
+  .lbl{color:var(--mu);font-size:11px;font-weight:600;letter-spacing:0.6px;text-transform:uppercase;padding:0 4px 8px}
+  .ic{width:30px;height:30px;border-radius:9px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="frame"><div class="scroll" style="padding-bottom:30px">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+  <!-- header -->
+  <div style="display:flex;align-items:center;gap:11px;padding:12px 18px 6px">
+    <i class="ti ti-chevron-left" style="color:var(--tx);font-size:25px"></i>
+    <span style="color:var(--tx);font-size:23px;font-weight:600;letter-spacing:-0.4px;flex:1">Edit profile</span>
+    <span style="color:var(--lm);font-size:15px;font-weight:600">Save</span>
+  </div>
+
+  <!-- avatar -->
+  <div style="text-align:center;padding:14px 0 2px">
+    <div style="position:relative;width:92px;height:92px;margin:0 auto">
+      <div style="width:92px;height:92px;border-radius:50%;background:#1c2a0e;border:1.5px solid #2e3a16;color:var(--lm);display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:700">A</div>
+      <div style="position:absolute;bottom:0;right:0;width:30px;height:30px;border-radius:50%;background:var(--lm);color:#13200a;display:flex;align-items:center;justify-content:center;border:3px solid var(--bg)"><i class="ti ti-camera" style="font-size:15px"></i></div>
+    </div>
+    <div style="color:var(--lm);font-size:13px;font-weight:600;margin-top:10px">Change photo</div>
+  </div>
+
+  <!-- account group -->
+  <div style="padding:18px 16px 0">
+    <div class="lbl">Account</div>
+    <div class="zc">
+      <div class="row"><span style="color:var(--mu);font-size:14px;width:92px;flex-shrink:0">Name</span><span style="color:var(--tx);font-size:14px;font-weight:500;flex:1">Alex Carter</span><i class="ti ti-chevron-right" style="color:#55585f;font-size:16px"></i></div>
+      <div class="dv"></div>
+      <div class="row"><span style="color:var(--mu);font-size:14px;width:92px;flex-shrink:0">Username</span><span style="color:var(--tx);font-size:14px;font-weight:500;flex:1">@alexc</span><i class="ti ti-chevron-right" style="color:#55585f;font-size:16px"></i></div>
+      <div class="dv"></div>
+      <div class="row"><span style="color:var(--mu);font-size:14px;width:92px;flex-shrink:0">Email</span><span style="color:var(--tx);font-size:14px;font-weight:500;flex:1">alex@email.com</span><i class="ti ti-chevron-right" style="color:#55585f;font-size:16px"></i></div>
+    </div>
+  </div>
+
+  <!-- plan group -->
+  <div style="padding:22px 16px 0">
+    <div class="lbl">Your plan</div>
+    <div class="zc">
+      <div class="row"><div class="ic"><i class="ti ti-calendar-event" style="color:var(--lm);font-size:17px"></i></div><span style="color:var(--tx);font-size:14px;font-weight:500;flex:1;margin-left:12px">Shift type</span><span style="color:var(--mu);font-size:14px">Night</span><i class="ti ti-chevron-right" style="color:#55585f;font-size:16px;margin-left:7px"></i></div>
+      <div class="dv"></div>
+      <div class="row"><div class="ic"><i class="ti ti-target" style="color:var(--lm);font-size:17px"></i></div><span style="color:var(--tx);font-size:14px;font-weight:500;flex:1;margin-left:12px">Goals</span><span style="color:var(--mu);font-size:14px">Muscle +2</span><i class="ti ti-chevron-right" style="color:#55585f;font-size:16px;margin-left:7px"></i></div>
+      <div class="dv"></div>
+      <div class="row"><div class="ic"><i class="ti ti-ruler-2" style="color:var(--lm);font-size:17px"></i></div><span style="color:var(--tx);font-size:14px;font-weight:500;flex:1;margin-left:12px">Units</span><span style="color:var(--mu);font-size:14px">Metric</span><i class="ti ti-chevron-right" style="color:#55585f;font-size:16px;margin-left:7px"></i></div>
+    </div>
+  </div>
+
+  <!-- sign out -->
+  <div style="padding:22px 16px 0">
+    <div class="zc"><div class="row" style="justify-content:center"><span style="color:#FF6B6B;font-size:14px;font-weight:600">Sign out</span></div></div>
+  </div>
+</div></div>
+</body>
+</html>

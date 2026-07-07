@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { SubscriptionService } from './subscription.service';
 import type { EventBus } from './events';
 import { publishTierUpdated } from './events';
+import { sendUnauthorizedPayload, makeInternalAuthGuard } from '@nightfuel/config';
 import {
   TIER_CATALOGUE,
   UpgradeBodySchema,
@@ -39,6 +40,13 @@ function extractUserId(request: FastifyRequest): string {
 interface RoutesPluginOptions {
   subscriptionService: SubscriptionService;
   eventBus: EventBus;
+  /**
+   * Shared server-to-server token (INTERNAL_SERVICE_TOKEN) gating the
+   * /v1/subscriptions/internal/* routes. Optional so existing callers/tests that
+   * don't exercise internal routes keep working; when unset the guard fails
+   * CLOSED (every internal request 404s).
+   */
+  internalServiceToken?: string;
 }
 
 export async function subscriptionRoutes(
@@ -46,6 +54,12 @@ export async function subscriptionRoutes(
   options: RoutesPluginOptions,
 ): Promise<void> {
   const { subscriptionService, eventBus } = options;
+
+  // ── Internal-token guard (F34 #5 / F35a pattern) ────────────────────────────
+  // Constant-time X-Internal-Token check for the server-to-server-only
+  // /internal/* routes below; 404s on a missing/wrong token (mirrors the nginx
+  // edge) so a probe can't distinguish a guarded route from a missing one.
+  const internalAuth = makeInternalAuthGuard(options.internalServiceToken);
   // Cast: fastify.log is FastifyBaseLogger; events.ts expects pino.Logger — both are structurally compatible at runtime.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const log = fastify.log as any;
@@ -146,7 +160,7 @@ export async function subscriptionRoutes(
         userId = extractUserId(request);
       } catch (err) {
         log.warn({ err }, 'routes: failed to extract userId from JWT');
-        return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid token payload' });
+        return sendUnauthorizedPayload(reply, request, err);
       }
 
       try {
@@ -211,7 +225,7 @@ export async function subscriptionRoutes(
         userId = extractUserId(request);
       } catch (err) {
         log.warn({ err }, 'routes: failed to extract userId from JWT');
-        return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid token payload' });
+        return sendUnauthorizedPayload(reply, request, err);
       }
 
       try {
@@ -269,6 +283,14 @@ export async function subscriptionRoutes(
               message: { type: 'string' },
             },
           },
+          402: {
+            type: 'object',
+            properties: {
+              statusCode: { type: 'number' },
+              error: { type: 'string' },
+              message: { type: 'string' },
+            },
+          },
         },
       },
     },
@@ -278,7 +300,7 @@ export async function subscriptionRoutes(
         userId = extractUserId(request);
       } catch (err) {
         log.warn({ err }, 'routes: failed to extract userId from JWT');
-        return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid token payload' });
+        return sendUnauthorizedPayload(reply, request, err);
       }
 
       // Validate body with Zod manually (fastify-type-provider-zod is registered
@@ -293,6 +315,24 @@ export async function subscriptionRoutes(
       }
 
       const { tier } = parseResult.data as UpgradeBody;
+
+      // SECURITY (paywall / revenue bypass): this route is authenticated but
+      // performs NO payment verification, so it must never grant a PAID tier.
+      // Elevation to a paid plan (PRO / PREMIUM / ENTERPRISE) is only legitimate
+      // via the verified purchase flows — POST /v1/subscriptions/iap/validate
+      // (Apple/Google receipt validation) or the Stripe webhook. Both of those
+      // call subscriptionService.upgradeTier() directly after verifying payment;
+      // this client-callable path is restricted to the safe transition: FREE
+      // (downgrade / cancel). Any attempt to set a paid tier here is rejected so
+      // a user cannot grant themselves a free upgrade.
+      if (tier !== 'FREE') {
+        log.warn({ userId, tier }, 'routes: POST /upgrade – rejected paid-tier elevation without verified purchase');
+        return reply.status(402).send({
+          statusCode: 402,
+          error: 'payment_required',
+          message: 'Paid plans require a verified purchase',
+        });
+      }
 
       try {
         const { subscription, fromTier } = await subscriptionService.upgradeTier({
@@ -365,7 +405,7 @@ export async function subscriptionRoutes(
         userId = extractUserId(request);
       } catch (err) {
         log.warn({ err }, 'routes: failed to extract userId from JWT');
-        return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid token payload' });
+        return sendUnauthorizedPayload(reply, request, err);
       }
 
       try {
@@ -376,10 +416,17 @@ export async function subscriptionRoutes(
           subscription,
         });
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to cancel subscription';
+        // Branch on the cause, but NEVER reflect err.message on the wire — the
+        // service throws `No subscription found for user ${userId}`, which would
+        // leak the internal userId. Log the real cause server-side, ship a fixed
+        // human-readable literal to the client.
+        const causeMessage = err instanceof Error ? err.message : '';
 
-        if (message.includes('No subscription found')) {
-          return reply.status(404).send({ statusCode: 404, error: 'Not Found', message });
+        if (causeMessage.includes('No subscription found')) {
+          log.error({ userId, err }, 'routes: POST /cancel – no active subscription');
+          return reply
+            .status(404)
+            .send({ statusCode: 404, error: 'Not Found', message: 'No active subscription found' });
         }
 
         log.error({ userId, err }, 'routes: POST /cancel – unexpected error');
@@ -423,6 +470,15 @@ export async function subscriptionRoutes(
               errorMessage: { type: 'string' },
             },
           },
+          // CRITICAL #1: a receipt already redeemed by another account.
+          409: {
+            type: 'object',
+            properties: {
+              valid: { type: 'boolean' },
+              errorCode: { type: 'string' },
+              errorMessage: { type: 'string' },
+            },
+          },
         },
       },
     },
@@ -432,7 +488,7 @@ export async function subscriptionRoutes(
         userId = extractUserId(request);
       } catch (err) {
         log.warn({ err }, 'routes: failed to extract userId from JWT');
-        return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid token payload' });
+        return sendUnauthorizedPayload(reply, request, err);
       }
 
       const { platform, receipt, productId } = request.body as {
@@ -482,6 +538,47 @@ export async function subscriptionRoutes(
           });
         }
 
+        // SECURITY (CRITICAL #1 — receipt replay / sharing): bind the verified
+        // receipt to exactly ONE account before granting any tier. The stable
+        // cross-renewal id (Apple originalTransactionId / Google orderId) keys
+        // the binding. If the same receipt was already redeemed by a DIFFERENT
+        // user, reject — one valid receipt must never upgrade unlimited accounts.
+        const originalTransactionId = result.originalTransactionId;
+        if (!originalTransactionId) {
+          // A verified receipt with no stable id can't be deduped safely — refuse
+          // rather than grant an unbindable (replayable) upgrade.
+          log.warn({ userId, platform }, 'IAP verified receipt missing originalTransactionId — refusing to bind');
+          return reply.status(200).send({
+            valid: false,
+            errorCode: 'invalid_receipt',
+            errorMessage: 'Receipt is missing a stable transaction identifier',
+          });
+        }
+
+        const binding = await subscriptionService.bindIapTransaction({
+          originalTransactionId,
+          userId,
+          platform,
+          productId,
+          tier: result.tier as SubscriptionTier,
+        });
+
+        if (binding.status === 'conflict') {
+          log.warn(
+            { userId, originalTransactionId },
+            'IAP receipt already redeemed by another account — rejecting replay',
+          );
+          return reply.status(409).send({
+            valid: false,
+            errorCode: 'receipt_already_redeemed',
+            errorMessage: 'This receipt has already been redeemed by another account',
+          });
+        }
+
+        // status is 'bound' (first redemption) or 'reaffirmed' (same user
+        // re-validating). Both proceed to upgradeTier; upgradeTier is itself
+        // idempotent (no-op when already on the target tier).
+
         // Persist the new tier. upgradeTier emits the tier-updated event
         // for the rest of the system (notification-service, user-service, etc.).
         const { subscription, fromTier } = await subscriptionService.upgradeTier({
@@ -510,6 +607,125 @@ export async function subscriptionRoutes(
           errorCode: 'server_error',
           errorMessage: 'Could not validate receipt',
         });
+      }
+    },
+  );
+
+  // ── DELETE /v1/subscriptions/internal/user/:userId (GDPR purge) ────────────
+  // Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+  // internalAuth preHandler additionally requires X-Internal-Token, 404ing on a
+  // missing/wrong token so a probe can't tell a guarded route from a missing one).
+  // PERMANENTLY erases EVERY subscription-service row owned by :userId across ALL
+  // THREE user-owned tables (subscriptions, subscription_events, iap_transactions
+  // — each via user_id). IDEMPOTENT: purging a user with no rows returns 200 with
+  // zero counts; purging twice is safe (deleteMany never throws on zero rows).
+  // SubscriptionService.purgeUser wraps the deletes in a $transaction and returns
+  // a per-table deletedCounts summary.
+  fastify.delete(
+    '/v1/subscriptions/internal/user/:userId',
+    {
+      preHandler: internalAuth,
+      schema: {
+        description: 'GDPR: permanently delete all of this user\'s subscription-service data.',
+        tags: ['internal'],
+        params: {
+          type: 'object',
+          required: ['userId'],
+          properties: { userId: { type: 'string', minLength: 1 } },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              userId: { type: 'string' },
+              deletedCounts: {
+                type: 'object',
+                properties: {
+                  subscriptions: { type: 'number' },
+                  subscription_events: { type: 'number' },
+                  iap_transactions: { type: 'number' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { userId } = request.params as { userId: string };
+      try {
+        const deletedCounts = await subscriptionService.purgeUser(userId);
+        return reply.status(200).send({ userId, deletedCounts });
+      } catch (err) {
+        log.error({ userId, err }, 'routes: DELETE /internal/user – GDPR purge failed');
+        return reply
+          .status(500)
+          .send({ statusCode: 500, error: 'Internal Server Error', message: 'Failed to purge user data' });
+      }
+    },
+  );
+
+  // ── GET /v1/subscriptions/internal/user/:userId/export (GDPR data export) ───
+  // READ-ONLY counterpart of the purge above (GDPR Right of Access). Behind the
+  // SAME internalAuth guard the purge uses (404 without/with-wrong X-Internal-Token
+  // so a probe can't tell a guarded route from a missing one; unset token fails
+  // CLOSED). READS and returns EVERY subscription-service row owned by :userId
+  // across the EXACT SAME three user-owned tables the purge erases (subscriptions,
+  // subscription_events, iap_transactions — each via user_id), as a JSON object
+  // keyed by table name, so export and erasure stay in sync. IDEMPOTENT: a user
+  // with no rows returns empty arrays, still 200; NO writes ever occur.
+  // SECURITY: this service stores NO password/token/secret/raw-key columns — the
+  // Stripe ids are object references (not credentials) and the raw Apple/Google
+  // receipt blob is never persisted — so the export carries no secrets.
+  fastify.get(
+    '/v1/subscriptions/internal/user/:userId/export',
+    {
+      preHandler: internalAuth,
+      schema: {
+        description: "GDPR: export all of this user's subscription-service data (read-only).",
+        tags: ['internal'],
+        params: {
+          type: 'object',
+          required: ['userId'],
+          properties: { userId: { type: 'string', minLength: 1 } },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              userId: { type: 'string' },
+              data: {
+                type: 'object',
+                properties: {
+                  subscriptions: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                  subscription_events: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                  iap_transactions: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                  _meta: {
+                    type: 'object',
+                    properties: {
+                      subscriptionsTruncated: { type: 'boolean' },
+                      subscriptionEventsTruncated: { type: 'boolean' },
+                      iapTransactionsTruncated: { type: 'boolean' },
+                      rowLimit: { type: 'number' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { userId } = request.params as { userId: string };
+      try {
+        const data = await subscriptionService.exportUser(userId);
+        return reply.status(200).send({ userId, data });
+      } catch (err) {
+        log.error({ userId, err }, 'routes: GET /internal/user/export – GDPR export failed');
+        return reply
+          .status(500)
+          .send({ statusCode: 500, error: 'Internal Server Error', message: 'Failed to export user data' });
       }
     },
   );

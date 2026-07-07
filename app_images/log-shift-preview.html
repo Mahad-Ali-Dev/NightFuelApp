@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Track Shift</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll::-webkit-scrollbar{display:none}
+  .ov{color:var(--mu);font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;display:flex;align-items:center;gap:7px}
+  .field{flex:1;background:var(--cd);border:1px solid var(--bd);border-radius:13px;padding:11px 14px}
+  .field .fl{color:var(--mu);font-size:10px;font-weight:500;letter-spacing:0.4px;text-transform:uppercase}
+  .field .fv{color:var(--tx);font-size:16px;font-weight:600;letter-spacing:-0.2px;margin-top:3px;display:flex;align-items:center;justify-content:space-between}
+  /* shift tiles: cutout floats on a neutral stage */
+  .typecard{width:calc(50% - 5px);border-radius:16px;background:var(--cd);border:1px solid var(--bd);padding:14px;position:relative;overflow:hidden;min-height:108px}
+  .typecard.sel{border:1.5px solid var(--lm);box-shadow:0 0 12px #C2F03C33}
+  .typecard .art{position:absolute;right:-10px;bottom:-10px;width:72px;height:72px;object-fit:contain;opacity:0.92}
+  .detail{display:flex;align-items:center;border-radius:16px;padding:13px 14px;background:var(--cd);border:1px solid var(--bd);min-height:64px}
+</style>
+</head>
+<body>
+<div class="frame">
+  <!-- status bar + header -->
+  <div style="padding:9px 18px 0;background:var(--bg);position:relative;z-index:10">
+    <div style="display:flex;justify-content:space-between;align-items:center;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0 12px">
+      <div style="width:38px;height:38px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:20px"></i></div>
+      <span style="color:var(--tx);font-size:17px;font-weight:600;letter-spacing:-0.3px">Track Shift</span>
+      <span style="color:var(--lm);font-size:15px;font-weight:600">Save</span>
+    </div>
+  </div>
+
+  <div class="scroll" style="height:calc(100% - 158px);overflow-y:auto">
+
+    <!-- 24h schedule timeline hero -->
+    <div style="padding:6px 18px 0"><div style="border-radius:16px;overflow:hidden;background:var(--cd);border:1px solid var(--bd)">
+      <div style="padding:16px 16px 14px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div><div style="color:var(--mu);font-size:10px;font-weight:500;letter-spacing:0.5px;text-transform:uppercase">Thu, Jun 26</div><div style="color:var(--tx);font-size:19px;font-weight:600;letter-spacing:-0.4px;margin-top:2px">Overnight shift</div></div>
+          <span style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:30px;background:#1c2a0e;border:1px solid #2e3a16"><i class="ti ti-moon" style="color:var(--lm);font-size:13px"></i><span style="color:var(--lm);font-size:12px;font-weight:600">12h</span></span>
+        </div>
+
+        <!-- 24h band: neutral track, lime work window -->
+        <div style="position:relative;margin-top:16px;height:30px;border-radius:9px;overflow:hidden;background:#1e222b">
+          <div style="position:absolute;top:0;bottom:0;left:79%;right:0;background:var(--lm);opacity:0.9"></div>
+          <div style="position:absolute;top:0;bottom:0;left:0;width:29%;background:var(--lm);opacity:0.9"></div>
+          <i class="ti ti-sun" style="position:absolute;top:7px;left:3%;color:var(--mu);font-size:15px"></i>
+          <i class="ti ti-moon-stars" style="position:absolute;top:7px;left:47%;color:var(--mu);font-size:15px"></i>
+          <i class="ti ti-sun" style="position:absolute;top:7px;right:3%;color:#13200a;font-size:15px"></i>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:7px">
+          <span style="color:var(--mu);font-size:9px;font-weight:500">00</span><span style="color:var(--mu);font-size:9px;font-weight:500">06</span><span style="color:var(--mu);font-size:9px;font-weight:500">12</span><span style="color:var(--mu);font-size:9px;font-weight:500">18</span><span style="color:var(--mu);font-size:9px;font-weight:500">24</span>
+        </div>
+
+        <!-- clock in / out -->
+        <div style="display:flex;align-items:center;gap:10px;margin-top:14px">
+          <div style="flex:1;display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:13px;background:#1e222b"><i class="ti ti-player-play" style="color:var(--lm);font-size:16px"></i><div><div style="color:var(--mu);font-size:9px;font-weight:500;letter-spacing:0.4px">CLOCK IN</div><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.3px">19:00</div></div></div>
+          <i class="ti ti-arrow-right" style="color:var(--mu);font-size:15px"></i>
+          <div style="flex:1;display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:13px;background:#1e222b"><i class="ti ti-player-stop" style="color:var(--mu);font-size:16px"></i><div><div style="color:var(--mu);font-size:9px;font-weight:500;letter-spacing:0.4px">CLOCK OUT</div><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.3px">07:00<span style="color:var(--mu);font-size:10px;font-weight:500">+1</span></div></div></div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:11px 16px;border-top:1px solid var(--bd)"><i class="ti ti-bulb" style="color:var(--lm);font-size:15px"></i><span style="color:var(--mu);font-size:11px;font-weight:500;line-height:1.3;flex:1">Zeitra will shift your meals, light &amp; sleep targets to match.</span></div>
+    </div></div>
+
+    <div style="padding:20px 18px 0">
+      <!-- schedule -->
+      <div class="ov" style="margin-bottom:12px"><i class="ti ti-calendar-event" style="font-size:15px"></i>Schedule</div>
+      <div class="field" style="margin-bottom:11px"><div class="fl">Shift date</div><div class="fv">Thu, Jun 26<i class="ti ti-calendar" style="color:var(--lm);font-size:17px"></i></div></div>
+      <div style="display:flex;gap:11px">
+        <div class="field"><div class="fl">Start time</div><div class="fv">19:00<i class="ti ti-clock" style="color:var(--lm);font-size:16px"></i></div></div>
+        <div class="field"><div class="fl">End time</div><div class="fv">07:00<i class="ti ti-clock" style="color:var(--lm);font-size:16px"></i></div></div>
+      </div>
+
+      <!-- shift type -->
+      <div class="ov" style="margin:24px 0 12px"><i class="ti ti-layout-grid" style="font-size:15px"></i>Shift type</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <div class="typecard sel">
+          <img class="art" src="ready/shift-fixed-night.png" alt="">
+          <div style="position:absolute;top:11px;right:11px;width:22px;height:22px;border-radius:11px;background:var(--lm);display:flex;align-items:center;justify-content:center"><i class="ti ti-check" style="font-size:14px;color:#13200a"></i></div>
+          <i class="ti ti-moon" style="color:var(--lm);font-size:23px;position:relative"></i>
+          <div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px;margin-top:15px;position:relative">Fixed Night</div>
+          <div style="color:var(--lm);font-size:11px;font-weight:500;position:relative">Overnight, every shift</div>
+        </div>
+        <div class="typecard">
+          <img class="art" src="ready/shift-rotating.png" alt="">
+          <i class="ti ti-refresh" style="color:var(--mu);font-size:23px;position:relative"></i>
+          <div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px;margin-top:15px;position:relative">Rotating</div>
+          <div style="color:var(--mu);font-size:11px;font-weight:500;position:relative">Shifts vary weekly</div>
+        </div>
+        <div class="typecard">
+          <img class="art" src="ready/shift-evening.png" alt="">
+          <i class="ti ti-sunset" style="color:var(--mu);font-size:23px;position:relative"></i>
+          <div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px;margin-top:15px;position:relative">Evening</div>
+          <div style="color:var(--mu);font-size:11px;font-weight:500;position:relative">Afternoon → late</div>
+        </div>
+        <div class="typecard">
+          <img class="art" src="ready/shift-irregular.png" alt="">
+          <i class="ti ti-arrows-shuffle" style="color:var(--mu);font-size:23px;position:relative"></i>
+          <div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px;margin-top:15px;position:relative">Irregular</div>
+          <div style="color:var(--mu);font-size:11px;font-weight:500;position:relative">On-call / unpredictable</div>
+        </div>
+        <div class="typecard" style="width:100%;min-height:84px;display:flex;align-items:center">
+          <img class="art" src="ready/shift-12hour.png" alt="" style="width:90px;height:90px;right:6px;bottom:-18px">
+          <div style="position:relative">
+            <i class="ti ti-hourglass-high" style="color:var(--mu);font-size:23px"></i>
+            <div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px;margin-top:6px">12-Hour Shift</div>
+            <div style="color:var(--mu);font-size:11px;font-weight:500">Long block, day or night</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- details -->
+      <div class="ov" style="margin:24px 0 12px"><i class="ti ti-adjustments-horizontal" style="font-size:15px"></i>Details</div>
+      <div class="detail" style="margin-bottom:11px">
+        <div style="width:38px;height:38px;border-radius:12px;background:#1e222b;display:flex;align-items:center;justify-content:center"><i class="ti ti-bed" style="color:var(--mu);font-size:18px"></i></div>
+        <div style="flex:1;margin-left:12px"><div style="color:var(--tx);font-size:14px;font-weight:600">Rest day</div><div style="color:var(--mu);font-size:12px;font-weight:500">Mark this as a day off</div></div>
+        <div style="width:46px;height:28px;border-radius:14px;background:#1e222b;position:relative"><div style="position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:11px;background:var(--mu)"></div></div>
+      </div>
+      <div class="detail">
+        <div style="width:38px;height:38px;border-radius:12px;background:#1e222b;display:flex;align-items:center;justify-content:center"><i class="ti ti-car" style="color:var(--mu);font-size:18px"></i></div>
+        <div style="flex:1;margin-left:12px"><div style="color:var(--tx);font-size:14px;font-weight:600">Commute</div><div style="color:var(--mu);font-size:12px;font-weight:500">One-way travel time</div></div>
+        <div style="display:flex;align-items:baseline"><span style="color:var(--tx);font-size:24px;font-weight:600;letter-spacing:-0.5px">30</span><span style="color:var(--mu);font-size:12px;font-weight:500;margin-left:4px">min</span></div>
+      </div>
+
+      <div style="height:24px"></div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:14px 18px 24px;background:var(--bg);border-top:1px solid var(--bd)">
+    <div style="height:54px;background:var(--lm);color:#13200a;font-size:15px;font-weight:600;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:-0.2px"><i class="ti ti-calendar-plus" style="font-size:19px"></i>Save Shift</div>
+  </div>
+</div>
+</body>
+</html>

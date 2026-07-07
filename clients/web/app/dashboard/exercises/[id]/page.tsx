@@ -3,15 +3,15 @@
 import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-    LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer
+    LineChart, Line, XAxis, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { useQuery } from '@tanstack/react-query';
 import { exerciseApi } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronLeft, Target, Dumbbell, CheckCircle2,
-    Zap, List, BookOpen, BarChart3, Share2,
-    ChevronRight, Loader2, AlertCircle
+    List, BookOpen, BarChart3,
+    Loader2, AlertCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { KEGEL_EXERCISES, BODY_PART_LABELS, type Exercise } from '@/lib/exercisedb';
@@ -110,7 +110,7 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ id: s
                 </div>
                 <button
                     onClick={() => router.push('/dashboard/exercises')}
-                    className="bg-brand-500 text-white px-6 py-2.5 rounded-xl font-semibold hover:bg-brand-600 transition-colors"
+                    className="bg-brand-500 text-background px-6 py-2.5 rounded-xl font-semibold hover:bg-brand-600 transition-colors"
                 >
                     Browse Exercises
                 </button>
@@ -496,7 +496,7 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ id: s
                                                             contentStyle={{ backgroundColor: '#171717', borderColor: '#262626', borderRadius: '12px' }}
                                                             itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
                                                         />
-                                                        <Line type="monotone" dataKey="maxWeight" name="Weight (kg)" stroke="#f97316" strokeWidth={3} dot={{ r: 4, fill: '#f97316' }} />
+                                                        <Line type="monotone" dataKey="maxWeight" name="Weight (kg)" stroke="#a8cc3c" strokeWidth={3} dot={{ r: 4, fill: '#a8cc3c' }} />
                                                     </LineChart>
                                                 </ResponsiveContainer>
                                             </div>
@@ -540,7 +540,7 @@ export default function ExerciseDetailPage({ params }: { params: Promise<{ id: s
                 >
                     <button
                         onClick={() => router.push('/dashboard/exercise')}
-                        className="flex-1 bg-brand-500 hover:bg-brand-600 text-white py-4 rounded-2xl font-bold text-sm transition-all shadow-lg shadow-brand-500/20 flex items-center justify-center gap-2"
+                        className="flex-1 bg-brand-500 hover:bg-brand-600 text-background py-4 rounded-2xl font-bold text-sm transition-all shadow-lg shadow-brand-500/20 flex items-center justify-center gap-2"
                     >
                         <Dumbbell size={16} />
                         Log This Exercise

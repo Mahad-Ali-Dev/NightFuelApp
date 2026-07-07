@@ -301,6 +301,26 @@ function isEnglishTranslation(lang: number | { id: number; short_name?: string }
     return lang.id === 2 || lang.short_name === 'en';
 }
 
+// Strip HTML tags from wger's rich-text description. Applied repeatedly until
+// the string stops changing: a single `.replace(/<[^>]+>/g, '')` pass is unsafe
+// because overlapping/nested constructs like `<scr<b>ipt>` leave a live tag
+// behind (String.replace does not re-scan its own output). Looping to a fixed
+// point closes the incomplete-multi-character-sanitization hole (CodeQL
+// js/incomplete-multi-character-sanitization).
+function stripHtmlTags(input: string): string {
+    let prev = input;
+    let next = prev.replace(/<[^>]+>/g, '');
+    while (next !== prev) {
+        prev = next;
+        next = next.replace(/<[^>]+>/g, '');
+    }
+    // Strip any RESIDUAL angle brackets: `<[^>]+>` only matches a tag that has
+    // its closing `>`, so an unclosed `<script` (no `>`) would survive the loop.
+    // Removing leftover `<`/`>` guarantees no partial tag remains (CodeQL
+    // js/incomplete-multi-character-sanitization).
+    return next.replace(/[<>]/g, '');
+}
+
 export function mapWgerToExercise(info: WgerExerciseInfo): Exercise | null {
     // Find the English translation in the translations array.
     // wger v2 API returns language as a plain integer (2 = English).
@@ -325,7 +345,7 @@ export function mapWgerToExercise(info: WgerExerciseInfo): Exercise | null {
         equipment: normalizeWgerEquipment(equipName),
         gifUrl: imageUrl,
         instructions: description
-            ? [description.replace(/<[^>]+>/g, '').trim()]
+            ? [stripHtmlTags(description).trim()]
             : [],
         secondaryMuscles: info.muscles_secondary.map(m => m.name_en),
     };
@@ -343,7 +363,7 @@ export async function searchExercisesLive(query: string): Promise<Exercise[]> {
                 { headers: { Accept: 'application/json' }, signal: timeout },
             );
             if (res.ok) {
-                const data: { results: WgerExerciseInfo[] } = await res.json();
+                const data = await res.json() as { results: WgerExerciseInfo[] };
                 const mapped = data.results
                     .map(mapWgerToExercise)
                     .filter((e): e is Exercise => e !== null);
@@ -362,7 +382,7 @@ export async function searchExercisesLive(query: string): Promise<Exercise[]> {
             { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(6000) },
         );
         if (res.ok) {
-            const data: WgerSearchResult = await res.json();
+            const data = await res.json() as WgerSearchResult;
             if (data.suggestions.length > 0) {
                 return data.suggestions.map(s => ({
                     id: `wger-${s.data.base_id}`,
@@ -396,7 +416,7 @@ export async function fetchExerciseById(id: string): Promise<Exercise | undefine
             { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(6000) },
         );
         if (res.ok) {
-            const info: WgerExerciseInfo = await res.json();
+            const info = await res.json() as WgerExerciseInfo;
             return mapWgerToExercise(info) ?? undefined;
         }
     } catch {

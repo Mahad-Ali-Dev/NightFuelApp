@@ -139,16 +139,38 @@ export async function logHydration(
 
 /** Get the current streak information. */
 export async function getStreak(): Promise<Streak> {
-  const { data } = await apiClient.get<Streak>('/v1/progress/streak');
-  return data;
+  // Backend returns currentStreak / longestStreak / lastAdherentDate
+  const { data } = await apiClient.get<any>('/v1/progress/streak');
+  return {
+    current: data.currentStreak ?? data.current ?? 0,
+    longest: data.longestStreak ?? data.longest ?? 0,
+    lastActiveDate: data.lastAdherentDate ?? data.lastActiveDate ?? '',
+  };
 }
 
 /** Get aggregated stats for the past week. */
 export async function getWeeklyStats(): Promise<WeeklyStats> {
-  const { data } = await apiClient.get<WeeklyStats>(
-    '/v1/progress/weekly-stats',
-  );
-  return data;
+  // Backend returns `{ summary, chartData }` where `summary` is the getStats()
+  // shape (daysTracked / avgCaloriesActual / adherencePercent / …) — NOT the flat
+  // fields below — and carries no streak. Map it here and pull the streak in
+  // parallel so the Weekly Recap never renders `undefined`/`NaN`.
+  const [resp, streak] = await Promise.all([
+    apiClient.get<any>('/v1/progress/weekly-stats'),
+    getStreak().catch(() => ({ current: 0, longest: 0, lastActiveDate: '' } as Streak)),
+  ]);
+
+  const root = resp.data?.data ?? resp.data ?? {};
+  const s = root.summary ?? root ?? {};
+  const num = (v: any) => (typeof v === 'number' && isFinite(v) ? v : 0);
+
+  return {
+    avgCalories: num(s.avgCaloriesActual ?? s.avgCalories),
+    avgProtein: num(s.avgProteinActual ?? s.avgProtein),
+    avgHydration: num(s.avgHydration ?? s.avgHydrationActual),
+    avgScore: num(s.adherencePercent ?? s.avgScore),
+    daysLogged: num(s.daysTracked ?? s.daysLogged ?? s.totalDays),
+    streakDays: num(streak.current ?? s.streakDays),
+  };
 }
 
 /** Log body measurement metrics. */

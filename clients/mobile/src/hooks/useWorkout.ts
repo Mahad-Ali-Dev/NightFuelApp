@@ -77,10 +77,14 @@ export function useWorkout() {
         activeSession: activeSessionQuery.data ?? null,
         hasActiveSession: !!activeSessionQuery.data,
         isLoadingSession: activeSessionQuery.isLoading,
+        isErrorSession: activeSessionQuery.isError,
+        refetchSession: activeSessionQuery.refetch,
 
         // Routines
         routines: routinesQuery.data ?? [],
         isLoadingRoutines: routinesQuery.isLoading,
+        isErrorRoutines: routinesQuery.isError,
+        refetchRoutines: routinesQuery.refetch,
 
         // 1RM
         oneRepMaxes: oneRepMaxQuery.data ?? [],

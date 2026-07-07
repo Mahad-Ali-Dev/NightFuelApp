@@ -7,7 +7,7 @@ import { exerciseApi } from '@/lib/api';
 import { motion } from 'framer-motion';
 import {
     ChevronLeft, Calendar, List, Dumbbell,
-    Clock, Flame, TrendingUp, ChevronRight
+    Clock, TrendingUp, ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -109,7 +109,7 @@ export default function WorkoutHistoryPage() {
                                 onClick={() => setView(val)}
                                 className={cn(
                                     'p-2 rounded-lg transition-all',
-                                    view === val ? 'bg-brand-500 text-white' : 'text-neutral-500 hover:text-white'
+                                    view === val ? 'bg-brand-500 text-background' : 'text-neutral-500 hover:text-white'
                                 )}
                             >
                                 <Icon size={16} />
@@ -206,7 +206,7 @@ export default function WorkoutHistoryPage() {
                                 <Dumbbell size={32} className="text-neutral-700 mx-auto mb-3" />
                                 <p className="text-neutral-500">No workouts logged yet</p>
                                 <Link href="/dashboard/exercise">
-                                    <Button className="mt-4 bg-brand-500 text-white rounded-xl">Log a Workout</Button>
+                                    <Button className="mt-4 bg-brand-500 text-background rounded-xl">Log a Workout</Button>
                                 </Link>
                             </div>
                         ) : (

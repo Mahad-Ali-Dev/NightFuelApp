@@ -1,54 +1,44 @@
-# ═══════════════════════════════════════════════════════════════════════════════
-# NightFuel Web Client — Multi-stage Production Dockerfile
-# Base: Node.js 22 LTS Alpine
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# ── Stage 1: Deps ─────────────────────────────────────────────────────────────
-FROM node:22-alpine AS deps
+# Monorepo-aware Next.js build via turbo prune (mirrors the backend services)
+FROM node:22-alpine AS base
 RUN apk add --no-cache libc6-compat
+RUN npm install -g turbo@^2
+
+FROM base AS pruner
 WORKDIR /app
-
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev --legacy-peer-deps
-
-# ── Stage 2: Builder ──────────────────────────────────────────────────────────
-FROM node:22-alpine AS builder
-WORKDIR /app
-
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN turbo prune web --docker
 
-# Build-time env vars (public only — baked into the bundle)
-ARG NEXT_PUBLIC_API_URL=http://localhost/api
-ARG NEXT_PUBLIC_WS_URL=ws://localhost
+FROM base AS installer
+WORKDIR /app
+COPY --from=pruner /app/out/json/ .
+COPY --from=pruner /app/out/package-lock.json* ./
+RUN npm install --legacy-peer-deps
+
+FROM installer AS builder
+WORKDIR /app
+COPY --from=pruner /app/out/full/ .
+ARG NEXT_PUBLIC_API_URL=http://nginx/api
+ARG NEXT_PUBLIC_WS_URL=ws://nginx
 ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY=""
-
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_WS_URL=$NEXT_PUBLIC_WS_URL
 ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
 ENV NEXT_TELEMETRY_DISABLED=1
+# Root tsconfig for the @nightfuel/* workspace packages that `extends` it (config,
+# etc.) — `turbo prune` omits it, so their tsc falls back to broken defaults
+# (no skipLibCheck/esModuleInterop) and the build fails. Mirrors the backend
+# Dockerfiles (e.g. user-service), which copy it in for exactly this reason.
+COPY --from=pruner /app/tsconfig.json ./tsconfig.json
+RUN turbo run build --filter=web
 
-RUN npm run build
-
-# ── Stage 3: Runner ───────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
-
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-
-RUN addgroup --system --gid 1001 nodejs \
- && adduser  --system --uid 1001 nextjs
-
-# Copy only the standalone build output (requires `output: 'standalone'` in next.config)
-COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
-
+COPY --from=builder /app /app
+WORKDIR /app/clients/web
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-
-CMD ["node", "server.js"]
+CMD ["npx", "next", "start", "--port", "3000"]

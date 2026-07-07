@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { motion } from 'framer-motion';
-import { Calendar, Clock, MapPin, Coffee } from 'lucide-react';
+import { Clock, MapPin, Coffee } from 'lucide-react';
 
 const SHIFT_TYPES = ['FIXED_NIGHT', 'ROTATING', 'SPLIT', 'IRREGULAR', 'TWELVE_HOUR'] as const;
 
@@ -160,7 +160,7 @@ export default function CreateShiftPage() {
 
                             <div className="flex gap-4 pt-4 border-t border-white/5">
                                 <Button type="button" variant="outline" className="w-full bg-transparent border-white/10 text-white hover:bg-white/5" onClick={() => router.back()}>Cancel</Button>
-                                <Button type="submit" className="w-full bg-brand-500 text-white hover:bg-brand-600 shadow-[0_0_15px_-3px_hsl(var(--brand)/0.4)]" disabled={createMutation.isPending}>
+                                <Button type="submit" className="w-full bg-brand-500 text-background hover:bg-brand-600 shadow-[0_0_15px_-3px_hsl(var(--brand)/0.4)]" disabled={createMutation.isPending}>
                                     {createMutation.isPending ? 'Saving...' : 'Save Shift'}
                                 </Button>
                             </div>

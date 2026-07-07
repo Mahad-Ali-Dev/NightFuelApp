@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getUnseenBadges, type Badge } from '@/api/community';
+import { useAuthStore } from '@/store/authStore';
 import { useTheme } from '@/theme';
 import { withAlpha } from '@/theme/utils';
 
@@ -35,6 +36,12 @@ export default function BadgeToast() {
     const router = useRouter();
     const qc = useQueryClient();
 
+    // Only poll while signed in. On the login/signup screens there is no token,
+    // so an ungated poll 401s → the axios interceptor treats it as session-expired
+    // and router.replace('/(auth)/login') remounts the screen mid-typing (the
+    // "page reloads while I type slowly" bug). Gating on auth stops that entirely.
+    const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
     const [queue, setQueue] = useState<Badge[]>([]);
     const [visible, setVisible] = useState(false);
     const [current, setCurrent] = useState<Badge | null>(null);
@@ -49,6 +56,7 @@ export default function BadgeToast() {
     const { data: unseenBadges } = useQuery({
         queryKey: ['unseen-badges'],
         queryFn: getUnseenBadges,
+        enabled: isAuthenticated,
         refetchInterval: POLL_INTERVAL_MS,
         refetchIntervalInBackground: false,
         retry: false,
@@ -160,7 +168,7 @@ export default function BadgeToast() {
                             />
 
                             {/* Close button */}
-                            <TouchableOpacity style={s.closeBtn} onPress={handleClose}>
+                            <TouchableOpacity style={s.closeBtn} onPress={handleClose} activeOpacity={0.85}>
                                 <Ionicons name="close" size={18} color={colors.text.tertiary} />
                             </TouchableOpacity>
 
@@ -211,6 +219,7 @@ export default function BadgeToast() {
                                 <TouchableOpacity
                                     style={[s.viewAllBtn, { borderColor: withAlpha(colors.text.primary, 0.2) }]}
                                     onPress={handleViewAll}
+                                    activeOpacity={0.85}
                                 >
                                     <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: '700' }]}>
                                         View Achievements
@@ -220,6 +229,7 @@ export default function BadgeToast() {
                                 <TouchableOpacity
                                     style={[s.doneBtn, { backgroundColor: tier.glow }]}
                                     onPress={handleClose}
+                                    activeOpacity={0.85}
                                 >
                                     <Text style={[typography.caption, { color: '#FFF', fontWeight: '800' }]}>
                                         Awesome! 🎉

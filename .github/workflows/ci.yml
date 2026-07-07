@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run lint --workspaces --if-present
@@ -30,9 +30,27 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
+      # Build the shared @nightfuel/config package BEFORE tests. Services import
+      # `@nightfuel/config`, which resolves to packages/config/dist — absent after
+      # a clean `npm ci`, so jest fails with "Cannot find module '@nightfuel/config'".
+      # The local gate does exactly this (`tsc -b packages/config --force`); the CI
+      # job didn't. --force is required: a stale tsbuildinfo makes plain `tsc -b`
+      # report "up to date" and emit nothing.
+      - name: Build shared packages (@nightfuel/config)
+        run: npx tsc -b packages/config --force
+      # Generate the Prisma client BEFORE tests. The clients
+      # (services/*/src/generated/prisma) are gitignored, so a clean `npm ci`
+      # leaves them absent and the jest suites fail to import them. The local
+      # gate (scripts/run-backend-tests.js) already does this — replicating it
+      # here is what closes the long-standing local-green / CI-red gap.
+      - name: Generate Prisma client
+        run: |
+          if [ -f services/${{ matrix.service }}/prisma/schema.prisma ]; then
+            cd services/${{ matrix.service }} && npx prisma generate
+          fi
       - run: npm test --workspace=${{ matrix.service }} --if-present
 
   test-python:
@@ -51,11 +69,19 @@ jobs:
         run: |
           cd services/${{ matrix.service }}
           pip install -r requirements.txt
+          # pytest is a TEST dependency and isn't in the services' (prod)
+          # requirements.txt, so the runner had no `pytest` module and the job
+          # died with "No module named pytest" before any test ran. Install it
+          # explicitly for the test job.
+          pip install pytest
       - name: Run tests
         env:
           ANTHROPIC_API_KEY: mock-key
           OPENAI_API_KEY: mock-key
           REDIS_URL: redis://localhost:6379
+          # F22 #8: ai-pipeline now requires these at boot (dual-auth).
+          JWT_SECRET: test-jwt-secret-at-least-32-characters-long
+          INTERNAL_SERVICE_TOKEN: test-internal-token
         run: |
           cd services/${{ matrix.service }}
           python -m pytest tests/ -v --tb=short
@@ -64,11 +90,36 @@ jobs:
     name: Build Check
     runs-on: ubuntu-latest
     needs: [lint-and-typecheck]
+    env:
+      # `next build` downloads its platform SWC binary when it isn't installed
+      # (npm ci doesn't reliably install the Linux optional dep from a Windows-
+      # generated lock), and to find the registry it runs `<pkgManager> config get
+      # registry`. Next's getRegistry THROWS if that command fails instead of
+      # using its built-in default, and it picks the runner's global yarn 1.22,
+      # which errors on ANY `packageManager` field. The ROOT fix is removing that
+      # field from package.json (npm doesn't need it; Node is pinned via .nvmrc +
+      # engines), so the registry lookup succeeds and the SWC download proceeds.
+      # Telemetry off just avoids Next's separate update-check making the same call.
+      NEXT_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
+      # Pre-build the shared @nightfuel/* packages IN DEPENDENCY ORDER before the
+      # full workspace build. `npm run build --workspaces` builds in listing order
+      # (not topological), so a service's `tsc` can run before @nightfuel/config /
+      # events / types are built and fail with "Cannot find module
+      # '@nightfuel/config'" — the 11 Build Check errors. (turbo's build SHOULD
+      # order via dependsOn:["^build"] but doesn't reliably here, so we order
+      # explicitly: types has no deps, events + config depend on types, services
+      # depend on all three. dates is source-consumed and has no build.) This
+      # passed locally only because those dist/ dirs already existed.
+      - name: Build shared packages (dependency order)
+        run: |
+          npm run build --workspace=@nightfuel/types
+          npm run build --workspace=@nightfuel/events
+          npm run build --workspace=@nightfuel/config
       - run: npm run build --workspaces --if-present

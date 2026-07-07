@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Workout</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .rnd{width:38px;height:38px;border-radius:50%;background:#15181Fcc;border:1px solid var(--bd);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center}
+  .ex{display:flex;align-items:center;gap:13px;padding:9px 0}
+  .th{position:relative;width:56px;height:56px;border-radius:14px;background:#14171d;border:1px solid #262b34;overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+  .th img{width:52px;height:52px;object-fit:contain}
+  .pp{position:absolute;bottom:3px;right:3px;width:20px;height:20px;border-radius:50%;background:#0A0C12dd;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll">
+    <!-- full-bleed demo hero -->
+    <div style="position:relative;height:266px;background:linear-gradient(150deg,#2b303a,#14171e 62%,#0f1014)">
+      <img src="ready/muscle-core-male.png" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);height:226px;width:auto;object-fit:contain;opacity:0.9">
+      <div style="position:absolute;inset:0;background:linear-gradient(180deg,#0A0C1266 0%,transparent 32%,#0A0C1299 76%,var(--bg) 100%)"></div>
+
+      <!-- status bar -->
+      <div style="position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+      <!-- back-chevron header -->
+      <div style="position:absolute;top:42px;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:0 16px"><div class="rnd"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:20px"></i></div><div class="rnd"><i class="ti ti-bookmark" style="color:var(--tx);font-size:19px"></i></div></div>
+
+      <!-- title overlay -->
+      <div style="position:absolute;bottom:18px;left:20px;right:20px">
+        <div style="color:#fff;font-size:26px;font-weight:600;letter-spacing:-0.5px">Full Body Blast</div>
+        <div style="display:flex;gap:15px;color:#cfd4dd;font-size:13px;font-weight:500;margin-top:7px">
+          <span style="display:flex;align-items:center;gap:5px"><i class="ti ti-clock" style="color:var(--lm);font-size:16px"></i>45 min</span>
+          <span style="display:flex;align-items:center;gap:5px"><i class="ti ti-flame" style="color:var(--lm);font-size:16px"></i>~380 kcal</span>
+          <span style="display:flex;align-items:center;gap:5px"><i class="ti ti-bolt" style="color:var(--lm);font-size:16px"></i>Intermediate</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- timing note -->
+    <div style="padding:16px 16px 0"><div class="zc" style="padding:13px 14px;display:flex;align-items:center;gap:11px">
+      <i class="ti ti-bulb" style="color:var(--lm);font-size:21px;flex-shrink:0"></i>
+      <span style="color:var(--tx);font-size:12.5px;font-weight:500;line-height:1.5">Scheduled for <b style="color:var(--lm);font-weight:600">23:00</b> — peak strength window for your night shift.</span>
+    </div></div>
+
+    <!-- exercises header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:24px 18px 6px"><span style="color:var(--tx);font-size:18px;font-weight:600;letter-spacing:-0.3px">Exercises</span><span style="color:var(--mu);font-size:12.5px;font-weight:500">8 moves · 3 rounds</span></div>
+
+    <!-- round 1 -->
+    <div style="display:flex;align-items:center;gap:11px;padding:6px 18px 2px"><span style="color:var(--lm);font-size:12.5px;font-weight:600">Round 1</span><div style="flex:1;height:1px;background:var(--bd)"></div><span style="color:var(--mu);font-size:11.5px;font-weight:500">repeat × 3</span></div>
+    <div style="padding:2px 18px 0">
+      <div class="ex"><div class="th"><img src="ready/muscle-legs-male.png"><div class="pp"><i class="ti ti-player-play" style="color:var(--lm);font-size:9px"></i></div></div><div style="flex:1"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Goblet squats</div><div style="color:var(--mu);font-size:12.5px;font-weight:500;margin-top:2px">12 reps · 60s rest</div></div><i class="ti ti-chevron-right" style="color:#55585f;font-size:18px"></i></div>
+      <div class="ex"><div class="th"><img src="ready/muscle-chest-male.png"><div class="pp"><i class="ti ti-player-play" style="color:var(--lm);font-size:9px"></i></div></div><div style="flex:1"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Push-ups</div><div style="color:var(--mu);font-size:12.5px;font-weight:500;margin-top:2px">15 reps · 45s rest</div></div><i class="ti ti-chevron-right" style="color:#55585f;font-size:18px"></i></div>
+      <div class="ex"><div class="th"><img src="ready/muscle-cardio-male.png"><div class="pp"><i class="ti ti-player-play" style="color:var(--lm);font-size:9px"></i></div></div><div style="flex:1"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Mountain climbers</div><div style="color:var(--mu);font-size:12.5px;font-weight:500;margin-top:2px">40s · 30s rest</div></div><i class="ti ti-chevron-right" style="color:#55585f;font-size:18px"></i></div>
+    </div>
+
+    <!-- round 2 -->
+    <div style="display:flex;align-items:center;gap:11px;padding:16px 18px 2px"><span style="color:var(--lm);font-size:12.5px;font-weight:600">Round 2</span><div style="flex:1;height:1px;background:var(--bd)"></div><span style="color:var(--mu);font-size:11.5px;font-weight:500">repeat × 3</span></div>
+    <div style="padding:2px 18px 0">
+      <div class="ex"><div class="th"><img src="ready/muscle-legs-male.png"><div class="pp"><i class="ti ti-player-play" style="color:var(--lm);font-size:9px"></i></div></div><div style="flex:1"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Reverse lunges</div><div style="color:var(--mu);font-size:12.5px;font-weight:500;margin-top:2px">12 each · 45s rest</div></div><i class="ti ti-chevron-right" style="color:#55585f;font-size:18px"></i></div>
+      <div class="ex"><div class="th"><img src="ready/muscle-core-male.png"><div class="pp"><i class="ti ti-player-play" style="color:var(--lm);font-size:9px"></i></div></div><div style="flex:1"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Plank hold</div><div style="color:var(--mu);font-size:12.5px;font-weight:500;margin-top:2px">45s · 30s rest</div></div><i class="ti ti-chevron-right" style="color:#55585f;font-size:18px"></i></div>
+    </div>
+    <div style="height:104px"></div>
+  </div>
+
+  <!-- sticky action bar -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:14px 18px 24px;background:linear-gradient(180deg,transparent,var(--bg) 30%);z-index:20"><div style="background:var(--lm);color:#13200a;font-size:15px;font-weight:600;padding:15px;border-radius:16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:-0.2px"><i class="ti ti-player-play" style="font-size:16px"></i>Start workout</div></div>
+</div>
+</body>
+</html>

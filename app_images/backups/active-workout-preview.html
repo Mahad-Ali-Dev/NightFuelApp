@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Active Workout</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E;--am:#FFA64D}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll::-webkit-scrollbar,.mscroll::-webkit-scrollbar{display:none}
+  .mscroll{overflow-x:auto;scrollbar-width:none}
+  .ov{font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase}
+  .stat{flex:1;border-radius:16px;background:var(--cd);border:1px solid var(--bd);padding:13px}
+  .statchip{width:30px;height:30px;border-radius:10px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center;margin-bottom:9px}
+  .ninput{font-family:inherit;font-size:18px;font-weight:600;text-align:center;background:#1e222b;border-radius:12px;padding:9px 0;width:100%;letter-spacing:-0.3px}
+</style>
+</head>
+<body>
+<div class="frame">
+  <!-- fixed live-player header -->
+  <div style="padding:9px 18px 16px;background:var(--bg);position:relative;z-index:10">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:0 2px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:14px">
+      <div style="flex:1;padding-right:12px">
+        <div style="display:flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:4px;background:var(--lm)"></span><span class="ov" style="color:var(--lm)">Active workout</span></div>
+        <div style="color:var(--tx);font-size:24px;font-weight:600;letter-spacing:-0.5px;margin-top:5px">Night Shift Prep</div>
+        <div style="display:flex;align-items:center;gap:9px;margin-top:9px">
+          <span style="display:flex;align-items:center;gap:5px;color:var(--tx);font-size:16px;font-weight:600;letter-spacing:-0.3px"><i class="ti ti-stopwatch" style="color:var(--lm);font-size:17px"></i>18:24</span>
+          <span style="padding:4px 10px;border-radius:30px;background:var(--cd);border:1px solid var(--bd)"><span class="ov" style="color:var(--mu)">Hypertrophy</span></span>
+        </div>
+      </div>
+      <div style="width:78px;height:78px;border-radius:50%;flex-shrink:0;background:conic-gradient(var(--lm) 0% 40%,#252a33 40% 100%);display:flex;align-items:center;justify-content:center">
+        <div style="width:64px;height:64px;border-radius:50%;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center"><span style="color:var(--tx);font-size:22px;font-weight:600;letter-spacing:-0.5px">40</span><span class="ov" style="color:var(--mu);font-size:9px">% done</span></div>
+      </div>
+    </div>
+    <div style="margin-top:16px;height:50px;background:var(--lm);color:#13200a;font-size:15px;font-weight:600;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:-0.2px">Finish workout<i class="ti ti-flag" style="font-size:18px"></i></div>
+  </div>
+
+  <div class="scroll" style="height:calc(100% - 222px);overflow-y:auto">
+
+    <!-- rest banner (calm amber) -->
+    <div style="display:flex;align-items:center;margin:6px 18px 0;padding:13px 14px;border-radius:16px;background:var(--cd);border:1px solid #3a3324">
+      <div style="display:flex;align-items:center"><i class="ti ti-hourglass" style="color:var(--am);font-size:22px"></i><div style="margin-left:11px"><div class="ov" style="color:var(--am)">Rest</div><div style="color:var(--mu);font-size:12px;font-weight:500;margin-top:1px">Catch your breath</div></div></div>
+      <div style="flex:1;display:flex;justify-content:center">
+        <div style="width:58px;height:58px;border-radius:50%;background:conic-gradient(var(--am) 0% 64%,#252a33 64% 100%);display:flex;align-items:center;justify-content:center">
+          <div style="width:46px;height:46px;border-radius:50%;background:var(--cd);display:flex;align-items:center;justify-content:center"><span style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.3px">0:58</span></div>
+        </div>
+      </div>
+      <div style="width:40px;height:40px;border-radius:13px;background:#1e222b;display:flex;align-items:center;justify-content:center"><i class="ti ti-x" style="color:var(--am);font-size:18px"></i></div>
+    </div>
+
+    <!-- stat grid -->
+    <div style="display:flex;gap:10px;padding:14px 18px 0">
+      <div class="stat"><div class="statchip"><i class="ti ti-stack-2" style="color:var(--lm);font-size:15px"></i></div><div style="color:var(--tx);font-size:21px;font-weight:600;letter-spacing:-0.5px">4.2k<span style="color:var(--mu);font-size:11px;font-weight:500"> kg</span></div><div class="ov" style="color:var(--mu);margin-top:1px">Volume</div></div>
+      <div class="stat"><div class="statchip"><i class="ti ti-checkbox" style="color:var(--lm);font-size:15px"></i></div><div style="color:var(--tx);font-size:21px;font-weight:600;letter-spacing:-0.5px">6/15</div><div class="ov" style="color:var(--mu);margin-top:1px">Sets done</div></div>
+      <div class="stat"><div class="statchip"><i class="ti ti-clock" style="color:var(--lm);font-size:15px"></i></div><div style="color:var(--tx);font-size:21px;font-weight:600;letter-spacing:-0.5px">18:24</div><div class="ov" style="color:var(--mu);margin-top:1px">Elapsed</div></div>
+    </div>
+
+    <!-- session rail -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:22px 18px 12px"><span class="ov" style="color:var(--mu)">Session</span><span style="color:var(--mu);font-size:12px;font-weight:500">3 exercises</span></div>
+    <div class="mscroll" style="display:flex;gap:12px;padding:0 18px 4px">
+      <div style="width:158px;flex-shrink:0;border-radius:16px;background:var(--cd);border:1px solid var(--bd);padding:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="min-width:26px;height:22px;border-radius:7px;background:#1e222b;display:flex;align-items:center;justify-content:center"><span style="color:var(--mu);font-size:10px;font-weight:600">01</span></span><i class="ti ti-circle-check" style="color:var(--lm);font-size:17px"></i></div>
+        <div style="color:var(--tx);font-size:14px;font-weight:600;margin-top:10px">Barbell Bench Press</div>
+        <div style="color:var(--mu);font-size:12px;font-weight:500;margin-top:2px">3/3 sets</div>
+        <div style="height:4px;border-radius:999px;background:#1e222b;margin-top:10px;overflow:hidden"><div style="width:100%;height:100%;background:var(--lm)"></div></div>
+      </div>
+      <div style="width:158px;flex-shrink:0;border-radius:16px;background:var(--cd);padding:14px;border:1.5px solid var(--lm);box-shadow:0 0 12px #C2F03C33">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="min-width:26px;height:22px;border-radius:7px;background:var(--lm);display:flex;align-items:center;justify-content:center"><span style="color:#13200a;font-size:10px;font-weight:600">02</span></span><i class="ti ti-circle-dashed" style="color:var(--lm);font-size:17px"></i></div>
+        <div style="color:var(--tx);font-size:14px;font-weight:600;margin-top:10px">Incline Dumbbell Press</div>
+        <div style="color:var(--lm);font-size:12px;font-weight:600;margin-top:2px">1/4 sets</div>
+        <div style="height:4px;border-radius:999px;background:#1e222b;margin-top:10px;overflow:hidden"><div style="width:25%;height:100%;background:var(--lm)"></div></div>
+      </div>
+    </div>
+
+    <!-- current exercise -->
+    <div style="margin:18px 18px 20px;border-radius:18px;background:var(--cd);border:1px solid var(--bd);overflow:hidden">
+      <!-- demo band -->
+      <div style="height:196px;position:relative;background:linear-gradient(150deg,#2b303a,#14171e);display:flex;align-items:center;justify-content:center">
+        <img src="ready/muscle-chest-male.png" style="width:160px;height:160px;object-fit:contain;opacity:0.92" alt="">
+        <div style="position:absolute;top:12px;left:12px;padding:4px 10px;border-radius:30px;background:#0A0C12cc;border:1px solid var(--bd)"><span class="ov" style="color:var(--lm)">02</span></div>
+        <div style="position:absolute;left:12px;bottom:12px;display:flex;align-items:center;gap:6px;padding:5px 11px;border-radius:30px;background:#0A0C12cc;border:1px solid var(--bd)"><i class="ti ti-barbell" style="color:var(--lm);font-size:14px"></i><span class="ov" style="color:var(--tx)">1/4 sets</span></div>
+      </div>
+
+      <div style="padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="flex:1;padding-right:12px">
+            <div style="color:var(--tx);font-size:20px;font-weight:600;letter-spacing:-0.4px">Incline Dumbbell Press</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-top:4px"><i class="ti ti-target" style="color:var(--mu);font-size:15px"></i><span style="color:var(--mu);font-size:12px;font-weight:500">Target 8-12 reps</span></div>
+          </div>
+          <div style="width:34px;height:34px;border-radius:12px;background:#1e222b;display:flex;align-items:center;justify-content:center"><i class="ti ti-dots" style="color:var(--mu);font-size:18px"></i></div>
+        </div>
+
+        <div style="height:6px;border-radius:999px;background:#1e222b;margin:14px 0 18px;overflow:hidden"><div style="width:25%;height:100%;background:var(--lm)"></div></div>
+
+        <!-- set header -->
+        <div style="display:flex;align-items:center;margin-bottom:10px;padding:0 10px"><span class="ov" style="color:var(--mu);width:48px">Set</span><span class="ov" style="color:var(--mu);flex:1;text-align:center">Kg</span><span class="ov" style="color:var(--mu);flex:1;text-align:center">Reps</span><div style="width:52px"></div></div>
+
+        <!-- active set row -->
+        <div style="display:flex;align-items:center;padding:10px;border-radius:14px;background:#1e222b;margin-bottom:8px;border:1.5px solid var(--lm)">
+          <div style="width:48px"><div style="color:var(--tx);font-size:16px;font-weight:600">1</div><div style="color:var(--mu);font-size:9px;font-weight:500">last 30×10</div></div>
+          <div style="flex:1;padding:0 6px"><div class="ninput" style="color:var(--tx)">32</div></div>
+          <div style="flex:1;padding:0 6px"><div class="ninput" style="color:var(--tx)">10</div></div>
+          <div style="width:44px;height:44px;border-radius:14px;background:var(--lm);display:flex;align-items:center;justify-content:center;margin-left:8px"><i class="ti ti-check" style="color:#13200a;font-size:21px"></i></div>
+        </div>
+
+        <div style="display:flex;align-items:center;padding:10px;border-radius:14px;background:#1e222b;margin-bottom:8px">
+          <div style="width:48px"><div style="color:var(--tx);font-size:16px;font-weight:600">2</div><div style="color:var(--mu);font-size:9px;font-weight:500">32×10</div></div>
+          <div style="flex:1;padding:0 6px"><div class="ninput" style="color:var(--mu);background:#15181F">32</div></div>
+          <div style="flex:1;padding:0 6px"><div class="ninput" style="color:var(--mu);background:#15181F">8</div></div>
+          <div style="width:44px;height:44px;border-radius:14px;background:#15181F;display:flex;align-items:center;justify-content:center;margin-left:8px"><i class="ti ti-check" style="color:var(--mu);font-size:21px"></i></div>
+        </div>
+
+        <div style="display:flex;align-items:center;padding:10px;border-radius:14px;background:#1e222b">
+          <div style="width:48px"><div style="color:var(--tx);font-size:16px;font-weight:600">3</div></div>
+          <div style="flex:1;padding:0 6px"><div class="ninput" style="color:#56585f;background:#15181F">32</div></div>
+          <div style="flex:1;padding:0 6px"><div class="ninput" style="color:#56585f;background:#15181F">8</div></div>
+          <div style="width:44px;height:44px;border-radius:14px;background:#15181F;display:flex;align-items:center;justify-content:center;margin-left:8px"><i class="ti ti-check" style="color:var(--mu);font-size:21px"></i></div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:14px;padding:13px;border-radius:14px;background:#1e222b"><i class="ti ti-plus" style="color:var(--mu);font-size:17px"></i><span style="color:var(--mu);font-size:14px;font-weight:600">Add set</span></div>
+      </div>
+    </div>
+
+    <div style="margin:0 18px 24px;height:50px;border-radius:16px;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;gap:8px"><i class="ti ti-plus" style="color:var(--lm);font-size:19px"></i><span style="color:var(--lm);font-size:15px;font-weight:600">Add exercise</span></div>
+  </div>
+</div>
+</body>
+</html>

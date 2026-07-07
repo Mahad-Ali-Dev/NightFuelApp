@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Cycle</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  /* cycle keeps a rose/coral secondary accent --ro */
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--ro:#FF7A90;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .sec{color:var(--tx);font-size:16px;font-weight:600}
+  .nbtn{width:36px;height:36px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll" style="padding-bottom:36px">
+    <!-- status bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+    <!-- back header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 4px">
+      <div style="display:flex;align-items:center;gap:10px"><div class="nbtn"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:18px"></i></div><span style="color:var(--tx);font-size:18px;font-weight:600;letter-spacing:-0.3px">Your cycle</span></div>
+      <div class="nbtn"><i class="ti ti-calendar-event" style="color:var(--mu);font-size:17px"></i></div>
+    </div>
+
+    <!-- ring hero -->
+    <div style="display:flex;flex-direction:column;align-items:center;padding:18px 0 6px">
+      <div style="position:relative;width:236px;height:236px">
+        <svg viewBox="0 0 236 236" width="236" height="236">
+          <circle cx="118" cy="118" r="102" fill="none" stroke="#252A33" stroke-width="12"/>
+          <!-- period segment (muted rose) -->
+          <circle cx="118" cy="118" r="102" fill="none" stroke="#4a2730" stroke-width="12" stroke-linecap="round" stroke-dasharray="118 523" stroke-dashoffset="0" transform="rotate(-90 118 118)"/>
+          <!-- current follicular progress, the accent -->
+          <circle cx="118" cy="118" r="102" fill="none" stroke="var(--ro)" stroke-width="12" stroke-linecap="round" stroke-dasharray="186 455" stroke-dashoffset="-128" transform="rotate(-90 118 118)"/>
+        </svg>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center">
+          <div style="color:var(--mu);font-size:12px;font-weight:600;letter-spacing:1.5px">DAY</div>
+          <div style="color:var(--tx);font-size:54px;font-weight:700;letter-spacing:-2px;line-height:1.02;margin-top:2px">9</div>
+          <div style="color:var(--ro);font-size:14px;font-weight:600;margin-top:2px">Follicular</div>
+        </div>
+      </div>
+      <div style="color:var(--mu);font-size:13px;margin-top:14px">Next period in <span style="color:var(--tx);font-weight:600">19 days</span> · ovulation in <span style="color:var(--ro);font-weight:600">5</span></div>
+    </div>
+
+    <!-- phase track -->
+    <div style="display:flex;gap:7px;padding:20px 18px 0">
+      <div style="flex:1;text-align:center"><div style="height:6px;border-radius:3px;background:#4a2730"></div><div style="color:var(--mu);font-size:10px;font-weight:500;margin-top:6px">Period</div></div>
+      <div style="flex:1.4;text-align:center"><div style="height:6px;border-radius:3px;background:var(--ro)"></div><div style="color:var(--ro);font-size:10px;font-weight:600;margin-top:6px">Follicular</div></div>
+      <div style="flex:0.6;text-align:center"><div style="height:6px;border-radius:3px;background:var(--bd)"></div><div style="color:var(--mu);font-size:10px;font-weight:500;margin-top:6px">Ovul.</div></div>
+      <div style="flex:1.6;text-align:center"><div style="height:6px;border-radius:3px;background:var(--bd)"></div><div style="color:var(--mu);font-size:10px;font-weight:500;margin-top:6px">Luteal</div></div>
+    </div>
+
+    <!-- phase recommendations -->
+    <div class="sec" style="padding:22px 18px 10px">Tuned to your phase</div>
+    <div style="padding:0 16px"><div class="zc" style="display:flex;align-items:flex-start;gap:14px;padding:15px">
+      <div style="width:46px;height:46px;border-radius:13px;background:#2c1419;border:1px solid #45222a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-barbell" style="color:var(--ro);font-size:24px"></i></div>
+      <div style="flex:1"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Push your strength</div><div style="color:var(--mu);font-size:13px;line-height:1.5;margin-top:3px">Estrogen's rising — energy and recovery peak now. A great window for heavy lifts and PRs.</div></div>
+    </div></div>
+    <div style="padding:11px 16px 0"><div class="zc" style="display:flex;align-items:flex-start;gap:14px;padding:15px">
+      <div style="width:46px;height:46px;border-radius:13px;background:#2c1419;border:1px solid #45222a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-bowl" style="color:var(--ro);font-size:24px"></i></div>
+      <div style="flex:1"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Eat for energy</div><div style="color:var(--mu);font-size:13px;line-height:1.5;margin-top:3px">Lean protein and complex carbs to fuel training. Keep iron up after your period.</div></div>
+    </div></div>
+
+    <!-- track CTA -->
+    <div style="padding:22px 16px 0"><div style="background:var(--ro);color:#2a0a12;font-size:16px;font-weight:600;padding:16px;border-radius:15px;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:-0.2px"><i class="ti ti-plus" style="font-size:19px"></i>Track today</div></div>
+    <div style="height:24px"></div>
+  </div>
+</div>
+</body>
+</html>

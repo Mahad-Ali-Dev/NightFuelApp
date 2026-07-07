@@ -1,4 +1,4 @@
-// ─── NightFuel Shared Enums ──────────────────────────────────────────────────
+// ─── Zeitra Shared Enums ──────────────────────────────────────────────────
 // Previously expected from @nightfuel/types (package not published).
 // Keep values in sync with the backend Prisma enums.
 
@@ -7,6 +7,7 @@ export const ShiftType = {
     ROTATING: 'ROTATING',
     SPLIT: 'SPLIT',
     IRREGULAR: 'IRREGULAR',
+    TWELVE_HOUR: 'TWELVE_HOUR',
 } as const;
 export type ShiftType = typeof ShiftType[keyof typeof ShiftType];
 

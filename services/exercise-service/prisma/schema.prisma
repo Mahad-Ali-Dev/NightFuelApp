@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
   output   = "../src/generated/prisma"
 }
 
@@ -58,9 +59,25 @@ model LibraryExercise {
   equipment        String?
   instructions     String?
   imageUrl         String?  @map("image_url")
+  demoUrl          String?  @map("demo_url")
+  // Self-hosted MP4 exercise-demo clip (nullable). When set, the mobile app
+  // streams it in-player via the gate-safe expo-video seam; absent it falls back
+  // to the animated image-frame loop / demoUrl tutorial link. Both imageUrl/
+  // demoUrl predate this column, so legacy rows (no MP4) stay valid.
+  videoUrl         String?  @map("video_url")
+  // Female demo clip — set when the catalog has a separate Female-gendered video.
+  // The player picks this for Female users and falls back to videoUrl (the
+  // Male/canonical clip) otherwise. Additive + nullable: legacy rows stay valid.
+  videoUrlFemale   String?  @map("video_url_female")
   difficulty       String?  @default("intermediate")
   bodyPart         String?  @map("body_part")
   category         String?  // "gym" | "home" | "cardio" | "kegel"
+  // Catalog enrichment (self-hosted exercise catalogs). secondaryMuscles backs
+  // the detail screen's "Secondary muscles" chips; gender lets the library split
+  // Male/Female demos. Both additive — String[] defaults to [] and gender is
+  // nullable, so legacy wger-seeded rows stay valid with no backfill.
+  secondaryMuscles String[] @map("secondary_muscles")
+  gender           String?  // "Male" | "Female"; null = unisex / unspecified
   createdAt        DateTime @default(now()) @map("created_at")
 
   @@map("library_exercises")
@@ -74,6 +91,12 @@ model WorkoutRoutine {
   splitType    String?  @map("split_type")
   muscleGroups String[] @map("muscle_groups")
   exercises    Json     // Array of configured exercises
+  // True only for routines created by the AI generator
+  // (POST /v1/exercises/routines/generate). Manual creates
+  // (POST /v1/exercises/routines) leave this false so they do NOT
+  // consume the daily AI-generation quota — the quota COUNT filters
+  // on aiGenerated = true.
+  aiGenerated  Boolean  @default(false) @map("ai_generated")
   createdAt    DateTime @default(now()) @map("created_at")
 
   @@index([userId])
@@ -122,4 +145,16 @@ model ExerciseLog {
 
   @@index([sessionId])
   @@map("exercise_logs")
+}
+
+// Per-user AI Coach plan blob (the generated challenge + progress) so the plan
+// survives reinstalls + syncs across devices. One row per user; `data` is the
+// serialized CoachPlan the mobile coachStore persists. Additive table — boot-time
+// `prisma db push` creates it without touching existing exercise data.
+model CoachPlan {
+  userId    String   @id @map("user_id")
+  data      Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("coach_plans")
 }

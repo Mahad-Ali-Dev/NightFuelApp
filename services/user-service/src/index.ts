@@ -2,10 +2,10 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, bootstrapCluster, connectWithRetry, registerGlobalProcessHandlers } from '@nightfuel/config';
+import { createLogger, loadConfig, bootstrapCluster, connectWithRetry, registerGlobalProcessHandlers, sendUnauthorized, registerFastifyErrorHandler } from '@nightfuel/config';
 import { z } from 'zod';
 import { UserService } from './user.service';
-import { userRoutes } from './routes';
+import { userRoutes, waitlistRoutes } from './routes';
 import { setupEventSubscribers } from './events';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCors from '@fastify/cors';
@@ -15,9 +15,13 @@ import fastifyRateLimit from '@fastify/rate-limit';
 // ── Environment validation ────────────────────────────────────────────────────
 const envSchema = z.object({
     USER_PORT: z.string().default('3009'),
-    JWT_SECRET: z.string(),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     USER_DATABASE_URL: z.string().url(),
     USER_DIRECT_URL: z.string().url(),
+    // F34 #5: shared secret that the /v1/users/internal/* routes verify via the
+    // makeInternalAuthGuard preHandler. Defaulted so boot doesn't break in
+    // dev/test; when empty the guard fails closed (every /internal request 404s).
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -66,8 +70,15 @@ fastify.register(fastifyRateLimit, {
 });
 
 fastify.register(fastifyCors, {
-    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    // The marketing site (zeitra.app) browser-POSTs the public waitlist route,
+    // so the production origins join the local dev ones.
+    origin: [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'https://zeitra.app',
+        'https://www.zeitra.app',
+    ],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
 });
@@ -81,11 +92,7 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
     try {
         await request.jwtVerify();
     } catch (err) {
-        return reply.code(401).send({
-            statusCode: 401,
-            error: 'Unauthorized',
-            message: 'A valid Bearer token is required.',
-        });
+        return sendUnauthorized(reply, request, err);
     }
 });
 
@@ -97,41 +104,26 @@ fastify.get('/health', async () => {
 // ── Route registration ────────────────────────────────────────────────────────
 fastify.register(
     async (instance) => {
-        await userRoutes(instance, { userService });
+        await userRoutes(instance, { userService, internalServiceToken: config.INTERNAL_SERVICE_TOKEN });
     },
     { prefix: '/v1/users' }
 );
 
+// Public launch waitlist — no auth, tight per-IP rate limit inside the plugin.
+fastify.register(
+    async (instance) => {
+        await waitlistRoutes(instance, { prisma });
+    },
+    { prefix: '/v1/waitlist' }
+);
+
 // ── Global error handler ──────────────────────────────────────────────────────
-fastify.setErrorHandler((error, request, reply) => {
-    logger.error(
-        {
-            err: error,
-            url: request.url,
-            method: request.method,
-            body: request.body,
-            params: request.params,
-            query: request.query,
-            user: request.user,
-        },
-        'Unhandled route error'
-    );
-
-    // Fastify validation errors have a statusCode of 400
-    if (error.statusCode && error.statusCode < 500) {
-        return reply.code(error.statusCode).send({
-            error: error.name,
-            message: error.message,
-            statusCode: error.statusCode,
-        });
-    }
-
-    return reply.code(500).send({
-        error: 'Internal server error',
-        message: error.message,
-        stack: error.stack,
-    });
-});
+// Converged onto the shared @nightfuel/config redactor (wraps the pure
+// buildErrorResponse): the 500 branch ships a fixed generic body and never
+// reflects error.message/error.stack, while <500 keeps only Fastify-generated
+// validation messages. The real cause is logged server-side inside the helper.
+// This matches the locked __tests__/error-redaction.test.ts shape exactly.
+registerFastifyErrorHandler(fastify, logger);
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 const start = async (): Promise<void> => {
@@ -146,6 +138,26 @@ const start = async (): Promise<void> => {
         const port = parseInt(config.USER_PORT, 10);
         await fastify.listen({ port, host: '0.0.0.0' });
         logger.info(`User Service running on port ${port}`);
+
+        // ── Period-reminder sweep ────────────────────────────────────────────
+        // Publishes `cycle:period-approaching` for eligible users (see
+        // sweepPeriodReminders — uncertainty-aware, one nudge per cycle).
+        // Every 6h + one warm-up pass shortly after boot; a `running` latch
+        // guards against overlap; failures are logged and never fatal.
+        let sweepRunning = false;
+        const runSweep = async () => {
+            if (sweepRunning) return;
+            sweepRunning = true;
+            try {
+                await userService.sweepPeriodReminders();
+            } catch (err) {
+                logger.warn({ err }, 'Period reminder sweep failed (will retry next tick)');
+            } finally {
+                sweepRunning = false;
+            }
+        };
+        setTimeout(() => { void runSweep(); }, 90_000).unref();
+        setInterval(() => { void runSweep(); }, 6 * 60 * 60 * 1000).unref();
     } catch (err) {
         logger.error(err, 'Failed to start user-service');
         process.exit(1);

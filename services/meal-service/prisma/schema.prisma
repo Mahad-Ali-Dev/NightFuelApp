@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
   output   = "../src/generated/prisma"
 }
 
@@ -19,6 +20,22 @@ model FoodItem {
   fiber         Float    @default(0)
   sugar         Float    @default(0)
   sodiumMg      Float    @default(0) @map("sodium_mg")
+  // Micronutrients per serving (USDA FoodData Central, public domain). All
+  // nullable — legacy FooDB rows have none, and not every food reports every
+  // nutrient. Typed columns (not a JSON blob) so the cycle "best foods for your
+  // phase" feature can rank foods by a specific micro (e.g. orderBy ironMg desc
+  // for the menstrual phase). Units encoded in the field name (Mg = milligrams,
+  // Mcg = micrograms).
+  ironMg        Float?   @map("iron_mg")
+  magnesiumMg   Float?   @map("magnesium_mg")
+  calciumMg     Float?   @map("calcium_mg")
+  potassiumMg   Float?   @map("potassium_mg")
+  zincMg        Float?   @map("zinc_mg")
+  vitaminCMg    Float?   @map("vitamin_c_mg")
+  vitaminB6Mg   Float?   @map("vitamin_b6_mg")
+  vitaminB12Mcg Float?   @map("vitamin_b12_mcg")
+  folateMcg     Float?   @map("folate_mcg")
+  vitaminDMcg   Float?   @map("vitamin_d_mcg")
   servingSize   String   @map("serving_size")
   glycemicIndex Int?     @map("glycemic_index")
   isVegan       Boolean  @default(false) @map("is_vegan")
@@ -28,6 +45,12 @@ model FoodItem {
   cuisineTags   String[] @default([]) @map("cuisine_tags")
   source        String   @default("OPENFOODFACTS")  // OPENFOODFACTS | FOODB | CUSTOM
   foodGroup     String?  @map("food_group")
+  // Food photo + its license attribution. imageUrl points at an openly-licensed
+  // image (Open Food Facts, ODbL/CC-BY-SA); imageAttribution carries the credit
+  // string we must display/retain to honor that license. Both nullable so legacy
+  // FooDB rows (no photo) and CUSTOM foods stay valid.
+  imageUrl         String? @map("image_url")
+  imageAttribution String? @map("image_attribution")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -46,9 +69,17 @@ model MealLog {
   totalCarbs    Float    @map("total_carbs")
   totalFat      Float    @map("total_fat")
   isAdherent    Boolean  @map("is_adherent")
+  // Optional client-supplied idempotency key. When present, a retry / double-tap
+  // that re-POSTs the SAME key for the SAME user collapses onto the existing row
+  // (one DB row, one published meal-logged event) instead of double-logging.
+  // Nullable so existing ad-hoc logs (and every legacy row) keep a NULL key —
+  // Postgres treats NULLs as distinct, so the partial unique index below never
+  // collides for keyless logs and normal distinct logging is unaffected.
+  idempotencyKey String? @map("idempotency_key")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
+  @@unique([userId, idempotencyKey], name: "meal_logs_user_idempotency_key")
   @@index([userId, loggedAt(sort: Desc)])
   @@map("meal_logs")
 }

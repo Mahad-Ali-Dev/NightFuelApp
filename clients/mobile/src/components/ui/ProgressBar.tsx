@@ -2,7 +2,6 @@ import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/theme';
-import { borderRadius as br } from '@/theme/spacing';
 
 interface ProgressBarProps {
   progress: number; // 0–100
@@ -13,7 +12,7 @@ interface ProgressBarProps {
   style?: ViewStyle;
 }
 
-export function ProgressBar({
+function ProgressBarComponent({
   progress,
   color,
   gradientColors,
@@ -61,6 +60,12 @@ export function ProgressBar({
     </View>
   );
 }
+
+/**
+ * Memoized: `progress`/`height` are numbers and colors are strings. The
+ * optional `gradientColors`/`style` may be inline (just no skip then) — safe.
+ */
+export const ProgressBar = React.memo(ProgressBarComponent);
 
 const styles = StyleSheet.create({
   track: {

@@ -91,10 +91,12 @@ paths = [
   '''.next/''',
   # Generated Prisma client files contain large binary-encoded blobs.
   '''services/.*/src/generated/''',
-  # Tree dumps and log files
+  # Tree dumps
   '''mobile_tree.*\.txt''',
   '''web_tree.*\.txt''',
-  '''.*\.log''',
+  # NOTE: the blanket '''.*\.log''' allowlist was REMOVED in F22 — it hid real
+  # leaked PII/secrets in committed *.log files from the scanner. *.log is now
+  # gitignored (so none should be committed); if one ever is, gitleaks must scan it.
 ]
 
 regexes = [
@@ -113,4 +115,21 @@ regexes = [
   '''REPLACE_WITH_.*''',
   # The deliberate test secret in tests/aiSafety
   '''sk-ant-abcdefghijklmnop1234567890''',
+  # Obviously-fake provider keys used as fixtures in ai-pipeline's F21 fallback
+  # tests (test_ai_pipeline.py): the literal word "real" + a run of one repeated
+  # letter — never a credential. Pinned tightly so a genuine key still trips.
+  '''sk-ant-real-[a-z]+''',
+  '''sk-real-[a-z]+''',
+  # Static fixture for the Apple IAP shared-secret env in subscription tests.
+  '''shared-secret-test-value''',
+  # JWT_SECRET / INTERNAL_SERVICE_TOKEN test fixtures hard-coded in service
+  # __tests__ files (gitleaks' generic-api-key rule trips on the high entropy).
+  # These are deliberately self-describing fake values used only to boot a test
+  # Fastify instance — pinned to the literal "test"/"internal-token"/"-value"
+  # shapes so a genuine high-entropy secret would NOT match.
+  '''test-jwt-secret-[A-Za-z0-9-]+''',
+  '''test-secret-of-at-least-32-char[A-Za-z-]*''',
+  '''test-internal-token-[A-Za-z0-9-]+''',
+  '''[a-z]+-internal-token-value''',
+  '''internal-shared-secret-token-[A-Za-z0-9-]+''',
 ]

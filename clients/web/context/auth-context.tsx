@@ -10,19 +10,23 @@ export const useAuth = () => {
 
     const login = async (data: any) => {
         const res = await api.post('/login', data);
-        storeLogin(res.data.user, res.data.accessToken, res.data.refreshToken);
+        // HIGH #1: the refresh token is set by auth-service in an httpOnly cookie;
+        // we only keep the short-lived access token (in memory) here.
+        storeLogin(res.data.user, res.data.accessToken);
         router.push('/dashboard');
     };
 
     const register = async (data: any) => {
         const res = await api.post('/register', data);
-        storeLogin(res.data.user, res.data.accessToken, res.data.refreshToken);
+        storeLogin(res.data.user, res.data.accessToken);
         router.push('/dashboard');
     };
 
     const logout = async () => {
         try {
-            await api.post('/logout', { refreshToken: localStorage.getItem('refreshToken') });
+            // No body needed — auth-service reads the refresh token from the
+            // httpOnly cookie (api has withCredentials) and clears it server-side.
+            await api.post('/logout', {});
         } catch (e) {
             console.error("Logout failed", e);
         }

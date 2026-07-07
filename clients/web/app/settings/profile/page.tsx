@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Save, User as UserIcon, Camera } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { useEffect } from 'react';
 
 const profileSchema = z.object({
@@ -118,7 +117,7 @@ export default function ProfilePage() {
                                         <UserIcon className="h-10 w-10 text-neutral-500" />
                                     )}
                                 </div>
-                                <button type="button" className="absolute bottom-0 right-0 p-1.5 bg-brand-500 rounded-full text-white shadow-lg hover:bg-brand-600 transition-colors">
+                                <button type="button" className="absolute bottom-0 right-0 p-1.5 bg-brand-500 rounded-full text-background shadow-lg hover:bg-brand-600 transition-colors">
                                     <Camera className="h-4 w-4" />
                                 </button>
                             </div>
@@ -183,7 +182,7 @@ export default function ProfilePage() {
                             <Button
                                 type="submit"
                                 disabled={mutation.isPending || !isDirty}
-                                className="bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50 min-w-[120px]"
+                                className="bg-brand-500 text-background hover:bg-brand-600 disabled:opacity-50 min-w-[120px]"
                             >
                                 {mutation.isPending ? (
                                     <>

@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, ZodTypeProvider } from 'fastify-type-provider-zod';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler } from '@nightfuel/config';
+import { createLogger, loadConfig, connectWithRetry, registerGlobalProcessHandlers, registerFastifyErrorHandler, sendUnauthorized, makeInternalAuthGuard } from '@nightfuel/config';
 import { z } from 'zod';
 import { MealService } from './meal.service';
 import { mealRoutes } from './routes';
@@ -13,9 +13,13 @@ import fastifyRateLimit from '@fastify/rate-limit';
 
 const envSchema = z.object({
     MEAL_PORT: z.string().default('3006'),
-    JWT_SECRET: z.string(),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     REDIS_URL: z.string().url(),
     PLAN_SERVICE_URL: z.string().url(),
+    // F34 #5: shared token sent as X-Internal-Token on the s2s call to
+    // plan-service /v1/plans/internal/active/:userId. Defaulted so boot doesn't
+    // break; plan-service's guard rejects an empty/wrong token.
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -25,7 +29,7 @@ const eventBus = new RedisEventBus(config.REDIS_URL);
 const mealService = new MealService(
     prisma,
     eventBus,
-    { PLAN_SERVICE_URL: config.PLAN_SERVICE_URL }
+    { PLAN_SERVICE_URL: config.PLAN_SERVICE_URL, INTERNAL_SERVICE_TOKEN: config.INTERNAL_SERVICE_TOKEN }
 );
 
 const fastify = Fastify({ logger: false });
@@ -58,12 +62,63 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
     try {
         await request.jwtVerify();
     } catch (err) {
-        reply.send(err);
+        return sendUnauthorized(reply, request, err);
     }
 });
 
 fastify.get('/health', async () => {
     return { status: 'ok', service: 'meal-service' };
+});
+
+// F34 #5 / GDPR purge: guard the server-to-server-only /v1/meals/internal/*
+// routes with the shared INTERNAL_SERVICE_TOKEN (X-Internal-Token header). An
+// unset/empty token fails CLOSED (every request 404s until the token is set).
+const internalAuth = makeInternalAuthGuard(config.INTERNAL_SERVICE_TOKEN);
+
+// ── DELETE /v1/meals/internal/user/:userId (GDPR purge) ─────────────────────────
+// Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+// internalAuth preHandler additionally requires X-Internal-Token). PERMANENTLY
+// erases EVERY meal-service row owned by :userId across both user-owned tables
+// (meal_logs, fasting_logs). food_items / recipes are shared library data with no
+// per-user ownership and are left untouched. IDEMPOTENT: purging a user with no
+// rows returns 200 with zero counts; purging twice is safe (deleteMany never
+// throws on zero rows). Returns a per-table deletedCounts summary.
+fastify.withTypeProvider<ZodTypeProvider>().delete('/v1/meals/internal/user/:userId', {
+    preHandler: internalAuth,
+    schema: { params: z.object({ userId: z.string().uuid() }) },
+}, async (request, reply) => {
+    const { userId } = request.params;
+    try {
+        const deletedCounts = await mealService.purgeUser(userId);
+        return reply.code(200).send({ userId, deletedCounts });
+    } catch (err: any) {
+        request.log.error({ err, userId }, 'GDPR purge failed');
+        return reply.code(500).send({ error: 'Internal server error' });
+    }
+});
+
+// ── GET /v1/meals/internal/user/:userId/export (GDPR data export) ───────────────
+// Read-only counterpart of the purge above, behind the SAME internalAuth guard
+// (X-Internal-Token; 404s without/with a wrong token, fails CLOSED on an empty
+// expected token). Server-to-server only (nginx 404s /v1/<svc>/internal/* at the
+// edge). RETURNS every meal-service row owned by :userId across the SAME
+// user-owned tables the purge erases (meal_logs, fasting_logs), keyed by table
+// name, so right-to-access and right-to-erasure cover identical data. IDEMPOTENT
+// & read-only: no writes; the per-table result is bounded (EXPORT_ROW_LIMIT, see
+// MealService.exportUser) with a `_meta` truncation flag. NEVER exports any
+// secret/credential column (neither table holds one).
+fastify.withTypeProvider<ZodTypeProvider>().get('/v1/meals/internal/user/:userId/export', {
+    preHandler: internalAuth,
+    schema: { params: z.object({ userId: z.string().uuid() }) },
+}, async (request, reply) => {
+    const { userId } = request.params;
+    try {
+        const data = await mealService.exportUser(userId);
+        return reply.code(200).send({ userId, data });
+    } catch (err: any) {
+        request.log.error({ err, userId }, 'GDPR export failed');
+        return reply.code(500).send({ error: 'Internal server error' });
+    }
 });
 
 fastify.register(async (instance) => {

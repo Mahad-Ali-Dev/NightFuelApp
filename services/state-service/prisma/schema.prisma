@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
   output   = "../src/generated/prisma"
 }
 
@@ -13,6 +14,9 @@ model UserState {
   id                   String   @id @default(uuid())
   userId               String   @unique @map("user_id")
   last7DaysAdherence   Float    @default(1.0) @map("last_7_days_adherence")
+  // Rolling window of recent adherence samples: [{ "at": ISO8601, "adherent": bool }].
+  // Pruned to the last 7 days on each meal-logged event; last7DaysAdherence is the mean.
+  adherenceSamples     Json     @default("[]") @map("adherence_samples")
   avgSleepQuality      Float    @default(7.0) @map("avg_sleep_quality")
   fatigueLevel         Float    @default(3.0) @map("fatigue_level")
   currentWeightKg      Float?   @map("current_weight_kg")

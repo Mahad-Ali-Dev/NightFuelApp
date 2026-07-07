@@ -98,7 +98,7 @@ export function StepTracker() {
                             type="submit"
                             size="sm"
                             disabled={mutation.isPending}
-                            className="h-8 bg-brand-500 text-white px-3"
+                            className="h-8 bg-brand-500 text-background px-3"
                         >
                             {mutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
                         </Button>

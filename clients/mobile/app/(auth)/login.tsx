@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,36 +7,104 @@ import {
   Platform,
   ScrollView,
   Pressable,
+  Image,
+  AccessibilityInfo,
+  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter, Link } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useAuthStore } from '@/store/authStore';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Input, Button } from '@/components/ui';
+import { Input, CtaButton } from '@/components/ui';
 import { useTheme } from '@/theme';
-import { spacing } from '@/theme/spacing';
-import { isValidEmail, sanitizeInput } from '@/utils/validation';
+import { spacing, borderRadius } from '@/theme/spacing';
+import { typography } from '@/theme/typography';
+import { withAlpha } from '@/theme/utils';
+import { isValidEmail, sanitizeInput, normalizeEmail } from '@/utils/validation';
+import { resendOtp } from '@/api/auth';
+import {
+  runGoogleSignIn,
+  runAppleSignIn,
+  isAppleAuthAvailable,
+} from '@/lib/socialAuth';
+
+// Hero model — bundled female athlete asset (mockup: login-preview.html).
+const HERO_FEMALE = require('../../assets/images/hero-female-1.png');
+
+// Per-item entrance: a staggered FadeInDown spring. Each block enters ~45ms
+// after the previous so the hero, form, CTA and footer cascade in (premium,
+// not all-at-once). Spring physics + transform/opacity only keeps it cheap and
+// interruptible.
+const enter = (i: number) =>
+  FadeInDown.springify().damping(18).mass(0.9).delay(80 + i * 45);
 
 export default function LoginScreen() {
   const { colors } = useTheme();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Inline, per-field validation surfaced on blur (recovery-friendly: each
+  // message sits directly below its field, not in the submit pill). This mirrors
+  // register.tsx so the two auth screens speak the same forms language.
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  // Which social provider (if any) is mid-flight — dims/locks the buttons so the
+  // user can't fire two provider sheets at once.
+  const [socialLoading, setSocialLoading] = useState<'Google' | 'Apple' | null>(null);
+  // Apple sign-in only exists on iOS; gate the button on the runtime check.
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
-  const { login } = useAuthStore();
+  const { login, socialLogin } = useAuthStore();
+
+  useEffect(() => {
+    let active = true;
+    isAppleAuthAvailable().then((ok) => {
+      if (active) setAppleAvailable(ok);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Validate the email on blur so the user gets early, in-context feedback and
+  // a clear recovery path before they ever press Sign In. Empty stays silent —
+  // "required" is the submit-time concern.
+  const handleEmailBlur = () => {
+    const cleanEmail = sanitizeInput(email);
+    if (cleanEmail && !isValidEmail(cleanEmail)) {
+      setEmailError('Enter a valid email, e.g. you@example.com');
+    } else {
+      setEmailError('');
+    }
+  };
+
+  // Password on-blur validation to match register's per-field UX. The only
+  // client-side rule a sign-in password must satisfy is "not empty"; surface
+  // that below the field so the user recovers in-context rather than at submit.
+  const handlePasswordBlur = () => {
+    setPasswordError(password ? '' : 'Password is required');
+  };
 
   const handleLogin = async () => {
     const cleanEmail = sanitizeInput(email);
     if (!cleanEmail || !password) {
       setError('Please fill in all fields');
+      AccessibilityInfo.announceForAccessibility('Please fill in all fields');
       return;
     }
     if (!isValidEmail(cleanEmail)) {
       setError('Please enter a valid email address');
+      AccessibilityInfo.announceForAccessibility('Please enter a valid email address');
       return;
     }
     setLoading(true);
@@ -46,58 +114,211 @@ export default function LoginScreen() {
       // Let app/index.tsx decide: onboarding vs tabs based on onboardingComplete
       router.replace('/');
     } catch (e: any) {
-      setError(e?.message ?? 'Login failed. Please try again.');
+      const message = e?.message ?? 'Login failed. Please try again.';
+      // The account exists but its email was never verified — the backend
+      // returns the allowlisted EMAIL_NOT_VERIFIED marker. Route to the verify
+      // screen and kick off a fresh OTP so the user can complete signup instead
+      // of hitting a wall. resendOtp is anti-enumeration (always 200), so this
+      // is safe to fire-and-forget.
+      if (typeof message === 'string' && message.includes('EMAIL_NOT_VERIFIED')) {
+        const verifyEmail = normalizeEmail(cleanEmail);
+        resendOtp(verifyEmail).catch(() => {});
+        AccessibilityInfo.announceForAccessibility(
+          'Please verify your email. We sent you a new code.',
+        );
+        router.push(`/(auth)/verify?email=${encodeURIComponent(verifyEmail)}` as any);
+        return;
+      }
+      setError(message);
+      AccessibilityInfo.announceForAccessibility(message);
     } finally {
       setLoading(false);
     }
   };
 
+  // Real Google / Apple sign-in. The shared helpers return a discriminated
+  // result so we branch cleanly: success hydrates the store (shared with email
+  // login + verify-otp) and redirects; cancel is a silent no-op; not-configured
+  // and error surface a friendly message on the same error pill.
+  const handleSocial = async (provider: 'Apple' | 'Google') => {
+    if (socialLoading) return;
+    setError('');
+    setSocialLoading(provider);
+    try {
+      const result =
+        provider === 'Google' ? await runGoogleSignIn() : await runAppleSignIn();
+      switch (result.status) {
+        case 'success':
+          await socialLogin(result.auth);
+          router.replace('/');
+          break;
+        case 'cancelled':
+          break;
+        case 'not-configured':
+        case 'error':
+          setError(result.message);
+          AccessibilityInfo.announceForAccessibility(result.message);
+          break;
+      }
+    } catch (e: any) {
+      const message = e?.message ?? `${provider} sign-in failed. Please try again.`;
+      setError(message);
+      AccessibilityInfo.announceForAccessibility(message);
+    } finally {
+      setSocialLoading(null);
+    }
+  };
+
+  // Full-bleed hero width: cancel the ScrollView's horizontal padding so the band
+  // spans edge to edge under the rounded form card.
+  const heroWidth = width;
+
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background.primary }]}>
+    <View style={[styles.container, { backgroundColor: colors.background.primary }]}>
+      <StatusBar style="light" />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            // Bottom clearance for the CTA + footer above the home indicator.
+            { paddingBottom: insets.bottom + spacing['3xl'] },
+          ]}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={[styles.logo, { color: colors.text.primary }]}>
-              Night<Text style={{ color: colors.accent.coral }}>Fuel</Text>
-            </Text>
-            <Text style={[styles.subtitle, { color: colors.text.secondary }]}>
-              Welcome back, night warrior
-            </Text>
-          </View>
+          {/* Hero band — female athlete + dark gradient fade + overlaid title */}
+          <Animated.View
+            entering={enter(0)}
+            style={[
+              styles.hero,
+              { width: heroWidth, marginLeft: -spacing['2xl'], marginRight: -spacing['2xl'] },
+            ]}
+          >
+            <LinearGradient
+              colors={[withAlpha(colors.accent.coral, 0.16), colors.background.secondary, colors.background.primary]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            <Image
+              source={HERO_FEMALE}
+              style={styles.heroImage}
+              resizeMode="contain"
+              accessibilityRole="image"
+              accessibilityLabel="Zeitra"
+            />
+            {/* Fade the image down into the background so the title reads cleanly */}
+            <LinearGradient
+              colors={[
+                withAlpha(colors.background.primary, 0.33),
+                'transparent',
+                withAlpha(colors.background.primary, 0.73),
+                colors.background.primary,
+              ]}
+              locations={[0, 0.3, 0.78, 1]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFillObject}
+            />
+            {/* Back button — circular chip, top-left of the hero stage (mockup). */}
+            <Pressable
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/(auth)/welcome'))}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              style={[styles.backBtn, { top: insets.top + 8, backgroundColor: withAlpha(colors.background.secondary, 0.8), borderColor: colors.border.default }]}
+            >
+              <Ionicons name="chevron-back" size={20} color={colors.text.primary} />
+            </Pressable>
+            <View style={[styles.heroCopy, { paddingTop: insets.top }]}>
+              <Text
+                style={[styles.heroTitle, { color: colors.text.primary }]}
+                accessibilityRole="header"
+                maxFontSizeMultiplier={1.3}
+              >
+                Welcome back
+              </Text>
+              <Text style={[styles.heroSubtitle, { color: colors.text.secondary }]}>
+                Sign in to keep your streak going.
+              </Text>
+            </View>
+          </Animated.View>
 
           {/* Form */}
-          <View style={styles.form}>
+          <Animated.View entering={enter(1)} style={styles.form}>
+            <Text
+              style={[styles.fieldLabel, { color: colors.text.secondary }]}
+              maxFontSizeMultiplier={1.4}
+            >
+              Email <Text style={{ color: colors.accent.coral }}>*</Text>
+            </Text>
             <Input
-              label="Email"
               placeholder="you@example.com"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(t) => {
+                setEmail(t);
+                if (emailError) setEmailError('');
+              }}
+              onBlur={handleEmailBlur}
+              error={emailError || undefined}
               icon="mail-outline"
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              autoComplete="email"
+              textContentType="emailAddress"
+              returnKeyType="next"
             />
 
-            <Input
-              label="Password"
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={setPassword}
-              icon="lock-closed-outline"
-              secureTextEntry={!showPassword}
-              rightIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
-              onRightIconPress={() => setShowPassword(!showPassword)}
-            />
+            {/* Password field. The show/hide toggle is rendered as a
+                dedicated 44x44 overlay (PasswordToggle) rather than the Input
+                primitive's rightIcon, whose ~28px tap area is sub-44pt — and
+                the primitive is shared, so it is fixed here on-screen instead.
+                The label is rendered locally (with an explicit lineHeight) so
+                the input box sits at a deterministic offset the overlay can
+                anchor to; the TextInput reserves room via paddingRight. */}
+            <View style={styles.passwordField}>
+              <Text
+                style={[styles.fieldLabel, { color: colors.text.secondary }]}
+                maxFontSizeMultiplier={1.4}
+              >
+                Password <Text style={{ color: colors.accent.coral }}>*</Text>
+              </Text>
+              <Input
+                placeholder="Enter your password"
+                value={password}
+                onChangeText={(t) => {
+                  setPassword(t);
+                  if (passwordError) setPasswordError('');
+                }}
+                onBlur={handlePasswordBlur}
+                error={passwordError || undefined}
+                icon="lock-closed-outline"
+                secureTextEntry={!showPassword}
+                style={styles.passwordInput}
+                autoComplete="password"
+                textContentType="password"
+                returnKeyType="go"
+                onSubmitEditing={handleLogin}
+              />
+              <PasswordToggle
+                visible={showPassword}
+                onToggle={() => setShowPassword((v) => !v)}
+                tintColor={colors.text.tertiary}
+                pressedColor={colors.accent.coral}
+              />
+            </View>
 
             <Link href="/(auth)/forgot-password" asChild>
-              <Pressable style={styles.forgotLink}>
+              <Pressable
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="link"
+                accessibilityLabel="Forgot password"
+                style={({ pressed }) => [styles.forgotLink, pressed && styles.pressed]}
+              >
                 <Text style={[styles.forgotText, { color: colors.accent.coral }]}>
                   Forgot password?
                 </Text>
@@ -105,57 +326,177 @@ export default function LoginScreen() {
             </Link>
 
             {error ? (
-              <View style={[styles.errorBox, { backgroundColor: 'rgba(255,68,68,0.1)' }]}>
+              <View
+                style={[
+                  styles.errorBox,
+                  {
+                    backgroundColor: withAlpha(colors.error, 0.1),
+                    borderColor: withAlpha(colors.error, 0.25),
+                  },
+                ]}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="assertive"
+              >
                 <Ionicons name="alert-circle" size={16} color={colors.error} />
                 <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
               </View>
             ) : null}
 
-            <Button
-              title="Sign In"
-              onPress={handleLogin}
-              loading={loading}
-              fullWidth
+            <CtaButton
+              label="Sign in"
               size="lg"
-              icon={<Ionicons name="log-in-outline" size={20} color={colors.background.primary} />}
+              flat
+              loading={loading}
+              onPress={handleLogin}
+              style={styles.cta}
             />
-          </View>
 
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
-            <Text style={[styles.dividerText, { color: colors.text.tertiary }]}>or</Text>
-            <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
-          </View>
+            {/* "or continue with" divider */}
+            <View style={styles.dividerRow}>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
+              <Text style={[styles.dividerText, { color: colors.text.tertiary }]}>
+                or continue with
+              </Text>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border.default }]} />
+            </View>
 
-          {/* Social login */}
-          <Button
-            title="Continue with Google"
-            variant="outline"
-            fullWidth
-            size="lg"
-            icon={<Ionicons name="logo-google" size={20} color={colors.accent.coral} />}
-            onPress={() => { }}
-          />
+            {/* Social auth — Apple (iOS only) + Google */}
+            <View style={styles.socialRow}>
+              {appleAvailable ? (
+                <SocialButton
+                  provider="Apple"
+                  icon="logo-apple"
+                  onPress={() => handleSocial('Apple')}
+                  loading={socialLoading === 'Apple'}
+                  disabled={socialLoading !== null}
+                  colors={colors}
+                />
+              ) : null}
+              <SocialButton
+                provider="Google"
+                icon="logo-google"
+                onPress={() => handleSocial('Google')}
+                loading={socialLoading === 'Google'}
+                disabled={socialLoading !== null}
+                colors={colors}
+              />
+            </View>
+          </Animated.View>
 
           {/* Register link */}
-          <View style={styles.registerRow}>
+          <Animated.View entering={enter(2)} style={styles.registerRow}>
             <Text style={[styles.registerText, { color: colors.text.secondary }]}>
-              Don't have an account?{' '}
+              New to Zeitra?{' '}
             </Text>
             <Link href="/(auth)/register" asChild>
-              <Pressable>
+              <Pressable
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="link"
+                accessibilityLabel="Create a new account"
+                style={({ pressed }) => pressed && styles.pressed}
+              >
                 <Text style={[styles.registerLink, { color: colors.accent.coral }]}>
-                  Sign Up
+                  Create account
                 </Text>
               </Pressable>
             </Link>
-          </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
+
+/**
+ * SocialButton — a dark, outlined provider button (Apple / Google) matching the
+ * mockup's `.soc` chips. Icon + label, 44pt+ tall, transform/opacity pressed
+ * feedback and full a11y wiring.
+ */
+function SocialButton({
+  provider,
+  icon,
+  onPress,
+  loading = false,
+  disabled = false,
+  colors,
+}: {
+  provider: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  onPress: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+  colors: ReturnType<typeof useTheme>['colors'];
+}) {
+  const isDisabled = disabled || loading;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={isDisabled}
+      accessibilityRole="button"
+      accessibilityLabel={`Continue with ${provider}`}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
+      style={({ pressed }) => [
+        styles.social,
+        {
+          backgroundColor: colors.background.secondary,
+          borderColor: colors.border.default,
+        },
+        pressed && !isDisabled && styles.socialPressed,
+        isDisabled && styles.socialDisabled,
+      ]}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.text.primary} />
+      ) : (
+        <>
+          <Ionicons name={icon} size={19} color={colors.text.primary} />
+          <Text style={[styles.socialText, { color: colors.text.primary }]}>{provider}</Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+/**
+ * PasswordToggle — a self-contained show/hide control for the password field.
+ *
+ * Rendered as a 44x44 overlay anchored to the right edge of the Input box (the
+ * box is 52px tall; the toggle centers on it) so it meets the >=44pt touch
+ * target the shared Input primitive's rightIcon does not, without editing that
+ * primitive. transform/opacity-only pressed feedback; full a11y wiring.
+ */
+function PasswordToggle({
+  visible,
+  onToggle,
+  tintColor,
+  pressedColor,
+}: {
+  visible: boolean;
+  onToggle: () => void;
+  tintColor: string;
+  pressedColor: string;
+}) {
+  return (
+    <Pressable
+      onPress={onToggle}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      accessibilityRole="button"
+      accessibilityLabel={visible ? 'Hide password' : 'Show password'}
+      accessibilityState={{ selected: visible }}
+      style={styles.pwToggle}
+    >
+      {({ pressed }) => (
+        <Ionicons
+          name={visible ? 'eye-off-outline' : 'eye-outline'}
+          size={20}
+          color={pressed ? pressedColor : tintColor}
+        />
+      )}
+    </Pressable>
+  );
+}
+
+const HERO_HEIGHT = 252;
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -163,23 +504,83 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing['2xl'],
-    paddingTop: spacing['5xl'],
-    paddingBottom: spacing['3xl'],
+    // paddingBottom is applied inline from safe-area insets.
   },
-  header: {
-    marginBottom: spacing['4xl'],
+  hero: {
+    height: HERO_HEIGHT,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    marginBottom: spacing.lg,
   },
-  logo: {
-    fontSize: 38,
-    fontWeight: '800',
-    letterSpacing: -1,
+  heroImage: {
+    position: 'absolute',
+    top: 0,
+    alignSelf: 'center',
+    height: HERO_HEIGHT + 78,
+    width: '100%',
   },
-  subtitle: {
-    fontSize: 16,
-    marginTop: spacing.sm,
+  heroCopy: {
+    paddingHorizontal: spacing['2xl'],
+    paddingBottom: spacing.lg,
+  },
+  backBtn: {
+    position: 'absolute',
+    left: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+  },
+  heroTitle: {
+    ...typography.display,
+    fontSize: 30,
+    lineHeight: 34,
+    letterSpacing: -0.5,
+  },
+  heroSubtitle: {
+    ...typography.bodyMedium,
+    marginTop: spacing.xs,
   },
   form: {
-    marginBottom: spacing['2xl'],
+    paddingTop: spacing.xs,
+  },
+  // Visible, required-marked field label (forms best-practice: label not
+  // placeholder-only), rendered locally so it stays consistent across Email and
+  // Password and so the password input box sits at a known, fixed offset that
+  // the 44pt PasswordToggle overlay can anchor to. lineHeight is explicit (16)
+  // so that offset does not drift with platform font metrics.
+  fieldLabel: {
+    ...typography.captionMedium,
+    fontSize: 13,
+    lineHeight: 16,
+    marginBottom: spacing.xs,
+  },
+  passwordField: {
+    position: 'relative',
+  },
+  // Reserve trailing room inside the TextInput so password text never slides
+  // under the toggle (icon 20 + its visual padding within the 44pt target).
+  passwordInput: {
+    paddingRight: 40,
+  },
+  // 44x44 tap target, anchored to the right edge of the 52px input box and
+  // vertically centered on it. top = fieldLabel block (lineHeight 16 + marginBottom
+  // xs 4 = 20) + (52 - 44) / 2 = 24. right nudged so the 20px glyph optically
+  // matches the field's 16px inner padding.
+  pwToggle: {
+    position: 'absolute',
+    top: 24,
+    right: spacing.sm,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pressed: {
+    opacity: 0.6,
   },
   forgotLink: {
     alignSelf: 'flex-end',
@@ -187,44 +588,75 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   forgotText: {
-    fontSize: 14,
-    fontWeight: '500',
+    ...typography.bodySm,
+    fontWeight: '600',
   },
   errorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: 8,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
     marginBottom: spacing.lg,
   },
   errorText: {
-    fontSize: 13,
+    ...typography.bodySm,
     flex: 1,
   },
-  divider: {
+  cta: {
+    width: '100%',
+  },
+  dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: spacing['2xl'],
     gap: spacing.md,
+    marginTop: spacing.xl,
+    marginBottom: spacing.lg,
   },
   dividerLine: {
     flex: 1,
     height: 1,
   },
   dividerText: {
-    fontSize: 13,
+    ...typography.caption,
+  },
+  socialRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  social: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    height: 50,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+  },
+  socialPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.98 }],
+  },
+  socialDisabled: {
+    opacity: 0.5,
+  },
+  socialText: {
+    ...typography.bodySm,
+    fontWeight: '600',
   },
   registerRow: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     marginTop: spacing['3xl'],
   },
   registerText: {
-    fontSize: 15,
+    ...typography.body,
   },
   registerLink: {
-    fontSize: 15,
-    fontWeight: '600',
+    ...typography.body,
+    fontWeight: '700',
   },
 });

@@ -1,26 +1,38 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { sendUnauthorizedPayload, makeInternalAuthGuard } from '@nightfuel/config';
 import {
     updateProfileSchema,
     updatePreferencesSchema,
     updateOnboardingSchema,
+    updatePrivacySchema,
+    logPeriodSchema,
+    cycleForecastQuerySchema,
+    logSymptomsSchema,
+    symptomsQuerySchema,
+    updateCycleHealthSchema,
+    logPillSchema,
+    cycleShareCodeParamsSchema,
 } from './schemas';
 import { z } from 'zod';
 import { UserService } from './user.service';
+import { fanOutPurge, ServicePurgeResult } from './account-deletion';
+import { fanOutExport, assembleServicesMap, DataExportBundle } from './data-export';
 
 // ── Shared userId extractor ───────────────────────────────────────────────────
 // auth-service signs JWTs with { userId, role }. @fastify/jwt attaches the
 // decoded payload as request.user, so we read .userId (primary) or .id (legacy).
+// On failure we delegate to the canonical sendUnauthorizedPayload helper
+// (packages/config/src/auth-errors.ts) — that keeps the wire body identical to
+// every other service. Returning `null` is the signal callers use to short-
+// circuit before doing any DB work (see `if (!userId) return;` at every call
+// site below).
 function extractUserId(request: FastifyRequest, reply: FastifyReply): string | null {
     const user = request.user as any;
     const userId: string | undefined = user?.userId ?? user?.id;
     if (!userId || typeof userId !== 'string') {
-        reply.code(401).send({
-            statusCode: 401,
-            error: 'Unauthorized',
-            message: 'Token payload is missing userId.',
-        });
+        sendUnauthorizedPayload(reply, request);
         return null;
     }
     return userId;
@@ -43,9 +55,29 @@ function requireAdmin(request: FastifyRequest, reply: FastifyReply): boolean {
 
 export const userRoutes = async (
     fastify: FastifyInstance,
-    opts: { userService: UserService }
+    opts: {
+        userService: UserService;
+        internalServiceToken?: string;
+        // Seam for tests: override the inter-service fan-out so the DELETE /me
+        // orchestrator can be exercised without real HTTP. Defaults to the real
+        // fanOutPurge (native fetch + X-Internal-Token to every owning service).
+        fanOut?: typeof fanOutPurge;
+        // Seam for tests: override the data-export fan-out so the GET /me/export
+        // orchestrator can be exercised without real HTTP. Defaults to the real
+        // fanOutExport (native fetch + X-Internal-Token GET to every owning service).
+        fanOutExp?: typeof fanOutExport;
+    }
 ): Promise<void> => {
     const service = opts.userService;
+    const fanOut = opts.fanOut ?? fanOutPurge;
+    const fanOutExp = opts.fanOutExp ?? fanOutExport;
+
+    // F34 #5: in-service guard for the server-to-server-only /internal/* routes.
+    // Constant-time checks X-Internal-Token == INTERNAL_SERVICE_TOKEN; on
+    // missing/wrong token it 404s (same as the nginx edge — never reveal the
+    // route). Callers (chat/plan/progress) send the header. This is
+    // defense-in-depth behind the edge 404, not a replacement for it.
+    const internalAuth = makeInternalAuthGuard(opts.internalServiceToken);
 
     // ── GET /v1/users/me ──────────────────────────────────────────────────────
     // Returns the authenticated user's full profile including nested preferences.
@@ -83,19 +115,49 @@ export const userRoutes = async (
         async (request, reply) => {
             try {
                 const { userId } = request.params as { userId: string };
-                // Using internal profile fetcher as it gets the basic data
-                const profile = await service.getProfileWithPreferences(userId);
+                // PERF (MEDIUM #9): lean public read — no ensureProfileExists()
+                // count()/auto-create, selects ONLY the public fields below. A
+                // missing profile 404s (never provisioned by a public read). The
+                // returned object is already the exact public shape.
+                const profile = await service.getPublicProfile(userId);
                 if (!profile) {
                     return reply.code(404).send({ error: 'Profile not found' });
                 }
 
-                // Strip sensitive data before sending
-                return reply.code(200).send({
-                    id: profile.userId,
-                    displayName: profile.displayName,
-                    avatarUrl: profile.avatarUrl,
-                    timezone: profile.timezone
-                });
+                // isPrivate is part of the public social contract (community-service
+                // composes detailed profile access from it).
+                return reply.code(200).send(profile);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── POST /v1/users/public/batch ───────────────────────────────────────────
+    // PERF (HIGH #4): batch sibling of GET /v1/users/public/:userId. Resolves an
+    // array of user ids to the SAME public profile shape in ONE round-trip, so the
+    // community feed's author resolver can enrich a whole page of posts without N
+    // separate HTTP GETs. PUBLIC route (same auth as /public/:userId — NOT
+    // internal-token guarded). Bounded to MAX_BATCH ids per request. Returns
+    // { users: PublicProfile[] }; ids with no profile are simply absent (mirrors
+    // the single-id 404 → "no author" degrade).
+    const MAX_BATCH = 100;
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/public/batch',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: {
+                body: z.object({
+                    ids: z.array(z.string()).min(1).max(MAX_BATCH),
+                }),
+            },
+        },
+        async (request, reply) => {
+            try {
+                const { ids } = request.body as { ids: string[] };
+                const users = await service.getPublicProfilesBatch(ids);
+                return reply.code(200).send({ users });
             } catch (err: any) {
                 request.log.error(err);
                 return reply.code(500).send({ error: 'Internal server error' });
@@ -118,23 +180,194 @@ export const userRoutes = async (
                 const userId = extractUserId(request, reply);
                 if (!userId) return;
 
-                // DEBUG (remove later)
-                console.log('UPDATE PROFILE BODY:', request.body);
-
                 const profile = await service.updateProfile(userId, request.body);
                 return reply.code(200).send(profile);
             } catch (err: any) {
                 request.log.error(err);
-                console.error('PUT /me ERROR:', err); // ← IMPORTANT
 
                 if (err.message === 'Profile not found') {
-                    return reply.code(404).send({ error: err.message });
+                    // Fixed literal — never echo err.message verbatim. Real error logged above.
+                    return reply.code(404).send({ error: 'Profile not found' });
                 }
 
-                // Return actual error during dev (instead of hiding it)
-                return reply.code(500).send({
-                    error: err.message || 'Internal server error',
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── PATCH /v1/users/me ────────────────────────────────────────────────────
+    // Update the authenticated user's account-visibility flag (public/private).
+    // Backs the social public/private contract; keeps PUT /me (full profile)
+    // untouched. Returns the updated profile so callers read back isPrivate.
+    fastify.withTypeProvider<ZodTypeProvider>().patch(
+        '/me',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: {
+                body: updatePrivacySchema,
+            },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const profile = await service.updatePrivacy(userId, request.body);
+                return reply.code(200).send(profile);
+            } catch (err: any) {
+                request.log.error(err);
+
+                if (err.message === 'Profile not found') {
+                    // Fixed literal — never echo err.message verbatim. Real error logged above.
+                    return reply.code(404).send({ error: 'Profile not found' });
+                }
+
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── DELETE /v1/users/me ───────────────────────────────────────────────────
+    // GDPR "delete my account" ORCHESTRATOR. Erases the CALLING user everywhere.
+    //
+    // SECURITY (no IDOR): the userId comes ONLY from the verified JWT
+    // (extractUserId → request.user.userId). There is NO body/param userId, so a
+    // user can only ever delete THEIR OWN account — a forged body can't redirect
+    // the deletion at someone else.
+    //
+    // Steps:
+    //   1. Authoritatively purge user-service's OWN tables (transactional,
+    //      idempotent deleteMany over the ownership inventory).
+    //   2. Fan out DELETE /v1/<svc>/internal/user/:userId to EVERY owning service
+    //      (auth-service included — it holds the canonical credentials) with the
+    //      shared X-Internal-Token. Auth credentials are erased via auth's purge.
+    //   3. RESILIENT: attempt all services, collect per-service success/failure.
+    //      All-ok → 200; any failure → 207 multi-status with the per-service list
+    //      so the failures are visible + logged for retry (never silently half-
+    //      deleted). The own-data purge already succeeded authoritatively.
+    //   4. IDEMPOTENT: a re-delete of an already-deleted account returns success
+    //      (own purge counts come back 0; downstream purges deleteMany → 2xx).
+    //   5. Best-effort USER_DELETED event for async consumers.
+    fastify.withTypeProvider<ZodTypeProvider>().delete(
+        '/me',
+        {
+            onRequest: [(fastify as any).authenticate],
+        },
+        async (request, reply) => {
+            try {
+                // IDENTITY: JWT only. Never read a userId from body/params here.
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                // 1. Own data first — this is the authoritative deletion for the
+                //    PII this service owns. If it throws, we 500 (nothing erased
+                //    elsewhere yet, so the client can safely retry).
+                const ownData = await service.purgeOwnUserData(userId);
+
+                // 2 + 3. Fan out to every owning service (auth included), resilient.
+                const services: ServicePurgeResult[] = await fanOut(
+                    userId,
+                    opts.internalServiceToken ?? ''
+                );
+
+                // 5. Best-effort event (never throws).
+                await service.emitUserDeleted(userId);
+
+                const failures = services.filter((s) => !s.ok);
+                if (failures.length > 0) {
+                    request.log.error(
+                        { userId, failures },
+                        'GDPR deletion: some downstream services failed to purge (queued for retry)'
+                    );
+                    // 207-style summary: own data + auth/others that succeeded are
+                    // authoritative; the listed failures need retry.
+                    return reply.code(207).send({
+                        userId,
+                        status: 'partial',
+                        ownData,
+                        services,
+                    });
+                }
+
+                return reply.code(200).send({
+                    userId,
+                    status: 'deleted',
+                    ownData,
+                    services,
                 });
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── GET /v1/users/me/export ───────────────────────────────────────────────
+    // GDPR "export my data" ORCHESTRATOR (Art. 20 portability). Returns a SINGLE
+    // machine-readable JSON bundle of ALL the CALLING user's data across the
+    // platform. Read-only twin of DELETE /v1/users/me.
+    //
+    // SECURITY (no IDOR): the userId comes ONLY from the verified JWT
+    // (extractUserId → request.user.userId). There is NO body/param userId, so a
+    // user can only ever export THEIR OWN data — a forged param can't redirect
+    // the export at someone else's account.
+    //
+    // Steps:
+    //   1. Gather user-service's OWN user-owned data (profile, preferences,
+    //      status, coach profile/relations, period logs, derived cycle history +
+    //      forecast) — the SAME ownership inventory the deletion orchestrator
+    //      purges, read-only.
+    //   2. Fan out GET /v1/<svc>/internal/user/:userId/export to EVERY owning
+    //      service (auth included) with the shared X-Internal-Token.
+    //   3. RESILIENT: attempt all services, fold each into the `services` map —
+    //      the exported data on success, or { error } in that slot on failure
+    //      (best-effort completeness; a single unreachable service NEVER fails
+    //      the whole export — mirrors the deletion orchestrator's partial summary).
+    //   4. SECRETS: the per-service /export endpoints already exclude credentials;
+    //      this orchestrator only relays their JSON verbatim and never injects any.
+    //
+    // Always 200 with the full bundle (per-service failures are visible in-band as
+    // { error } slots, not an HTTP failure — the user still receives a portable
+    // export of everything that responded).
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/export',
+        {
+            onRequest: [(fastify as any).authenticate],
+        },
+        async (request, reply) => {
+            try {
+                // IDENTITY: JWT only. Never read a userId from body/params here.
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                // 1. Own data + 2. fan-out to every owning service, concurrently.
+                const [self, results] = await Promise.all([
+                    service.gatherOwnUserData(userId),
+                    fanOutExp(userId, opts.internalServiceToken ?? ''),
+                ]);
+
+                // 3. Fold per-service results (data | { error }) into the bundle.
+                const services = assembleServicesMap(results);
+
+                const failures = results.filter((r) => r.error !== undefined);
+                if (failures.length > 0) {
+                    request.log.error(
+                        { userId, failures: failures.map((f) => ({ service: f.service, error: f.error })) },
+                        'GDPR export: some services failed to export (degraded slots returned as { error })'
+                    );
+                }
+
+                const bundle: DataExportBundle = {
+                    exportedAt: new Date().toISOString(),
+                    userId,
+                    self,
+                    services,
+                };
+
+                return reply.code(200).send(bundle);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
             }
         }
     );
@@ -183,8 +416,9 @@ export const userRoutes = async (
                 return reply.code(200).send(prefs);
             } catch (err: any) {
                 request.log.error(err);
-                if (err.message.includes('not found')) {
-                    return reply.code(404).send({ error: err.message });
+                if (err.message?.includes('not found')) {
+                    // Fixed literal — never echo err.message verbatim. Real error logged above.
+                    return reply.code(404).send({ error: 'Preferences not found' });
                 }
                 return reply.code(500).send({ error: 'Internal server error' });
             }
@@ -211,7 +445,8 @@ export const userRoutes = async (
             } catch (err: any) {
                 request.log.error(err);
                 if (err.message === 'Profile not found') {
-                    return reply.code(404).send({ error: err.message });
+                    // Fixed literal — never echo err.message verbatim. Real error logged above.
+                    return reply.code(404).send({ error: 'Profile not found' });
                 }
                 return reply.code(500).send({ error: 'Internal server error' });
             }
@@ -236,6 +471,292 @@ export const userRoutes = async (
                 }
 
                 return reply.code(200).send(status);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── Menstrual-cycle Routes ───────────────────────────────────────────────
+    // All cycle routes require auth and are gated to the caller's OWN userId
+    // (extractUserId is the only identity source — there is no path param), so a
+    // user can never read or write another user's cycle data.
+
+    // POST /v1/users/me/cycle/period — log a period start (+ optional end).
+    // Appends a PeriodLog, then recomputes learned avgCycleLength /
+    // avgPeriodLength / regularity FROM the user's own history + the phase.
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/me/cycle/period',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { body: logPeriodSchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const stats = await service.logPeriod(userId, request.body as any);
+                return reply.code(201).send(stats);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/cycle/history — past cycles + learned averages/variability.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/cycle/history',
+        {
+            onRequest: [(fastify as any).authenticate],
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const history = await service.getCycleHistory(userId);
+                return reply.code(200).send(history);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/cycle/forecast — uncertainty-aware per-day phase calendar,
+    // predicted next-period / fertile-window / ovulation, confidence + logged flag.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/cycle/forecast',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { querystring: cycleForecastQuerySchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const { months } = request.query as { months?: number };
+                const forecast = await service.getCycleForecast(userId, months ?? 1);
+                return reply.code(200).send(forecast);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── Partner cycle-sharing (owner-managed, self-only) ─────────────────────
+    // GET/POST/DELETE the caller's OWN revocable partner-share code. Same self-only
+    // identity contract as every other cycle route (extractUserId is the only
+    // identity source). The partner READ path is the separate PUBLIC route below.
+
+    // GET /v1/users/me/cycle/share — the caller's active share, or { share: null }.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/cycle/share',
+        {
+            onRequest: [(fastify as any).authenticate],
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const share = await service.getActiveCycleShare(userId);
+                return reply.code(200).send({ share });
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // POST /v1/users/me/cycle/share — generate a share code (idempotent: returns
+    // the existing active one rather than minting a duplicate).
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/me/cycle/share',
+        {
+            onRequest: [(fastify as any).authenticate],
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const share = await service.createCycleShare(userId);
+                return reply.code(201).send({ share });
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // DELETE /v1/users/me/cycle/share — revoke the caller's active share(s).
+    fastify.withTypeProvider<ZodTypeProvider>().delete(
+        '/me/cycle/share',
+        {
+            onRequest: [(fastify as any).authenticate],
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const result = await service.revokeCycleShare(userId);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── PUBLIC partner read (no auth) ────────────────────────────────────────
+    // GET /v1/users/cycle-share/:code — resolve a partner-presented code to the
+    // owner's SANITIZED, summary-only cycle view. Deliberately UNAUTHENTICATED (the
+    // partner holds only the opaque code, not the owner's session), so:
+    //   * NO `authenticate` hook — the code itself is the bearer credential.
+    //   * TIGHT per-IP rate limit on top of the global cap — brute-forcing a
+    //     192-bit code is already infeasible; this also stops scraping/abuse.
+    //   * an unknown OR revoked code returns a plain 404 (service -> null); the
+    //     high-entropy code space makes enumeration pointless either way.
+    // It sits under the already-routed `/v1/users` prefix (NOT `/me/...`), so the
+    // existing gateway/nginx routing covers it with no infra change. The sanitizer
+    // guarantees only summary fields are ever emitted (never symptom/activity/notes).
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/cycle-share/:code',
+        {
+            config: {
+                // 20 resolves/min/IP — plenty for a partner refreshing the view.
+                rateLimit: { max: 20, timeWindow: '1 minute' },
+            },
+            schema: { params: cycleShareCodeParamsSchema },
+        },
+        async (request, reply) => {
+            try {
+                const { code } = request.params as { code: string };
+                const summary = await service.resolveSharedCycleSummary(code);
+                if (!summary) {
+                    // Same generic body for unknown vs revoked — reveal nothing.
+                    return reply.code(404).send({ error: 'Share not found' });
+                }
+                return reply.code(200).send(summary);
+            } catch (err: any) {
+                // Never echo the code or the error detail.
+                request.log.error({ err }, 'Failed to resolve cycle share');
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // POST /v1/users/me/cycle/symptoms — per-day symptom quick-log (mood /
+    // cramps / energy / flow / notes). Upserts on (user, day): re-logging the
+    // same day merges fields. Same self-only identity contract as the other
+    // cycle routes (extractUserId is the only identity source).
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/me/cycle/symptoms',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { body: logSymptomsSchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const row = await service.logCycleSymptoms(userId, request.body as any);
+                return reply.code(201).send(row);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/cycle/symptoms?days=35 — trailing symptom window.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/cycle/symptoms',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { querystring: symptomsQuerySchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const { days } = request.query as { days?: number };
+                const result = await service.getCycleSymptoms(userId, days ?? 35);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // PATCH /v1/users/me/cycle/health — pregnancy mode + birth-control/pill config
+    // (Period P2). Partial update; self-only identity contract as the other cycle routes.
+    fastify.withTypeProvider<ZodTypeProvider>().patch(
+        '/me/cycle/health',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { body: updateCycleHealthSchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const row = await service.updateCycleHealth(userId, request.body as any);
+                return reply.code(200).send(row);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // POST /v1/users/me/cycle/pill — log today's (or a given day's) pill adherence.
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/me/cycle/pill',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { body: logPillSchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const row = await service.logPill(userId, request.body as any);
+                return reply.code(201).send(row);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/cycle/pill?days=35 — trailing pill-log window, newest first.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/cycle/pill',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { querystring: symptomsQuerySchema },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+
+                const { days } = request.query as { days?: number };
+                const result = await service.getPillLogs(userId, days ?? 35);
+                return reply.code(200).send(result);
             } catch (err: any) {
                 request.log.error(err);
                 return reply.code(500).send({ error: 'Internal server error' });
@@ -287,8 +808,91 @@ export const userRoutes = async (
                 return reply.code(200).send({ success: true });
             } catch (err: any) {
                 request.log.error(err);
-                const status = err.message.includes('Unauthorized') ? 403 : 500;
-                return reply.code(status).send({ error: err.message });
+                if (err.message.includes('Unauthorized')) {
+                    return reply.code(403).send({ error: 'Forbidden' });
+                }
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── Coach ↔ client lifecycle ─────────────────────────────────────────────
+
+    // POST /v1/users/coaches/:coachUserId/request — a client requests a coach
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/coaches/:coachUserId/request',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { params: z.object({ coachUserId: z.string().uuid() }) },
+        },
+        async (request, reply) => {
+            try {
+                const clientUserId = extractUserId(request, reply);
+                if (!clientUserId) return;
+                const { coachUserId } = request.params as { coachUserId: string };
+                const result = await service.requestCoach(clientUserId, coachUserId);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                if (err.statusCode === 400) return reply.code(400).send({ error: 'Invalid request' });
+                if (err.statusCode === 404) return reply.code(404).send({ error: 'Coach not found' });
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/coach-requests — a coach's incoming PENDING requests
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/coach-requests',
+        { onRequest: [(fastify as any).authenticate] },
+        async (request, reply) => {
+            try {
+                const coachUserId = extractUserId(request, reply);
+                if (!coachUserId) return;
+                const requests = await service.getCoachRequests(coachUserId);
+                return reply.code(200).send(requests);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // POST /v1/users/coach-requests/:id/accept | /decline — coach responds
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/coach-requests/:id/:action',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { params: z.object({ id: z.string().uuid(), action: z.enum(['accept', 'decline']) }) },
+        },
+        async (request, reply) => {
+            try {
+                const coachUserId = extractUserId(request, reply);
+                if (!coachUserId) return;
+                const { id, action } = request.params as { id: string; action: 'accept' | 'decline' };
+                const result = await service.respondToCoachRequest(id, coachUserId, action === 'accept');
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                if (err.statusCode === 404) return reply.code(404).send({ error: 'Request not found' });
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/coach — a client's current (accepted) coach, or null
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/coach',
+        { onRequest: [(fastify as any).authenticate] },
+        async (request, reply) => {
+            try {
+                const clientUserId = extractUserId(request, reply);
+                if (!clientUserId) return;
+                const coach = await service.getMyCoach(clientUserId);
+                return reply.code(200).send(coach);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
             }
         }
     );
@@ -359,8 +963,127 @@ export const userRoutes = async (
             } catch (err: any) {
                 request.log.error(err);
                 if (err.message === 'User not found') {
-                    return reply.code(404).send({ error: err.message });
+                    // Fixed literal — never echo err.message verbatim. Real error logged above.
+                    return reply.code(404).send({ error: 'User not found' });
                 }
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── Coach applications (apply → admin review → role promotion) ───────────
+
+    // POST /v1/users/me/coach-application — apply (or re-apply) to become a coach
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/me/coach-application',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: {
+                body: z.object({
+                    bio: z.string().max(2000).optional(),
+                    specializations: z.array(z.string().max(60)).max(20).optional(),
+                    certifications: z.array(z.string().max(120)).max(20).optional(),
+                    monthlyRateUsd: z.number().min(0).max(100000).nullish(),
+                }),
+            },
+        },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+                const result = await service.submitCoachApplication(userId, request.body as any);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/me/coach-application — my application status (or null)
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/me/coach-application',
+        { onRequest: [(fastify as any).authenticate] },
+        async (request, reply) => {
+            try {
+                const userId = extractUserId(request, reply);
+                if (!userId) return;
+                const app = await service.getMyCoachApplication(userId);
+                return reply.code(200).send(app);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // GET /v1/users/admin/coach-applications?status=PENDING — admin review queue
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/admin/coach-applications',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: {
+                querystring: z.object({ status: z.enum(['PENDING', 'APPROVED', 'REJECTED']).optional() }),
+            },
+        },
+        async (request, reply) => {
+            try {
+                if (!requireAdmin(request, reply)) return;
+                const { status } = request.query as { status?: string };
+                const apps = await service.listCoachApplications(status);
+                return reply.code(200).send(apps);
+            } catch (err: any) {
+                request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // POST /v1/users/admin/coach-applications/:id/approve — promote to COACH
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/admin/coach-applications/:id/approve',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: { params: z.object({ id: z.string().uuid() }) },
+        },
+        async (request, reply) => {
+            try {
+                if (!requireAdmin(request, reply)) return;
+                const adminId = extractUserId(request, reply);
+                if (!adminId) return;
+                const { id } = request.params as { id: string };
+                const result = await service.approveCoachApplication(id, adminId);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                if (err.statusCode === 404) return reply.code(404).send({ error: 'Application not found' });
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // POST /v1/users/admin/coach-applications/:id/reject — reject with a reason
+    fastify.withTypeProvider<ZodTypeProvider>().post(
+        '/admin/coach-applications/:id/reject',
+        {
+            onRequest: [(fastify as any).authenticate],
+            schema: {
+                params: z.object({ id: z.string().uuid() }),
+                body: z.object({ reason: z.string().max(500).optional() }),
+            },
+        },
+        async (request, reply) => {
+            try {
+                if (!requireAdmin(request, reply)) return;
+                const adminId = extractUserId(request, reply);
+                if (!adminId) return;
+                const { id } = request.params as { id: string };
+                const { reason } = request.body as { reason?: string };
+                const result = await service.rejectCoachApplication(id, adminId, reason);
+                return reply.code(200).send(result);
+            } catch (err: any) {
+                request.log.error(err);
+                if (err.statusCode === 404) return reply.code(404).send({ error: 'Application not found' });
                 return reply.code(500).send({ error: 'Internal server error' });
             }
         }
@@ -369,6 +1092,7 @@ export const userRoutes = async (
     // ── GET /v1/users/internal/profile/:userId ────────────────────────────────────
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/internal/profile/:userId',
+        { preHandler: internalAuth },
         async (request, reply) => {
             try {
                 const { userId } = request.params as { userId: string };
@@ -387,6 +1111,7 @@ export const userRoutes = async (
     // ── GET /v1/users/internal/preferences/:userId ────────────────────────────────
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/internal/preferences/:userId',
+        { preHandler: internalAuth },
         async (request, reply) => {
             try {
                 const { userId } = request.params as { userId: string };
@@ -405,6 +1130,7 @@ export const userRoutes = async (
     // ── GET /v1/users/internal/status/:userId ────────────────────────────────────
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/internal/status/:userId',
+        { preHandler: internalAuth },
         async (request, reply) => {
             try {
                 const { userId } = request.params as { userId: string };
@@ -421,16 +1147,74 @@ export const userRoutes = async (
     );
 
     // ── GET /v1/users/internal/all ────────────────────────────────────────────────
+    // PERF (HIGH #3): CURSOR-PAGINATED. Accepts ?cursor=&limit= and returns
+    // { users, nextCursor }. Callers (plan-service worker) page through batches
+    // until nextCursor is null. Bounded per query instead of an unbounded
+    // findMany over every profile. Internal-token guarded as before.
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/internal/all',
+        {
+            preHandler: internalAuth,
+            schema: {
+                querystring: z.object({
+                    cursor: z.string().optional(),
+                    limit: z.coerce.number().int().min(1).max(1000).optional(),
+                }),
+            },
+        },
         async (request, reply) => {
             try {
-                const users = await service.getAllUsersInternal();
-                return reply.code(200).send(users);
+                const { cursor, limit } = request.query as { cursor?: string; limit?: number };
+                const page = await service.getAllUsersInternal({ cursor, limit });
+                return reply.code(200).send(page);
             } catch (err: any) {
                 request.log.error(err);
                 return reply.code(500).send({ error: 'Internal server error' });
             }
+        }
+    );
+};
+
+// ── Public waitlist routes (/v1/waitlist) ─────────────────────────────────────
+// Registered as a SEPARATE plugin with NO auth hook: the marketing site posts
+// here pre-signup. Anti-enumeration: a duplicate email returns the exact same
+// success body as a fresh signup, so the endpoint can't be used to probe who
+// is already on the list. Tightly rate-limited per IP on top of the global cap.
+import type { PrismaClient } from './generated/prisma';
+import { waitlistJoinSchema } from './schemas';
+
+const WAITLIST_OK = { message: "You're on the list — we'll be in touch." };
+
+export const waitlistRoutes = async (
+    fastify: FastifyInstance,
+    opts: { prisma: PrismaClient }
+): Promise<void> => {
+    const app = fastify.withTypeProvider<ZodTypeProvider>();
+
+    app.post(
+        '/',
+        {
+            config: {
+                // 5 joins/min/IP — generous for humans, hostile to scripts.
+                rateLimit: { max: 5, timeWindow: '1 minute' },
+            },
+            schema: { body: waitlistJoinSchema },
+        },
+        async (request, reply) => {
+            const { email, source } = request.body;
+            try {
+                await opts.prisma.waitlistEntry.create({
+                    data: { email, source: source ?? 'landing' },
+                });
+            } catch (err: any) {
+                // P2002 = unique violation (already on the list) → identical
+                // success response; anything else is a real failure.
+                if (err?.code !== 'P2002') {
+                    request.log.error(err);
+                    return reply.code(500).send({ error: 'Internal server error' });
+                }
+            }
+            return reply.code(200).send(WAITLIST_OK);
         }
     );
 };

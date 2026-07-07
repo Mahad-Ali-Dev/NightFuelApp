@@ -3,13 +3,36 @@ import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { PlanService } from './plan.service';
-import { getPlanParamsSchema, getPlanResponseSchema, generatePlanBodySchema, storePlanBodySchema, createProtocolSchema, updateProtocolSchema } from './schemas';
-import { createLogger } from '@nightfuel/config';
+import { getPlanParamsSchema, generatePlanBodySchema, storePlanBodySchema, createProtocolSchema, updateProtocolSchema, getPlanHistoryQuerySchema } from './schemas';
+import { createLogger, assertWithinDailyLimit, AI_LIMITS, AI_QUOTA_EXCEEDED, resolvePlan, makeInternalAuthGuard } from '@nightfuel/config';
 
 const logger = createLogger('plan-service:routes');
 
-export const planRoutes = async (fastify: FastifyInstance, opts: { planService: PlanService }) => {
+// ── AI daily-generation quota (route-level only) ────────────────────────────────
+// POST /v1/plans/generate runs the paid AI plan pipeline, so it is metered with
+// the SAME shared policy chat-service uses for Ria (@nightfuel/config: AI_LIMITS /
+// assertWithinDailyLimit / AI_QUOTA_EXCEEDED). The gate lives in the ROUTE handler
+// ONLY — generateAndStorePlan() is also invoked SYSTEM-side by worker.ts
+// (checkAndRegenerate) and events.ts (circadian:profile-computed) with no user
+// request, and those auto-generation paths MUST stay unblocked or daily plans
+// silently stop. They never reach this file, so they are never gated.
+const INTERNAL_REQUEST_TIMEOUT_MS = 3_000;
+const DEFAULT_SUBSCRIPTION_SERVICE_URL = 'http://subscription-service:3015';
+
+// resolvePlan centralized into @nightfuel/config; the shared token mints {userId,
+// sub} — a compatible superset (subscription-service reads only userId/id), so
+// chat's old role:'SYSTEM'/no-sub and exercise/plan's sub/no-role both reduce to
+// behavior-identical at /me. The shared fn mints via jwtSecret and strips the
+// trailing slash itself, so DEFAULT_SUBSCRIPTION_SERVICE_URL stays only as the
+// fallback value and this route no longer reaches into (fastify as any).jwt.
+
+export const planRoutes = async (fastify: FastifyInstance, opts: { planService: PlanService; internalServiceToken?: string }) => {
     const { planService } = opts;
+
+    // F34 #5: guard the server-to-server-only /internal/* route. Constant-time
+    // X-Internal-Token check; 404s on missing/wrong token (matches the nginx
+    // edge). meal-service (the sole caller) sends the header.
+    const internalAuth = makeInternalAuthGuard(opts.internalServiceToken);
 
     // GET /v1/plans/:date — fetch stored plan for a specific date
     fastify.withTypeProvider<ZodTypeProvider>().get(
@@ -31,7 +54,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.send(plan);
             } catch (err: any) {
                 logger.error(err);
-                return reply.code(500).send({ error: err.message });
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -49,6 +72,50 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
             try {
                 // @ts-ignore
                 const userId = request.user.userId;
+
+                // ── AI daily-generation quota gate (ROUTE ONLY) ──────────────
+                // Enforced HERE, before any AI work, so a user can't exhaust the
+                // paid plan pipeline. The SYSTEM auto-generation callers
+                // (worker.ts checkAndRegenerate, events.ts circadian handler)
+                // call planService.generateAndStorePlan directly and never pass
+                // through this handler, so they are intentionally NOT gated.
+                //
+                // NOTE: the mobile client circadian.tsx can trigger plan
+                // generation and will now receive 429
+                // { error: 'ai_quota_exceeded', ... } once a user hits their
+                // daily cap. circadian.tsx is intentionally NOT edited this
+                // sprint — surfacing/handling that 429 in the client is a
+                // separate work-item.
+                const plan_tier = await resolvePlan({
+                    userId,
+                    jwtSecret: process.env.JWT_SECRET ?? '',
+                    subscriptionServiceUrl: process.env.SUBSCRIPTION_SERVICE_URL ?? DEFAULT_SUBSCRIPTION_SERVICE_URL,
+                    timeoutMs: INTERNAL_REQUEST_TIMEOUT_MS,
+                });
+                const now = new Date();
+                // Count this user's ROUTE-AI plans created since UTC midnight.
+                // The chosen persistence table is DayPlan (prisma.dayPlan), but a
+                // raw rowcount would over-count: generateAndStorePlan is also run
+                // SYSTEM-side (worker.ts checkAndRegenerate, events.ts circadian
+                // handler) and the manual /store path writes rows too — none of
+                // those consume the user's paid daily quota. Only this /generate
+                // route passes aiGenerated:true into the create, so we scope the
+                // count to aiGenerated:true and those auto-gen / store rows stay
+                // uncounted. We count INLINE via the prisma client on the
+                // PlanService instance; the field is compile-time private, hence
+                // the cast.
+                const startOfUtcDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+                const usedToday: number = await (planService as any).prisma.dayPlan.count({
+                    where: { userId, aiGenerated: true, createdAt: { gte: startOfUtcDay } },
+                });
+                const limit = AI_LIMITS[plan_tier].generations;
+                const q = assertWithinDailyLimit({ usedToday, limit, now });
+                if (!q.allowed) {
+                    // 429 BEFORE generateAndStorePlan / any AI fetch — shared
+                    // over-cap wire contract (identical to chat-service Ria).
+                    return reply.code(429).send({ error: AI_QUOTA_EXCEEDED, limit, plan: plan_tier, resetsAt: q.resetsAt });
+                }
+
                 const { date, circadianProfile, profile, shiftId, shiftType } = request.body as any;
                 // Accept either `circadianProfile` (frontend) or `profile` (legacy event-driven flow)
                 const resolvedProfile = circadianProfile ?? profile ?? {};
@@ -58,12 +125,13 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                     userId,
                     date,
                     shiftId ?? null,
-                    shiftType ?? 'ROTATING'
+                    shiftType ?? 'ROTATING',
+                    true // aiGenerated: route-triggered AI generation IS counted toward the daily cap
                 );
                 return reply.code(201).send(plan);
             } catch (err: any) {
                 logger.error(err);
-                return reply.code(500).send({ error: err.message });
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -95,26 +163,32 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.code(201).send(plan);
             } catch (err: any) {
                 logger.error(err);
-                return reply.code(500).send({ error: err.message });
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
 
-    // GET /v1/plans/history — list all plans for the authenticated user
+    // GET /v1/plans/history — list the authenticated user's plans, OPTIONALLY
+    // bounded to a [start,end] date range. With no params the behaviour is
+    // unchanged (server caps at take:30); the range is validated by the shared
+    // bound helper (a reversed/over-span range → 400 on path ['end']).
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/history',
         {
             onRequest: [(fastify as any).authenticate],
+            schema: {
+                querystring: getPlanHistoryQuerySchema,
+            },
         },
         async (request, reply) => {
             try {
                 // @ts-ignore
                 const userId = request.user.userId;
-                const plans = await planService.getPlanHistory(userId);
+                const plans = await planService.getPlanHistory(userId, request.query);
                 return reply.send(plans);
             } catch (err: any) {
                 logger.error(err);
-                return reply.code(500).send({ error: err.message });
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -139,8 +213,13 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.code(200).send({ success: true });
             } catch (err: any) {
                 logger.error(err);
-                const status = err.message.includes('not found') ? 404 : 500;
-                return reply.code(status).send({ error: err.message });
+                // Preserve a safe 404 for the business "not found" case; use a
+                // fixed message (never echo raw err.message) and guard the
+                // .includes() against a missing message. Everything else → 500.
+                if (typeof err?.message === 'string' && err.message.includes('not found')) {
+                    return reply.code(404).send({ error: 'Plan not found' });
+                }
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -150,6 +229,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
     fastify.withTypeProvider<ZodTypeProvider>().get(
         '/internal/active/:userId',
         {
+            preHandler: internalAuth,
             schema: {
                 params: z.object({ userId: z.string().uuid() }),
                 querystring: z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }),
@@ -168,6 +248,67 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.code(200).send(plan);
             } catch (err: any) {
                 request.log.error(err);
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── DELETE /v1/plans/internal/user/:userId (GDPR purge) ──────────────────────
+    // Server-to-server only (nginx 404s /v1/<svc>/internal/* at the edge; the
+    // internalAuth preHandler additionally requires X-Internal-Token, 404ing on a
+    // missing/wrong token so a probe can't tell a guarded route from a missing one).
+    // PERMANENTLY erases EVERY plan-service row owned by :userId across BOTH
+    // user-owned tables (day_plans via user_id, protocol_templates via creator_id).
+    // IDEMPOTENT: purging a user with no rows returns 200 with zero counts; purging
+    // twice is safe (deleteMany never throws on zero rows). PlanService.purgeUser
+    // wraps both deletes in a $transaction and returns a per-table deletedCounts
+    // summary.
+    fastify.withTypeProvider<ZodTypeProvider>().delete(
+        '/internal/user/:userId',
+        {
+            preHandler: internalAuth,
+            schema: {
+                params: z.object({ userId: z.string().uuid() }),
+            },
+        },
+        async (request, reply) => {
+            const { userId } = request.params;
+            try {
+                const deletedCounts = await planService.purgeUser(userId);
+                return reply.code(200).send({ userId, deletedCounts });
+            } catch (err: any) {
+                request.log.error({ err, userId }, 'GDPR purge failed');
+                return reply.code(500).send({ error: 'Internal server error' });
+            }
+        }
+    );
+
+    // ── GET /v1/plans/internal/user/:userId/export (GDPR data export) ────────────
+    // Read-only counterpart of the purge above, behind the SAME internalAuth guard
+    // (X-Internal-Token; 404s without/with a wrong token, fails CLOSED on an empty
+    // expected token — F35a pattern). Server-to-server only (nginx 404s
+    // /v1/<svc>/internal/* at the edge). RETURNS every plan-service row owned by
+    // :userId across the SAME user-owned tables the purge erases (day_plans via
+    // user_id, protocol_templates via creator_id), keyed by table name, so
+    // right-to-access and right-to-erasure cover identical data. IDEMPOTENT &
+    // read-only: no writes; the per-table result is bounded (EXPORT_ROW_LIMIT, see
+    // PlanService.exportUser) with a `_meta` truncation flag. Neither table holds a
+    // secret/credential column, so nothing is redacted.
+    fastify.withTypeProvider<ZodTypeProvider>().get(
+        '/internal/user/:userId/export',
+        {
+            preHandler: internalAuth,
+            schema: {
+                params: z.object({ userId: z.string().uuid() }),
+            },
+        },
+        async (request, reply) => {
+            const { userId } = request.params;
+            try {
+                const data = await planService.exportUser(userId);
+                return reply.code(200).send({ userId, data });
+            } catch (err: any) {
+                request.log.error({ err, userId }, 'GDPR export failed');
                 return reply.code(500).send({ error: 'Internal server error' });
             }
         }
@@ -192,7 +333,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.code(201).send(protocol);
             } catch (err: any) {
                 logger.error(err);
-                return reply.code(500).send({ error: err.message });
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -211,7 +352,7 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.send(protocols);
             } catch (err: any) {
                 logger.error(err);
-                return reply.code(500).send({ error: err.message });
+                return reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -234,8 +375,10 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.send(protocol);
             } catch (err: any) {
                 logger.error(err);
-                const status = err.message.includes('not found') ? 404 : 403;
-                return reply.code(status).send({ error: err.message });
+                // Guard .includes() against a missing message; messages are
+                // fixed copy ('Not found' / 'Forbidden') so nothing raw leaks.
+                const isNotFound = typeof err?.message === 'string' && err.message.includes('not found');
+                return isNotFound ? reply.code(404).send({ error: 'Not found' }) : reply.code(403).send({ error: 'Forbidden' });
             }
         }
     );
@@ -259,8 +402,10 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.send(protocol);
             } catch (err: any) {
                 logger.error(err);
-                const status = err.message.includes('not found') ? 404 : 403;
-                return reply.code(status).send({ error: err.message });
+                // Guard .includes() against a missing message; messages are
+                // fixed copy ('Not found' / 'Forbidden') so nothing raw leaks.
+                const isNotFound = typeof err?.message === 'string' && err.message.includes('not found');
+                return isNotFound ? reply.code(404).send({ error: 'Not found' }) : reply.code(403).send({ error: 'Forbidden' });
             }
         }
     );
@@ -283,8 +428,10 @@ export const planRoutes = async (fastify: FastifyInstance, opts: { planService: 
                 return reply.code(204).send();
             } catch (err: any) {
                 logger.error(err);
-                const status = err.message.includes('not found') ? 404 : 403;
-                return reply.code(status).send({ error: err.message });
+                // Guard .includes() against a missing message; messages are
+                // fixed copy ('Not found' / 'Forbidden') so nothing raw leaks.
+                const isNotFound = typeof err?.message === 'string' && err.message.includes('not found');
+                return isNotFound ? reply.code(404).send({ error: 'Not found' }) : reply.code(403).send({ error: 'Forbidden' });
             }
         }
     );

@@ -1,6 +1,6 @@
 # EAS Build & Submit — first-time setup walkthrough
 
-This is the exact sequence you (Mahad) run once to get NightFuel mobile from "code complete" to "app actually built in the cloud and runnable on your phone." Every command here is interactive (needs your Expo / Apple / Google credentials), so it can't be automated by Claude.
+This is the exact sequence you (Mahad) run once to get Zeitra mobile from "code complete" to "app actually built in the cloud and runnable on your phone." Every command here is interactive (needs your Expo / Apple / Google credentials), so it can't be automated by Claude.
 
 Estimated time: **45 minutes** (most of it waiting for the first cloud build).
 
@@ -49,7 +49,7 @@ Verify: `git diff app.json` should show a new `extra.eas.projectId` field. **Com
 
 ## 2. Set environment variables
 
-NightFuel reads these at build time. Set them via EAS web dashboard OR CLI — the CLI is faster.
+Zeitra reads these at build time. Set them via EAS web dashboard OR CLI — the CLI is faster.
 
 ```bash
 # Sentry (you already have a DSN from the previous session)
@@ -136,19 +136,19 @@ For subscriptions to actually work, you must create matching subscription produc
 
 ### App Store Connect
 
-1. Open https://appstoreconnect.apple.com → My Apps → NightFuel
+1. Open https://appstoreconnect.apple.com → My Apps → Zeitra
 2. **Features → In-App Purchases → Subscriptions**
-3. Create a **Subscription Group** named `NightFuel Subscriptions` (or anything — group name isn't user-visible)
+3. Create a **Subscription Group** named `Zeitra Subscriptions` (or anything — group name isn't user-visible)
 4. Inside the group, create 6 auto-renewable subscriptions with these EXACT product IDs:
 
 | Product ID | Reference name | Subscription duration | Price tier |
 |------------|----------------|------------------------|------------|
-| `com.nightfuel.app.pro.monthly` | NightFuel Pro Monthly | 1 month | $9.99 (tier 10) |
-| `com.nightfuel.app.pro.yearly` | NightFuel Pro Yearly | 1 year | $79.99 (tier 80) |
-| `com.nightfuel.app.premium.monthly` | NightFuel Premium Monthly | 1 month | $19.99 (tier 20) |
-| `com.nightfuel.app.premium.yearly` | NightFuel Premium Yearly | 1 year | $159.99 (tier 160) |
-| `com.nightfuel.app.enterprise.monthly` | NightFuel Enterprise Monthly | 1 month | $49.99 (tier 50) |
-| `com.nightfuel.app.enterprise.yearly` | NightFuel Enterprise Yearly | 1 year | $399.99 (tier 400) |
+| `com.zeitra.app.pro.monthly` | Zeitra Pro Monthly | 1 month | $9.99 (tier 10) |
+| `com.zeitra.app.pro.yearly` | Zeitra Pro Yearly | 1 year | $79.99 (tier 80) |
+| `com.zeitra.app.premium.monthly` | Zeitra Premium Monthly | 1 month | $19.99 (tier 20) |
+| `com.zeitra.app.premium.yearly` | Zeitra Premium Yearly | 1 year | $159.99 (tier 160) |
+| `com.zeitra.app.enterprise.monthly` | Zeitra Enterprise Monthly | 1 month | $49.99 (tier 50) |
+| `com.zeitra.app.enterprise.yearly` | Zeitra Enterprise Yearly | 1 year | $399.99 (tier 400) |
 
 For each subscription, add at least one localization (e.g. English (US)) with a display name and description that match what you advertise in-app.
 

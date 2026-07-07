@@ -9,7 +9,8 @@ import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { getRecent } from '@/api/exercises';
-import { withAlpha } from '@/theme/utils';
+import { withAlpha, isLightHex } from '@/theme/utils';
+import { localDateKey } from '@/components/activityHeatmapDate';
 
 const CELL   = 10;   // px per cell
 const GAP    = 2;    // px gap between cells
@@ -25,6 +26,13 @@ const INTENSITY_COLORS: string[] = [
     '#10B981',                  // 4 — max
 ];
 
+// Brand-lime ramp for the embedded "Consistency" grid (Zeitra You/Profile mockup).
+const LIME_RAMP: string[] = ['#1A1E26', '#2E3B17', '#5D8120', '#92BB2F', '#C2F03C'];
+// Light-theme ramps — on a near-white card the empty cell must NOT be a dark slab
+// (the old #1A1E26 rendered the whole grid black for a new user on a light theme).
+const LIME_RAMP_LIGHT: string[] = ['rgba(20,23,31,0.06)', '#DCEBB0', '#B4D861', '#8FC236', '#6E9C22'];
+const INTENSITY_COLORS_LIGHT: string[] = ['rgba(20,23,31,0.06)', 'rgba(16,185,129,0.25)', 'rgba(16,185,129,0.5)', 'rgba(16,185,129,0.78)', '#0E9E70'];
+
 function getIntensity(minutes: number): number {
     if (minutes === 0)  return 0;
     if (minutes <= 20)  return 1;
@@ -32,6 +40,11 @@ function getIntensity(minutes: number): number {
     if (minutes <= 75)  return 3;
     return 4;
 }
+
+// localDateKey lives in ./activityHeatmapDate (pure, dependency-free) so it can
+// be unit-tested without loading this RN/expo component. Re-export for any
+// existing importer of `@/components/ActivityHeatmap`.
+export { localDateKey };
 
 interface CellData {
     date:      string;
@@ -41,8 +54,10 @@ interface CellData {
     minutes:   number;
 }
 
-export function ActivityHeatmap() {
+export function ActivityHeatmap({ embedded = false }: { embedded?: boolean } = {}) {
     const { colors } = useTheme();
+    const isLight = isLightHex(colors.background.primary);
+    const intensityRamp = isLight ? INTENSITY_COLORS_LIGHT : INTENSITY_COLORS;
 
     // Fetch recent workout logs (same endpoint as web component)
     const { data: workouts = [] } = useQuery({
@@ -57,7 +72,20 @@ export function ActivityHeatmap() {
         const map = new Map<string, { duration: number; count: number }>();
         (workouts as any[]).forEach((w: any) => {
             const raw: string = w.createdAt ?? w.date ?? '';
-            const date = raw.split('T')[0] as string;
+            if (!raw) return;
+            // Key by the LOCAL calendar day so a workout lands in the same column
+            // the grid (which iterates local days) draws for that day. For a full
+            // ISO instant we parse and read LOCAL fields (a bare `split('T')[0]`
+            // would use the UTC day instead — the bug). A date-only value (no time
+            // component) already names a calendar day with no zone, so we take it
+            // verbatim rather than re-interpreting it as a UTC instant.
+            let date: string;
+            if (raw.includes('T')) {
+                const parsed = new Date(raw);
+                date = Number.isNaN(parsed.getTime()) ? (raw.split('T')[0] as string) : localDateKey(parsed);
+            } else {
+                date = raw.split('T')[0] as string;
+            }
             if (!date) return;
             const existing = map.get(date);
             if (existing) {
@@ -81,7 +109,7 @@ export function ActivityHeatmap() {
         let week = 0;
         const cursor = new Date(startDay);
         while (cursor <= today) {
-            const dateStr  = cursor.toISOString().split('T')[0] as string;
+            const dateStr  = localDateKey(cursor); // local frame — matches grid iteration
             const dayOfWeek = cursor.getDay();
             const wo        = workoutMap.get(dateStr);
             cells.push({
@@ -112,10 +140,16 @@ export function ActivityHeatmap() {
         const labels: { label: string; week: number }[] = [];
         let lastMonth = -1;
         grid.forEach(cell => {
-            const month = new Date(cell.date).getMonth();
+            // cell.date is a LOCAL `YYYY-MM-DD` key. Parse it back as LOCAL
+            // midnight (not `new Date('YYYY-MM-DD')`, which is UTC midnight and
+            // would read one day earlier for users behind UTC) so the month label
+            // stays in the same frame as the grid.
+            const [y, m, d] = cell.date.split('-').map(Number) as [number, number, number];
+            const local = new Date(y, m - 1, d);
+            const month = local.getMonth();
             if (month !== lastMonth && cell.day === 0) {
                 labels.push({
-                    label: new Date(cell.date).toLocaleString('default', { month: 'short' }),
+                    label: local.toLocaleString('default', { month: 'short' }),
                     week:  cell.week,
                 });
                 lastMonth = month;
@@ -126,7 +160,26 @@ export function ActivityHeatmap() {
 
     const activeDays   = workoutMap.size;
     const totalMinutes = Array.from(workoutMap.values()).reduce((s, d) => s + d.duration, 0);
-    const todayStr     = new Date().toISOString().split('T')[0] as string;
+    const todayStr     = localDateKey(new Date()); // local frame — matches cell date keys
+
+    // Embedded variant (You/Profile "Consistency") — a BARE lime grid with no card
+    // chrome / header / legend / labels; the screen supplies the surrounding card.
+    if (embedded) {
+        const ramp = isLight ? LIME_RAMP_LIGHT : LIME_RAMP;
+        return (
+            <View style={s.bareGrid}>
+                {weekGroups.map((weekCells, weekIdx) => (
+                    <View key={weekIdx} style={s.bareCol}>
+                        {Array.from({ length: 7 }).map((_, dayIdx) => {
+                            const cell = weekCells?.find((c) => c.day === dayIdx);
+                            const bg = ramp[cell?.intensity ?? 0] ?? ramp[0]!;
+                            return <View key={dayIdx} style={[s.bareCell, { backgroundColor: bg }]} />;
+                        })}
+                    </View>
+                ))}
+            </View>
+        );
+    }
 
     return (
         <View style={[s.card, {
@@ -150,7 +203,7 @@ export function ActivityHeatmap() {
                 {/* Legend */}
                 <View style={s.legend}>
                     <Text style={[s.legendTxt, { color: colors.text.tertiary }]}>Less</Text>
-                    {INTENSITY_COLORS.map((c, i) => (
+                    {intensityRamp.map((c, i) => (
                         <View key={i} style={[s.legendCell, { backgroundColor: c }]} />
                     ))}
                     <Text style={[s.legendTxt, { color: colors.text.tertiary }]}>More</Text>
@@ -193,7 +246,7 @@ export function ActivityHeatmap() {
                                         return <View key={dayIdx} style={{ width: CELL, height: CELL }} />;
                                     }
                                     const isToday   = cell.date === todayStr;
-                                    const bgColor   = INTENSITY_COLORS[cell.intensity] ?? INTENSITY_COLORS[0]!;
+                                    const bgColor   = intensityRamp[cell.intensity] ?? intensityRamp[0]!;
                                     return (
                                         <View
                                             key={dayIdx}
@@ -237,4 +290,9 @@ const s = StyleSheet.create({
     weekCol:     { flexDirection: 'column', gap: GAP },
     cell:        { width: CELL, height: CELL, borderRadius: 2 },
     todayCell:   { borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)' },
+
+    // Embedded bare grid (You/Profile "Consistency") — 7-row lime grid, no chrome.
+    bareGrid:    { flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
+    bareCol:     { flexDirection: 'column', gap: 4 },
+    bareCell:    { width: 13, height: 13, borderRadius: 3 },
 });

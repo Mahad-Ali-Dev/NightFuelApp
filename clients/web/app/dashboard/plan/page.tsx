@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
-import { shiftApi, circadianApi, planApi, mealApi, generatePlan, userApi, getWeeklyStats, getTodayProgress, swapMeal } from '@/lib/api';
+import { shiftApi, mealApi, generatePlan, userApi, getWeeklyStats, getTodayProgress, swapMeal } from '@/lib/api';
 import InteractiveTrackingHub from '@/components/InteractiveTrackingHub';
 import WorkoutLogHub from '@/components/WorkoutLogHub';
 import { useQuery } from '@tanstack/react-query';
@@ -17,11 +17,10 @@ import {
     LineChart,
     Line,
     ComposedChart,
-    Area,
-    CartesianGrid
+    Area
 } from 'recharts';
 import Link from 'next/link';
-import { ArrowLeft, Zap, Coffee, Dumbbell, Utensils, RefreshCw, AlertCircle, CalendarDays, Activity, Droplets, Moon } from 'lucide-react';
+import { ArrowLeft, Zap, Coffee, Utensils, RefreshCw, AlertCircle, CalendarDays, Activity, Droplets, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -342,7 +341,7 @@ function TrendsSection({ data }: { data: any }) {
                                     contentStyle={{ backgroundColor: '#171717', border: '1px solid #333', borderRadius: '12px', fontSize: '10px' }}
                                     cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                                 />
-                                <Bar dataKey="caloriesActual" name="Actual" fill="#fb923c" radius={[4, 4, 0, 0]} />
+                                <Bar dataKey="caloriesActual" name="Actual" fill="#b6d752" radius={[4, 4, 0, 0]} />
                                 <Bar dataKey="caloriesTarget" name="Target" fill="#3b82f6" radius={[4, 4, 0, 0]} opacity={0.3} />
                             </BarChart>
                         </ResponsiveContainer>
@@ -408,7 +407,7 @@ function TrendsSection({ data }: { data: any }) {
                             <Tooltip
                                 contentStyle={{ backgroundColor: '#171717', border: '1px solid #333', borderRadius: '12px', fontSize: '10px' }}
                             />
-                            <Bar yAxisId="left" dataKey="caloriesActual" name="kcal" fill="#fb923c" opacity={0.15} radius={[2, 2, 0, 0]} />
+                            <Bar yAxisId="left" dataKey="caloriesActual" name="kcal" fill="#b6d752" opacity={0.15} radius={[2, 2, 0, 0]} />
                             <Line
                                 yAxisId="right"
                                 type="stepAfter"
@@ -530,7 +529,7 @@ export default function PlanPage() {
             : null;
 
     return (
-        <div className="min-h-screen bg-transparent p-4 md:p-8 relative z-10 selection:bg-brand-500 selection:text-white">
+        <div className="min-h-screen bg-transparent p-4 md:p-8 relative z-10 selection:bg-brand-500 selection:text-background">
             {/* Background elements */}
             <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
                 <div className="absolute -top-[10%] right-[10%] w-[50%] h-[50%] bg-brand-500/10 rounded-full blur-[150px]" />
@@ -712,7 +711,7 @@ export default function PlanPage() {
 
                         {/* ── Generate Button ── */}
                         <Button
-                            className="w-full h-14 text-lg font-bold bg-brand-500 hover:bg-brand-600 text-white shadow-[0_0_25px_-5px_hsl(var(--brand)/0.5)] transition-all rounded-xl relative overflow-hidden group"
+                            className="w-full h-14 text-lg font-bold bg-brand-500 hover:bg-brand-600 text-background shadow-[0_0_25px_-5px_hsl(var(--brand)/0.5)] transition-all rounded-xl relative overflow-hidden group"
                             onClick={handleGenerate}
                             disabled={isGenerating || !selectedShift}
                         >

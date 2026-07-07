@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
   output   = "../src/generated/prisma"
 }
 
@@ -19,8 +20,22 @@ model Post {
 
   comments  Comment[]
 
+  // Profile feed, post-count, like-sum (Social Butterfly badge) and the GDPR
+  // delete-by-author path all filter on authorId — none was indexed before.
+  @@index([authorId])
   @@index([createdAt(sort: Desc)])
   @@map("posts")
+}
+
+model PostLike {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, postId])
+  @@index([postId])
+  @@map("post_likes")
 }
 
 model Comment {
@@ -32,6 +47,8 @@ model Comment {
 
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
 
+  // Author-scoped reads (comment count / GDPR delete-by-author) filter authorId.
+  @@index([authorId])
   @@index([postId])
   @@map("comments")
 }
@@ -97,6 +114,21 @@ model ChallengeParticipant {
 
   challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
 
+  // The composite @@unique has userId NON-leftmost, so userId-only predicates
+  // (e.g. "challenges this user has joined") can't use it. This stand-alone
+  // index serves those.
+  @@index([userId])
   @@unique([challengeId, userId])
   @@map("challenge_participants")
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([followerId, followingId])
+  @@index([followingId])
+  @@map("follows")
 }

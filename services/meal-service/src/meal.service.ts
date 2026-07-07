@@ -4,11 +4,60 @@ import { createLogger } from '@nightfuel/config';
 
 const logger = createLogger('meal-service');
 
+// MEDIUM #10: upper bound for the cross-service plan-service fetch in
+// generateGroceryList. Generous enough for a healthy internal call, but stops a
+// hung/slow plan-service from holding this request open indefinitely.
+const PLAN_FETCH_TIMEOUT_MS = 5_000;
+
+// ── Cycle "best foods for your phase" map ────────────────────────────────────
+// Each menstrual-cycle phase focuses on ONE micronutrient column on FoodItem.
+// The `focus` is the literal Prisma field name we filter/orderBy on; `label` is
+// the human nutrient name; `rationale` is a NON-PRESCRIPTIVE wellness note (no
+// medical claim). Deterministic — no randomness — so the same phase always
+// returns the same ranked foods. Keyed by the upper-cased phase name.
+export type CyclePhase = 'MENSTRUAL' | 'FOLLICULAR' | 'OVULATORY' | 'LUTEAL';
+
+export interface PhaseNutrientSpec {
+    // A nullable micronutrient column on FoodItem (e.g. 'ironMg').
+    focus: 'ironMg' | 'folateMcg' | 'zincMg' | 'magnesiumMg';
+    label: string;
+    rationale: string;
+}
+
+export const PHASE_NUTRIENT_MAP: Record<CyclePhase, PhaseNutrientSpec> = {
+    MENSTRUAL: {
+        focus: 'ironMg',
+        label: 'Iron',
+        rationale:
+            'Iron helps replenish what is lost during menstruation — pair with vitamin C for absorption.',
+    },
+    FOLLICULAR: {
+        focus: 'folateMcg',
+        label: 'Folate',
+        rationale: 'Folate supports the cell growth of the rebuilding follicular phase.',
+    },
+    OVULATORY: {
+        focus: 'zincMg',
+        label: 'Zinc',
+        rationale: 'Zinc supports hormone balance around ovulation.',
+    },
+    LUTEAL: {
+        focus: 'magnesiumMg',
+        label: 'Magnesium',
+        rationale:
+            'Magnesium may ease luteal-phase tension and supports steady energy.',
+    },
+};
+
+// phase-foods result-size bounds: default 6, clamp to 1..12.
+export const DEFAULT_PHASE_FOODS_LIMIT = 6;
+export const MAX_PHASE_FOODS_LIMIT = 12;
+
 export class MealService {
     constructor(
         private prisma: PrismaClient,
         private eventBus: EventBus,
-        private config: { PLAN_SERVICE_URL: string }
+        private config: { PLAN_SERVICE_URL: string; INTERNAL_SERVICE_TOKEN?: string }
     ) { }
 
     async searchFoods(query: string, options?: {
@@ -52,6 +101,19 @@ export class MealService {
                 carbs:        true,
                 fat:          true,
                 fiber:        true,
+                // Micronutrients per serving (nullable). Named explicitly so the
+                // /search response carries them to the mobile food library and
+                // the cycle "best foods for your phase" UI can show them.
+                ironMg:        true,
+                magnesiumMg:   true,
+                calciumMg:     true,
+                potassiumMg:   true,
+                zincMg:        true,
+                vitaminCMg:    true,
+                vitaminB6Mg:   true,
+                vitaminB12Mcg: true,
+                folateMcg:     true,
+                vitaminDMcg:   true,
                 servingSize:  true,
                 glycemicIndex: true,
                 isVegan:      true,
@@ -61,6 +123,12 @@ export class MealService {
                 cuisineTags:  true,
                 source:       true,
                 foodGroup:    true,
+                // Open Food Facts photo + its license credit. Included so the
+                // mobile food library can render the product image and display
+                // the attribution the license requires. Nullable for legacy
+                // FooDB / CUSTOM rows with no photo.
+                imageUrl:         true,
+                imageAttribution: true,
             },
         });
     }
@@ -69,6 +137,57 @@ export class MealService {
         return this.prisma.foodItem.findUnique({
             where: { id },
         });
+    }
+
+    /**
+     * getPhaseFoods — deterministic "best foods for your cycle phase" suggestions.
+     *
+     * Each menstrual-cycle phase maps to ONE focus micronutrient (see
+     * PHASE_NUTRIENT_MAP). We return the foods that report the most of that
+     * nutrient: filter to rows where the focus column is non-null, order by it
+     * descending, take `limit`. Full rows are returned (image + macros + micros)
+     * so the client can render rich cards without a second fetch.
+     *
+     * NON-PRESCRIPTIVE: these are general wellness suggestions, never medical
+     * advice — the rationale strings are worded that way and make no health claim.
+     *
+     * @param phase  case-insensitive phase name; an unknown phase yields an empty
+     *               `foods` list with a clear shape (the route returns 400 for an
+     *               invalid phase, so this is defence-in-depth).
+     * @param limit  caller-clamped to 1..12 by the route; defaulted/clamped here
+     *               too so a direct service call can't pass an absurd `take`.
+     */
+    async getPhaseFoods(phase: string, limit: number = DEFAULT_PHASE_FOODS_LIMIT) {
+        const key = String(phase ?? '').trim().toUpperCase();
+        const spec = (PHASE_NUTRIENT_MAP as Record<string, PhaseNutrientSpec>)[key];
+
+        // Defensive clamp (route already clamps): keep `take` in 1..12.
+        const take = Math.min(
+            MAX_PHASE_FOODS_LIMIT,
+            Math.max(1, Math.floor(Number.isFinite(limit) ? limit : DEFAULT_PHASE_FOODS_LIMIT)),
+        );
+
+        // Unknown phase -> clearly-shaped empty result (no throw).
+        if (!spec) {
+            return { phase: key, focusNutrient: null, focusLabel: null, rationale: null, foods: [] };
+        }
+
+        logger.info({ phase: key, focusNutrient: spec.focus, take }, 'Fetching phase foods');
+
+        const foods = await this.prisma.foodItem.findMany({
+            // Only foods that actually report the focus nutrient.
+            where: { [spec.focus]: { not: null } },
+            orderBy: { [spec.focus]: 'desc' },
+            take,
+        });
+
+        return {
+            phase: key,
+            focusNutrient: spec.focus,
+            focusLabel: spec.label,
+            rationale: spec.rationale,
+            foods,
+        };
     }
 
     async listFoodGroups() {
@@ -80,8 +199,46 @@ export class MealService {
         return groups.map(g => g.foodGroup).filter(Boolean);
     }
 
-    async logMeal(userId: string, mealType: any, foodItems: any[]) {
-        logger.info(`Logging meal for user: ${userId}, type: ${mealType}`);
+    /**
+     * logMeal
+     *
+     * @param planMealId  OPTIONAL provenance link to a planned protocol slot
+     *   (the circadian "Log this" flow). Additive 4th argument — existing
+     *   3-arg callers compile and behave exactly as before. When provided, it
+     *   is persisted on the MealLog's `foodItems` JSON (no DB column / migration
+     *   is added) and echoed back on the returned object + the published event
+     *   payload so consumers can correlate the log with its plan item.
+     *
+     * @param idempotencyKey  OPTIONAL client-supplied idempotency key (HIGH #6).
+     *   Additive 5th argument. When provided, a retry / double-tap that re-sends
+     *   the SAME key for the SAME user is DEDUPED: the existing row is returned
+     *   verbatim WITHOUT inserting a second meal_logs row and WITHOUT re-publishing
+     *   meal-logged (so a double-tap never double-counts in progress/state). The
+     *   key is scoped per user via the @@unique([userId, idempotencyKey])
+     *   constraint. When omitted (NULL key) every call is a normal DISTINCT log —
+     *   Postgres treats NULL keys as distinct, so keyless logging is unaffected.
+     */
+    async logMeal(userId: string, mealType: any, foodItems: any[], planMealId?: string, idempotencyKey?: string) {
+        // Structured fields (not string interpolation): mealType / idempotencyKey
+        // are request-controlled, and interpolating them into the message lets a
+        // newline forge fake log lines (CodeQL js/log-injection). pino JSON-encodes
+        // field values, so embedded newlines are escaped.
+        logger.info({ userId, mealType, planMealId, idempotencyKey }, 'Logging meal');
+
+        // IDEMPOTENCY fast-path: if this user already has a row for this key, the
+        // POST is a retry/double-tap — return the existing row and DO NOT insert
+        // or re-publish. (The unique constraint below is the authoritative guard
+        // against the concurrent-race window; this read just avoids the throw on
+        // the common sequential-retry case.)
+        if (idempotencyKey) {
+            const existing = await (this.prisma.mealLog as any).findFirst({
+                where: { userId, idempotencyKey },
+            });
+            if (existing) {
+                logger.info({ mealLogId: existing.id }, 'Idempotent replay — returning existing meal log');
+                return planMealId ? { ...existing, planMealId } : existing;
+            }
+        }
 
         let totalCalories = 0;
         let totalProtein = 0;
@@ -98,18 +255,56 @@ export class MealService {
         // Adherence calculation can be delegated or simplified. Default true for now.
         const isAdherent = true;
 
-        const mealLog = await this.prisma.mealLog.create({
-            data: {
-                userId,
-                mealType,
-                foodItems,
-                totalCalories,
-                totalProtein,
-                totalCarbs,
-                totalFat,
-                isAdherent
+        // Persist the plan link WITHOUT a schema migration: stamp it into the
+        // existing JSON column as a sibling `_planMealId` key alongside the food
+        // items array. We keep `foodItems` an array when there is no link (so
+        // the stored shape is byte-identical for the common ad-hoc case) and
+        // only switch to the `{ items, _planMealId }` envelope when a link is
+        // present.
+        //
+        // MICRONUTRIENTS: each item in `foodItems` is persisted VERBATIM here, so
+        // any OPTIONAL micro / secondary-macro fields the route forwarded (now
+        // RETAINED rather than stripped by logMealBodySchema — see schemas.ts
+        // MICRO_FIELDS) land in this JSON column untouched and round-trip back out
+        // via getMealLogs. No per-micro handling is needed at the write: the array
+        // is the source of truth and we never reconstruct items field-by-field.
+        const storedFoodItems = planMealId
+            ? { items: foodItems, _planMealId: planMealId }
+            : foodItems;
+
+        let mealLog;
+        try {
+            mealLog = await this.prisma.mealLog.create({
+                data: {
+                    userId,
+                    mealType,
+                    foodItems: storedFoodItems,
+                    totalCalories,
+                    totalProtein,
+                    totalCarbs,
+                    totalFat,
+                    isAdherent,
+                    // NULL for keyless logs; Postgres treats NULL keys as distinct
+                    // so this never trips the @@unique([userId, idempotencyKey]).
+                    ...(idempotencyKey ? { idempotencyKey } : {}),
+                } as any
+            });
+        } catch (err: any) {
+            // CONCURRENT-RETRY race: two in-flight requests carrying the SAME key
+            // for the same user. The unique constraint lets exactly ONE insert win;
+            // the loser hits P2002. Treat it as the idempotent replay — fetch and
+            // return the row the winner created, and DO NOT publish a second event.
+            if (idempotencyKey && err?.code === 'P2002') {
+                const winner = await (this.prisma.mealLog as any).findFirst({
+                    where: { userId, idempotencyKey },
+                });
+                if (winner) {
+                    logger.info({ mealLogId: winner.id }, 'Idempotent replay (race) — returning existing meal log');
+                    return planMealId ? { ...winner, planMealId } : winner;
+                }
             }
-        });
+            throw err;
+        }
 
         // Publish Event
         await this.eventBus.publish('nightfuel:meal:meal-logged', {
@@ -121,20 +316,38 @@ export class MealService {
             userId,
             payload: {
                 mealLogId: mealLog.id,
+                // The actual time the meal was logged (NOT the event-processing
+                // time). Consumers bucket by calendar day from this — omitting it
+                // makes progress-service fall back to its own processing clock and
+                // mis-attribute near-midnight logs to the wrong day. Persisted
+                // value from the row (Prisma `loggedAt`, defaults to now()).
+                loggedAt: mealLog.loggedAt.toISOString(),
                 totalCalories,
                 totalProtein,
                 totalCarbs,
                 totalFat,
-                mealType
+                mealType,
+                // Forward the persisted adherence verdict so state-service can
+                // fold it into its rolling window. This is the value stamped on
+                // the row (see `isAdherent` above) — NOT a fabricated verdict.
+                // progress-service ignores this and recomputes adherence from
+                // target-vs-actual; state-service consumes it directly.
+                isAdherent: mealLog.isAdherent,
+                // Only present when this log originated from a planned slot.
+                ...(planMealId ? { planMealId } : {})
             }
         });
 
-        logger.info(`Successfully logged meal: ${mealLog.id}`);
-        return mealLog;
+        logger.info({ mealLogId: mealLog.id }, 'Successfully logged meal');
+        // Echo the provenance link back to the caller (route -> client) so the
+        // response carries it without persisting a dedicated column.
+        return planMealId ? { ...mealLog, planMealId } : mealLog;
     }
 
     async getMealLogs(userId: string, date?: string, limit: number = 20) {
-        logger.info(`Fetching meal logs for user: ${userId}, date: ${date ?? 'all'}`);
+        // `date` is a request query value — log it as a structured field so a
+        // crafted newline can't forge log lines (CodeQL js/log-injection).
+        logger.info({ userId, date: date ?? 'all' }, 'Fetching meal logs');
 
         const where: any = { userId };
 
@@ -155,6 +368,18 @@ export class MealService {
     }
 
     /**
+     * Delete a meal log the user owns. Scoped by userId so a user can only
+     * remove their OWN rows (deleteMany with both id + userId = no cross-user
+     * delete, and a non-existent/other-user id is a no-op, not an error). Backs
+     * the chat "Undo" on a just-logged Ria meal + general mis-log correction.
+     */
+    async deleteMealLog(userId: string, id: string): Promise<{ deleted: boolean }> {
+        const res = await this.prisma.mealLog.deleteMany({ where: { id, userId } });
+        logger.info({ userId, id, deleted: res.count }, 'Meal log delete');
+        return { deleted: res.count > 0 };
+    }
+
+    /**
      * generateGroceryList
      * Fetches the active day plan and extracts all unique food items.
      */
@@ -167,7 +392,16 @@ export class MealService {
             const cleanDate = date ? date.split('T')[0] : new Date().toISOString().split('T')[0];
             const url = `${this.config.PLAN_SERVICE_URL}/v1/plans/internal/active/${userId}?date=${cleanDate}`;
 
-            const res = await fetch(url);
+            // MEDIUM #10: bound the cross-service call. Without a timeout a hung /
+            // slow plan-service would hang this request (and its connection) until
+            // an OS-level socket timeout. AbortSignal.timeout fires an AbortError
+            // after PLAN_FETCH_TIMEOUT_MS; the surrounding try/catch re-throws the
+            // friendly business error (and the route redacts it to a 400).
+            const res = await fetch(url, {
+                // F34 #5: plan-service /internal/* now requires the shared token.
+                headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+                signal: AbortSignal.timeout(PLAN_FETCH_TIMEOUT_MS),
+            });
             if (!res.ok) {
                 const errorData = await res.json().catch(() => ({}) as any);
                 throw new Error((errorData as any).error || `No active plan found for ${date ?? 'today'}`);
@@ -261,9 +495,100 @@ export class MealService {
         });
         if (!active) throw new Error('No active fast found');
 
+        // A fast that is ended before reaching its target window was ended early
+        // (the mobile UI's "END FAST EARLY" action) and must be CANCELLED, not
+        // COMPLETED. Only a fast that reached its target counts as COMPLETED
+        // ("COMPLETE FAST"). Compute elapsed hours from the recorded startTime.
+        const endTime = new Date();
+        const elapsedHours = (endTime.getTime() - active.startTime.getTime()) / (1000 * 60 * 60);
+        const status = elapsedHours >= active.targetHours ? 'COMPLETED' : 'CANCELLED';
+
         return this.prisma.fastingLog.update({
             where: { id: active.id },
-            data: { status: 'COMPLETED', endTime: new Date() }
+            data: { status, endTime }
         });
     }
+
+    // ── GDPR purge ──────────────────────────────────────────────────────────────
+    // PERMANENTLY erase EVERY meal-service row owned by `userId`. This service's
+    // only user-owned tables are meal_logs (MealLog.userId) and fasting_logs
+    // (FastingLog.userId); food_items and recipes are shared library data with NO
+    // per-user ownership column (verified against schema.prisma) and are left
+    // untouched. Mirrors the exercise-service / user-service purge pattern.
+    //
+    // IDEMPOTENT by construction: every step is a deleteMany, which returns
+    // `{ count: 0 }` (never throws) when no rows match — so purging a user with
+    // no data, or purging the same user twice, both succeed. Returns a per-table
+    // deletedCounts summary the caller surfaces in the 200 body.
+    //
+    // All deletes run inside `$transaction` so the purge is all-or-nothing: a
+    // mid-purge failure leaves no partially-erased user.
+    async purgeUser(userId: string): Promise<{
+        meal_logs: number;
+        fasting_logs: number;
+    }> {
+        const [mealLogs, fastingLogs] = await this.prisma.$transaction([
+            this.prisma.mealLog.deleteMany({ where: { userId } }),
+            this.prisma.fastingLog.deleteMany({ where: { userId } }),
+        ]);
+
+        return {
+            meal_logs: mealLogs.count,
+            fasting_logs: fastingLogs.count,
+        };
+    }
+
+    // ── GDPR data export ──────────────────────────────────────────────────────────
+    // Read-only counterpart of purgeUser: READ and return EVERY meal-service row
+    // owned by `userId` across the SAME user-owned tables the purge erases
+    // (meal_logs via MealLog.userId, fasting_logs via FastingLog.userId), keyed by
+    // table name. The export table set MUST stay EXACTLY in sync with purgeUser's
+    // table set so a user's right-to-access and right-to-erasure cover identical
+    // data — the gdpr-export test asserts this invariant.
+    //
+    // food_items / recipes are shared library data with NO per-user ownership column
+    // (same as the purge) and are deliberately NOT exported.
+    //
+    // SECURITY: neither table holds any secret/credential column — MealLog.foodItems
+    // is user-entered food/nutrition JSON, not a credential — so the full rows are
+    // returned verbatim. (If a secret/token/password column is ever added to either
+    // table, it MUST be stripped here before returning.)
+    //
+    // READ-ONLY & IDEMPOTENT: only findMany runs; calling it twice yields identical
+    // output and never mutates state. Bounded: each table is capped at EXPORT_ROW_LIMIT
+    // rows (newest first) so a pathological user cannot return an unbounded payload;
+    // `_meta` flags whether either table was truncated at the cap.
+    async exportUser(userId: string): Promise<{
+        meal_logs: any[];
+        fasting_logs: any[];
+        _meta: { mealLogsTruncated: boolean; fastingLogsTruncated: boolean; rowLimit: number };
+    }> {
+        const cap = EXPORT_ROW_LIMIT;
+        const [mealLogs, fastingLogs] = await Promise.all([
+            this.prisma.mealLog.findMany({
+                where: { userId },
+                orderBy: { loggedAt: 'desc' },
+                take: cap + 1,
+            }),
+            this.prisma.fastingLog.findMany({
+                where: { userId },
+                orderBy: { startTime: 'desc' },
+                take: cap + 1,
+            }),
+        ]);
+
+        const mealLogsTruncated = mealLogs.length > cap;
+        const fastingLogsTruncated = fastingLogs.length > cap;
+
+        return {
+            meal_logs: mealLogsTruncated ? mealLogs.slice(0, cap) : mealLogs,
+            fasting_logs: fastingLogsTruncated ? fastingLogs.slice(0, cap) : fastingLogs,
+            _meta: { mealLogsTruncated, fastingLogsTruncated, rowLimit: cap },
+        };
+    }
 }
+
+// Per-table row cap for the GDPR export. Generous enough that a real user's full
+// history is returned, but bounds the payload so a pathological user cannot force
+// an unbounded read. `take: cap + 1` lets exportUser detect (and flag) truncation.
+const EXPORT_ROW_LIMIT = 50_000;

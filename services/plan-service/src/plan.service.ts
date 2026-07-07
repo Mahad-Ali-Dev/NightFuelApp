@@ -13,7 +13,7 @@ export class PlanService {
     constructor(
         private prisma: PrismaClient,
         private eventBus: EventBus,
-        private config: { AI_PIPELINE_URL: string, USER_SERVICE_URL: string, STATE_SERVICE_URL: string, DECISION_ENGINE_URL: string, MEAL_SERVICE_URL: string, EXERCISE_SERVICE_URL: string }
+        private config: { AI_PIPELINE_URL: string, USER_SERVICE_URL: string, STATE_SERVICE_URL: string, DECISION_ENGINE_URL: string, MEAL_SERVICE_URL: string, EXERCISE_SERVICE_URL: string, INTERNAL_SERVICE_TOKEN?: string }
     ) {
         const breakerOptions = {
             timeout: 30000,           // 30s — LLM calls can be slow
@@ -26,18 +26,148 @@ export class PlanService {
         });
     }
 
-    private async makeAIRequest(userId: string, date: string, shiftType: string, planParams: any, circadianProfile?: any, context?: any): Promise<any> {
+    /**
+     * Map the decision-engine / protocol `planParams` (snake_case, top-level) into
+     * the EXACT logicTargets shape ai-pipeline's DayPlanRequest expects.
+     *
+     * WHY THIS EXISTS (the wiring-gap fix): plan-service historically sent only a
+     * top-level `planParams` ({calories, protein_g, volume_modifier, ...}), but
+     * DayPlanRequest has NO `planParams` field — Pydantic silently dropped it. So
+     * `request.logicTargets` was always None and the prompt's "DETERMINISTIC
+     * TARGETS (STRICT ADHERENCE REQUIRED)" block NEVER fired: the engine's numeric
+     * (and phase-adjusted) calories/volume never reached the LLM. We now translate
+     * planParams -> logicTargets so that block fires for EVERY plan.
+     *
+     * Mapping (mirrors models.py LogicTargets, all ints + a float multiplier):
+     *   calories         -> calorieTarget
+     *   protein_g        -> proteinTargetG
+     *   carbs/fat        -> carbsTargetG / fatTargetG (derived the SAME way the
+     *                       plan.generated event already derives them, so there is
+     *                       one canonical macro derivation)
+     *   volume_modifier  -> trainingVolumeMultiplier
+     *
+     * Returns null when calories/protein aren't usable numbers, so a malformed
+     * planParams degrades to "no deterministic block" (the prior behaviour) rather
+     * than emitting NaN targets. cyclePhase stays a separate top-level field.
+     */
+    private buildLogicTargets(planParams: any): {
+        calorieTarget: number;
+        proteinTargetG: number;
+        carbsTargetG: number;
+        fatTargetG: number;
+        trainingVolumeMultiplier: number;
+    } | null {
+        const p = planParams ?? {};
+        const calories = Number(p.calories);
+        const proteinG = Number(p.protein_g);
+        if (!Number.isFinite(calories) || !Number.isFinite(proteinG)) return null;
+
+        // Fat: explicit if provided, else the same 65g default the event payload uses.
+        const fatTargetG = Number.isFinite(Number(p.fat_g)) ? Number(p.fat_g) : 65;
+        // Carbs: explicit if provided, else remaining-calorie derivation
+        // (cal - protein*4 - fat*9) / 4 — identical to the plan.generated payload.
+        const carbsTargetG = Number.isFinite(Number(p.carbs_g))
+            ? Number(p.carbs_g)
+            : (calories - proteinG * 4 - fatTargetG * 9) / 4;
+
+        const volume = Number(p.volume_modifier);
+        const trainingVolumeMultiplier = Number.isFinite(volume) ? volume : 1.0;
+
+        return {
+            calorieTarget: Math.round(calories),
+            proteinTargetG: Math.round(proteinG),
+            // Carbs can go negative for absurd inputs; clamp at 0 so the prompt
+            // never shows a nonsensical negative macro target.
+            carbsTargetG: Math.max(0, Math.round(carbsTargetG)),
+            fatTargetG: Math.max(0, Math.round(fatTargetG)),
+            trainingVolumeMultiplier,
+        };
+    }
+
+    /**
+     * Shape the user-service preferences row into the EXACT subset ai-pipeline's
+     * GoalPreferences model reads for the plan prompt — most importantly
+     * `dietaryPreference` (VEGAN/HALAL/...) and `allergies` (hard exclusions),
+     * which previously NEVER reached the LLM (this is the wiring-gap fix).
+     *
+     * DEGRADES GRACEFULLY: the `preferences` arg is whatever the (best-effort,
+     * may-have-failed) user-service fetch produced — possibly null. Every field
+     * has a safe fallback (dietaryPreference 'ANY', allergies []), so a missing
+     * field or a failed fetch yields a benign no-constraint object rather than
+     * throwing. This NEVER blocks plan generation.
+     */
+    private buildAIPreferences(preferences: any): {
+        primaryGoal: string;
+        dietaryPreference: string;
+        dietMode: string;
+        allergies: string[];
+        region: string;
+        healthConditions: string[];
+        experienceLevel: string;
+    } {
+        const p = preferences ?? {};
+        // allergies/healthConditions: only pass through genuine string arrays;
+        // anything else (missing, null, malformed) degrades to [] (no constraint).
+        const allergies = Array.isArray(p.allergies)
+            ? p.allergies.filter((a: unknown): a is string => typeof a === 'string')
+            : [];
+        const healthConditions = Array.isArray(p.healthConditions)
+            ? p.healthConditions.filter((c: unknown): c is string => typeof c === 'string')
+            : [];
+        return {
+            primaryGoal: typeof p.primaryGoal === 'string' ? p.primaryGoal : 'MAINTENANCE',
+            // user-service stores 'NONE' as its no-preference default; map that (and
+            // any missing value) to the ai-pipeline 'ANY' sentinel so the prompt adds
+            // no dietary constraint when the user hasn't chosen one.
+            dietaryPreference:
+                typeof p.dietaryPreference === 'string' && p.dietaryPreference && p.dietaryPreference !== 'NONE'
+                    ? p.dietaryPreference
+                    : 'ANY',
+            dietMode: typeof p.dietMode === 'string' ? p.dietMode : 'BALANCED',
+            allergies,
+            region: typeof p.region === 'string' ? p.region : 'us',
+            healthConditions,
+            experienceLevel: typeof p.experienceLevel === 'string' ? p.experienceLevel : 'BEGINNER',
+        };
+    }
+
+    private async makeAIRequest(userId: string, date: string, shiftType: string, planParams: any, circadianProfile?: any, context?: any, cyclePhase: string = 'UNKNOWN', preferences?: any): Promise<any> {
         logger.info(`Making HTTP request to ai-pipeline at ${this.config.AI_PIPELINE_URL}/v1/ai/generate-plan`);
+
+        // Translate planParams -> logicTargets in the EXACT shape DayPlanRequest
+        // expects so the prompt's DETERMINISTIC TARGETS block fires (see
+        // buildLogicTargets). planParams is still sent for backward compatibility
+        // (extra fields are ignored by Pydantic).
+        const logicTargets = this.buildLogicTargets(planParams);
+
+        // Shape the fetched user-profile preferences into GoalPreferences so the
+        // prompt honors dietaryPreference + allergies. Degrades to safe defaults
+        // (ANY diet, no allergies) when the fetch failed or fields are missing.
+        const aiPreferences = this.buildAIPreferences(preferences);
+
         const response = await fetch(`${this.config.AI_PIPELINE_URL}/v1/ai/generate-plan`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                // F22 #8: authorize this server-to-server call to ai-pipeline.
+                'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '',
+            },
             body: JSON.stringify({
                 userId,
                 date,
                 shiftType,
                 circadianProfile,
-                planParams, // Pass deterministic parameters here
-                context    // Pass meal/exercise context here
+                planParams,    // legacy passthrough (Pydantic ignores unknown fields)
+                logicTargets,  // canonical deterministic targets the prompt reads
+                // User dietary preference + allergies (+ region/health/goal/experience).
+                // dietaryPreference & allergies are honored by SYSTEM_PROMPT rules 2/9;
+                // allergies are a HARD exclusion. Shaped to GoalPreferences.
+                preferences: aiPreferences,
+                context,       // Pass meal/exercise context here
+                // Derived menstrual-cycle phase (UNKNOWN if unavailable). The
+                // ai-pipeline applies a SMALL phase-aware prompt nudge only when
+                // != UNKNOWN, so non-tracking users see no change.
+                cyclePhase
             })
         });
 
@@ -50,57 +180,181 @@ export class PlanService {
         return (await response.json()) as any;
     }
 
-    async generateAndStorePlan(profileData: any, userId: string, date: string, shiftId: string | null = null, shiftType: string = 'ROTATING'): Promise<any> {
+    /**
+     * Supersede the user's ACTIVE plans for `date` and create the next-versioned
+     * row, concurrency-safe.
+     *
+     * planVersion is a read-max-then-create value guarded by
+     * @@unique([userId, planDate, planVersion]). Two generations racing on the
+     * same (userId, date) can read the same max and both compute the same
+     * nextVersion — the second create then throws P2002, surfacing as a 500
+     * *after* a paid AI call. We recompute nextVersion from the current max and
+     * retry the create on P2002 (up to MAX_VERSION_RETRIES times) so the loser of
+     * the race simply takes the next free version instead of failing.
+     *
+     * The single-call happy path is unchanged: first attempt reads the max,
+     * creates version max+1, and returns — no extra round-trips on success beyond
+     * the (already present) max lookup.
+     */
+    private async createNextVersionedPlan(
+        userId: string,
+        date: string,
+        buildData: (nextVersion: number) => any,
+    ): Promise<any> {
+        const MAX_VERSION_RETRIES = 3;
+        const planDate = new Date(date);
+
+        // Supersede once — this is idempotent across retries (already-SUPERSEDED
+        // rows are simply not re-matched by the status:'ACTIVE' filter).
+        await this.prisma.dayPlan.updateMany({
+            where: { userId, planDate, status: 'ACTIVE' },
+            data: { status: 'SUPERSEDED' },
+        });
+
+        let lastErr: any;
+        for (let attempt = 0; attempt < MAX_VERSION_RETRIES; attempt++) {
+            const maxPlan = await this.prisma.dayPlan.findFirst({
+                where: { userId, planDate },
+                orderBy: { planVersion: 'desc' },
+                select: { planVersion: true },
+            });
+            const nextVersion = (maxPlan?.planVersion ?? 0) + 1;
+
+            try {
+                return await this.prisma.dayPlan.create({ data: buildData(nextVersion) });
+            } catch (err: any) {
+                // P2002 = unique constraint collision on the version: a concurrent
+                // generation grabbed this version first. Recompute + retry.
+                if (err?.code === 'P2002') {
+                    lastErr = err;
+                    logger.warn(
+                        { userId, date, attempt: attempt + 1, nextVersion },
+                        'planVersion collision (P2002) — recomputing next version and retrying',
+                    );
+                    continue;
+                }
+                throw err;
+            }
+        }
+
+        logger.error({ userId, date }, 'Exhausted planVersion retries after repeated P2002 collisions');
+        throw lastErr;
+    }
+
+    async generateAndStorePlan(profileData: any, userId: string, date: string, shiftId: string | null = null, shiftType: string = 'ROTATING', aiGenerated: boolean = false): Promise<any> {
         logger.info(`Generating plan for user ${userId} on ${date}`);
 
-        // 1. Fetch user state from state-service
+        // MEDIUM #10: These five cross-service fetches are mutually independent
+        // (none reads another's result; the first consumer is `prefs?.activeProtocolId`
+        // below, which runs only after all have resolved). Run them concurrently so the
+        // latency is max-of-5 instead of sum-of-5. Each block keeps its own try/catch
+        // and fallback exactly as before, so one failure is isolated to its own value.
         let userState = null;
-        try {
-            const stateRes = await fetch(`${this.config.STATE_SERVICE_URL}/v1/state/${userId}`);
-            if (stateRes.ok) {
-                userState = await stateRes.json();
-                logger.info({ userId }, 'Fetched user state for decision engine');
-            }
-        } catch (err) {
-            logger.warn({ userId, err }, 'Failed to fetch user state, falling back to defaults');
-        }
-
-        // 2. Fetch user preferences
         let preferences = null;
-        try {
-            const prefRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`);
-            if (prefRes.ok) {
-                preferences = await prefRes.json();
-                logger.info({ userId }, 'Fetched user preferences for AI plan');
-            }
-        } catch (err) {
-            logger.warn({ userId, err }, 'Failed to fetch user preferences');
-        }
+        // 2b. cyclePhase: derived menstrual-cycle phase from user-service's status
+        // (digital twin). Defaults to 'UNKNOWN' if the status is missing/unreachable
+        // or has no phase yet — UNKNOWN is a strict no-op downstream (decision-engine
+        // modifiers + ai-pipeline prompt), so a fetch failure NEVER changes the plan
+        // for non-tracking users (or anyone). This is best-effort and non-fatal.
+        let cyclePhase = 'UNKNOWN';
+        let mealContext: any[] = [];
+        let exerciseContext: any[] = [];
 
-        // 3. Fetch Meal Context
-        let mealContext = [];
-        try {
-            const mealRes = await fetch(`${this.config.MEAL_SERVICE_URL}/v1/meals/${userId}?date=${date}`);
-            if (mealRes.ok) {
-                mealContext = await mealRes.json() as any[];
-                logger.debug({ userId }, 'Fetched meal context for AI');
-            }
-        } catch (err) {
-            logger.warn({ userId, err }, 'Failed to fetch meal context');
-        }
+        await Promise.all([
+            // 1. Fetch user state from state-service
+            (async () => {
+                try {
+                    const stateRes = await fetch(`${this.config.STATE_SERVICE_URL}/v1/state/${userId}`, {
+                        // HIGH #4: bound this context fetch so a stalled state-service
+                        // can't hang plan generation forever — a timeout aborts the
+                        // request and degrades via the catch below (defaults).
+                        signal: AbortSignal.timeout(5000),
+                    });
+                    if (stateRes.ok) {
+                        userState = await stateRes.json();
+                        logger.info({ userId }, 'Fetched user state for decision engine');
+                    }
+                } catch (err) {
+                    logger.warn({ userId, err }, 'Failed to fetch user state, falling back to defaults');
+                }
+            })(),
 
-        // 4. Fetch Exercise Context
-        let exerciseContext = [];
-        try {
-            // Fetch recent workouts (limit 5 for context)
-            const exerciseRes = await fetch(`${this.config.EXERCISE_SERVICE_URL}/v1/workouts/${userId}?limit=5`);
-            if (exerciseRes.ok) {
-                exerciseContext = await exerciseRes.json() as any[];
-                logger.debug({ userId }, 'Fetched exercise context for AI');
-            }
-        } catch (err) {
-            logger.warn({ userId, err }, 'Failed to fetch exercise context');
-        }
+            // 2. Fetch user preferences
+            (async () => {
+                try {
+                    const prefRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`, {
+                        // F34 #5: user-service /internal/* now requires the shared token.
+                        headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+                        // HIGH #4: bound this context fetch so a stalled user-service
+                        // can't hang plan generation forever (degrades via catch below).
+                        signal: AbortSignal.timeout(5000),
+                    });
+                    if (prefRes.ok) {
+                        preferences = await prefRes.json();
+                        logger.info({ userId }, 'Fetched user preferences for AI plan');
+                    }
+                } catch (err) {
+                    logger.warn({ userId, err }, 'Failed to fetch user preferences');
+                }
+            })(),
+
+            // 2b. Fetch the derived menstrual-cycle phase from user-service's status.
+            (async () => {
+                try {
+                    const statusRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/status/${userId}`, {
+                        // F34 #5: user-service /internal/* now requires the shared token.
+                        headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+                        // HIGH #4: bound this context fetch so a stalled user-service
+                        // can't hang plan generation forever (degrades to UNKNOWN below).
+                        signal: AbortSignal.timeout(5000),
+                    });
+                    if (statusRes.ok) {
+                        const status = await statusRes.json() as any;
+                        if (typeof status?.cyclePhase === 'string' && status.cyclePhase) {
+                            cyclePhase = status.cyclePhase;
+                        }
+                        logger.debug({ userId, cyclePhase }, 'Fetched cycle phase for plan');
+                    }
+                } catch (err) {
+                    logger.warn({ userId, err }, 'Failed to fetch cycle phase, defaulting to UNKNOWN');
+                }
+            })(),
+
+            // 3. Fetch Meal Context
+            (async () => {
+                try {
+                    const mealRes = await fetch(`${this.config.MEAL_SERVICE_URL}/v1/meals/${userId}?date=${date}`, {
+                        // HIGH #4: bound this context fetch so a stalled meal-service
+                        // can't hang plan generation forever (degrades via catch below).
+                        signal: AbortSignal.timeout(5000),
+                    });
+                    if (mealRes.ok) {
+                        mealContext = await mealRes.json() as any[];
+                        logger.debug({ userId }, 'Fetched meal context for AI');
+                    }
+                } catch (err) {
+                    logger.warn({ userId, err }, 'Failed to fetch meal context');
+                }
+            })(),
+
+            // 4. Fetch Exercise Context
+            (async () => {
+                try {
+                    // Fetch recent workouts (limit 5 for context)
+                    const exerciseRes = await fetch(`${this.config.EXERCISE_SERVICE_URL}/v1/workouts/${userId}?limit=5`, {
+                        // HIGH #4: bound this context fetch so a stalled exercise-service
+                        // can't hang plan generation forever (degrades via catch below).
+                        signal: AbortSignal.timeout(5000),
+                    });
+                    if (exerciseRes.ok) {
+                        exerciseContext = await exerciseRes.json() as any[];
+                        logger.debug({ userId }, 'Fetched exercise context for AI');
+                    }
+                } catch (err) {
+                    logger.warn({ userId, err }, 'Failed to fetch exercise context');
+                }
+            })(),
+        ]);
 
         const context = {
             meals: mealContext,
@@ -130,17 +384,26 @@ export class PlanService {
                 const decisionRes = await fetch(`${this.config.DECISION_ENGINE_URL}/v1/decision/compute-params`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    // MEDIUM #9: bound this hot-path call so a stalled decision-engine
+                    // can't hang plan generation — a timeout degrades via the catch
+                    // below to the safe-default planParams.
+                    signal: AbortSignal.timeout(5000),
                     body: JSON.stringify({
-                        userState: userState ?? {
-                            userId,
-                            currentWeightKg: 80,
-                            last7DaysAdherence: 1.0,
-                            avgSleepQuality: 7,
-                            fatigueLevel: 3,
-                            currentCalorieTarget: 2000,
-                            currentProteinTargetG: 150,
-                            trainingPhase: 'HYPERTROPHY',
-                            cycleWeek: 1
+                        userState: {
+                            ...(userState ?? {
+                                userId,
+                                currentWeightKg: 80,
+                                last7DaysAdherence: 1.0,
+                                avgSleepQuality: 7,
+                                fatigueLevel: 3,
+                                currentCalorieTarget: 2000,
+                                currentProteinTargetG: 150,
+                                trainingPhase: 'HYPERTROPHY',
+                                cycleWeek: 1
+                            }),
+                            // Inject the derived cycle phase (UNKNOWN if unavailable —
+                            // a strict no-op in the engine, so this is safe for everyone).
+                            cyclePhase,
                         },
                         goal: (preferences as any)?.primaryGoal ?? 'MAINTENANCE'
                     })
@@ -191,7 +454,7 @@ export class PlanService {
         let latencyMs = 0;
 
         try {
-            planResult = await this.breaker.fire(userId, date, shiftType, planParams, profileData, context) as any;
+            planResult = await this.breaker.fire(userId, date, shiftType, planParams, profileData, context, cyclePhase, preferences) as any;
             latencyMs = Date.now() - startMs;
             logger.info(`AI plan received in ${latencyMs}ms for user ${userId}`);
         } catch (aiErr: any) {
@@ -219,30 +482,26 @@ export class PlanService {
             };
         }
 
-        // 8. Supersede existing plans
-        await this.prisma.dayPlan.updateMany({
-            where: { userId, planDate: new Date(date), status: 'ACTIVE' },
-            data: { status: 'SUPERSEDED' },
-        });
-
-        const nextVersion = (lastPlan?.planVersion ?? 0) + 1;
-
-        const createdPlan = await this.prisma.dayPlan.create({
-            data: {
-                userId,
-                planDate: new Date(date),
-                shiftId,
-                planVersion: nextVersion,
-                plan: {
-                    ...planResult.structuredPlan,
-                    parameters: planParams
-                },
-                generationModel: planResult.providerUsed ?? 'openai',
-                generationLatencyMs: latencyMs,
-                generationTokens: planResult.tokensUsed ?? null,
-                status: 'ACTIVE',
+        // 8. Supersede existing plans + persist the new version.
+        // Versioning is concurrency-safe: supersede, recompute nextVersion from the
+        // current max, and create — retrying on P2002 (the @@unique([userId,
+        // planDate, planVersion]) collision two racing generations would otherwise
+        // surface as a 500 AFTER the paid AI call). See createNextVersionedPlan.
+        const createdPlan = await this.createNextVersionedPlan(userId, date, (nextVersion) => ({
+            userId,
+            planDate: new Date(date),
+            shiftId,
+            planVersion: nextVersion,
+            plan: {
+                ...planResult.structuredPlan,
+                parameters: planParams
             },
-        });
+            generationModel: planResult.providerUsed ?? 'openai',
+            generationLatencyMs: latencyMs,
+            generationTokens: planResult.tokensUsed ?? null,
+            status: 'ACTIVE',
+            aiGenerated,
+        }));
 
         // 9. Publish event (non-blocking — don't crash on Redis failure)
         try {
@@ -291,32 +550,20 @@ export class PlanService {
     ): Promise<any> {
         logger.info({ userId, date }, 'Storing pre-generated plan');
 
-        await this.prisma.dayPlan.updateMany({
-            where: { userId, planDate: new Date(date), status: 'ACTIVE' },
-            data: { status: 'SUPERSEDED' },
-        });
-
-        // Get highest current version
-        const lastPlan = await this.prisma.dayPlan.findFirst({
-            where: { userId, planDate: new Date(date) },
-            orderBy: { planVersion: 'desc' },
-            select: { planVersion: true }
-        });
-        const nextVersion = (lastPlan?.planVersion ?? 0) + 1;
-
-        const createdPlan = await this.prisma.dayPlan.create({
-            data: {
-                userId,
-                planDate: new Date(date),
-                shiftId,
-                planVersion: nextVersion,
-                plan: structuredPlan,
-                generationModel: providerUsed,
-                generationLatencyMs: null,
-                generationTokens: tokensUsed,
-                status: 'ACTIVE',
-            },
-        });
+        // Supersede existing plans + persist the new version with the same
+        // concurrency-safe versioning as generateAndStorePlan (retry on the
+        // @@unique([userId, planDate, planVersion]) P2002 collision).
+        const createdPlan = await this.createNextVersionedPlan(userId, date, (nextVersion) => ({
+            userId,
+            planDate: new Date(date),
+            shiftId,
+            planVersion: nextVersion,
+            plan: structuredPlan,
+            generationModel: providerUsed,
+            generationLatencyMs: null,
+            generationTokens: tokensUsed,
+            status: 'ACTIVE',
+        }));
 
         const sp = (structuredPlan as any) ?? {};
         const planPayload: PlanGeneratedPayload = {
@@ -352,9 +599,17 @@ export class PlanService {
         });
     }
 
-    async getPlanHistory(userId: string) {
+    async getPlanHistory(userId: string, range?: { start?: string; end?: string }) {
+        // Always scope to the caller. When BOTH bounds are supplied (the schema
+        // has already validated start <= end), narrow to that inclusive
+        // planDate window; otherwise the where-clause and take:30 cap are
+        // byte-identical to the original no-params query.
+        const where: { userId: string; planDate?: { gte: Date; lte: Date } } = { userId };
+        if (range?.start !== undefined && range?.end !== undefined) {
+            where.planDate = { gte: new Date(range.start), lte: new Date(range.end) };
+        }
         return this.prisma.dayPlan.findMany({
-            where: { userId },
+            where,
             orderBy: { planDate: 'desc' },
             take: 30,
         });
@@ -453,4 +708,91 @@ export class PlanService {
             where: { id }
         });
     }
+
+    /**
+     * GDPR purge — PERMANENTLY delete EVERY plan-service row owned by `userId`.
+     *
+     * This service has exactly two user-owned tables (verified against
+     * prisma/schema.prisma — no other user-id columns exist):
+     *   • day_plans          — owned via user_id      (DayPlan.userId)
+     *   • protocol_templates — owned via creator_id   (ProtocolTemplate.creatorId)
+     *
+     * day_plans has an optional FK to protocol_templates (protocol_id). Deleting
+     * day_plans FIRST avoids any FK contention before the templates go. Both run
+     * inside a single $transaction so the purge is all-or-nothing.
+     *
+     * IDEMPOTENT: deleteMany never throws on zero rows, so purging a user with no
+     * data returns all-zero counts and re-purging is a safe no-op.
+     */
+    async purgeUser(userId: string): Promise<{ day_plans: number; protocol_templates: number }> {
+        const [dayPlans, protocolTemplates] = await this.prisma.$transaction([
+            // The user's day plans (user_id).
+            this.prisma.dayPlan.deleteMany({ where: { userId } }),
+            // Protocol templates the user authored (creator_id).
+            this.prisma.protocolTemplate.deleteMany({ where: { creatorId: userId } }),
+        ]);
+
+        return {
+            day_plans: dayPlans.count,
+            protocol_templates: protocolTemplates.count,
+        };
+    }
+
+    /**
+     * GDPR data export (right-to-access) — READ every plan-service row owned by
+     * `userId`, returned as a JSON object keyed by table name. This is the
+     * read-only counterpart of purgeUser and MUST mirror its table set EXACTLY so
+     * right-to-access and right-to-erasure cover identical data:
+     *   • day_plans          — owned via user_id      (DayPlan.userId)
+     *   • protocol_templates — owned via creator_id   (ProtocolTemplate.creatorId)
+     *
+     * SECURITY: neither table holds a password/token/secret/raw-key column — they
+     * store plan JSON, generation metadata, and protocol parameters — so the FULL
+     * rows are safe to export verbatim (nothing to redact). The no-secret-leak
+     * test locks this in: if a credential-looking column is ever added to either
+     * model, that test fails and forces an explicit redaction decision here.
+     *
+     * READ-ONLY & IDEMPOTENT: only findMany, no writes; a user with no rows yields
+     * empty arrays (never throws), and repeated calls return identical output.
+     *
+     * BOUNDED: each per-user table is capped at EXPORT_ROW_LIMIT rows (newest
+     * first). `take: cap + 1` lets us detect and flag truncation via `_meta` so a
+     * pathological user cannot force an unbounded read.
+     */
+    async exportUser(userId: string): Promise<{
+        day_plans: any[];
+        protocol_templates: any[];
+        _meta: { dayPlansTruncated: boolean; protocolTemplatesTruncated: boolean; rowLimit: number };
+    }> {
+        const cap = EXPORT_ROW_LIMIT;
+        const [dayPlans, protocolTemplates] = await Promise.all([
+            // The user's day plans (user_id), newest first.
+            this.prisma.dayPlan.findMany({
+                where: { userId },
+                orderBy: { createdAt: 'desc' },
+                take: cap + 1,
+            }),
+            // Protocol templates the user authored (creator_id), newest first.
+            this.prisma.protocolTemplate.findMany({
+                where: { creatorId: userId },
+                orderBy: { createdAt: 'desc' },
+                take: cap + 1,
+            }),
+        ]);
+
+        const dayPlansTruncated = dayPlans.length > cap;
+        const protocolTemplatesTruncated = protocolTemplates.length > cap;
+
+        return {
+            day_plans: dayPlansTruncated ? dayPlans.slice(0, cap) : dayPlans,
+            protocol_templates: protocolTemplatesTruncated ? protocolTemplates.slice(0, cap) : protocolTemplates,
+            _meta: { dayPlansTruncated, protocolTemplatesTruncated, rowLimit: cap },
+        };
+    }
 }
+
+// Per-table row cap for the GDPR export. Generous enough that a real user's full
+// plan/protocol history is returned, but bounds the payload so a pathological user
+// cannot force an unbounded read. `take: cap + 1` lets exportUser detect (and flag)
+// truncation.
+const EXPORT_ROW_LIMIT = 50_000;

@@ -6,8 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Dumbbell, Home, Activity, Waves, Search,
-    Filter, ChevronRight, Flame, Target, X,
-    Loader2, RefreshCw, Info
+    Filter, ChevronRight, Target, X,
+    RefreshCw, Info
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { KEGEL_EXERCISES, type Exercise } from '@/lib/exercisedb';
@@ -178,7 +178,7 @@ export default function ExercisesPage() {
                             className={cn(
                                 "p-2.5 rounded-xl transition-all shrink-0",
                                 showSearch
-                                    ? "bg-brand-500 text-white shadow-lg shadow-brand-500/25"
+                                    ? "bg-brand-500 text-background shadow-lg shadow-brand-500/25"
                                     : "bg-white/5 border border-white/10 text-neutral-400 hover:text-white hover:bg-white/10"
                             )}
                         >
@@ -276,7 +276,7 @@ export default function ExercisesPage() {
                                             "whitespace-nowrap px-3.5 py-1.5 rounded-xl text-xs font-bold border transition-all shrink-0",
                                             levelFilter === f.value && f.value
                                                 ? f.value === 'beginner' ? "bg-emerald-500 text-white border-emerald-500"
-                                                    : f.value === 'intermediate' ? "bg-brand-500 text-white border-brand-500"
+                                                    : f.value === 'intermediate' ? "bg-brand-500 text-background border-brand-500"
                                                         : "bg-red-500 text-white border-red-500"
                                                 : "bg-transparent text-neutral-600 border-white/[0.06] hover:border-white/20 hover:text-neutral-300"
                                         )}

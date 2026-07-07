@@ -8,10 +8,11 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
 import { PrismaClient } from './generated/prisma';
 import { RedisEventBus } from '@nightfuel/events';
-import { createLogger, loadConfig } from '@nightfuel/config';
+import { createLogger, loadConfig, sendUnauthorized, registerFastifyErrorHandler } from '@nightfuel/config';
 import { NotificationService } from './notification.service';
 import { PushService } from './push.service';
 import { notificationRoutes } from './routes';
+import { internalRoutes } from './internal-routes';
 import { setupEventSubscribers } from './events';
 import fastifySocketIO from 'fastify-socket.io';
 
@@ -22,12 +23,17 @@ import fastifySocketIO from 'fastify-socket.io';
 // ---------------------------------------------------------------------------
 const envSchema = z.object({
     NOTIF_PORT: z.string().default('3008'),
-    JWT_SECRET: z.string().min(1),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
     // Override: the notification service uses NOTIF_DATABASE_URL as primary,
     // but @nightfuel/config baseEnvSchema requires DATABASE_URL to be present.
     // Both are in .env, so this is satisfied automatically.
     NOTIF_DATABASE_URL: z.string().url(),
     NOTIF_DIRECT_URL: z.string().url(),
+    // Shared server-to-server token for /v1/notifications/internal/* routes
+    // (GDPR purge). The makeInternalAuthGuard preHandler constant-time compares
+    // X-Internal-Token to this value; an empty/unset token fails closed (every
+    // internal request 404s), so prod must set INTERNAL_SERVICE_TOKEN.
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
 });
 
 const config = loadConfig(envSchema);
@@ -119,7 +125,7 @@ fastify.decorate('authenticate', async (request: any, reply: any) => {
     try {
         await request.jwtVerify();
     } catch (err) {
-        reply.send(err);
+        return sendUnauthorized(reply, request, err);
     }
 });
 
@@ -197,26 +203,30 @@ fastify.register(
 );
 
 // ---------------------------------------------------------------------------
-// Global error handler
+// Internal (server-to-server) routes — registered WITHOUT the JWT prefix.
+// Guarded by makeInternalAuthGuard (X-Internal-Token), not the user JWT.
+// Includes the GDPR endpoints:
+//   DELETE /v1/notifications/internal/user/:userId         (purge / erasure)
+//   GET    /v1/notifications/internal/user/:userId/export  (data export)
 // ---------------------------------------------------------------------------
-fastify.setErrorHandler((error, request, reply) => {
-    logger.error(
-        {
-            err: error,
-            url: request.url,
-            method: request.method,
-            statusCode: error.statusCode,
-        },
-        'Unhandled request error',
-    );
-
-    const statusCode = error.statusCode ?? 500;
-    reply.code(statusCode).send({
-        error: error.name ?? 'InternalServerError',
-        message: error.message ?? 'An unexpected error occurred',
-        statusCode,
+fastify.register(async (instance) => {
+    await internalRoutes(instance, {
+        notificationService,
+        internalServiceToken: config.INTERNAL_SERVICE_TOKEN,
     });
 });
+
+// ---------------------------------------------------------------------------
+// Global error handler
+// ---------------------------------------------------------------------------
+// Converged onto the shared pure redactor in @nightfuel/config
+// (buildErrorResponse). The structured `logger.error` inside the helper STILL
+// captures the full error object server-side (stack, Prisma details,
+// conn-string fragments); on the wire a 5xx returns a fixed generic body and a
+// non-validation 4xx is redacted to 'Bad request' — only Fastify validation
+// messages are reflected. See __tests__/error-redaction.test.ts for the
+// locked-in shape.
+registerFastifyErrorHandler(fastify, logger);
 
 // ---------------------------------------------------------------------------
 // Startup
@@ -229,7 +239,7 @@ const start = async (): Promise<void> => {
 
         // Set up Redis event subscribers
         // Each subscriber is internally wrapped in try/catch — see events.ts
-        setupEventSubscribers(eventBus, notificationService, fastify);
+        setupEventSubscribers(eventBus, notificationService, pushService, fastify);
         logger.info('Redis event subscribers active');
 
         // Start HTTP server

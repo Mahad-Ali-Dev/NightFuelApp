@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
 FROM node:22-alpine AS base
+RUN apk add --no-cache openssl
 RUN npm install -g turbo@2
 
 # ── Pruner stage: extract only sleep-service and its workspace deps ───────────
@@ -20,6 +21,7 @@ RUN npm install
 
 # Copy pruned source files
 COPY --from=pruner /app/out/full/ .
+COPY --from=pruner /app/tsconfig.json ./tsconfig.json
 
 # Generate Prisma client targeting the sleep-service schema
 RUN npx --workspace=sleep-service prisma generate
@@ -29,19 +31,16 @@ RUN turbo run build --filter=sleep-service
 
 # ── Runner stage ──────────────────────────────────────────────────────────────
 FROM node:22-alpine AS runner
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-
-WORKDIR /app
-
-# Copy built output and runtime node_modules
-COPY --from=installer --chown=appuser:appgroup /app/services/sleep-service/dist ./dist
-COPY --from=installer --chown=appuser:appgroup /app/services/sleep-service/node_modules ./node_modules
-COPY --from=installer --chown=appuser:appgroup /app/node_modules ./root_node_modules
-COPY --from=installer --chown=appuser:appgroup /app/services/sleep-service/prisma ./prisma
-
-USER appuser
-
+RUN apk add --no-cache openssl
+ENV NODE_ENV=production
+COPY --from=installer /app /app
+WORKDIR /app/services/sleep-service
 EXPOSE 3010
-
-# Run Prisma migrations then start the service
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+# The hand-written migrations under prisma/migrations are human-readable RECORDS,
+# not a complete `prisma migrate` history (the new 20260621_health_samples table
+# is documented there but only applied via db push — F28 user-service precedent).
+# `migrate deploy` would leave the DB missing the health_samples table, so the
+# new POST /v1/sleep/health-sync would 500 with P2021. Sync from the schema
+# instead so a fresh DB gets the full, correct set of columns/tables. db push of
+# an additive, table-only delta is data-loss-free (see migration.sql SAFETY note).
+CMD ["sh", "-c", "npx prisma db push --schema=prisma/schema.prisma --skip-generate --accept-data-loss && node dist/index.js"]

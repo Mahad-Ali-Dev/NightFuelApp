@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
 import { CircularProgress } from '@/components/ui/CircularProgress';
+import { useTheme } from '@/theme';
 
 interface SleepWindowCardProps {
     targetTime: string;
@@ -10,15 +11,17 @@ interface SleepWindowCardProps {
     hint?: string;
 }
 
-export function SleepWindowCard({ targetTime, progress, hint = 'Melatonin rising in 3h' }: SleepWindowCardProps) {
+function SleepWindowCardComponent({ targetTime, progress, hint = 'Melatonin rising in 3h' }: SleepWindowCardProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <Card style={styles.card}>
             <View style={styles.header}>
-                <Ionicons name="moon" size={20} color="#00D4AA" />
+                <Ionicons name="moon" size={20} color={colors.accent.cyan} />
                 <Text style={styles.title}>Sleep Window</Text>
             </View>
             <View style={styles.ringContainer}>
-                <CircularProgress progress={progress} size={90} strokeWidth={8} color="#00D4AA" trackColor="#2D3748" />
+                <CircularProgress progress={progress} size={90} strokeWidth={8} color={colors.accent.cyan} trackColor={colors.border.light} />
                 <View style={styles.ringInner}>
                     <Text style={styles.time}>{targetTime}</Text>
                     <Text style={styles.label}>Target</Text>
@@ -29,13 +32,18 @@ export function SleepWindowCard({ targetTime, progress, hint = 'Melatonin rising
     );
 }
 
-const styles = StyleSheet.create({
-    card: { flex: 1, backgroundColor: '#161B22', borderColor: '#21262D', borderWidth: 1, borderRadius: 20, padding: 16 },
+/**
+ * Memoized: all props are primitives (string/number) and there's no state.
+ */
+export const SleepWindowCard = React.memo(SleepWindowCardComponent);
+
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
+    card: { flex: 1, backgroundColor: colors.background.secondary, borderColor: colors.border.default, borderWidth: 1, borderRadius: 20, padding: 16 },
     header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-    title: { color: '#FFFFFF', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+    title: { color: colors.text.primary, fontSize: 16, fontWeight: '600', marginLeft: 8 },
     ringContainer: { alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
     ringInner: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-    time: { color: '#FFFFFF', fontSize: 20, fontWeight: '700' },
-    label: { color: '#8B949E', fontSize: 10 },
-    hint: { color: '#8B949E', textAlign: 'center', fontSize: 12, marginTop: -4 },
+    time: { color: colors.text.primary, fontSize: 20, fontWeight: '700' },
+    label: { color: colors.text.secondary, fontSize: 10 },
+    hint: { color: colors.text.secondary, textAlign: 'center', fontSize: 12, marginTop: -4 },
 });

@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
 import { sleepApi } from '@/lib/api';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -10,15 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     Moon,
-    Timer,
     Star,
     ChevronLeft,
-    Zap,
     Wind,
     Sun
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 
 export default function LogSleepPage() {
     const router = useRouter();
@@ -142,7 +138,7 @@ export default function LogSleepPage() {
                     <Button
                         type="submit"
                         disabled={mutation.isPending}
-                        className="w-full py-6 bg-brand-500 hover:bg-brand-600 text-white rounded-2xl shadow-xl shadow-brand-500/20 text-lg font-bold transition-all"
+                        className="w-full py-6 bg-brand-500 hover:bg-brand-600 text-background rounded-2xl shadow-xl shadow-brand-500/20 text-lg font-bold transition-all"
                     >
                         {mutation.isPending ? 'Syncing Recovery...' : 'Log Session'}
                     </Button>

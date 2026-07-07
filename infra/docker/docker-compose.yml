@@ -5,66 +5,123 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgrespassword}
     volumes:
       - ./postgres/init-scripts:/docker-entrypoint-initdb.d
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # No host port exposure — only the internal Docker network reaches Postgres.
+    # (Avoids clashing with any existing DB on the host and is safer.)
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
+    # Without this, a Docker daemon restart (e.g. unattended-upgrades upgrading
+    # docker/containerd, or a reboot) leaves Postgres DOWN while the app services
+    # — which DO carry restart:unless-stopped — come back and crash-loop on
+    # `P1001 Can't reach postgres`. Match the services so the datastore returns too.
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # No host port exposure — internal Docker network only.
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
+    # Same reason as postgres above: survive a daemon restart / reboot so the
+    # services that depend on Redis don't crash-loop after an auto-upgrade.
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    # Host port 8080 -> gateway. Avoids the host's existing nginx on 80/443.
+    # Front this with the host nginx (subdomain -> localhost:8080) for HTTPS.
     ports:
-      - "80:80"
+      - "8080:80"
+    # MEDIUM #12: gate nginx on upstream health, not mere container start.
+    # Without service_healthy, nginx could come up before the app processes are
+    # listening and start returning 502s. Each app service below carries a
+    # /health healthcheck, so wait until they actually serve traffic.
     depends_on:
-      - auth-service
-      - user-service
-      - shift-service
-      - circadian-engine
-      - ai-pipeline
-      - plan-service
-      - meal-service
-      - progress-service
-      - exercise-service
-      - sleep-service
-      - notification-service
-      - subscription-service
-      - community-service
-      - chat-service
-      - state-service
-      - decision-engine
+      auth-service:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      shift-service:
+        condition: service_healthy
+      circadian-engine:
+        condition: service_healthy
+      ai-pipeline:
+        condition: service_healthy
+      plan-service:
+        condition: service_healthy
+      meal-service:
+        condition: service_healthy
+      progress-service:
+        condition: service_healthy
+      exercise-service:
+        condition: service_healthy
+      sleep-service:
+        condition: service_healthy
+      notification-service:
+        condition: service_healthy
+      subscription-service:
+        condition: service_healthy
+      community-service:
+        condition: service_healthy
+      chat-service:
+        condition: service_healthy
+      state-service:
+        condition: service_healthy
+      decision-engine:
+        condition: service_healthy
     restart: unless-stopped
 
   auth-service:
     build:
       context: ../../
       dockerfile: services/auth-service/Dockerfile
+    # F34 #2: bind to localhost only. Sibling services + nginx reach this over
+    # the internal Docker network by service-name (http://auth-service:3001), so
+    # the host port is needed ONLY for local debugging — exposing it on 0.0.0.0
+    # let anyone on the host network bypass the nginx edge (incl. its /internal
+    # 404 gate). Follows the postgres/redis "internal-only" precedent above.
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     environment:
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_auth?schema=public
-      DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_auth?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_auth?schema=public
+      DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_auth?schema=public
       REDIS_URL: redis://redis:6379
       AUTH_PORT: 3001
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F36 GDPR purge: verifies X-Internal-Token on DELETE /internal/user/:userId.
+      # Shared INTERNAL_SERVICE_TOKEN across services; guard fails closed if empty.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      # Email OTP delivery (Resend SMTP) + social sign-in verification. Values
+      # live ONLY in the deploy-host .env; empty in dev → the service logs a
+      # [DEV] line instead of sending. These mappings MUST stay in this file:
+      # they were once added on the VPS copy only, and a `git checkout` of the
+      # compose silently wiped them (2026-07-02 incident — OTP emails stopped).
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      GOOGLE_CLIENT_IDS: ${GOOGLE_CLIENT_IDS:-}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
       LOG_LEVEL: info
+    # MEDIUM #12: node:alpine has no curl/wget, so probe /health via a node
+    # one-liner (exit 0 only on HTTP 200). Lets nginx wait for service_healthy.
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,14 +134,24 @@ services:
       context: ../../
       dockerfile: services/shift-service/Dockerfile
     ports:
-      - "3002:3002"
+      # F34 #2: localhost-only (reached internally as http://shift-service:3002).
+      - "127.0.0.1:3002:3002"
     environment:
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_shifts?schema=public
-      DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_shifts?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_shifts?schema=public
+      DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_shifts?schema=public
       REDIS_URL: redis://redis:6379
       SHIFT_PORT: 3002
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F35a / GDPR purge: authorizes this service's /v1/shifts/internal/* routes
+      # (X-Internal-Token). Same INTERNAL_SERVICE_TOKEN value shared across services.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3002/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -97,10 +164,19 @@ services:
       context: ../../services/circadian-engine
       dockerfile: Dockerfile
     ports:
-      - "3003:3003"
+      # F34 #2: localhost-only (reached internally as http://circadian-engine:3003).
+      - "127.0.0.1:3003:3003"
     environment:
       REDIS_URL: redis://redis:6379
       PORT: 3003
+    # MEDIUM #12: python:slim has no curl/wget; probe /v1/circadian/health
+    # (its router prefix) via urllib so nginx can wait for service_healthy.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:3003/v1/circadian/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       redis:
         condition: service_healthy
@@ -111,12 +187,36 @@ services:
       context: ../../services/ai-pipeline
       dockerfile: Dockerfile
     ports:
-      - "3004:3004"
+      # F34 #2: localhost-only. nginx proxies /v1/ai -> http://ai-pipeline:3004
+      # over the internal network; the public edge is nginx (8080) only.
+      - "127.0.0.1:3004:3004"
     environment:
       REDIS_URL: redis://redis:6379
       PORT: 3004
+      # F22 #8 dual-auth: verify end-user Bearer JWTs (shared JWT_SECRET) and
+      # trusted server-to-server callers (INTERNAL_SERVICE_TOKEN). The same
+      # INTERNAL_SERVICE_TOKEN value is shared with chat/exercise/plan/progress.
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-mock-key}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-mock-key}
+      # Optional LLM tuning (all default safely when unset). Set in infra/docker/.env:
+      #   OPENAI_BASE_URL — point the OpenAI branch at a budget/self-hosted
+      #     OpenAI-compatible endpoint (DeepSeek/Groq/Ollama/vLLM); unset => OpenAI cloud.
+      #   *_MODEL / *_MODEL_FAST — override the model ids per tier.
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-}
+      ANTHROPIC_MODEL_FAST: ${ANTHROPIC_MODEL_FAST:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      OPENAI_MODEL_FAST: ${OPENAI_MODEL_FAST:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+    # MEDIUM #12: python:slim has no curl/wget; probe /v1/ai/health (its router
+    # prefix) via urllib so nginx can wait for service_healthy.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:3004/v1/ai/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       redis:
         condition: service_healthy
@@ -129,15 +229,31 @@ services:
       context: ../../
       dockerfile: services/plan-service/Dockerfile
     ports:
-      - "3005:3005"
+      # F34 #2: localhost-only (reached internally as http://plan-service:3005).
+      - "127.0.0.1:3005:3005"
     environment:
-      PLAN_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_plans?schema=public
-      PLAN_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_plans?schema=public
+      PLAN_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_plans?schema=public
+      PLAN_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_plans?schema=public
+      # @nightfuel/config's loadConfig validates process.env.DATABASE_URL; Prisma reads PLAN_DATABASE_URL.
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_plans?schema=public
       REDIS_URL: redis://redis:6379
       PLAN_PORT: 3005
       AI_PIPELINE_URL: http://ai-pipeline:3004
+      USER_SERVICE_URL: http://user-service:3009
+      STATE_SERVICE_URL: http://state-service:3015
+      DECISION_ENGINE_URL: http://decision-engine:3016
+      MEAL_SERVICE_URL: http://meal-service:3006
+      EXERCISE_SERVICE_URL: http://exercise-service:3011
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F22 #8: shared token authorizing the server-to-server call to ai-pipeline.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3005/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -152,14 +268,27 @@ services:
       context: ../../
       dockerfile: services/meal-service/Dockerfile
     ports:
-      - "3006:3006"
+      # F34 #2: localhost-only (reached internally as http://meal-service:3006).
+      - "127.0.0.1:3006:3006"
     environment:
-      MEAL_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_meals?schema=public
-      MEAL_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_meals?schema=public
+      MEAL_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_meals?schema=public
+      MEAL_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_meals?schema=public
+      # @nightfuel/config's loadConfig validates process.env.DATABASE_URL; Prisma reads MEAL_DATABASE_URL.
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_meals?schema=public
       REDIS_URL: redis://redis:6379
       MEAL_PORT: 3006
+      PLAN_SERVICE_URL: http://plan-service:3005
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F34 #5: sent as X-Internal-Token on the s2s call to plan-service
+      # /v1/plans/internal/active/:userId (now guarded in-service).
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3006/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -172,15 +301,26 @@ services:
       context: ../../
       dockerfile: services/user-service/Dockerfile
     ports:
-      - "3009:3009"
+      # F34 #2: localhost-only (reached internally as http://user-service:3009).
+      - "127.0.0.1:3009:3009"
     environment:
-      USER_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_users?schema=public
-      USER_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_users?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_users?schema=public
+      USER_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_users?schema=public
+      USER_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_users?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_users?schema=public
       REDIS_URL: redis://redis:6379
       USER_PORT: 3009
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F34 #5: user-service OWNS /v1/users/internal/* (profile/preferences/
+      # status/all). It verifies this token via the in-service guard; callers
+      # (chat/plan/progress) send the same value.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3009/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -193,15 +333,26 @@ services:
       context: ../../
       dockerfile: services/progress-service/Dockerfile
     ports:
-      - "3007:3007"
+      # F34 #2: localhost-only (reached internally as http://progress-service:3007).
+      - "127.0.0.1:3007:3007"
     environment:
-      PROGRESS_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_progress?schema=public
-      PROGRESS_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_progress?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_progress?schema=public
+      PROGRESS_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_progress?schema=public
+      PROGRESS_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_progress?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_progress?schema=public
       REDIS_URL: redis://redis:6379
       PROGRESS_PORT: 3007
+      USER_SERVICE_URL: http://user-service:3009
+      AI_PIPELINE_URL: http://ai-pipeline:3004
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F22 #8: shared token authorizing the server-to-server call to ai-pipeline.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3007/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -214,19 +365,29 @@ services:
       context: ../../
       dockerfile: services/notification-service/Dockerfile
     ports:
-      - "3008:3008"
+      # F34 #2: localhost-only (reached internally as http://notification-service:3008).
+      - "127.0.0.1:3008:3008"
     environment:
-      NOTIF_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_notifications?schema=public
-      NOTIF_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_notifications?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_notifications?schema=public
+      NOTIF_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_notifications?schema=public
+      NOTIF_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_notifications?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_notifications?schema=public
       REDIS_URL: redis://redis:6379
       NOTIF_PORT: 3008
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # Shared server-to-server token guarding /v1/notifications/internal/*
+      # (GDPR purge). Same INTERNAL_SERVICE_TOKEN value shared across services.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-VAPID_PLACEHOLDER_PUBLIC}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-VAPID_PLACEHOLDER_PRIVATE}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:admin@nightfuel.app}
       EXPO_ACCESS_TOKEN: ${EXPO_ACCESS_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3008/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -239,15 +400,25 @@ services:
       context: ../../
       dockerfile: services/exercise-service/Dockerfile
     ports:
-      - "3011:3011"
+      # F34 #2: localhost-only (reached internally as http://exercise-service:3011).
+      - "127.0.0.1:3011:3011"
     environment:
-      EXERCISE_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_exercise?schema=public
-      EXERCISE_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_exercise?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_exercise?schema=public
+      EXERCISE_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_exercise?schema=public
+      EXERCISE_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_exercise?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_exercise?schema=public
       REDIS_URL: redis://redis:6379
       EXERCISE_PORT: 3011
+      AI_PIPELINE_URL: http://ai-pipeline:3004
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F22 #8: shared token authorizing the server-to-server call to ai-pipeline.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3011/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -260,15 +431,25 @@ services:
       context: ../../
       dockerfile: services/sleep-service/Dockerfile
     ports:
-      - "3012:3012"
+      # F34 #2: localhost-only (reached internally as http://sleep-service:3012).
+      - "127.0.0.1:3012:3012"
     environment:
-      SLEEP_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_sleep?schema=public
-      SLEEP_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_sleep?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_sleep?schema=public
+      SLEEP_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_sleep?schema=public
+      SLEEP_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_sleep?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_sleep?schema=public
       REDIS_URL: redis://redis:6379
       SLEEP_PORT: 3012
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F36 GDPR purge: verifies X-Internal-Token on DELETE /internal/user/:userId
+      # (erases sleep_sessions + health_samples). Fails closed if empty.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3012/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -281,17 +462,32 @@ services:
       context: ../../
       dockerfile: services/subscription-service/Dockerfile
     ports:
-      - "3010:3010"
+      # F34 #2: localhost-only (reached internally as http://subscription-service:3010).
+      - "127.0.0.1:3010:3010"
     environment:
-      SUB_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_subscriptions?schema=public
-      SUB_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_subscriptions?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_subscriptions?schema=public
+      SUB_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_subscriptions?schema=public
+      SUB_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_subscriptions?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_subscriptions?schema=public
       REDIS_URL: redis://redis:6379
       SUB_PORT: 3010
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F36 GDPR purge: verifies X-Internal-Token on DELETE /internal/user/:userId
+      # (erases subscriptions + iap_transactions billing PII). Fails closed if empty.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-sk_test_placeholder}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
+      APPLE_SHARED_SECRET: ${APPLE_SHARED_SECRET:-}
+      # HIGH #3: accept Apple/Google SANDBOX receipts. Default false — a sandbox
+      # (StoreKit-test / TestFlight) receipt must NEVER upgrade a real account in
+      # production. Set to true only in non-prod test environments.
+      IAP_ALLOW_SANDBOX: ${IAP_ALLOW_SANDBOX:-false}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3010/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -304,15 +500,27 @@ services:
       context: ../../
       dockerfile: services/community-service/Dockerfile
     ports:
-      - "3013:3013"
+      # F34 #2: localhost-only (reached internally as http://community-service:3013).
+      - "127.0.0.1:3013:3013"
     environment:
-      COMMUNITY_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_community?schema=public
-      COMMUNITY_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_community?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_community?schema=public
+      COMMUNITY_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_community?schema=public
+      COMMUNITY_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_community?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_community?schema=public
       REDIS_URL: redis://redis:6379
       COMMUNITY_PORT: 3013
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      USER_SERVICE_URL: http://user-service:3009
+      # GDPR purge: shared token the server-to-server-only
+      # /v1/community/internal/* routes verify (makeInternalAuthGuard). Same
+      # INTERNAL_SERVICE_TOKEN value shared across services.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3013/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -325,15 +533,25 @@ services:
       context: ../../
       dockerfile: services/chat-service/Dockerfile
     ports:
-      - "3014:3014"
+      # F34 #2: localhost-only (reached internally as http://chat-service:3014).
+      - "127.0.0.1:3014:3014"
     environment:
-      CHAT_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_chat?schema=public
-      CHAT_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_chat?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_chat?schema=public
+      CHAT_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_chat?schema=public
+      CHAT_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_chat?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_chat?schema=public
       REDIS_URL: redis://redis:6379
       CHAT_PORT: 3014
+      AI_PIPELINE_URL: http://ai-pipeline:3004
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F22 #8: shared token authorizing the server-to-server call to ai-pipeline.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3014/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -346,15 +564,25 @@ services:
       context: ../../
       dockerfile: services/state-service/Dockerfile
     ports:
-      - "3015:3015"
+      # F34 #2: localhost-only (reached internally as http://state-service:3015).
+      - "127.0.0.1:3015:3015"
     environment:
-      STATE_DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_state?schema=public
-      STATE_DIRECT_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_state?schema=public
-      DATABASE_URL: postgresql://postgres:postgrespassword@postgres:5432/nightfuel_state?schema=public
+      STATE_DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_state?schema=public
+      STATE_DIRECT_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_state?schema=public
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_state?schema=public
       REDIS_URL: redis://redis:6379
       STATE_PORT: 3015
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      # F36 GDPR purge: verifies X-Internal-Token on DELETE /internal/user/:userId
+      # (erases derived user_state). Fails closed if empty.
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3015/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -367,12 +595,22 @@ services:
       context: ../../
       dockerfile: services/decision-engine/Dockerfile
     ports:
-      - "3016:3016"
+      # F34 #2: localhost-only (reached internally as http://decision-engine:3016).
+      - "127.0.0.1:3016:3016"
     environment:
       REDIS_URL: redis://redis:6379
       DECISION_PORT: 3016
+      # decision-engine is Redis-only but the shared @nightfuel/config schema
+      # requires DATABASE_URL to be present; it is validated, not used.
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgrespassword}@postgres:5432/nightfuel_state?schema=public
       JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
       LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3016/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       redis:
         condition: service_healthy
@@ -381,17 +619,36 @@ services:
   # ── Web Client (Next.js 15) ────────────────────────────────────────────────
   web:
     build:
-      context: ../../clients/web
-      dockerfile: Dockerfile
+      context: ../../
+      dockerfile: clients/web/Dockerfile
     ports:
-      - "3000:3000"
+      # F34 #2: localhost-only. The web client is built to call the API via the
+      # nginx gateway (NEXT_PUBLIC_API_URL=http://nginx/api), so the host port is
+      # only for local browsing; front it with the host nginx like 8080.
+      - "127.0.0.1:3100:3000"
     environment:
       NODE_ENV: production
       NEXT_PUBLIC_API_URL: http://nginx/api
       NEXT_PUBLIC_WS_URL: ws://nginx
       NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-VAPID_PLACEHOLDER_PUBLIC}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.groq.com/openai/v1}
+      FOOD_VISION_MODEL: ${FOOD_VISION_MODEL:-meta-llama/llama-4-scout-17b-16e-instruct}
+      # ── Food-scan daily quota (lib/scanQuota.ts) ──────────────────────────
+      # The /api/food-vision + /api/food-search(barcode) routes enforce the shared
+      # per-user daily `scans` quota (@nightfuel/config). They need: the shared HS256
+      # secret to verify the caller's Bearer token → userId; the subscription-service
+      # to resolve free/pro tier; and Redis for the per-user/per-UTC-day counter.
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-prod}
+      SUBSCRIPTION_SERVICE_URL: http://subscription-service:3010
+      REDIS_URL: redis://redis:6379
+      # Optional per-plan overrides (defaults free:3 / pro:30 live in @nightfuel/config).
+      AI_FREE_SCANS_DAILY: ${AI_FREE_SCANS_DAILY:-3}
+      AI_PRO_SCANS_DAILY: ${AI_PRO_SCANS_DAILY:-30}
     depends_on:
       - nginx
+      - redis
+      - subscription-service
     restart: unless-stopped
 
 volumes:

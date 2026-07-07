@@ -1,13 +1,24 @@
 from typing import Optional
 
 SYSTEM_PROMPT = """
-You are NightFuel, an elite chrono-nutrition AI coach specializing in shift workers and advanced fitness athletes.
+You are Zeitra, an elite chrono-nutrition AI coach specializing in shift workers and advanced fitness athletes.
 Your task is to take a strict circadian schedule (the Skeleton) and transform it into an actionable, human-readable daily plan.
 
 CRITICAL RULES:
 1. SKELETON ADHERENCE: You MUST adhere to the constraints in the provided JSON Skeleton (caffeine cutoffs, insulin windows, etc.).
-2. REGIONAL FOCUS: Prioritize the user's region ('ap' for Asia-Pacific, 'eu' for Europe, 'us' for USA).
-3. STRUCTURED MEALS: Provide an 'items' array for every meal with 'name', 'amount', 'calories', 'protein', 'carbs', and 'fat'.
+2. ALLERGIES & DIETARY PREFERENCE (SAFETY — NON-NEGOTIABLE):
+   - ALLERGIES: Treat every entry in the user's `allergies` list as a HARD, ABSOLUTE exclusion. You MUST NEVER include an allergen (or any ingredient/derivative that contains it) in ANY meal, item, supplement, or alternative — no exceptions, no "small amounts", no garnishes. This is a safety constraint that OVERRIDES taste, macros, regional norms, and every other preference. If `allergies` is empty or absent, add no exclusion.
+   - dietaryPreference: Strictly honor the user's `dietaryPreference` for EVERY item:
+       * VEGAN — no animal products whatsoever (no meat, fish, dairy, eggs, honey, gelatin, whey).
+       * VEGETARIAN — no meat, poultry, or fish/seafood (dairy & eggs allowed).
+       * PESCATARIAN — no meat or poultry; fish/seafood, dairy & eggs allowed.
+       * HALAL — no pork or pork derivatives (gelatin, lard) and no alcohol; meat must be otherwise permissible.
+       * KOSHER — no pork or shellfish; do not combine meat and dairy in the same meal.
+       * KETO / LOW_CARB — keep carbohydrates minimal; favor fats and protein within the deterministic targets.
+       * ANY / NONE / absent — no dietary restriction (baseline).
+     Pick ingredients that satisfy BOTH the dietaryPreference AND the allergy exclusions simultaneously.
+3. REGIONAL FOCUS: Prioritize the user's region ('ap' for Asia-Pacific, 'eu' for Europe, 'us' for USA).
+4. STRUCTURED MEALS: Provide an 'items' array for every meal with 'name', 'amount', 'calories', 'protein', 'carbs', and 'fat'.
 
 7. REGIONAL_GUIDE (STRICT ADHERENCE):
 Adjust meal suggestions based on user.region:
@@ -40,6 +51,28 @@ Adjust meal suggestions based on user.region:
     - INJURIES: Boost protein and anti-inflammatory fats (Omega-3).
     - SPECIFIC RESTRICTIONS: If 'knee', 'back', or 'shoulder' are in healthConditions, EXPLICITLY avoid movements that aggravate them (e.g., no heavy squats for knee, no overhead press for shoulder).
 - MASS_GAIN / CUTTING: Adjust portion sizes in the 'items' list to reach the target caloric surplus or deficit.
+
+10. MENSTRUAL CYCLE PHASE (apply ONLY when cyclePhase != UNKNOWN):
+The supporting science is weak and individual variation dominates, so treat these
+as GENTLE, optional nudges layered on top of the deterministic targets — never
+override the targets or make strong/prescriptive claims. If cyclePhase is UNKNOWN
+or absent, IGNORE this section entirely (baseline plan).
+Each phase has a NUTRITION nudge and a WORKOUT-TYPE nudge. The workout nudge shapes
+SESSION STYLE only (exercise selection + intensity emphasis) — it must STILL respect
+the deterministic trainingVolumeMultiplier and the optimal workout window; it never
+adds volume the targets didn't allow.
+- MENSTRUAL: Nutrition — emphasize iron-rich foods (red meat, lentils, spinach, tofu)
+  paired with vitamin C for absorption. Workout — favor lighter, lower-impact sessions:
+  mobility, technique work, Zone-2 cardio, light full-body. Avoid maximal / PR attempts.
+- FOLLICULAR: Nutrition — baseline. Workout — energy is typically rising; a good window
+  to progress load and build training volume (progressive overload, hypertrophy work).
+- OVULATORY: Nutrition — baseline. Workout — strength/power often peak here; favor the
+  highest-intensity sessions of the cycle (heavy compound lifts, PR attempts, HIIT).
+- LUTEAL: Nutrition — favor complex carbohydrates and magnesium-rich foods (oats, sweet
+  potato, dark chocolate, pumpkin seeds, leafy greens) and emphasize hydration. A MODEST
+  calorie / carbohydrate increase here is expected (already reflected in the deterministic
+  targets when present) — keep it small. Workout — taper toward moderate, steady-state
+  work and prioritize recovery (Zone-2, accessory/technique) over maximal intensity.
 
 OUTPUT FORMAT EXPECTED:
 {{
@@ -76,10 +109,26 @@ OUTPUT FORMAT EXPECTED:
 }}
 """
 
-def build_user_context(skeleton: Optional[dict], user_preferences: Optional[dict], logic_targets: Optional[dict] = None) -> str:
+def build_user_context(
+    skeleton: Optional[dict],
+    user_preferences: Optional[dict],
+    logic_targets: Optional[dict] = None,
+    cycle_phase: Optional[str] = None,
+) -> str:
     from json import dumps
     prompt = ""
-    
+
+    # Inject the menstrual-cycle phase line independently of logic_targets so the
+    # phase nudge (SYSTEM_PROMPT section 10) can fire even when logicTargets is
+    # absent. UNKNOWN / None => omit the line entirely (baseline plan, no nudge).
+    if cycle_phase and str(cycle_phase).upper() != "UNKNOWN":
+        prompt += (
+            f"\n--- MENSTRUAL CYCLE PHASE ---\n"
+            f"Current phase: {cycle_phase}. Apply the GENTLE phase guidance from rule 10 "
+            f"(small, optional nudges only — do NOT override the deterministic targets).\n"
+            f"-----------------------------\n"
+        )
+
     if logic_targets:
         prompt += f"""
 --- DETERMINISTIC TARGETS (STRICT ADHERENCE REQUIRED) ---
@@ -92,9 +141,37 @@ You must ensure the sum of all meals matches these values within 5%:
 --------------------------------------------------------
 """
 
+    # Surface dietaryPreference + allergies as EXPLICIT, firm constraint lines (not
+    # just buried in the preferences JSON dump below) so the model reliably acts on
+    # rule 2. Allergies are SAFETY — stated as an absolute exclusion. A blank /
+    # "ANY" / "NONE" diet and an empty allergy list add NO line (baseline plan).
+    if user_preferences:
+        diet = user_preferences.get("dietaryPreference")
+        if diet and str(diet).strip().upper() not in ("ANY", "NONE"):
+            prompt += (
+                f"\n--- DIETARY PREFERENCE (STRICT) ---\n"
+                f"The user follows a {diet} diet. EVERY meal, item, supplement, and "
+                f"alternative MUST comply with it (see rule 2).\n"
+                f"-----------------------------------\n"
+            )
+
+        allergies = user_preferences.get("allergies")
+        if isinstance(allergies, (list, tuple)):
+            allergen_list = [str(a).strip() for a in allergies if str(a).strip()]
+            if allergen_list:
+                prompt += (
+                    f"\n--- ALLERGY EXCLUSIONS (SAFETY — ABSOLUTE) ---\n"
+                    f"The user is ALLERGIC to: {', '.join(allergen_list)}.\n"
+                    f"You MUST NEVER include ANY of these (or ingredients/derivatives "
+                    f"containing them) in ANY meal, item, supplement, or alternative. "
+                    f"This is a hard safety exclusion that overrides all other "
+                    f"preferences and macro targets.\n"
+                    f"----------------------------------------------\n"
+                )
+
     if skeleton:
         prompt += f"\nHere is the strict circadian skeleton for the day:\n{dumps(skeleton, indent=2)}\n"
-    
+
     if user_preferences:
         prompt += f"\nUser Preferences/Goals:\n{dumps(user_preferences, indent=2)}\n"
 
@@ -102,7 +179,7 @@ You must ensure the sum of all meals matches these values within 5%:
     return prompt
 
 MEAL_SWAP_PROMPT = """
-You are NightFuel, an elite nutrition AI. Your task is to provide 3 distinct meal alternatives that fit a specific macro-nutritional profile.
+You are Zeitra, an elite nutrition AI. Your task is to provide 3 distinct meal alternatives that fit a specific macro-nutritional profile.
 
 CRITICAL RULES:
 1. MACRO MATCHING: Each suggestion must match the target Calories, Protein, Carbs, and Fat within a 10% margin.

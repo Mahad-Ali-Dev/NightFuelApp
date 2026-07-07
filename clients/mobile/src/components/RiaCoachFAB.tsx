@@ -1,16 +1,24 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { TouchableOpacity, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '@/theme/colors';
+import { useTheme } from '@/theme';
 
 interface RiaCoachFABProps {
     onPress: () => void;
 }
 
-export const RiaCoachFAB: React.FC<RiaCoachFABProps> = ({ onPress }) => {
+const RiaCoachFABComponent: React.FC<RiaCoachFABProps> = ({ onPress }) => {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
-        <TouchableOpacity style={styles.container} onPress={onPress} activeOpacity={0.8}>
+        <TouchableOpacity
+            style={styles.container}
+            onPress={onPress}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Open Coach Ria"
+        >
             <LinearGradient
                 colors={colors.gradients.purple}
                 style={styles.gradient}
@@ -24,7 +32,13 @@ export const RiaCoachFAB: React.FC<RiaCoachFABProps> = ({ onPress }) => {
     );
 };
 
-const styles = StyleSheet.create({
+/**
+ * Memoized: the only prop is a stable `onPress`. This floating button is
+ * mounted on screens that re-render often, so memo avoids needless re-renders.
+ */
+export const RiaCoachFAB = React.memo(RiaCoachFABComponent);
+
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
     container: {
         position: 'absolute',
         right: 20,
@@ -32,17 +46,22 @@ const styles = StyleSheet.create({
         width: 56,
         height: 56,
         borderRadius: 28,
-        elevation: 8,
+        // Brighter, larger purple glow halo so the FAB reads clearly above the
+        // dark-glass Aurora surfaces (visual-only — API/behaviour unchanged).
+        elevation: 12,
         shadowColor: colors.accent.purple,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.55,
+        shadowRadius: 14,
     },
     gradient: {
         flex: 1,
         borderRadius: 28,
         alignItems: 'center',
         justifyContent: 'center',
+        // Subtle bright inner ring lifts the disc off busy backgrounds.
+        borderWidth: 1,
+        borderColor: colors.accent.purpleLight,
     },
     badge: {
         position: 'absolute',

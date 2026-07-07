@@ -178,7 +178,7 @@ function CoachChatInner() {
                                     <div className={cn(
                                         'px-4 py-2.5 rounded-2xl text-sm leading-relaxed',
                                         isUser
-                                            ? 'bg-brand-500 text-white rounded-tr-sm shadow-sm shadow-brand-500/20'
+                                            ? 'bg-brand-500 text-background rounded-tr-sm shadow-sm shadow-brand-500/20'
                                             : 'bg-white/[0.06] border border-white/[0.04] text-neutral-100 rounded-tl-sm',
                                     )}>
                                         {msg.text}
@@ -222,7 +222,7 @@ function CoachChatInner() {
                             disabled={!input.trim()}
                             className={cn(
                                 'rounded-2xl h-[46px] w-[46px] shrink-0 p-0 flex items-center justify-center transition-all',
-                                input.trim() ? 'bg-brand-500 hover:bg-brand-600 text-white' : 'bg-white/5 text-neutral-500',
+                                input.trim() ? 'bg-brand-500 hover:bg-brand-600 text-background' : 'bg-white/5 text-neutral-500',
                             )}
                         >
                             <Send size={18} className={cn('ml-0.5', input.trim() && 'text-white')} />

@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
@@ -108,7 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                     transition={{ duration: 0.2 }}
                                     className="font-black text-white text-lg tracking-tight overflow-hidden whitespace-nowrap"
                                 >
-                                    NightFuel
+                                    Zeitra
                                 </motion.span>
                             )}
                         </AnimatePresence>
@@ -126,7 +126,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                             'flex items-center rounded-xl transition-all duration-200 group relative overflow-hidden',
                                             collapsed ? 'justify-center h-11 w-11 mx-auto' : 'gap-3 px-3 py-2.5',
                                             active
-                                                ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/25'
+                                                ? 'bg-brand-500 text-background shadow-lg shadow-brand-500/25'
                                                 : 'text-neutral-500 hover:text-white hover:bg-white/[0.06]'
                                         )}
                                         title={collapsed ? item.label : undefined}
@@ -191,7 +191,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                     'flex items-center rounded-xl transition-all group',
                                     collapsed ? 'justify-center h-11 w-11 mx-auto' : 'gap-3 px-3 py-2.5',
                                     pathname.startsWith('/coach')
-                                        ? 'bg-brand-500 text-white'
+                                        ? 'bg-brand-500 text-background'
                                         : 'text-neutral-500 hover:text-white hover:bg-white/[0.06]'
                                 )}
                                 title={collapsed ? 'Coach Hub' : undefined}
@@ -261,7 +261,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         <div className="w-7 h-7 bg-brand-500 rounded-lg flex items-center justify-center">
                             <Zap size={13} className="text-white" />
                         </div>
-                        <span className="font-black text-white text-base">NightFuel</span>
+                        <span className="font-black text-white text-base">Zeitra</span>
                     </div>
                     <button
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -300,7 +300,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                                 className={cn(
                                                     'flex items-center gap-3 px-3 py-3 rounded-xl transition-all text-sm font-medium',
                                                     active
-                                                        ? 'bg-brand-500 text-white'
+                                                        ? 'bg-brand-500 text-background'
                                                         : 'text-neutral-400 hover:text-white hover:bg-white/[0.06]'
                                                 )}
                                             >

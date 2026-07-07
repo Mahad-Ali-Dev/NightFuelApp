@@ -16,6 +16,10 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { enforceScanQuota } from '@/lib/scanQuota';
+
+// This gateway proxies Open Food Facts; the barcode branch runs server-side.
+export const runtime = 'nodejs';
 
 // ─── Nutrition Type ───────────────────────────────────────────────────────────
 
@@ -146,23 +150,41 @@ export async function GET(req: NextRequest) {
     ].join(',');
 
     const headers = {
-        'User-Agent': 'NightFuel-App/1.0 (https://nightfuel.app; contact@nightfuel.app)',
+        'User-Agent': 'Zeitra-App/1.0 (https://zeitra.app; contact@zeitra.app)',
     };
 
     try {
         // ── Barcode Lookup ────────────────────────────────────────────────────
+        // A barcode lookup is a SCAN — it counts against the shared per-user daily
+        // `scans` quota (same policy as the AI photo scan in /api/food-vision).
+        // The plain text search below (the food-library type-ahead) is NOT a scan
+        // and is intentionally left ungated. Over cap → 429 AI_QUOTA_EXCEEDED;
+        // missing/invalid JWT → 401. A scan is consumed (quota.commit) ONLY on a
+        // successful product match — a not-found/insufficient-data lookup does not
+        // burn quota.
         if (barcode) {
+            const quota = await enforceScanQuota(req);
+            if (!quota.ok) return quota.response;
+
             const url = `https://world.openfoodfacts.org/api/v2/product/${barcode}?fields=${fields}`;
             const res = await fetch(url, { headers, next: { revalidate: 86400 } });
-            if (!res.ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+            if (!res.ok) return NextResponse.json({ error: 'Not found' }, { status: 404, headers: quota.headers });
             const data = await res.json();
             if (data.status !== 1 || !data.product) {
-                return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+                return NextResponse.json({ error: 'Product not found' }, { status: 404, headers: quota.headers });
             }
             const food = parseProduct(data.product);
-            if (!food) return NextResponse.json({ error: 'Insufficient data' }, { status: 404 });
+            if (!food) return NextResponse.json({ error: 'Insufficient data' }, { status: 404, headers: quota.headers });
+            // Real product matched — consume one scan (best-effort) and echo the
+            // remaining balance alongside the cache header.
+            await quota.commit();
+            const remainingAfter = Math.max(0, quota.remaining - 1);
             return NextResponse.json({ food }, {
-                headers: { 'Cache-Control': 'public, s-maxage=86400' },
+                headers: {
+                    ...quota.headers,
+                    'X-Scan-Remaining': String(remainingAfter),
+                    'Cache-Control': 'no-store',
+                },
             });
         }
 

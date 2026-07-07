@@ -1,21 +1,21 @@
-# NightFuel Privacy Policy
+# Zeitra Privacy Policy
 
 **Last updated:** 2026-05-04
 **Version:** 1.0
 
-> **⚠️ Legal review required before launch.** This is a working draft tailored to NightFuel's actual data practices. Have an attorney review before posting publicly. The structure follows GDPR + CCPA + Apple App Store Connect privacy nutrition label requirements.
+> **⚠️ Legal review required before launch.** This is a working draft tailored to Zeitra's actual data practices. Have an attorney review before posting publicly. The structure follows GDPR + CCPA + Apple App Store Connect privacy nutrition label requirements.
 
 ---
 
 ## 1. Who we are
 
-NightFuel is operated by **Tase LLC** ("NightFuel," "we," "us," "our"). This Privacy Policy explains how we collect, use, share, and protect your personal information when you use the NightFuel mobile or web application (the "Service").
+Zeitra is operated by **Tase LLC** ("Zeitra," "we," "us," "our"). This Privacy Policy explains how we collect, use, share, and protect your personal information when you use the Zeitra mobile or web application (the "Service").
 
-If you have questions, contact: **privacy@nightfuel.app**.
+If you have questions, contact: **privacy@zeitra.app**.
 
 ## 2. What we collect
 
-We collect only what's needed to make NightFuel work for you.
+We collect only what's needed to make Zeitra work for you.
 
 ### 2.1 Account information
 
@@ -77,7 +77,7 @@ We use your information to:
 - Improve app reliability (crash reports, performance monitoring)
 - Comply with legal obligations
 
-We do **not** sell your personal information to third parties. We do not show targeted advertising in NightFuel.
+We do **not** sell your personal information to third parties. We do not show targeted advertising in Zeitra.
 
 ## 4. Who we share data with
 
@@ -108,17 +108,22 @@ Depending on where you live, you may have the right to:
 - **Withdraw consent** — at any time, where processing is based on consent
 - **Lodge a complaint** — with your local data protection authority
 
-To exercise any of these rights, email **privacy@nightfuel.app** or use the in-app **Settings → Privacy → Delete my account** flow.
+To exercise any of these rights, email **privacy@zeitra.app** or use the in-app **Settings → Privacy → Delete my account** flow.
 
 We will respond within 30 days (GDPR) or 45 days (CCPA), whichever applies to you.
 
 ## 6. Retention
 
+Our default stance is **storage-limitation by purpose**: we keep your data only while it serves you, and we delete it promptly when you ask. Unless a retention window is configured (below), your logged history is **kept until you delete it** (or close your account).
+
 - **Active accounts:** while your account is open
-- **Meal/workout/sleep logs:** indefinitely while account active; FREE tier history view limited to 30 days but data is retained
-- **AI prompts:** 90 days for abuse review, then auto-deleted
+- **Meal/workout/sleep logs and body measurements:** retained indefinitely while your account is active so your history and trends stay available; FREE tier history *view* is limited to 30 days but the data is retained. These are **never** auto-deleted on a timer — only when you delete the item, delete your account, or request erasure.
+- **Wearable / health-app samples** (raw readings imported from Apple Health / Google Health Connect): retained while your account is active. Because these are a raw archive (your derived sleep history is stored separately), we can apply an optional **time-based retention window** to age out raw samples older than a configured number of days; this is **off unless explicitly enabled** by the operator.
+- **AI prompts / interaction telemetry:** AI prompt text is retained up to 90 days for abuse review, then auto-deleted. AI usage/cost telemetry (token counts, no message content) is operational data we may age out on a configured retention window.
 - **Crash reports:** 90 days
 - **Deleted accounts:** purged within 30 days from active databases. Backups are rotated within 90 days.
+
+> **Configurable retention (storage limitation, GDPR Art. 5(1)(e)).** Zeitra implements an optional, configurable time-based purge for **archival** data (raw health samples and AI usage telemetry). It is **disabled by default** — when no retention window is set, the data is **kept until you delete it or your account**. When the operator configures a window (N days), data of that type older than N days is automatically and permanently deleted. **User-valuable history** (sleep sessions, body measurements, period/cycle logs) is **excluded** from any automatic timer and is only ever removed at your request (account deletion / right to erasure) — see §5.
 
 ## 7. Security
 
@@ -133,7 +138,7 @@ No system is perfectly secure. If we suffer a breach affecting your data, we wil
 
 ## 8. Children
 
-NightFuel is intended for users 17 and older. We do not knowingly collect data from children under 13. If you believe a child has signed up, contact us immediately and we will delete the account.
+Zeitra is intended for users 17 and older. We do not knowingly collect data from children under 13. If you believe a child has signed up, contact us immediately and we will delete the account.
 
 ## 9. International transfers
 
@@ -145,6 +150,6 @@ We will post any updates here and notify users in the app for material changes. 
 
 ## 11. Contact
 
-- **Privacy questions:** privacy@nightfuel.app
-- **Data subject requests:** privacy@nightfuel.app
+- **Privacy questions:** privacy@zeitra.app
+- **Data subject requests:** privacy@zeitra.app
 - **Mail:** Tase LLC, [Address — fill in before publishing]

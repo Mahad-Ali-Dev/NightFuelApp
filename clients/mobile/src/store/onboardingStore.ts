@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+import * as SecureStore from 'expo-secure-store';
 import {
     ShiftType,
     DietaryPreference,
@@ -30,6 +30,17 @@ export interface OnboardingData {
     lifestyleType: LifestyleType | null;
     healthConditions: HealthCondition[] | null;
     aiOptimizationLevel: 'low' | 'medium' | 'high';
+    // ── Menstrual-cycle tracking (OPT-IN, FEMALE-only step; F25 backend) ──────
+    // Track-first, suggestion-second: every field below is meaningful only when
+    // cycleTrackingEnabled is true. The step is fully skippable — a user can
+    // continue with tracking off (the default). Data minimization: ONLY these
+    // fields are collected (no sexual-activity / pregnancy-intent data).
+    cycleTrackingEnabled: boolean;
+    lastPeriodStartDate: string | null; // YYYY-MM-DD, same format as dateOfBirth
+    avgCycleLengthDays: number | null;  // backend range 21-45, default 28
+    avgPeriodLengthDays: number | null; // backend range 1-10, default 5
+    cycleRegularity: 'REGULAR' | 'IRREGULAR' | 'UNKNOWN' | null;
+    hormonalContraception: boolean;
 }
 
 interface OnboardingState {
@@ -37,6 +48,22 @@ interface OnboardingState {
     updateData: (partial: Partial<OnboardingData>) => void;
     reset: () => void;
 }
+
+/**
+ * SecureStore-backed persistence adapter.
+ *
+ * The onboarding draft holds health PII (weightKg / heightCm / dateOfBirth /
+ * biologicalSex / healthConditions). Persisting it to plaintext AsyncStorage
+ * leaves that PII readable on a compromised / rooted device, so we keep it in
+ * the OS keychain/keystore instead. The draft is a handful of scalars plus a
+ * short array — comfortably under SecureStore's size limit. On a successful
+ * profile submit `reset()` clears the value (see profile-summary.tsx).
+ */
+const secureStorage: StateStorage = {
+    getItem: (name) => SecureStore.getItemAsync(name),
+    setItem: (name, value) => SecureStore.setItemAsync(name, value),
+    removeItem: (name) => SecureStore.deleteItemAsync(name),
+};
 
 const initialState: OnboardingData = {
     shiftType: null,
@@ -56,6 +83,14 @@ const initialState: OnboardingData = {
     lifestyleType: null,
     healthConditions: [],
     aiOptimizationLevel: 'medium',
+    // Cycle tracking defaults OFF (opt-in). The remaining fields stay null until
+    // the user enables tracking and fills them in on cycle-basics.tsx.
+    cycleTrackingEnabled: false,
+    lastPeriodStartDate: null,
+    avgCycleLengthDays: null,
+    avgPeriodLengthDays: null,
+    cycleRegularity: null,
+    hormonalContraception: false,
 };
 
 export const useOnboardingStore = create<OnboardingState>()(
@@ -67,8 +102,9 @@ export const useOnboardingStore = create<OnboardingState>()(
             reset: () => set({ data: initialState }),
         }),
         {
+            // SecureStore key constraint: alphanumerics, '.', '-', '_' only.
             name: 'nf-onboarding-storage',
-            storage: createJSONStorage(() => AsyncStorage),
+            storage: createJSONStorage(() => secureStorage),
         }
     )
 );

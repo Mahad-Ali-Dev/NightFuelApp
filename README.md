@@ -1,4 +1,4 @@
-# 🌙 NightFuel
+# 🌙 Zeitra
 
 > **Chrono-Nutrition & Fitness Platform for Shift Workers**
 > Production-grade microservices monorepo — TypeScript + Python + Next.js 15
@@ -11,9 +11,9 @@
 
 ---
 
-## What is NightFuel?
+## What is Zeitra?
 
-NightFuel is a **chrono-nutrition and fitness platform** built specifically for people who work nights, rotating shifts, or irregular hours. Standard fitness apps assume a 9-to-5 lifestyle — NightFuel doesn't.
+Zeitra is a **chrono-nutrition and fitness platform** built specifically for people who work nights, rotating shifts, or irregular hours. Standard fitness apps assume a 9-to-5 lifestyle — Zeitra doesn't.
 
 It syncs meal timing, workout scheduling, caffeine guidance, and sleep optimisation to each user's **unique circadian rhythm**.
 
@@ -24,7 +24,7 @@ It syncs meal timing, workout scheduling, caffeine guidance, and sleep optimisat
 | 🕐 Reverse meal-timing | Meals scheduled around your sleep window, not the clock |
 | 🧠 Circadian-aware AI | Python deterministic engine + Claude (Sonnet/Haiku) for personalised plans |
 | 🌙 Night-shift first | Caffeine windows, fatigue tracking, sleep-cycle management |
-| 🥗 Dual food database | Open Food Facts (3M+ foods, online) + NightFuel Library (760 whole foods, offline) |
+| 🥗 Dual food database | Open Food Facts (3M+ foods, online) + Zeitra Library (760 whole foods, offline) |
 | 🏋️ Smart workouts | Intensity auto-adjusted by fatigue, shift hours, and sleep quality |
 | 🤝 Coach marketplace | Certified coaches can manage clients, create plans, and chat |
 | 🕌 Ramadan Mode | Active fasting schedule adjustments tailored for Suhoor and Iftar |
@@ -243,7 +243,7 @@ The meal logger at `/dashboard/meals` has a toggle in the top-right:
 [ 🌐 Online ]  [ 🥗 Library ]
 ```
 
-| | 🌐 Online (Open Food Facts) | 🥗 Library (NightFuel) |
+| | 🌐 Online (Open Food Facts) | 🥗 Library (Zeitra) |
 |---|---|---|
 | **Foods** | 3M+ branded & packaged foods | 760 whole/natural foods |
 | **Data** | Full micronutrients + barcode | Macros, fiber, sugar, sodium |
@@ -296,10 +296,91 @@ npx prisma migrate deploy
 
 ## Project Documentation
 
-See [`docs/NightFuel-Project-Doc.md`](docs/NightFuel-Project-Doc.md) for the full project design document including feature specs, data models, AI architecture, and deployment guide.
+See [`docs/Zeitra-Project-Doc.md`](docs/Zeitra-Project-Doc.md) for the full project design document including feature specs, data models, AI architecture, and deployment guide.
+
+---
+
+## Verifying the build
+
+Zeitra ships a single source of truth for "is this tree safe to merge?":
+the root `gate` script. Underneath, three smaller scripts give you finer-grained
+control when you're iterating on one slice of the stack and don't want to pay
+for the whole pipeline.
+
+Run any of these from the repo root.
+
+### `npm run test:backend`
+
+Runs every backend service's own `test` script in turn (each service still
+owns its own jest / vitest config) and prints exactly one line per service:
+
+```
+PASS auth-service: 2/2 suites passed
+PASS chat-service: 3/3 suites passed
+PASS user-service: 4/4 suites passed
+...
+```
+
+Per-service jest output is suppressed on success and dumped to stderr on
+failure, so a green run stays scannable and a red run gives you the full
+log to diagnose without re-running anything. Exits 0 only if every service
+discovered (any `services/<svc>/` with a `__tests__` folder and a `test`
+script in its `package.json`) is green.
+
+Use this when you've touched backend code and want fast feedback before
+running the full gate.
+
+### `npm run test:mobile`
+
+Runs the React Native client's jest suite (`clients/mobile`) in CI mode —
+no interactive watcher, no snapshot prompting, deterministic output. Use
+this when you've touched mobile-only code.
+
+### `npm run test:all`
+
+Backend tests, then mobile tests. Skips the lint guards and the typecheck —
+use this when you've already run the cheap checks and just want the test
+totality.
+
+### `npm run gate`
+
+The full gate. Runs the following in order, and exits 1 at the first
+failure with the failing step's name:
+
+1. `node scripts/check-no-inline-401.js` — service code must use the
+   canonical `sendUnauthorized` helper instead of inlining a 401 body.
+2. `node scripts/check-demo-maps-in-sync.js` — optional demo-data sanity
+   check (skipped automatically if the file does not exist).
+3. `npm run check-types --silent` — turbo typecheck across every package
+   and service.
+4. `node scripts/run-backend-tests.js` — equivalent to `test:backend` above.
+5. `npm test --workspace=@nightfuel/mobile -- --ci --silent` — equivalent
+   to `test:mobile` above.
+
+A green run looks like:
+
+```
+----- gate step: check-no-inline-401 -----
+OK
+----- gate step: check-no-inline-401 PASS -----
+...
+gate PASS — every step green
+```
+
+A red run looks like:
+
+```
+----- gate step: test:backend -----
+FAIL meal-service: 1 suite(s) failing (3/4 passed)
+...
+gate FAILED at step: test:backend
+```
+
+Run `npm run gate` before pushing any branch you intend to merge. CI runs
+the same script — if it's green locally, it's green in CI.
 
 ---
 
 ## License
 
-MIT © NightFuel
+MIT © Zeitra

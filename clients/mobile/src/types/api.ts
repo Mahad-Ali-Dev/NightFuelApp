@@ -93,7 +93,10 @@ export interface Notification {
     type: 'meal' | 'caffeine' | 'sleep' | 'workout' | 'coach' | 'system';
     title: string;
     body: string;
-    read: boolean;
+    // Matches the notification-service Prisma field (`is_read` -> `isRead`) and
+    // the canonical client type in src/api/notifications.ts. Was `read`, which
+    // never matched the API payload.
+    isRead: boolean;
     actionUrl?: string;
     createdAt: string;
 }

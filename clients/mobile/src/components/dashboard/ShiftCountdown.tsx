@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
 interface ShiftCountdownProps {
     shiftEndTime: Date | string | null;
@@ -38,6 +37,6 @@ const styles = StyleSheet.create({
     container: { marginTop: 12 },
     label: { color: '#FFFFFF', fontSize: 36, fontWeight: '800', lineHeight: 42 },
     countdown: { color: '#FFFFFF', fontSize: 36, fontWeight: '800', lineHeight: 42 },
-    hours: { color: '#FF6B35' },
+    hours: { color: '#A8CC3C' },
     mins: { color: '#A78BFA' },
 });

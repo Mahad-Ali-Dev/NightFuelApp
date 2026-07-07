@@ -1,5 +1,7 @@
-// Navigation is handled by the `href` prop in (tabs)/_layout.tsx.
-// This component is never rendered in normal app flow.
+import { Redirect } from 'expo-router';
+
+// Hidden tab. A deep link to /schedule would otherwise render a blank screen,
+// so redirect to the real shifts area.
 export default function ScheduleTab() {
-    return null;
+    return <Redirect href="/(shifts)" />;
 }

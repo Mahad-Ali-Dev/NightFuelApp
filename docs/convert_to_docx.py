@@ -1,22 +1,21 @@
 """
-NightFuel - Markdown to DOCX Converter (Beautiful Edition)
+Zeitra - Markdown to DOCX Converter (Beautiful Edition)
 Usage: python docs/convert_to_docx.py
 """
 
 import re
 import os
 from docx import Document
-from docx.shared import Pt, RGBColor, Inches, Cm, Emu
+from docx.shared import Pt, RGBColor, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-from copy import deepcopy
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
-INPUT_MD    = os.path.join(SCRIPT_DIR, "NightFuel-Project-Doc.md")
-OUTPUT_DOCX = os.path.join(SCRIPT_DIR, "NightFuel-Project-Doc.docx")
+INPUT_MD    = os.path.join(SCRIPT_DIR, "Zeitra-Project-Doc.md")
+OUTPUT_DOCX = os.path.join(SCRIPT_DIR, "Zeitra-Project-Doc.docx")
 
 # ── Palette ────────────────────────────────────────────────────────────────────
 C_ORANGE      = "F97316"   # brand primary
@@ -246,12 +245,12 @@ def add_cover(doc: Document):
     clean_spacer(doc, 28)
     clean_spacer(doc, 28)
 
-    # ── "NightFuel" title ─────────────────────────────────────────────────────
+    # ── "Zeitra" title ─────────────────────────────────────────────────────
     p_title = doc.add_paragraph(style="Normal")
     p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_title.paragraph_format.space_before = Pt(0)
     p_title.paragraph_format.space_after  = Pt(0)
-    r = p_title.add_run("NightFuel")
+    r = p_title.add_run("Zeitra")
     r.font.name  = "Calibri"
     r.font.size  = Pt(52)
     r.font.bold  = True
@@ -331,7 +330,7 @@ def add_cover(doc: Document):
     bot.paragraph_format.space_before = Pt(0)
     bot.paragraph_format.space_after  = Pt(0)
     shade_para(bot, C_NAVY)
-    br = bot.add_run("   NightFuel  |  Project Design Document v2.0  |  Confidential")
+    br = bot.add_run("   Zeitra  |  Project Design Document v2.0  |  Confidential")
     br.font.name  = "Calibri"
     br.font.size  = Pt(9)
     br.font.color.rgb = rgb(C_LIGHT)
@@ -352,7 +351,7 @@ def setup_header_footer(doc: Document):
         p = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
         p.clear()
         p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        run = p.add_run("NightFuel  |  Project Design Document v2.0")
+        run = p.add_run("Zeitra  |  Project Design Document v2.0")
         run.font.name  = "Calibri"
         run.font.size  = Pt(8.5)
         run.font.color.rgb = rgb(C_LIGHT)
@@ -548,7 +547,8 @@ def convert(md_path: str, docx_path: str):
     add_cover(doc)
     setup_header_footer(doc)
 
-    lines = open(md_path, encoding="utf-8").readlines()
+    with open(md_path, encoding="utf-8") as f:
+        lines = f.readlines()
 
     in_code    = False
     code_buf   = []

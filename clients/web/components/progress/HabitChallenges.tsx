@@ -93,7 +93,7 @@ export function HabitChallenges() {
                                                     className="flex flex-col items-center gap-1.5 shrink-0 group transition-transform hover:scale-105"
                                                     title={`Day ${idx + 1}`}
                                                 >
-                                                    <div className={`h-10 w-10 rounded-full flex items-center justify-center border-2 transition-all ${isDone ? `bg-brand-500 border-brand-400 text-white shadow-[0_0_10px_hsl(var(--brand)/0.4)]` :
+                                                    <div className={`h-10 w-10 rounded-full flex items-center justify-center border-2 transition-all ${isDone ? `bg-brand-500 border-brand-400 text-background shadow-[0_0_10px_hsl(var(--brand)/0.4)]` :
                                                         `border-white/10 bg-white/5 text-neutral-600 group-hover:border-white/20`
                                                         }`}>
                                                         {isDone ? <CheckCircle2 className="h-5 w-5" /> : <span className="font-mono text-xs font-bold">{idx + 1}</span>}

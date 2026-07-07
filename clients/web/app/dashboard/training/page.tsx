@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence, useMotionValue, useTransform, animate } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     Dumbbell, Lock, Check, ChevronLeft, ChevronRight, Play,
-    Calendar, Trophy, Flame, Target, Clock, Zap,
-    ArrowRight, RotateCcw, Layers, Sparkles, Shield
+    Calendar, Trophy, Flame, Target, Zap,
+    RotateCcw, Layers, Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { startWorkoutSession } from '@/lib/api';
@@ -847,7 +847,7 @@ function DayList({
                                 {/* Day Number / Status Icon */}
                                 <div className={cn(
                                     'flex items-center justify-center w-10 h-10 rounded-xl shrink-0 text-sm font-black transition-all',
-                                    isCurrent && 'bg-brand-500 text-white shadow-lg shadow-brand-500/30',
+                                    isCurrent && 'bg-brand-500 text-background shadow-lg shadow-brand-500/30',
                                     isCompleted && 'bg-emerald-500/20 text-emerald-400',
                                     isLocked && 'bg-white/[0.04] text-neutral-600',
                                     isPast && 'bg-white/[0.04] text-neutral-600',
@@ -898,7 +898,7 @@ function DayList({
                                             whileHover={{ scale: 1.05 }}
                                             whileTap={{ scale: 0.95 }}
                                             onClick={() => onStartDay(day.day)}
-                                            className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-brand-500/25 transition-colors"
+                                            className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-background text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-brand-500/25 transition-colors"
                                         >
                                             <Play size={14} className="fill-white" />
                                             Start

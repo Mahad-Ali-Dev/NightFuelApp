@@ -10,6 +10,7 @@ import {
 } from '@nightfuel/types';
 import { createLogger } from '@nightfuel/config';
 import { AdaptiveGoalOptimizer } from './utils/optimizer';
+import CircuitBreaker from 'opossum';
 
 const logger = createLogger('progress-service');
 
@@ -21,11 +22,40 @@ const logger = createLogger('progress-service');
 const ADHERENCE_CALORIE_THRESHOLD = 0.8;
 
 export class ProgressService {
+    /**
+     * HIGH #3: circuit breaker guarding the weekly-audit AI call.
+     *
+     * generateWeeklyAudit() is invoked synchronously from the user-facing
+     * POST /v1/progress/weekly-audit and hits ai-pipeline's *heaviest* (slow
+     * quality-model) LLM endpoint. Previously this was a bare fetch() with no
+     * timeout/breaker/retry, so an ai-pipeline brownout pinned Fastify workers
+     * until the socket eventually died. We wrap the call in opossum — mirroring
+     * plan-service's breaker (30s timeout, 50% error threshold, 30s reset) — so
+     * a provider brownout sheds load fast (open breaker => instant fallback)
+     * instead of hanging. The per-call AbortSignal.timeout inside
+     * makeWeeklyAuditRequest is the inner bound; the breaker timeout is the
+     * outer one.
+     */
+    private aiBreaker: CircuitBreaker;
+
     constructor(
         private prisma: PrismaClient,
         private eventBus: EventBus,
-        private config: { USER_SERVICE_URL: string, AI_PIPELINE_URL?: string }
-    ) { }
+        private config: { USER_SERVICE_URL: string, AI_PIPELINE_URL?: string, INTERNAL_SERVICE_TOKEN?: string }
+    ) {
+        const breakerOptions = {
+            timeout: 30000,           // 30s — the slow quality-model audit call
+            errorThresholdPercentage: 50,
+            resetTimeout: 30000
+        };
+        this.aiBreaker = new CircuitBreaker(this.makeWeeklyAuditRequest.bind(this), breakerOptions);
+        // When the breaker is open (or a call times out) we fail fast: throwing
+        // here surfaces to generateWeeklyAudit's catch, which logs and rethrows,
+        // and the route returns the existing friendly 500 instead of hanging.
+        this.aiBreaker.fallback(() => {
+            throw new Error('AI Pipeline is currently unavailable (Circuit Breaker Tripped)');
+        });
+    }
 
     // ---------------------------------------------------------------------------
     // Internal helpers
@@ -366,7 +396,9 @@ export class ProgressService {
     async getProgressHistory(userId: string, days: number): Promise<DailyProgress[]> {
         const clampedDays = Math.min(Math.max(days, 1), 90);
         const since = new Date();
-        since.setUTCDate(since.getUTCDate() - clampedDays);
+        // Inclusive N-day window: subtract (N-1) so the window spans exactly N
+        // calendar days (today + the previous N-1), not N+1.
+        since.setUTCDate(since.getUTCDate() - (clampedDays - 1));
         const sinceDate = this.toUtcDateOnly(since);
 
         return this.prisma.dailyProgress.findMany({
@@ -382,6 +414,16 @@ export class ProgressService {
      * GET /v1/progress/streak
      * Returns current and longest streak for the user.
      * If no streak record exists, returns zeroed defaults.
+     *
+     * The stored currentStreak only advances on a positive adherence event
+     * (see updateStreak), so it can go stale after a break: a user who was on a
+     * 5-day streak but logged nothing for a week still has currentStreak=5 in the
+     * row. We recompute the *live* current streak at read time by anchoring on
+     * lastAdherentDate (UTC date-only): the streak is only "alive" if the last
+     * adherent day was today or yesterday — otherwise the run is broken and the
+     * current streak is 0. This mirrors the on-device anchor logic in
+     * clients/mobile/src/lib/streaks.ts (anchor = today or yesterday, else 0).
+     * longestStreak is a historical high-water mark and is never reset here.
      */
     async getStreak(userId: string): Promise<{
         currentStreak: number;
@@ -394,8 +436,20 @@ export class ProgressService {
             return { currentStreak: 0, longestStreak: 0, lastAdherentDate: null };
         }
 
+        const todayUtc = this.toUtcDateOnly(new Date());
+        const yesterdayUtc = new Date(todayUtc.getTime() - 24 * 60 * 60 * 1000);
+        const lastDate = streak.lastAdherentDate
+            ? this.toUtcDateOnly(streak.lastAdherentDate)
+            : null;
+
+        // Anchor = today or yesterday, else the run is broken → currentStreak 0.
+        const isAlive =
+            lastDate !== null &&
+            (lastDate.getTime() === todayUtc.getTime() ||
+                lastDate.getTime() === yesterdayUtc.getTime());
+
         return {
-            currentStreak: streak.currentStreak,
+            currentStreak: isAlive ? streak.currentStreak : 0,
             longestStreak: streak.longestStreak,
             lastAdherentDate: streak.lastAdherentDate,
         };
@@ -554,11 +608,24 @@ export class ProgressService {
         avgProteinActual: number;
         avgCarbsActual: number;
         avgFatActual: number;
+        avgHydrationActual: number;
         totalMealsLogged: number;
     }> {
+        // Finite-ness invariant (mirrors sleep-service src/sleep.service.ts):
+        // every field below is computed by division/reduction over DB rows, so a
+        // poisoned or zero-denominator intermediate could surface NaN/Infinity
+        // into statsResponseSchema (adherencePercent is .min(0).max(100); the
+        // avgs are .nonnegative()) and fail serialization or leak a non-finite
+        // number. Collapsing any non-finite value to a safe default keeps the
+        // schema bounds intact. Behaviour-preserving: every real finite input
+        // rounds/divides exactly as before — only a non-finite result changes.
+        const finite = (x: number, fallback = 0) => (Number.isFinite(x) ? x : fallback);
+
         const clampedDays = Math.min(Math.max(days, 1), 365);
         const since = new Date();
-        since.setUTCDate(since.getUTCDate() - clampedDays);
+        // Inclusive N-day window: subtract (N-1) so the window spans exactly N
+        // calendar days (today + the previous N-1), not N+1.
+        since.setUTCDate(since.getUTCDate() - (clampedDays - 1));
         const sinceDate = this.toUtcDateOnly(since);
 
         const records = await this.prisma.dailyProgress.findMany({
@@ -581,6 +648,7 @@ export class ProgressService {
                 avgProteinActual: 0,
                 avgCarbsActual: 0,
                 avgFatActual: 0,
+                avgHydrationActual: 0,
                 totalMealsLogged: 0,
             };
         }
@@ -593,7 +661,7 @@ export class ProgressService {
 
         const adherencePercent =
             daysWithTarget > 0
-                ? Math.round((adherentDays / daysWithTarget) * 100 * 10) / 10
+                ? finite(Math.round((adherentDays / daysWithTarget) * 100 * 10) / 10)
                 : 0;
 
         const sum = (key: keyof typeof records[0]) =>
@@ -603,9 +671,16 @@ export class ProgressService {
         const totalProteinActual = sum('proteinActual');
         const totalCarbsActual = sum('carbsActual');
         const totalFatActual = sum('fatActual');
+        const totalHydrationActual = sum('hydrationActual');
         const totalMealsLogged = records.reduce((acc, r) => acc + r.mealsLogged, 0);
 
-        const targetRecords = records.filter((r) => r.caloriesTarget !== null);
+        // Average over the SAME predicate as daysWithTarget (caloriesTarget !==
+        // null && > 0). A stored 0 target is not a real target and must not drag
+        // the average down (or, if all targets were 0, produce a misleading 0
+        // instead of null).
+        const targetRecords = records.filter(
+            (r) => r.caloriesTarget !== null && r.caloriesTarget > 0,
+        );
         const avgCaloriesTarget =
             targetRecords.length > 0
                 ? targetRecords.reduce((acc, r) => acc + (r.caloriesTarget ?? 0), 0) /
@@ -617,14 +692,15 @@ export class ProgressService {
             daysWithTarget,
             adherentDays,
             adherencePercent,
-            avgCaloriesActual: Math.round((totalCaloriesActual / daysTracked) * 10) / 10,
+            avgCaloriesActual: finite(Math.round((totalCaloriesActual / daysTracked) * 10) / 10),
             avgCaloriesTarget:
                 avgCaloriesTarget !== null
-                    ? Math.round(avgCaloriesTarget * 10) / 10
+                    ? finite(Math.round(avgCaloriesTarget * 10) / 10, 0)
                     : null,
-            avgProteinActual: Math.round((totalProteinActual / daysTracked) * 10) / 10,
-            avgCarbsActual: Math.round((totalCarbsActual / daysTracked) * 10) / 10,
-            avgFatActual: Math.round((totalFatActual / daysTracked) * 10) / 10,
+            avgProteinActual: finite(Math.round((totalProteinActual / daysTracked) * 10) / 10),
+            avgCarbsActual: finite(Math.round((totalCarbsActual / daysTracked) * 10) / 10),
+            avgFatActual: finite(Math.round((totalFatActual / daysTracked) * 10) / 10),
+            avgHydrationActual: finite(Math.round((totalHydrationActual / daysTracked) * 10) / 10),
             totalMealsLogged,
         };
     }
@@ -655,7 +731,7 @@ export class ProgressService {
         const record = await (this.prisma as any).bodyMetrics.create({
             data: {
                 userId,
-                measuredAt: new Date(),
+                recordedAt: new Date(),
                 bmi,
                 ...data,
             },
@@ -663,7 +739,7 @@ export class ProgressService {
 
         const metricsPayload: BodyMetricsLoggedPayload = {
             metricsId: record.id,
-            measuredAt: record.measuredAt.toISOString(),
+            measuredAt: record.recordedAt.toISOString(),
             weightKg: data.weightKg ?? null,
             bodyFatPct: data.bodyFatPct ?? null,
             bmi: null,
@@ -684,11 +760,14 @@ export class ProgressService {
     }
 
     async getBodyMetricsHistory(userId: string, days: number): Promise<any[]> {
+        const clampedDays = Math.min(days, 365);
         const since = new Date();
-        since.setUTCDate(since.getUTCDate() - Math.min(days, 365));
+        // Inclusive N-day window: subtract (N-1) so the window spans exactly N
+        // calendar days (today + the previous N-1), not N+1.
+        since.setUTCDate(since.getUTCDate() - (clampedDays - 1));
         return (this.prisma as any).bodyMetrics.findMany({
-            where: { userId, measuredAt: { gte: since } },
-            orderBy: { measuredAt: 'desc' },
+            where: { userId, recordedAt: { gte: since } },
+            orderBy: { recordedAt: 'desc' },
         });
     }
 
@@ -703,7 +782,10 @@ export class ProgressService {
         // 1. Fetch preferences from user-service
         let preferences;
         try {
-            const res = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`);
+            const res = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`, {
+                // F34 #5: user-service /internal/* now requires the shared token.
+                headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+            });
             if (!res.ok) throw new Error('Could not fetch preferences');
             preferences = await res.json();
         } catch (err) {
@@ -729,7 +811,14 @@ export class ProgressService {
         try {
             const updateRes = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    // F34 #5: send the shared internal token (consistent with the
+                    // GET above). NOTE: user-service does not currently define a
+                    // PUT /internal/preferences route, so this call already 404s
+                    // pre-F34 — see the summary's "could not secure" note.
+                    'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '',
+                },
                 body: JSON.stringify({ targetCalories: result.newCalorieTarget })
             });
 
@@ -793,6 +882,37 @@ export class ProgressService {
     }
 
     /**
+     * The raw HTTP call to ai-pipeline's weekly-audit endpoint, factored out so
+     * the opossum breaker (this.aiBreaker) can wrap it. AbortSignal.timeout(30s)
+     * bounds a single attempt so a stalled provider can't hold a Fastify worker;
+     * the breaker's matching 30s timeout + 50%/30s open policy sheds load across
+     * calls. Throws on non-2xx / timeout so the breaker records the failure.
+     */
+    private async makeWeeklyAuditRequest(userId: string, body: any): Promise<Record<string, any>> {
+        const aiBaseUrl = (this as any).config.AI_PIPELINE_URL || 'http://localhost:8000';
+        const response = await fetch(`${aiBaseUrl}/v1/ai/weekly-audit?userId=${userId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                // F22 #8: authorize this server-to-server call to ai-pipeline.
+                'X-Internal-Token': (this as any).config.INTERNAL_SERVICE_TOKEN ?? '',
+            },
+            body: JSON.stringify(body),
+            // HIGH #3: bound a single attempt so an ai-pipeline brownout can't
+            // hang this worker; the breaker's timeout is the outer guard.
+            signal: AbortSignal.timeout(30000),
+        });
+
+        if (!response.ok) {
+            const text = await response.text();
+            logger.error({ userId, status: response.status, text }, 'AI pipeline audit failed');
+            throw new Error('AI pipeline failed to generate audit');
+        }
+
+        return (await response.json()) as Record<string, any>;
+    }
+
+    /**
      * generateWeeklyAudit
      * Fetches historical data and preferences, calls the AI pipeline for a summary.
      */
@@ -802,7 +922,10 @@ export class ProgressService {
         // 1. Fetch preferences
         let preferences;
         try {
-            const res = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`);
+            const res = await fetch(`${this.config.USER_SERVICE_URL}/v1/users/internal/preferences/${userId}`, {
+                // F34 #5: user-service /internal/* now requires the shared token.
+                headers: { 'X-Internal-Token': this.config.INTERNAL_SERVICE_TOKEN ?? '' },
+            });
             if (!res.ok) throw new Error('Could not fetch preferences');
             preferences = await res.json();
         } catch (err) {
@@ -814,27 +937,16 @@ export class ProgressService {
         const stats = await this.getStats(userId, 7);
         const { chartData } = await this.getWeeklyStats(userId);
 
-        // 3. Call AI Pipeline
+        // 3. Call AI Pipeline (through the circuit breaker — HIGH #3).
         try {
-            const aiBaseUrl = (this as any).config.AI_PIPELINE_URL || 'http://localhost:8000';
-            const response = await fetch(`${aiBaseUrl}/v1/ai/weekly-audit?userId=${userId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId,
-                    stats,
-                    history: chartData,
-                    preferences
-                })
-            });
-
-            if (!response.ok) {
-                const text = await response.text();
-                logger.error({ userId, status: response.status, text }, 'AI pipeline audit failed');
-                throw new Error('AI pipeline failed to generate audit');
-            }
-
-            const audit = await response.json() as Record<string, any>;
+            // breaker.fire applies the 30s timeout + open-circuit fast-fail; on a
+            // brownout it rejects immediately via the fallback instead of hanging.
+            const audit = await this.aiBreaker.fire(userId, {
+                userId,
+                stats,
+                history: chartData,
+                preferences
+            }) as Record<string, any>;
 
             // Generate a date range string for UI
             const today = new Date();
@@ -932,5 +1044,150 @@ export class ProgressService {
                 totalTokens: data.totalTokens
             }
         });
+    }
+
+    // ---------------------------------------------------------------------------
+    // GDPR purge — PERMANENTLY erase every progress-service row owned by userId.
+    //
+    // Backs DELETE /v1/progress/internal/user/:userId (server-to-server only,
+    // guarded by the shared X-Internal-Token check). Covers ALL six user-owned
+    // tables in this service's schema (every model carries a `user_id` column):
+    //   daily_progress, streaks, body_metrics, ai_usage_logs, hydration_logs,
+    //   performance_reports.
+    //
+    // IDEMPOTENT: deleteMany never throws on zero matched rows, so purging a user
+    // with no data returns all-zero counts and purging twice is safe. The whole
+    // set runs in a single $transaction so a partial failure rolls back (no
+    // half-deleted user). Returns a per-table deletedCounts summary.
+    // ---------------------------------------------------------------------------
+    async purgeUser(userId: string): Promise<{
+        daily_progress: number;
+        streaks: number;
+        body_metrics: number;
+        ai_usage_logs: number;
+        hydration_logs: number;
+        performance_reports: number;
+    }> {
+        const p = this.prisma as any;
+        const [
+            dailyProgress,
+            streaks,
+            bodyMetrics,
+            aiUsageLogs,
+            hydrationLogs,
+            performanceReports,
+        ] = await p.$transaction([
+            p.dailyProgress.deleteMany({ where: { userId } }),
+            p.streak.deleteMany({ where: { userId } }),
+            p.bodyMetrics.deleteMany({ where: { userId } }),
+            p.aiUsageLog.deleteMany({ where: { userId } }),
+            p.hydrationLog.deleteMany({ where: { userId } }),
+            p.performanceReport.deleteMany({ where: { userId } }),
+        ]);
+
+        return {
+            daily_progress: dailyProgress.count,
+            streaks: streaks.count,
+            body_metrics: bodyMetrics.count,
+            ai_usage_logs: aiUsageLogs.count,
+            hydration_logs: hydrationLogs.count,
+            performance_reports: performanceReports.count,
+        };
+    }
+
+    // ---------------------------------------------------------------------------
+    // GDPR data export — READ every progress-service row owned by userId.
+    //
+    // Backs GET /v1/progress/internal/user/:userId/export (server-to-server only,
+    // guarded by the SAME shared X-Internal-Token check the purge uses). The
+    // read-only counterpart of purgeUser: it returns the user's rows across the
+    // EXACT SAME six user-owned tables the purge clears, keyed by table name, so
+    // export and erasure stay in sync (the gdpr-export test asserts the two key
+    // sets are identical).
+    //   daily_progress, streaks, body_metrics, ai_usage_logs, hydration_logs,
+    //   performance_reports.
+    //
+    // SECURITY: this service's schema contains NO secret/credential/token/raw-key
+    // columns in any of the six tables (every field is the user's own fitness
+    // telemetry — macros, weight/measurements, streaks, AI token *counts*, etc.),
+    // so there is nothing to scrub here. We still cap each table at ROW_LIMIT so a
+    // pathological row count can't produce an unbounded payload; _meta flags any
+    // table that was truncated.
+    //
+    // READ-ONLY & IDEMPOTENT: only findMany/findUnique are issued; a user with no
+    // rows yields empty arrays (never throws), and repeated calls return identical
+    // output without mutating anything.
+    // ---------------------------------------------------------------------------
+    async exportUser(userId: string): Promise<{
+        daily_progress: any[];
+        streaks: any[];
+        body_metrics: any[];
+        ai_usage_logs: any[];
+        hydration_logs: any[];
+        performance_reports: any[];
+        _meta: { rowLimit: number; truncated: string[] };
+    }> {
+        // Per-table cap. Per-user fitness rows are small (one daily_progress row
+        // per day, etc.), so 50k is far above any real user while still bounding a
+        // pathological/abusive row count. take = ROW_LIMIT + 1 detects overflow.
+        const ROW_LIMIT = 50_000;
+        const p = this.prisma as any;
+
+        const [
+            dailyProgress,
+            streaks,
+            bodyMetrics,
+            aiUsageLogs,
+            hydrationLogs,
+            performanceReports,
+        ] = await p.$transaction([
+            p.dailyProgress.findMany({
+                where: { userId },
+                orderBy: { date: 'desc' },
+                take: ROW_LIMIT + 1,
+            }),
+            // Streak is unique per user (0-or-1 rows); findMany keeps the
+            // by-table-array shape consistent with the rest of the export.
+            p.streak.findMany({ where: { userId }, take: ROW_LIMIT + 1 }),
+            p.bodyMetrics.findMany({
+                where: { userId },
+                orderBy: { recordedAt: 'desc' },
+                take: ROW_LIMIT + 1,
+            }),
+            p.aiUsageLog.findMany({
+                where: { userId },
+                orderBy: { createdAt: 'desc' },
+                take: ROW_LIMIT + 1,
+            }),
+            p.hydrationLog.findMany({
+                where: { userId },
+                orderBy: { date: 'desc' },
+                take: ROW_LIMIT + 1,
+            }),
+            p.performanceReport.findMany({
+                where: { userId },
+                orderBy: { date: 'desc' },
+                take: ROW_LIMIT + 1,
+            }),
+        ]);
+
+        const truncated: string[] = [];
+        const cap = (table: string, rows: any[]): any[] => {
+            if (rows.length > ROW_LIMIT) {
+                truncated.push(table);
+                return rows.slice(0, ROW_LIMIT);
+            }
+            return rows;
+        };
+
+        return {
+            daily_progress: cap('daily_progress', dailyProgress),
+            streaks: cap('streaks', streaks),
+            body_metrics: cap('body_metrics', bodyMetrics),
+            ai_usage_logs: cap('ai_usage_logs', aiUsageLogs),
+            hydration_logs: cap('hydration_logs', hydrationLogs),
+            performance_reports: cap('performance_reports', performanceReports),
+            _meta: { rowLimit: ROW_LIMIT, truncated },
+        };
     }
 }

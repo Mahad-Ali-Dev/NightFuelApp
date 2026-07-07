@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Meals</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar,.mscroll::-webkit-scrollbar{display:none}
+  .mscroll{overflow-x:auto;scrollbar-width:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .glow{border:1.5px solid var(--lm);box-shadow:0 0 14px #C2F03C44;background:linear-gradient(150deg,#2b303a,#14171e)}
+  .imgwrap{position:relative;overflow:hidden}.imgwrap img{width:100%;height:100%;object-fit:cover}
+  .cat{position:relative;border-radius:15px;overflow:hidden;border:1.5px solid var(--lm);box-shadow:0 0 14px #C2F03C44;background:linear-gradient(150deg,#2b303a,#14171e)}
+  .cat .ph{position:absolute;inset:0;background:radial-gradient(circle at 72% 32%,#1c2a0e55,transparent 60%)}
+  .cat img{position:absolute;right:-8px;bottom:-6px;height:66px;object-fit:contain;opacity:0.92}
+  .cat .ico{position:absolute;bottom:10px;left:12px;width:30px;height:30px;border-radius:9px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center;color:var(--lm);font-size:17px}
+  .cat b{position:absolute;top:12px;left:13px;color:#fff;font-size:14px;font-weight:600;letter-spacing:-0.2px}
+  .cat small{position:absolute;top:31px;left:13px;color:#cfd4dd;font-size:10.5px;font-weight:500}
+  .ria{position:absolute;right:0;top:300px;z-index:5;background:var(--lm);color:#13200a;width:44px;padding:11px 0;border-radius:16px 0 0 16px;display:flex;flex-direction:column;align-items:center;gap:5px;box-shadow:0 4px 16px #0008}
+</style>
+</head>
+<body>
+<div class="frame"><div class="scroll">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+  <!-- header: Meals / search -->
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px 6px">
+    <div style="color:var(--tx);font-size:24px;font-weight:600;letter-spacing:-0.4px">Meals</div>
+    <div style="width:40px;height:40px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-search" style="color:var(--tx);font-size:20px"></i></div>
+  </div>
+
+  <!-- next meal hero (slider) -->
+  <div style="padding:10px 16px 0">
+    <div style="position:relative;height:172px;border-radius:18px;overflow:hidden">
+      <img src="ready/meal-lunch.png" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">
+      <div style="position:absolute;inset:0;background:linear-gradient(to top,#0a0c12f2 16%,#0a0c1255 50%,transparent 78%)"></div>
+      <span style="position:absolute;top:12px;left:12px;background:var(--lm);color:#13200a;font-size:10px;font-weight:600;padding:3px 9px;border-radius:8px;letter-spacing:0.3px">NEXT · PRE-SHIFT · IN 1H 20M</span>
+      <div style="position:absolute;left:15px;right:15px;bottom:13px">
+        <div style="color:#fff;font-size:21px;font-weight:600;letter-spacing:-0.3px">Grilled chicken bowl</div>
+        <div style="color:#cfd4dd;font-size:12.5px;margin-top:2px"><i class="ti ti-flame" style="color:var(--lm);font-size:13px;position:relative;top:1px"></i> 620 kcal · 48g protein · 12 min</div>
+        <div style="display:flex;gap:8px;margin-top:11px">
+          <div style="display:flex;align-items:center;gap:6px;background:var(--lm);color:#13200a;font-size:13px;font-weight:600;padding:9px 18px;border-radius:22px"><i class="ti ti-tools-kitchen-2" style="font-size:14px"></i>View meal</div>
+          <div style="display:flex;align-items:center;gap:5px;background:#ffffff1f;color:#fff;font-size:13px;font-weight:500;padding:9px 16px;border-radius:22px"><i class="ti ti-plus" style="font-size:15px"></i>Add</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:center;gap:6px;padding:11px 0 0">
+      <span style="width:18px;height:6px;background:var(--lm);border-radius:6px"></span>
+      <span style="width:6px;height:6px;background:#3a3f49;border-radius:50%"></span>
+      <span style="width:6px;height:6px;background:#3a3f49;border-radius:50%"></span>
+    </div>
+  </div>
+
+  <!-- macro rings -->
+  <div style="padding:16px 16px 0"><div class="zc" style="padding:14px 15px 16px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:13px"><span style="color:var(--tx);font-size:14px;font-weight:600">Today's macros</span><span style="color:var(--mu);font-size:12px"><b style="color:var(--tx);font-weight:600">1,840</b> / 2,400 kcal</span></div><div style="display:flex;justify-content:space-around;text-align:center">
+    <div>
+      <svg width="58" height="58" viewBox="0 0 58 58"><circle cx="29" cy="29" r="23" fill="none" stroke="#252A33" stroke-width="6"/><circle cx="29" cy="29" r="23" fill="none" stroke="#C2F03C" stroke-width="6" stroke-linecap="round" stroke-dasharray="144.5" stroke-dashoffset="36.1" transform="rotate(-90 29 29)"/><text x="29" y="33.5" text-anchor="middle" fill="#C2F03C" font-size="14" font-weight="600" font-family="Saira">75%</text></svg>
+      <div style="color:var(--mu);font-size:12px;margin-top:5px">Protein</div>
+    </div>
+    <div>
+      <svg width="58" height="58" viewBox="0 0 58 58"><circle cx="29" cy="29" r="23" fill="none" stroke="#252A33" stroke-width="6"/><circle cx="29" cy="29" r="23" fill="none" stroke="#FFB13C" stroke-width="6" stroke-linecap="round" stroke-dasharray="144.5" stroke-dashoffset="57.8" transform="rotate(-90 29 29)"/><text x="29" y="33.5" text-anchor="middle" fill="#FFB13C" font-size="14" font-weight="600" font-family="Saira">60%</text></svg>
+      <div style="color:var(--mu);font-size:12px;margin-top:5px">Carbs</div>
+    </div>
+    <div>
+      <svg width="58" height="58" viewBox="0 0 58 58"><circle cx="29" cy="29" r="23" fill="none" stroke="#252A33" stroke-width="6"/><circle cx="29" cy="29" r="23" fill="none" stroke="#FF7A90" stroke-width="6" stroke-linecap="round" stroke-dasharray="144.5" stroke-dashoffset="79.5" transform="rotate(-90 29 29)"/><text x="29" y="33.5" text-anchor="middle" fill="#FF7A90" font-size="14" font-weight="600" font-family="Saira">45%</text></svg>
+      <div style="color:var(--mu);font-size:12px;margin-top:5px">Fat</div>
+    </div>
+    <div>
+      <svg width="58" height="58" viewBox="0 0 58 58"><circle cx="29" cy="29" r="23" fill="none" stroke="#252A33" stroke-width="6"/><circle cx="29" cy="29" r="23" fill="none" stroke="#4FC9E8" stroke-width="6" stroke-linecap="round" stroke-dasharray="144.5" stroke-dashoffset="46.2" transform="rotate(-90 29 29)"/><text x="29" y="33.5" text-anchor="middle" fill="#4FC9E8" font-size="14" font-weight="600" font-family="Saira">68%</text></svg>
+      <div style="color:var(--mu);font-size:12px;margin-top:5px">Water</div>
+    </div>
+    </div>
+  </div></div>
+
+  <!-- explore meals: interlocking bento -->
+  <div style="color:var(--tx);font-size:16px;font-weight:600;padding:22px 18px 10px">Explore meals</div>
+  <div style="padding:0 16px">
+    <div style="position:relative;width:100%;height:401px">
+      <!-- Quick & easy: 1/3 tall -->
+      <div class="cat" style="position:absolute;left:0;top:0;width:96px;height:173px;border-radius:18px">
+        <img src="ready/meal-snack.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0">
+        <div style="position:absolute;inset:0;background:linear-gradient(155deg,#0A0C12e0 14%,transparent 62%);z-index:1"></div>
+        <b style="z-index:2;font-size:13px;line-height:1.16">Quick &amp; easy</b><small style="z-index:2">Under 15 min</small><div class="ico" style="z-index:2"><i class="ti ti-bolt"></i></div>
+      </div>
+      <!-- High protein: TRUE L-shape (SVG), Recovery nests in the notch -->
+      <div style="position:absolute;left:105px;top:0;width:203px;height:173px">
+        <svg viewBox="0 0 203 173" width="100%" height="100%" style="position:absolute;inset:0;overflow:visible;filter:drop-shadow(0 0 6px #C2F03C55)">
+          <defs>
+            <linearGradient id="mgD" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0.08" stop-color="#0A0C12" stop-opacity="0.9"/><stop offset="0.66" stop-color="#0A0C12" stop-opacity="0"/></linearGradient>
+            <clipPath id="mlc"><path d="M 0,18 A 18,18 0 0 1 18,0 L 185,0 A 18,18 0 0 1 203,18 L 203,88 A 18,18 0 0 1 185,106 L 113,106 A 18,18 0 0 0 95,124 L 95,155 A 18,18 0 0 1 77,173 L 18,173 A 18,18 0 0 1 0,155 Z"/></clipPath>
+          </defs>
+          <g clip-path="url(#mlc)">
+            <rect width="203" height="173" fill="#16191f"/>
+            <image href="ready/food-meat.png" x="0" y="0" width="203" height="173" preserveAspectRatio="xMidYMid slice"/>
+            <rect width="203" height="173" fill="url(#mgD)"/>
+          </g>
+          <path d="M 0,18 A 18,18 0 0 1 18,0 L 185,0 A 18,18 0 0 1 203,18 L 203,88 A 18,18 0 0 1 185,106 L 113,106 A 18,18 0 0 0 95,124 L 95,155 A 18,18 0 0 1 77,173 L 18,173 A 18,18 0 0 1 0,155 Z" fill="none" stroke="#C2F03C" stroke-width="1.5"/>
+        </svg>
+        <b style="position:absolute;top:11px;left:14px;color:#fff;font-size:16px;font-weight:600;z-index:2">High protein</b>
+        <small style="position:absolute;top:31px;left:14px;color:#cfd4dd;font-size:10.5px;font-weight:500;z-index:2">Training nights</small>
+        <div style="position:absolute;bottom:12px;left:12px;width:30px;height:30px;border-radius:9px;background:#1c2a0e;border:1px solid #2e3a16;display:flex;align-items:center;justify-content:center;color:#C2F03C;font-size:17px;z-index:2"><i class="ti ti-meat"></i></div>
+      </div>
+      <!-- Recovery: nests in the notch -->
+      <div class="cat" style="position:absolute;left:210px;top:113px;width:98px;height:195px;border-radius:18px">
+        <img src="ready/meal-recovery.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0">
+        <div style="position:absolute;inset:0;background:linear-gradient(155deg,#0A0C12e0 14%,transparent 62%);z-index:1"></div>
+        <b style="z-index:2;font-size:15px">Recovery</b><small style="z-index:2">Post-shift</small><div class="ico" style="z-index:2"><i class="ti ti-heart"></i></div>
+      </div>
+      <!-- Vegan: 2/3 wide -->
+      <div class="cat" style="position:absolute;left:0;top:182px;width:203px;height:126px;border-radius:18px">
+        <img src="ready/food-vegetables.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0">
+        <div style="position:absolute;inset:0;background:linear-gradient(108deg,#0A0C12ee 14%,#0A0C1255 50%,transparent 80%);z-index:1"></div>
+        <b style="z-index:2;font-size:16px">Vegan</b><small style="z-index:2">Plant-based</small><div class="ico" style="z-index:2"><i class="ti ti-leaf"></i></div>
+      </div>
+      <!-- Budget -->
+      <div class="cat" style="position:absolute;left:0;top:317px;width:149px;height:84px;border-radius:18px">
+        <img src="ready/food-grains.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0">
+        <div style="position:absolute;inset:0;background:linear-gradient(108deg,#0A0C12ee 18%,transparent 75%);z-index:1"></div>
+        <b style="z-index:2;font-size:15px">Budget</b><small style="z-index:2">Low cost</small><div class="ico" style="z-index:2"><i class="ti ti-coin"></i></div>
+      </div>
+      <!-- Comfort -->
+      <div class="cat" style="position:absolute;left:159px;top:317px;width:149px;height:84px;border-radius:18px">
+        <img src="ready/meal-dinner.png" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0">
+        <div style="position:absolute;inset:0;background:linear-gradient(108deg,#0A0C12ee 18%,transparent 75%);z-index:1"></div>
+        <b style="z-index:2;font-size:15px">Comfort</b><small style="z-index:2">Cosy classics</small><div class="ico" style="z-index:2"><i class="ti ti-bowl"></i></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- browse by food group carousel -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:24px 18px 12px">
+    <span style="color:var(--tx);font-size:16px;font-weight:600">Browse by food group</span>
+    <span style="color:var(--mu);font-size:12.5px;display:flex;align-items:center;gap:2px">All<i class="ti ti-chevron-right" style="font-size:15px"></i></span>
+  </div>
+  <div class="mscroll" style="display:flex;gap:12px;padding:0 16px 4px">
+    <div style="min-width:124px;flex-shrink:0;height:152px;border-radius:18px;border:1px solid #262b34;background:#14171d;position:relative;overflow:hidden">
+      <img src="ready/food-meat.png" style="position:absolute;left:50%;top:16px;height:94px;transform:translateX(-50%);object-fit:contain">
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 13px;background:linear-gradient(0deg,#0c0e13 34%,transparent)"><div style="color:#fff;font-size:14px;font-weight:600">Protein</div><div style="color:var(--lm);font-size:11px;font-weight:500;margin-top:1px">86 recipes</div></div>
+    </div>
+    <div style="min-width:124px;flex-shrink:0;height:152px;border-radius:18px;border:1px solid #262b34;background:#14171d;position:relative;overflow:hidden">
+      <img src="ready/food-vegetables.png" style="position:absolute;left:50%;top:16px;height:94px;transform:translateX(-50%);object-fit:contain">
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 13px;background:linear-gradient(0deg,#0c0e13 34%,transparent)"><div style="color:#fff;font-size:14px;font-weight:600">Vegetables</div><div style="color:var(--lm);font-size:11px;font-weight:500;margin-top:1px">124 recipes</div></div>
+    </div>
+    <div style="min-width:124px;flex-shrink:0;height:152px;border-radius:18px;border:1px solid #262b34;background:#14171d;position:relative;overflow:hidden">
+      <img src="ready/food-fruits.png" style="position:absolute;left:50%;top:16px;height:94px;transform:translateX(-50%);object-fit:contain">
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 13px;background:linear-gradient(0deg,#0c0e13 34%,transparent)"><div style="color:#fff;font-size:14px;font-weight:600">Fruits</div><div style="color:var(--lm);font-size:11px;font-weight:500;margin-top:1px">58 recipes</div></div>
+    </div>
+    <div style="min-width:124px;flex-shrink:0;height:152px;border-radius:18px;border:1px solid #262b34;background:#14171d;position:relative;overflow:hidden">
+      <img src="ready/food-grains.png" style="position:absolute;left:50%;top:16px;height:94px;transform:translateX(-50%);object-fit:contain">
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 13px;background:linear-gradient(0deg,#0c0e13 34%,transparent)"><div style="color:#fff;font-size:14px;font-weight:600">Grains</div><div style="color:var(--lm);font-size:11px;font-weight:500;margin-top:1px">72 recipes</div></div>
+    </div>
+    <div style="min-width:124px;flex-shrink:0;height:152px;border-radius:18px;border:1px solid #262b34;background:#14171d;position:relative;overflow:hidden">
+      <img src="ready/food-seafood.png" style="position:absolute;left:50%;top:16px;height:94px;transform:translateX(-50%);object-fit:contain">
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 13px;background:linear-gradient(0deg,#0c0e13 34%,transparent)"><div style="color:#fff;font-size:14px;font-weight:600">Seafood</div><div style="color:var(--lm);font-size:11px;font-weight:500;margin-top:1px">44 recipes</div></div>
+    </div>
+    <div style="min-width:124px;flex-shrink:0;height:152px;border-radius:18px;border:1px solid #262b34;background:#14171d;position:relative;overflow:hidden">
+      <img src="ready/food-dairy.png" style="position:absolute;left:50%;top:16px;height:94px;transform:translateX(-50%);object-fit:contain">
+      <div style="position:absolute;bottom:0;left:0;right:0;padding:10px 13px;background:linear-gradient(0deg,#0c0e13 34%,transparent)"><div style="color:#fff;font-size:14px;font-weight:600">Dairy</div><div style="color:var(--lm);font-size:11px;font-weight:500;margin-top:1px">36 recipes</div></div>
+    </div>
+  </div>
+
+  <div style="height:104px"></div>
+</div>
+
+<div class="ria"><i class="ti ti-message-circle" style="font-size:19px"></i><span style="font-size:10px;font-weight:500">Ria</span></div>
+<div style="position:absolute;bottom:12px;left:12px;right:12px;height:60px;background:#15181F;border:1px solid #2a2f3a;border-radius:26px;box-shadow:0 12px 28px #000b;display:flex;align-items:center;justify-content:space-around;padding:0 16px">
+  <div style="color:#7d828d;display:flex;flex-direction:column;align-items:center;gap:3px"><i class="ti ti-home" style="font-size:23px"></i><span style="font-size:10px">Home</span></div>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:3px"><div style="width:48px;height:48px;border-radius:50%;background:var(--lm);color:#13200a;display:flex;align-items:center;justify-content:center;margin-top:-24px;border:4px solid var(--bg);box-shadow:0 6px 15px #0009"><i class="ti ti-tools-kitchen-2" style="font-size:23px"></i></div><span style="font-size:10px;color:var(--lm);font-weight:500">Meals</span></div>
+  <div style="color:#7d828d;display:flex;flex-direction:column;align-items:center;gap:3px"><i class="ti ti-plus" style="font-size:23px"></i><span style="font-size:10px">Add</span></div>
+  <div style="color:#7d828d;display:flex;flex-direction:column;align-items:center;gap:3px"><i class="ti ti-barbell" style="font-size:23px"></i><span style="font-size:10px">Train</span></div>
+  <div style="color:#7d828d;display:flex;flex-direction:column;align-items:center;gap:3px"><i class="ti ti-user" style="font-size:23px"></i><span style="font-size:10px">You</span></div>
+</div>
+</div>
+</body>
+</html>

@@ -8,6 +8,9 @@ import {
     listNotificationsQuerySchema,
     notificationIdParamSchema,
     updatePreferencesSchema,
+    expoPushTokenSchema,
+    webPushEndpointSchema,
+    webPushKeySchema,
 } from './schemas';
 
 const errorResponseSchema = z.object({
@@ -82,7 +85,12 @@ export const notificationRoutes = async (
                     err.message?.includes('not found') ||
                     err.message?.includes('does not belong')
                 ) {
-                    reply.code(404).send({ error: err.message });
+                    // The service embeds the notification UUID in the thrown
+                    // message ("Notification <id> not found"). Use the guard only
+                    // to pick the 404 status, then reply with a FIXED generic
+                    // literal so the raw message (and any future internal detail)
+                    // can never reach the client. The real error stays logged above.
+                    reply.code(404).send({ error: 'Notification not found' });
                 } else {
                     reply.code(500).send({ error: 'Failed to mark notification as read' });
                 }
@@ -214,9 +222,9 @@ export const notificationRoutes = async (
             onRequest: [(fastify as any).authenticate],
             schema: {
                 body: z.object({
-                    endpoint: z.string().url(),
-                    p256dh: z.string().min(1),
-                    auth: z.string().min(1),
+                    endpoint: webPushEndpointSchema,
+                    p256dh: webPushKeySchema,
+                    auth: webPushKeySchema,
                 }),
                 response: {
                     200: z.object({ id: z.string() }),
@@ -249,7 +257,7 @@ export const notificationRoutes = async (
             onRequest: [(fastify as any).authenticate],
             schema: {
                 body: z.object({
-                    expoPushToken: z.string().min(1),
+                    expoPushToken: expoPushTokenSchema,
                 }),
                 response: {
                     200: z.object({ id: z.string() }),
@@ -282,7 +290,7 @@ export const notificationRoutes = async (
             onRequest: [(fastify as any).authenticate],
             schema: {
                 body: z.object({
-                    endpoint: z.string().min(1),
+                    endpoint: z.string().min(1).max(2048),
                 }),
                 response: {
                     200: z.object({ ok: z.boolean() }),

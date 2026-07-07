@@ -1,0 +1,18 @@
+# Keep node_modules and build junk out of the Docker build context.
+# Critical: turbo prune fails if any node_modules leaks into the context
+# (it tries to graph stray packages). Service images run their own install.
+**/node_modules
+node_modules
+**/.git
+.git
+**/dist
+**/.next
+**/.turbo
+**/.expo
+**/*.log
+**/*.tsbuildinfo
+**/*.dll.node
+**/.env
+.env
+# Prisma client is regenerated during each service build (prisma generate)
+**/src/generated

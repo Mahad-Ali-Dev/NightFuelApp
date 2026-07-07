@@ -14,6 +14,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import Stripe from 'stripe';
 import type { SubscriptionService } from './subscription.service';
 import type { Logger } from 'pino';
+import { sendUnauthorizedPayload } from '@nightfuel/config';
 
 // ─── Price IDs — set these env vars in Railway / docker-compose ──────────────
 const PRICE_IDS: Record<string, string | undefined> = {
@@ -82,7 +83,7 @@ export function registerStripeRoutes(
       const user = (request as any).user as { id?: string; userId?: string };
       const userId = user?.id ?? user?.userId;
       if (!userId) {
-        return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid token' });
+        return sendUnauthorizedPayload(reply, request);
       }
 
       const body = request.body as { tier?: string; successUrl?: string; cancelUrl?: string };
@@ -101,6 +102,15 @@ export function registerStripeRoutes(
           mode: 'subscription',
           line_items: [{ price: PRICE_IDS[tier]!, quantity: 1 }],
           metadata: { userId, tier },
+          // SECURITY (HIGH #4 — Stripe never downgrades on cancel/expire): the
+          // Session metadata above lives only on the Checkout Session, which is
+          // NOT the object delivered by customer.subscription.updated/deleted.
+          // Stripe copies `subscription_data.metadata` onto the underlying
+          // Subscription object, so the cancel/expire webhooks can resolve the
+          // owner via sub.metadata.userId and downgrade the RIGHT user. Without
+          // this, those handlers see no userId and the user keeps a paid tier
+          // forever after cancellation.
+          subscription_data: { metadata: { userId, tier } },
           success_url:
             successUrl ??
             `${process.env['APP_URL'] ?? 'http://localhost:3000'}/settings/subscription?success=1`,
@@ -114,7 +124,7 @@ export function registerStripeRoutes(
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown error';
         logger.error({ err: message, userId, tier }, '[stripe] checkout session creation failed');
-        return reply.status(500).send({ statusCode: 500, error: 'Internal Server Error', message });
+        return reply.status(500).send({ statusCode: 500, error: 'Internal Server Error', message: 'An unexpected error occurred' });
       }
     },
   );
@@ -155,7 +165,7 @@ export function registerStripeRoutes(
         return reply.status(200).send({ onboardingUrl: accountLink.url });
       } catch (err: any) {
         logger.error({ err: err.message, userId }, '[stripe] connect onboarding failed');
-        return reply.status(500).send({ error: err.message });
+        return reply.status(500).send({ error: 'An unexpected error occurred' });
       }
     }
   );
@@ -235,8 +245,16 @@ export function registerStripeRoutes(
         );
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Unknown';
+        // Log the real cause server-side, but NEVER echo Stripe's
+        // signature-verification internals (e.g. "No signatures found …",
+        // timestamps, payload hints) back on the wire to an unauthenticated
+        // caller. Ship a fixed, redacted body instead.
         logger.warn({ message }, '[stripe] webhook signature verification failed');
-        return reply.status(400).send({ error: `Webhook Error: ${message}` });
+        return reply.status(400).send({
+          statusCode: 400,
+          error: 'Bad Request',
+          message: 'Webhook signature verification failed',
+        });
       }
 
       logger.info({ type: event.type, id: event.id }, '[stripe] webhook event received');
@@ -305,6 +323,12 @@ async function handleStripeEvent(
           if (tier) {
             await subscriptionService.upgradeTier({ userId, targetTier: tier as any });
           }
+        } else if (sub.status === 'canceled') {
+          // HIGH #4: a terminal cancel can also surface as an `updated` event
+          // (e.g. immediate cancellation). Revoke the paid tier for the resolved
+          // user, same as the deleted handler.
+          await subscriptionService.upgradeTier({ userId, targetTier: 'FREE' as any });
+          logger.info({ userId }, '[stripe] customer.subscription.updated (canceled) — downgraded to FREE');
         } else if (sub.status === 'past_due' || sub.status === 'unpaid') {
           logger.warn({ userId, status: sub.status }, '[stripe] subscription payment issue');
         }
@@ -315,10 +339,19 @@ async function handleStripeEvent(
       case 'customer.subscription.deleted': {
         const sub = event.data.object as Stripe.Subscription;
         const userId = sub.metadata?.['userId'];
-        if (userId) {
-          await subscriptionService.cancel({ userId });
-          logger.info({ userId }, '[stripe] customer.subscription.deleted — subscription cancelled');
+        if (!userId) {
+          // HIGH #4: without subscription_data.metadata.userId on checkout we
+          // could not resolve the owner here and the user would keep their paid
+          // tier forever. Log loudly so a missing-metadata regression is visible.
+          logger.warn({ subId: sub.id }, '[stripe] customer.subscription.deleted — no userId in metadata, cannot downgrade');
+          break;
         }
+        // The subscription has fully ended (cancelled / expired) — revoke the
+        // paid tier by downgrading to FREE. `cancel` only flags
+        // cancelAtPeriodEnd and would leave the paid tier active, so we downgrade
+        // the tier directly here.
+        await subscriptionService.upgradeTier({ userId, targetTier: 'FREE' as any });
+        logger.info({ userId }, '[stripe] customer.subscription.deleted — downgraded to FREE');
         break;
       }
 

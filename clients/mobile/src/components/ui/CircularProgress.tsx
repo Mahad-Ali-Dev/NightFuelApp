@@ -2,11 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useTheme } from '@/theme';
+import { typography } from '@/theme/typography';
 
 interface CircularProgressProps {
   size: number;
   strokeWidth?: number;
-  progress: number; // 0–100
+  progress: number; // accepts a 0–1 fraction or a 0–100 percent
   color?: string;
   trackColor?: string;
   label?: string;
@@ -15,7 +16,7 @@ interface CircularProgressProps {
   children?: React.ReactNode;
 }
 
-export function CircularProgress({
+function CircularProgressComponent({
   size,
   strokeWidth = 8,
   progress,
@@ -32,7 +33,10 @@ export function CircularProgress({
   const track = trackColor ?? colors.border.default;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const clampedProgress = Math.min(100, Math.max(0, progress));
+  // Callers pass either a 0–1 fraction (e.g. consumed/target) or a 0–100
+  // percent. Normalize both: a value at or below 1 is treated as a fraction.
+  const pct = progress <= 1 ? progress * 100 : progress;
+  const clampedProgress = Math.min(100, Math.max(0, pct));
   const strokeDashoffset = circumference - (clampedProgress / 100) * circumference;
   const center = size / 2;
 
@@ -81,6 +85,13 @@ export function CircularProgress({
   );
 }
 
+/**
+ * Memoized: all props are primitives except optional `children`. When no
+ * children are passed (the common case) re-renders are skipped on equal props;
+ * inline children simply don't skip — behavior is unchanged either way.
+ */
+export const CircularProgress = React.memo(CircularProgressComponent);
+
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
@@ -94,14 +105,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   value: {
+    fontFamily: typography.statSmall.fontFamily,
     fontSize: 24,
     fontWeight: '700',
   },
   unit: {
+    fontFamily: typography.caption.fontFamily,
     fontSize: 12,
     marginTop: 2,
   },
   label: {
+    fontFamily: typography.overline.fontFamily,
     fontSize: 11,
     marginTop: 4,
     textTransform: 'uppercase',

@@ -62,6 +62,31 @@ if (typeof window === 'undefined') {
   global.window = global;
 }
 
+// ─── location (window.location) ───────────────────────────────────────────────
+// Because window === global (above), reads of `window.location` resolve to
+// `global.location`. RN/Hermes provides no `location`, so libraries that read
+// `window.location.href` during startup (expo-router / React Navigation init)
+// crash with "TypeError: Cannot read property 'href' of undefined" — which on a
+// release build kills the app before the first render (stuck on the splash).
+// This stub mirrors document.location so those reads return a harmless URL.
+if (typeof location === 'undefined' || global.location == null) {
+  global.location = {
+    href: 'http://localhost/',
+    protocol: 'http:',
+    host: 'localhost',
+    hostname: 'localhost',
+    port: '',
+    pathname: '/',
+    search: '',
+    hash: '',
+    origin: 'http://localhost',
+    assign: function () {},
+    replace: function () {},
+    reload: function () {},
+    toString: function () { return 'http://localhost/'; },
+  };
+}
+
 // ─── localStorage / sessionStorage ───────────────────────────────────────────
 // Some libs read these at module scope; stub them so they don't throw.
 if (typeof localStorage === 'undefined') {

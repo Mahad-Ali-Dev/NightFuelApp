@@ -19,12 +19,12 @@ const log = createLogger('iap-validator');
 // ─────────────────────────────────────────────────────────────────────
 
 const PRODUCT_ID_TO_TIER: Record<string, 'PRO' | 'PREMIUM' | 'ENTERPRISE'> = {
-  'com.nightfuel.app.pro.monthly': 'PRO',
-  'com.nightfuel.app.pro.yearly': 'PRO',
-  'com.nightfuel.app.premium.monthly': 'PREMIUM',
-  'com.nightfuel.app.premium.yearly': 'PREMIUM',
-  'com.nightfuel.app.enterprise.monthly': 'ENTERPRISE',
-  'com.nightfuel.app.enterprise.yearly': 'ENTERPRISE',
+  'com.zeitra.app.pro.monthly': 'PRO',
+  'com.zeitra.app.pro.yearly': 'PRO',
+  'com.zeitra.app.premium.monthly': 'PREMIUM',
+  'com.zeitra.app.premium.yearly': 'PREMIUM',
+  'com.zeitra.app.enterprise.monthly': 'ENTERPRISE',
+  'com.zeitra.app.enterprise.yearly': 'ENTERPRISE',
 };
 
 export function productIdToTier(
@@ -79,6 +79,12 @@ const APPLE_SANDBOX_VERIFY_URL = 'https://sandbox.itunes.apple.com/verifyReceipt
  * sandbox receipts to the sandbox URL. We try production first; if Apple
  * returns status `21007` (sandbox receipt sent to production), we retry
  * against sandbox automatically. This is the standard documented flow.
+ *
+ * SECURITY (HIGH #3 — sandbox receipts accepted in production): the 21007
+ * sandbox retry, and any receipt whose response `environment` is "Sandbox",
+ * are ONLY honoured when sandbox is explicitly allowed (see `isSandboxAllowed`).
+ * In production this is OFF by default, so a free StoreKit-test / TestFlight
+ * sandbox receipt can NEVER upgrade a real account.
  */
 export async function validateAppleReceipt(receipt: string): Promise<ValidationResult> {
   const sharedSecret = process.env.APPLE_SHARED_SECRET;
@@ -96,11 +102,36 @@ export async function validateAppleReceipt(receipt: string): Promise<ValidationR
   // Try production first (most common in real users)
   const prodResp = await postJson(APPLE_PRODUCTION_VERIFY_URL, body);
   if (prodResp.status === 21007) {
-    // 21007 = sandbox receipt sent to production — retry against sandbox.
+    // 21007 = sandbox receipt sent to production. Retrying against the sandbox
+    // URL is ONLY legitimate when sandbox is allowed; in production we refuse so
+    // a sandbox receipt cannot be laundered into a real upgrade.
+    if (!isSandboxAllowed()) {
+      log.warn('Apple sandbox receipt (status 21007) rejected in production (IAP_ALLOW_SANDBOX is off)');
+      return {
+        valid: false,
+        errorCode: 'apple_environment_mismatch',
+        errorMessage: 'Sandbox receipts are not accepted in production',
+      };
+    }
     const sandboxResp = await postJson(APPLE_SANDBOX_VERIFY_URL, body);
     return parseAppleResponse(sandboxResp);
   }
   return parseAppleResponse(prodResp);
+}
+
+/**
+ * Whether Sandbox-environment IAP receipts may be honoured.
+ *
+ * Default CLOSED: in production a sandbox receipt is rejected. Set
+ * `IAP_ALLOW_SANDBOX=true` (non-prod testing) to accept them. As a convenience,
+ * sandbox is also allowed when NODE_ENV is not 'production', so local/test runs
+ * work without extra config — but the flag, when set, is authoritative.
+ */
+export function isSandboxAllowed(): boolean {
+  const flag = (process.env.IAP_ALLOW_SANDBOX ?? '').trim().toLowerCase();
+  if (flag === 'true' || flag === '1') return true;
+  if (flag === 'false' || flag === '0') return false;
+  return process.env.NODE_ENV !== 'production';
 }
 
 interface AppleVerifyResponse {
@@ -122,6 +153,22 @@ interface AppleReceiptInfo {
 }
 
 function parseAppleResponse(resp: AppleVerifyResponse): ValidationResult {
+  // SECURITY (HIGH #3): reject Sandbox-environment receipts unless sandbox is
+  // explicitly allowed. Apple stamps every verifyReceipt response with the
+  // environment it was issued in; a real App Store purchase is "Production".
+  // Without this check a sandbox receipt that happens to validate at the
+  // production endpoint (or a sandbox URL retry) would silently upgrade a real
+  // account. We gate even though validateAppleReceipt already guards the 21007
+  // retry, so direct/edge responses are covered too (defense in depth).
+  if (resp.environment === 'Sandbox' && !isSandboxAllowed()) {
+    log.warn('Apple receipt rejected: Sandbox environment in production (IAP_ALLOW_SANDBOX is off)');
+    return {
+      valid: false,
+      errorCode: 'apple_environment_mismatch',
+      errorMessage: 'Sandbox receipts are not accepted in production',
+    };
+  }
+
   if (resp.status !== 0) {
     log.warn({ status: resp.status }, 'Apple receipt validation failed');
     // 21002 = malformed, 21003 = couldn't authenticate, 21004 = wrong shared secret,
@@ -187,7 +234,7 @@ function parseAppleResponse(resp: AppleVerifyResponse): ValidationResult {
  *      service-account JSON) — DO NOT commit the JSON file
  *   5. Replace this stub with a call to:
  *        google.androidpublisher('v3').purchases.subscriptionsv2.get({
- *          packageName: 'com.nightfuel.app',
+ *          packageName: 'com.zeitra.app',
  *          token: purchaseToken,
  *        });
  *   6. Translate the response to a ValidationResult
@@ -223,14 +270,40 @@ export async function validateGoogleReceipt(
 // Shared
 // ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Hard ceiling for an IAP verify HTTP round-trip. Receipt validation runs on
+ * the SYNCHRONOUS purchase-verification route, so a hung App Store endpoint
+ * (DNS black-hole, TLS stall, no response) would otherwise pin the request
+ * indefinitely. We abort after this and let the error propagate — the route's
+ * catch surfaces the validation-failure path, so a timeout fails CLOSED (the
+ * tier is never granted) rather than hanging or silently upgrading. Covers
+ * both the Apple production and sandbox-retry calls (the only postJson users;
+ * Google validation is a stub that never reaches the network — see
+ * validateGoogleReceipt — but if it is wired up it MUST route through here).
+ */
+const IAP_HTTP_TIMEOUT_MS = 10_000;
+
 async function postJson(url: string, body: string): Promise<AppleVerifyResponse> {
   // Node 22+ has fetch as a global. Subscribers to subscription-service
   // are running on Node 22 LTS per the monorepo engines field.
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      // Abort a stalled App Store endpoint instead of pinning the request.
+      // On timeout fetch rejects with an AbortError, which propagates to the
+      // route's catch → validation fails closed (no tier granted).
+      signal: AbortSignal.timeout(IAP_HTTP_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      log.error({ url, timeoutMs: IAP_HTTP_TIMEOUT_MS }, 'IAP HTTP request timed out');
+      throw new Error(`IAP HTTP timeout after ${IAP_HTTP_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  }
   if (!res.ok) {
     log.error({ url, status: res.status }, 'IAP HTTP request failed');
     throw new Error(`IAP HTTP ${res.status}`);

@@ -11,6 +11,7 @@ const sidebarItems = [
     { name: 'Preferences', href: '/settings/preferences', icon: Settings },
     { name: 'Notifications', href: '/settings/notifications', icon: Bell },
     { name: 'Subscription', href: '/settings/subscription', icon: CreditCard },
+    { name: 'Privacy', href: '/settings/privacy', icon: Shield },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
@@ -40,7 +41,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                                             className={cn(
                                                 "flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 group",
                                                 isActive
-                                                    ? "bg-brand-500 text-white shadow-lg shadow-brand-500/20"
+                                                    ? "bg-brand-500 text-background shadow-lg shadow-brand-500/20"
                                                     : "text-neutral-400 hover:text-white hover:bg-white/5"
                                             )}
                                         >

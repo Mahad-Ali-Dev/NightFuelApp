@@ -1,5 +1,4 @@
 import os
-import json
 from enum import Enum
 from typing import Dict, Any, Optional
 
@@ -13,31 +12,92 @@ from langchain_openai import ChatOpenAI
 from ..prompts.prompts import SYSTEM_PROMPT, build_user_context
 from ..validators import generate_skeleton, validate_plan_against_skeleton
 from ..logger import logger
+from ..llm_config import (
+    ANTHROPIC_MODEL,
+    ANTHROPIC_MODEL_FAST,
+    OPENAI_MODEL,
+    OPENAI_MODEL_FAST,
+    OPENAI_BASE_URL,
+)
 
 class LLMProvider(str, Enum):
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
 
-def get_llm(provider: LLMProvider):
-    # Retrieve mock/real API keys
+# Key values that mean "not configured". ANY other value is treated as a real,
+# usable key — including local-server sentinels (e.g. "local") when the OpenAI
+# branch is pointed at a self-host via OPENAI_BASE_URL.
+_PLACEHOLDER_KEYS = ("", "mock-key", "sk-ant-...", "sk-...")
+
+
+def _live_key(provider: LLMProvider):
+    """Return the configured key for `provider`, or None if it's a placeholder."""
+    env_var = "ANTHROPIC_API_KEY" if provider == LLMProvider.ANTHROPIC else "OPENAI_API_KEY"
+    key = os.environ.get(env_var, "")
+    return None if key in _PLACEHOLDER_KEYS else key
+
+
+def live_providers(preferred: LLMProvider = LLMProvider.OPENAI):
+    """Providers that have a usable key — `preferred` first, then the other."""
+    order = [preferred] + [p for p in (LLMProvider.ANTHROPIC, LLMProvider.OPENAI) if p != preferred]
+    return [p for p in order if _live_key(p) is not None]
+
+
+def no_live_provider() -> bool:
+    """True when NEITHER provider has a real key. Callers return demo/stub output."""
+    return len(live_providers()) == 0
+
+
+def _build_llm(provider: LLMProvider, fast: bool = True, temperature: float = 0.2):
+    """Construct a single concrete chat model for one provider."""
+    key = _live_key(provider) or "mock-key"
     if provider == LLMProvider.ANTHROPIC:
-        key = os.environ.get("ANTHROPIC_API_KEY", "mock-key")
         return ChatAnthropic(
-            model="claude-haiku-4-5",
+            model=ANTHROPIC_MODEL_FAST if fast else ANTHROPIC_MODEL,
             anthropic_api_key=key,
-            temperature=0.2,
-            max_tokens=4096
+            temperature=temperature,
+            max_tokens=4096,
+            # Bound a stalled provider connection so it can't hang the request
+            # indefinitely; on timeout the primary errors and .with_fallbacks()
+            # (F21) falls through to the other provider.
+            default_request_timeout=30,
+            max_retries=1,
         )
-    elif provider == LLMProvider.OPENAI:
-        key = os.environ.get("OPENAI_API_KEY", "mock-key")
-        return ChatOpenAI(
-            model="gpt-4o-mini",
-            openai_api_key=key,
-            temperature=0.2,
-            max_tokens=4096
-        )
-    else:
-        raise ValueError(f"Unsupported provider: {provider}")
+    return ChatOpenAI(
+        model=OPENAI_MODEL_FAST if fast else OPENAI_MODEL,
+        openai_api_key=key,
+        base_url=OPENAI_BASE_URL,  # None → OpenAI cloud; set → local/alt OpenAI-compatible server
+        temperature=temperature,
+        max_tokens=4096,
+        # Bound a stalled provider connection so it can't hang the request
+        # indefinitely; on timeout the primary errors and .with_fallbacks()
+        # (F21) falls through to the other provider.
+        request_timeout=30,
+        max_retries=1,
+    )
+
+
+def get_llm(provider: LLMProvider, fast: bool = True, temperature: float = 0.2):
+    """
+    Build the chat model for `provider` WITH CROSS-PROVIDER FALLBACK.
+
+    If the primary provider errors at call time (credit-balance exhausted, 429,
+    5xx, timeout), LangChain's `.with_fallbacks()` transparently retries on the
+    other provider — as long as both keys are configured. This works for both
+    `.ainvoke` and `.astream`, so it covers chat, streaming chat, plan/score/swap
+    and audit alike. It is exactly what would have prevented the Ria outage when
+    the Anthropic credit balance hit zero.
+
+    When NO provider is configured, returns a stub model built with a placeholder
+    key; callers gate on `no_live_provider()` and return demo output before using
+    it. `fast=False` selects the quality tier (used by the weekly audit).
+    """
+    provs = live_providers(preferred=provider)
+    if not provs:
+        return _build_llm(provider, fast=fast, temperature=temperature)
+    primary = _build_llm(provs[0], fast=fast, temperature=temperature)
+    fallbacks = [_build_llm(p, fast=fast, temperature=temperature) for p in provs[1:]]
+    return primary.with_fallbacks(fallbacks) if fallbacks else primary
 
 async def generate_plan_content(
     user_id: str,
@@ -45,7 +105,9 @@ async def generate_plan_content(
     user_preferences: Dict[str, Any],
     logic_targets: Optional[Dict[str, Any]] = None,
     provider: LLMProvider = LLMProvider.OPENAI,
-    max_retries: int = 3
+    max_retries: int = 3,
+    cycle_phase: Optional[str] = None,
+    verified_identity: Optional[str] = None,
 ) -> Dict[str, Any]:
 
     logger.info(f"Initializing LangChain with provider: {provider.value}")
@@ -58,13 +120,12 @@ async def generate_plan_content(
     ])
 
     chain = prompt | llm | parser
-    user_context = build_user_context(skeleton, user_preferences, logic_targets)
+    user_context = build_user_context(skeleton, user_preferences, logic_targets, cycle_phase)
 
-    # Only mock if the active provider's key is missing/placeholder
-    active_key_env = "ANTHROPIC_API_KEY" if provider == LLMProvider.ANTHROPIC else "OPENAI_API_KEY"
-    active_key = os.environ.get(active_key_env, "mock-key")
-    if not active_key or active_key in ("mock-key", "sk-ant-...", "sk-..."):
-        logger.warning("Using mock API keys for LangChain, returning stubbed response.")
+    # Only mock if NO provider has a real key (with cross-provider fallback, a
+    # single configured provider is enough — get_llm picks whichever is live).
+    if no_live_provider():
+        logger.warning("No live LLM provider configured, returning stubbed plan.")
         return {
            "coaching_message": "Stay hydrated tonight! You're doing great. Remember to dim the lights 2 hours before sleep.",
            "hydration_goal": "3.5L",
@@ -142,7 +203,7 @@ async def generate_plan_content(
             logger.info(f"Invoking LLM chain attempt: {attempt + 1}")
             
             from ..telemetry import TokenTelemetryHandler
-            handler = TokenTelemetryHandler(user_id=user_id, action="generate-plan", provider=provider.value)
+            handler = TokenTelemetryHandler(user_id=user_id, action="generate-plan", provider=provider.value, verified_identity=verified_identity)
 
             response = await chain.ainvoke(
                 {"user_context": user_context},

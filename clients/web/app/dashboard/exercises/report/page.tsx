@@ -6,8 +6,8 @@ import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { getRecentWorkouts, getExerciseHeatmap } from '@/lib/api';
 import {
-    ChevronLeft, ChevronRight, TrendingUp, Timer, Weight, Calendar,
-    ChevronDown, Dumbbell, Scale
+    ChevronLeft, Weight, Calendar,
+    ChevronDown, Scale
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -248,7 +248,7 @@ export default function ReportPage() {
                                     <span className="text-xs text-zinc-500">{day}</span>
                                     <div className={cn(
                                         'w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all',
-                                        isToday ? 'bg-brand-500 text-white' : 'text-zinc-400'
+                                        isToday ? 'bg-brand-500 text-background' : 'text-zinc-400'
                                     )}>
                                         {weekDates[i]}
                                     </div>
@@ -330,7 +330,7 @@ export default function ReportPage() {
                                 <p className="text-brand-500 text-4xl font-black">{currentWeight}</p>
                                 <p className="text-zinc-500 text-xs mt-1">Last 30 days —</p>
                             </div>
-                            <Button className="bg-brand-500 hover:bg-brand-600 text-white font-bold px-6">
+                            <Button className="bg-brand-500 hover:bg-brand-600 text-background font-bold px-6">
                                 <Scale size={16} className="mr-2" /> LOG
                             </Button>
                         </div>

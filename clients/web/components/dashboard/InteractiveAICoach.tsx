@@ -46,7 +46,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
     if (msg.role === 'user') {
         return (
             <div className="flex justify-end">
-                <div className="max-w-[85%] rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm bg-brand-500 text-white">
+                <div className="max-w-[85%] rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm bg-brand-500 text-background">
                     {msg.content}
                 </div>
             </div>
@@ -292,7 +292,7 @@ export function InteractiveAICoach() {
                                     type="submit"
                                     size="icon"
                                     disabled={!inputValue.trim() || chatMutation.isPending}
-                                    className="h-8 w-8 rounded-full shrink-0 bg-brand-500 hover:bg-brand-400 text-white disabled:opacity-30 transition-all hover:scale-105 active:scale-95"
+                                    className="h-8 w-8 rounded-full shrink-0 bg-brand-500 hover:bg-brand-400 text-background disabled:opacity-30 transition-all hover:scale-105 active:scale-95"
                                 >
                                     {chatMutation.isPending
                                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -313,7 +313,7 @@ export function InteractiveAICoach() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => { setIsOpen(!isOpen); setUnread(0); }}
-                className="group relative h-14 w-14 rounded-full bg-brand-500 text-white flex items-center justify-center shadow-xl shadow-brand-500/30 overflow-hidden"
+                className="group relative h-14 w-14 rounded-full bg-brand-500 text-background flex items-center justify-center shadow-xl shadow-brand-500/30 overflow-hidden"
             >
                 <div className="absolute inset-0 bg-gradient-to-tr from-brand-600 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                 <AnimatePresence mode="wait">

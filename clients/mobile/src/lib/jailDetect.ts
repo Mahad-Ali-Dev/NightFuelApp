@@ -6,7 +6,7 @@
  * module exists to:
  *
  *   1. Show users a soft warning that their device's security model has
- *      been bypassed and that NightFuel can't protect their account
+ *      been bypassed and that Zeitra can't protect their account
  *      tokens / payment data the way it normally would.
  *   2. Send a Sentry breadcrumb with a flag so we can see in aggregate
  *      what fraction of users run on rooted/jailbroken devices.
@@ -26,14 +26,14 @@
 import { Platform } from 'react-native';
 import { captureException } from '@/lib/sentry';
 
-type FileSystemModule = typeof import('expo-file-system');
+type FileSystemModule = typeof import('expo-file-system/legacy');
 let fs: FileSystemModule | null = null;
 
 function getFs(): FileSystemModule | null {
   if (fs !== null) return fs;
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    fs = require('expo-file-system') as FileSystemModule;
+    fs = require('expo-file-system/legacy') as FileSystemModule;
     return fs;
   } catch {
     return null;

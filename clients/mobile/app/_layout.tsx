@@ -6,11 +6,16 @@ import React, { useEffect } from 'react';
 import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Alert, useColorScheme } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+import { useFonts, Barlow_400Regular, Barlow_500Medium, Barlow_600SemiBold, Barlow_700Bold } from '@expo-google-fonts/barlow';
+import { BarlowCondensed_600SemiBold, BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold } from '@expo-google-fonts/barlow-condensed';
+import { Saira_400Regular, Saira_500Medium, Saira_600SemiBold, Saira_700Bold } from '@expo-google-fonts/saira';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ThemeContext, getThemeColors, typography, spacing, borderRadius, shadows, ColorScheme } from '@/theme';
-import { colors } from '@/theme/colors';
+import { ThemeContext, resolveThemeColors, typography, spacing, borderRadius, ColorScheme } from '@/theme';
+import { makeShadows } from '@/theme/shadows';
+import { isLightHex } from '@/theme/utils';
 import { useAuthStore } from '@/store/authStore';
 import { useThemeStore } from '@/store/themeStore';
 import { setOnSessionExpired } from '@/api/client';
@@ -20,6 +25,8 @@ import BadgeToast from '@/components/BadgeToast';
 import { getErrorMessage } from '@/utils/validation';
 import { useOfflineSync } from '@/hooks/useOfflineSync';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useCircadianReminders } from '@/hooks/useCircadianReminders';
+import { useCycleWidgetSync } from '@/widgets/sync';
 import { wrap as sentryWrap, setUser as sentrySetUser, captureException } from '@/lib/sentry';
 import * as Linking from 'expo-linking';
 import { resolveDeepLink } from '@/lib/deepLinks';
@@ -43,22 +50,58 @@ const queryClient = new QueryClient({
   },
 });
 
+// Hold the native splash until our brand fonts (Saira — the brand face — plus
+// Barlow / Barlow Condensed) load, so the very first frame renders in-brand with
+// no system-font flash.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 function RootLayout() {
   const systemScheme = useColorScheme();
-  const { isDarkTheme } = useThemeStore();
+  const [fontsLoaded] = useFonts({
+    Saira_400Regular, Saira_500Medium, Saira_600SemiBold, Saira_700Bold,
+    Barlow_400Regular, Barlow_500Medium, Barlow_600SemiBold, Barlow_700Bold,
+    BarlowCondensed_600SemiBold, BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold,
+  });
+  useEffect(() => { if (fontsLoaded) SplashScreen.hideAsync().catch(() => {}); }, [fontsLoaded]);
+  const { isDarkTheme, nightRead, themeVariant } = useThemeStore();
   const scheme = (isDarkTheme(systemScheme) ? 'dark' : 'light') as ColorScheme;
-  const themeColors = getThemeColors(scheme);
+  // Night Read (when ON) swaps in the deep-red, melatonin-safe palette so every
+  // `useTheme()` consumer re-themes (highest priority). Otherwise the selected
+  // color-theme variant drives the palette (default 'midnight-lime' = the
+  // unchanged Aurora dark look, so existing users see exactly the current theme).
+  const themeColors = React.useMemo(
+    () => resolveThemeColors(scheme, nightRead, themeVariant),
+    [scheme, nightRead, themeVariant],
+  );
+  // Scheme-aware shadows: dark variants keep the tuned dark elevation; LIGHT
+  // variants drop the Android system shadow + soften the iOS cast/halo so cards
+  // don't smear the near-white surface (the "shadow over the sections" bug).
+  const themedShadows = React.useMemo(
+    () => makeShadows(isLightHex(themeColors.background.primary)),
+    [themeColors],
+  );
 
-  const themeValue = {
+  // Memoized so the ThemeContext value is referentially stable across the root's
+  // frequent re-renders (auth / notification / connectivity churn during startup).
+  // Without this, a fresh object every render forces EVERY `useTheme()` consumer in
+  // the app to re-render on each root render — which on input screens can disrupt
+  // focus and read as flicker.
+  const themeValue = React.useMemo(() => ({
     scheme,
     colors: themeColors,
     typography,
     spacing,
     borderRadius,
-    shadows,
-  };
+    shadows: themedShadows,
+  }), [scheme, nightRead, themeVariant, themeColors, themedShadows]);
 
-  const { loadSession, user } = useAuthStore();
+  // Per-field scoped selectors: an unscoped `useAuthStore()` destructure
+  // subscribes the root to EVERY auth-store change, so any field mutation
+  // (e.g. isLoading flipping during loadSession, or a profile refetch) would
+  // re-render the whole root — and on the auth path that churn bounced users
+  // mid-type. Scope to exactly the two fields this layout reads.
+  const loadSession = useAuthStore((s) => s.loadSession);
+  const user = useAuthStore((s) => s.user);
   const router = useRouter();
   const [disclaimerVisible, setDisclaimerVisible] = React.useState(false);
 
@@ -79,6 +122,8 @@ function RootLayout() {
 
   useOfflineSync();    // Drains offline queue when connectivity is restored
   useNotifications(); // Registers push token with backend
+  useCircadianReminders(); // Schedules shift-timed circadian local reminders (eat / caffeine / wind-down / log sleep)
+  useCycleWidgetSync(); // Keeps the Android home-screen cycle widget's cached snapshot fresh (Android-only no-op elsewhere)
 
   useEffect(() => {
     loadSession();
@@ -124,6 +169,9 @@ function RootLayout() {
     });
   }, [router]);
 
+  // Hold render until the brand fonts are ready (native splash stays up meanwhile).
+  if (!fontsLoaded) return null;
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
@@ -136,7 +184,7 @@ function RootLayout() {
               <Stack
                 screenOptions={{
                   headerShown: false,
-                  contentStyle: { backgroundColor: colors.background.primary },
+                  contentStyle: { backgroundColor: themeColors.background.primary },
                   animation: 'slide_from_right',
                 }}
               >
@@ -146,6 +194,7 @@ function RootLayout() {
                 <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
                 <Stack.Screen name="(modals)" options={{ headerShown: false, presentation: 'modal' }} />
                 <Stack.Screen name="(coach)" options={{ animation: 'fade' }} />
+                <Stack.Screen name="(challenge)" options={{ animation: 'slide_from_right' }} />
                 <Stack.Screen name="(exercises)" options={{ animation: 'slide_from_right' }} />
                 <Stack.Screen name="(meals)" options={{ animation: 'slide_from_right' }} />
                 <Stack.Screen name="(performance)" options={{ animation: 'slide_from_right' }} />

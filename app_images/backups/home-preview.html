@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Home</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .glow{border:1.5px solid var(--lm);box-shadow:0 0 14px #C2F03C44;background:linear-gradient(150deg,#2b303a,#14171e)}
+  .imgwrap{position:relative;overflow:hidden}.imgwrap img{width:100%;height:100%;object-fit:cover}
+  .done{position:absolute;top:9px;right:9px;width:20px;height:20px;border-radius:50%;background:var(--lm);color:#13200a;display:flex;align-items:center;justify-content:center}
+  .ria{position:absolute;right:0;top:300px;z-index:5;background:var(--lm);color:#13200a;width:44px;padding:11px 0;border-radius:16px 0 0 16px;display:flex;flex-direction:column;align-items:center;gap:5px;box-shadow:0 4px 16px #0008}
+</style>
+</head>
+<body>
+<div class="frame"><div class="scroll">
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+  <!-- header -->
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 18px 4px">
+    <div style="display:flex;align-items:center;gap:11px"><div style="width:42px;height:42px;border-radius:50%;background:#1c2a0e;border:1.5px solid #2e3a16;color:var(--lm);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:600">A</div><div><div style="color:var(--mu);font-size:12px">Good evening</div><div style="color:var(--tx);font-size:17px;font-weight:600">Alex</div></div></div>
+    <div style="position:relative"><i class="ti ti-bell" style="color:var(--tx);font-size:23px"></i><span style="position:absolute;top:-1px;right:-1px;width:8px;height:8px;border-radius:50%;background:var(--lm);border:1.5px solid var(--bg)"></span></div>
+  </div>
+  <div style="padding:4px 16px 0"><span style="display:inline-flex;align-items:center;gap:6px;background:#15181F;border:1px solid #2a2f3a;color:var(--tx);font-size:12px;font-weight:500;padding:6px 12px;border-radius:20px"><i class="ti ti-moon" style="color:var(--lm);font-size:15px"></i>Night shift · 3h in</span></div>
+
+  <!-- hero slider -->
+  <div style="padding:14px 16px 0"><div style="position:relative;height:152px;border-radius:18px;overflow:hidden;background:linear-gradient(150deg,#2b303a,#14171e);display:flex;align-items:flex-end">
+    <img src="ready/muscle-chest-male.png" style="position:absolute;right:-14px;bottom:0;height:170px;width:auto;object-fit:contain">
+    <div style="position:relative;padding:16px"><span style="background:var(--lm);color:#13200a;font-size:10px;font-weight:600;padding:3px 9px;border-radius:8px;letter-spacing:0.3px">Tonight's focus</span><div style="color:#fff;font-size:21px;font-weight:600;margin-top:9px">Upper body strength</div><div style="color:#cfd4dd;font-size:13px">4 exercises · chest &amp; arms · 45 min</div></div>
+  </div>
+  <div style="display:flex;justify-content:center;gap:6px;padding:10px 0 0"><span style="width:18px;height:6px;background:var(--lm);border-radius:6px"></span><span style="width:6px;height:6px;background:#3a3f49;border-radius:50%"></span><span style="width:6px;height:6px;background:#3a3f49;border-radius:50%"></span></div></div>
+
+  <!-- next meal card -->
+  <div style="padding:10px 14px 0"><div class="zc" style="overflow:hidden"><div class="imgwrap" style="height:104px"><img src="ready/meal-recovery.png" alt="meal"></div>
+    <div style="padding:10px 13px;display:flex;justify-content:space-between;align-items:center"><div><span style="color:var(--mu);font-size:11px">Next · pre-shift meal</span><div style="color:var(--tx);font-size:15px;font-weight:500;margin-top:2px">Grilled chicken bowl</div><div style="color:var(--mu);font-size:11px;margin-top:3px">620 kcal · in 1h 20m</div></div><span style="background:#1e222b;color:var(--lm);font-size:12px;font-weight:500;padding:7px 13px;border-radius:10px">Add</span></div>
+  </div></div>
+
+  <!-- picked carousel -->
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 18px 10px"><span style="color:var(--tx);font-size:16px;font-weight:600">Picked for your shift</span><i class="ti ti-chevron-right" style="color:var(--mu);font-size:18px"></i></div>
+  <div style="display:flex;gap:11px;padding:0 0 0 14px;overflow:hidden">
+    <div style="min-width:128px;flex-shrink:0"><div style="height:90px;border-radius:14px;background:linear-gradient(150deg,#2b303a,#14171e);position:relative;overflow:hidden"><i class="ti ti-flame" style="position:absolute;bottom:8px;left:10px;color:var(--lm);font-size:20px"></i></div><div style="color:var(--tx);font-size:13px;font-weight:500;margin-top:7px">Night HIIT</div><div style="color:var(--mu);font-size:11px">20 min</div></div>
+    <div style="min-width:128px;flex-shrink:0"><div style="height:90px;border-radius:14px;background:linear-gradient(150deg,#33271a,#14171e);position:relative;overflow:hidden"><i class="ti ti-bowl" style="position:absolute;bottom:8px;left:10px;color:var(--lm);font-size:20px"></i></div><div style="color:var(--tx);font-size:13px;font-weight:500;margin-top:7px">High-protein bowls</div><div style="color:var(--mu);font-size:11px">12 recipes</div></div>
+    <div style="min-width:128px;flex-shrink:0"><div style="height:90px;border-radius:14px;background:linear-gradient(150deg,#1d2a30,#14171e);position:relative;overflow:hidden"><i class="ti ti-yoga" style="position:absolute;bottom:8px;left:10px;color:var(--lm);font-size:20px"></i></div><div style="color:var(--tx);font-size:13px;font-weight:500;margin-top:7px">Mobility flow</div><div style="color:var(--mu);font-size:11px">10 min</div></div>
+  </div>
+
+  <!-- bento -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;padding:18px 16px 0">
+    <div class="glow" style="border-radius:15px;padding:13px;grid-row:span 2;position:relative;display:flex;flex-direction:column;justify-content:space-between"><div><i class="ti ti-barbell" style="color:var(--lm);font-size:24px"></i><div style="color:#fff;font-size:16px;font-weight:500;margin-top:8px">Tonight's training</div><div style="color:#cfd4dd;font-size:12px;margin-top:2px">Push day · 45 min</div></div><div style="background:var(--lm);color:#13200a;font-size:13px;font-weight:600;padding:8px;border-radius:10px;text-align:center;margin-top:14px">Start workout</div></div>
+    <div class="zc" style="position:relative;padding:13px"><div class="done"><i class="ti ti-check" style="font-size:13px"></i></div><i class="ti ti-moon" style="color:#7C9CFF;font-size:20px"></i><div style="color:var(--tx);font-size:18px;font-weight:600;margin-top:6px">7h 12m</div><div style="color:var(--mu);font-size:11px">Sleep</div></div>
+    <div class="zc" style="position:relative;padding:13px"><i class="ti ti-droplet" style="color:#4FC9E8;font-size:20px"></i><div style="color:var(--tx);font-size:18px;font-weight:600;margin-top:6px">1.4<span style="font-size:12px;color:var(--mu)">L</span></div><div style="color:var(--mu);font-size:11px">Water</div><div style="height:4px;background:#252a33;border-radius:3px;margin-top:7px"><div style="width:47%;height:100%;background:#4FC9E8;border-radius:3px"></div></div></div>
+    <div class="zc" style="position:relative;padding:13px"><div class="done"><i class="ti ti-check" style="font-size:13px"></i></div><i class="ti ti-walk" style="color:var(--lm);font-size:20px"></i><div style="color:var(--tx);font-size:18px;font-weight:600;margin-top:6px">8,240</div><div style="color:var(--mu);font-size:11px">Steps</div></div>
+    <div class="zc" style="position:relative;padding:13px"><i class="ti ti-flame" style="color:var(--lm);font-size:20px"></i><div style="color:var(--tx);font-size:18px;font-weight:600;margin-top:6px">540</div><div style="color:var(--mu);font-size:11px">Calories</div></div>
+  </div>
+
+  <!-- streak + week -->
+  <div style="padding:18px 16px 0"><div class="zc" style="padding:14px;display:flex;align-items:center;justify-content:space-between"><div style="display:flex;align-items:center;gap:11px"><i class="ti ti-flame" style="color:var(--lm);font-size:26px"></i><div><div style="color:var(--tx);font-size:17px;font-weight:600">12-day streak</div><div style="color:var(--mu);font-size:12px">Keep it rolling</div></div></div><div style="display:flex;gap:5px">
+    <span style="width:8px;height:8px;border-radius:50%;background:var(--lm)"></span><span style="width:8px;height:8px;border-radius:50%;background:var(--lm)"></span><span style="width:8px;height:8px;border-radius:50%;background:var(--lm)"></span><span style="width:8px;height:8px;border-radius:50%;background:var(--lm)"></span><span style="width:8px;height:8px;border-radius:50%;background:var(--lm)"></span><span style="width:8px;height:8px;border-radius:50%;background:var(--lm)"></span><span style="width:8px;height:8px;border-radius:50%;background:#2a2f3a"></span></div></div></div>
+
+  <!-- circadian timeline -->
+  <div style="color:var(--tx);font-size:16px;font-weight:600;padding:20px 18px 10px">Your rhythm tonight</div>
+  <div style="padding:0 16px"><div class="zc" style="padding:15px">
+    <div style="display:flex;justify-content:space-between;color:var(--mu);font-size:11px"><span>21:00</span><span style="color:var(--lm)">NOW</span><span>02:00</span><span>08:00</span></div>
+    <div style="height:7px;border-radius:4px;margin-top:9px;background:linear-gradient(90deg,#C2F03C,#7C9CFF 52%,#252a33 52%)"></div>
+    <div style="display:flex;gap:9px;margin-top:13px"><div style="flex:1;background:#1e222b;border-radius:11px;padding:10px"><i class="ti ti-coffee" style="color:var(--lm);font-size:18px"></i><div style="color:var(--tx);font-size:12px;font-weight:500;margin-top:4px">Caffeine cutoff</div><div style="color:var(--mu);font-size:11px">by 02:00</div></div><div style="flex:1;background:#1e222b;border-radius:11px;padding:10px"><i class="ti ti-moon-stars" style="color:#7C9CFF;font-size:18px"></i><div style="color:var(--tx);font-size:12px;font-weight:500;margin-top:4px">Wind-down</div><div style="color:var(--mu);font-size:11px">07:30</div></div></div>
+  </div></div>
+
+  <!-- Ria insight -->
+  <div style="padding:14px 16px 0"><div style="background:#161d10;border:1px solid #38491b;border-radius:16px;padding:14px;display:flex;gap:12px"><div style="width:38px;height:38px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1.5px solid #2e3a16"><img src="logo_app.png" style="width:100%;height:100%;object-fit:cover"></div><div><div style="color:var(--lm);font-size:12px;font-weight:500;display:flex;align-items:center;gap:5px"><i class="ti ti-sparkles" style="font-size:14px"></i>Coach Ria</div><div style="color:#dfe3ea;font-size:12.5px;line-height:1.5;margin-top:4px">You're 3h into your shift — eat your pre-shift bowl now so you train fuelled at 23:00. 💪</div></div></div></div>
+  <div style="height:96px"></div>
+</div>
+
+<div class="ria"><i class="ti ti-message-circle" style="font-size:19px"></i><span style="font-size:10px;font-weight:500">Ria</span></div>
+<div style="position:absolute;bottom:12px;left:12px;right:12px;height:60px;background:#15181F;border:1px solid #2a2f3a;border-radius:26px;box-shadow:0 12px 28px #000b;display:flex;align-items:center;justify-content:space-around;padding:0 16px">
+  <div style="display:flex;flex-direction:column;align-items:center;gap:3px"><div style="width:48px;height:48px;border-radius:50%;background:var(--lm);color:#13200a;display:flex;align-items:center;justify-content:center;margin-top:-24px;border:4px solid var(--bg);box-shadow:0 6px 15px #0009"><i class="ti ti-home" style="font-size:23px"></i></div><span style="font-size:10px;color:var(--lm);font-weight:500">Home</span></div>
+  <div style="color:#7d828d;display:flex;flex-direction:column;align-items:center;gap:3px"><i class="ti ti-tools-kitchen-2" style="font-size:23px"></i><span style="font-size:10px">Meals</span></div>
+  <div style="color:#7d828d;display:flex;flex-direction:column;align-items:center;gap:3px"><i class="ti ti-plus" style="font-size:23px"></i><span style="font-size:10px">Add</span></div>
+  <div style="color:#7d828d;display:flex;flex-direction:column;align-items:center;gap:3px"><i class="ti ti-barbell" style="font-size:23px"></i><span style="font-size:10px">Train</span></div>
+  <div style="color:#7d828d;display:flex;flex-direction:column;align-items:center;gap:3px"><i class="ti ti-user" style="font-size:23px"></i><span style="font-size:10px">You</span></div>
+</div>
+</div>
+</body>
+</html>

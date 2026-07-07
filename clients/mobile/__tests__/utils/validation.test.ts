@@ -53,8 +53,16 @@ describe('isStrongPassword', () => {
 
 describe('sanitizeInput', () => {
   test('strips simple HTML tags', () => {
-    expect(sanitizeInput('<script>evil()</script>hello')).toBe('evilhello');
+    expect(sanitizeInput('<script>evil()</script>hello')).toBe('evil()hello');
     expect(sanitizeInput('<b>bold</b>')).toBe('bold');
+  });
+
+  test('leaves no live tag for nested or unclosed constructs', () => {
+    // Nested: one pass would leave a live <script>; the loop must fully clear it.
+    expect(sanitizeInput('<scr<script>ipt>x')).not.toContain('<script>');
+    // Unclosed tag (no '>'): the residual-bracket strip must remove the '<'.
+    expect(sanitizeInput('<script src=x')).not.toContain('<');
+    expect(sanitizeInput('a < b > c')).not.toMatch(/[<>]/);
   });
 
   test('trims whitespace', () => {

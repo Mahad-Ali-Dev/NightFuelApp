@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useShiftStore } from '@/store/shiftStore';
-import { getCurrent, Shift } from '@/api/shifts';
+import { getCurrent } from '@/api/shifts';
 
 /**
  * Current shift info hook.

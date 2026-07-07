@@ -9,7 +9,16 @@ import fastifyRateLimit from '@fastify/rate-limit';
 
 const envSchema = z.object({
     DECISION_ENGINE_PORT: z.string().default('3016'),
-    JWT_SECRET: z.string(),
+    // Enforce a >=32 char shared secret so a weak/short JWT_SECRET fails CLOSED
+    // at boot (via loadConfig → process.exit) rather than booting silently on a
+    // forgeable secret — mirrors auth-service (the token issuer) and the other
+    // services in this group.
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+    // Comma-separated list of allowed web origins. Optional: when unset we fail
+    // CLOSED with an empty allowlist (no cross-origin browser access) rather than
+    // reflecting the request origin. Never use '*' — that plus credentials is
+    // forbidden by the browser and reflective origins defeat the same-origin policy.
+    CORS_ORIGIN: z.string().optional(),
 });
 
 const config = loadConfig(envSchema);
@@ -30,8 +39,15 @@ fastify.register(fastifyRateLimit, {
     timeWindow: '1 minute'
 });
 
+// Explicit allowlist from CORS_ORIGIN (comma-separated). When unset the list is
+// empty, so the browser is told no cross-origin is allowed (fail CLOSED). Never
+// '*' and never reflect the request origin.
+const corsOrigins = config.CORS_ORIGIN
+    ? config.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+    : [];
+
 fastify.register(fastifyCors, {
-    origin: true,
+    origin: corsOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 });
 

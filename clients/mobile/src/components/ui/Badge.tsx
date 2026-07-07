@@ -10,16 +10,20 @@ interface BadgeProps {
   style?: ViewStyle;
 }
 
-export function Badge({ label, variant = 'default', size = 'sm', style }: BadgeProps) {
+function BadgeComponent({ label, variant = 'default', size = 'sm', style }: BadgeProps) {
   const { colors } = useTheme();
 
-  const colorMap: Record<string, { bg: string; text: string }> = {
-    default: { bg: colors.background.tertiary, text: colors.text.secondary },
-    coral: { bg: 'rgba(255,107,53,0.15)', text: colors.accent.coral },
-    cyan: { bg: 'rgba(0,212,170,0.15)', text: colors.accent.cyan },
-    purple: { bg: 'rgba(124,77,255,0.15)', text: colors.accent.purple },
-    red: { bg: 'rgba(255,68,68,0.15)', text: colors.accent.red },
-    amber: { bg: 'rgba(255,179,0,0.15)', text: colors.accent.amber },
+  const colorMap: Record<string, { bg: string; text: string; border: string }> = {
+    default: {
+      bg: colors.background.tertiary,
+      text: colors.text.secondary,
+      border: colors.border.default,
+    },
+    coral: { bg: 'rgba(255,107,53,0.14)', text: colors.accent.coral, border: 'rgba(255,107,53,0.28)' },
+    cyan: { bg: 'rgba(0,212,170,0.14)', text: colors.accent.cyan, border: 'rgba(0,212,170,0.28)' },
+    purple: { bg: 'rgba(124,77,255,0.14)', text: colors.accent.purple, border: 'rgba(124,77,255,0.28)' },
+    red: { bg: 'rgba(255,68,68,0.14)', text: colors.accent.red, border: 'rgba(255,68,68,0.28)' },
+    amber: { bg: 'rgba(255,179,0,0.14)', text: colors.accent.amber, border: 'rgba(255,179,0,0.28)' },
   };
 
   const c = colorMap[variant] ?? colorMap['default']!;
@@ -29,7 +33,7 @@ export function Badge({ label, variant = 'default', size = 'sm', style }: BadgeP
       style={[
         styles.badge,
         size === 'sm' ? styles.sm : styles.md,
-        { backgroundColor: c.bg },
+        { backgroundColor: c.bg, borderColor: c.border },
         style,
       ]}
     >
@@ -40,9 +44,17 @@ export function Badge({ label, variant = 'default', size = 'sm', style }: BadgeP
   );
 }
 
+/**
+ * Memoized: `label`/`variant`/`size` are primitives. `style` is usually a
+ * stable StyleSheet ref; when a caller passes an inline object the shallow
+ * compare simply doesn't skip — identical behavior, just no perf win there.
+ */
+export const Badge = React.memo(BadgeComponent);
+
 const styles = StyleSheet.create({
   badge: {
     borderRadius: br.full,
+    borderWidth: StyleSheet.hairlineWidth,
     alignSelf: 'flex-start',
   },
   sm: {

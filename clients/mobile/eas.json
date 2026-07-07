@@ -5,45 +5,54 @@
   },
   "build": {
     "development": {
+      "node": "24.13.1",
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
       "ios": { "simulator": true, "resourceClass": "m-medium" },
       "android": { "resourceClass": "medium" },
       "env": {
-        "EXPO_PUBLIC_APP_ENV": "development"
+        "EXPO_PUBLIC_APP_ENV": "development",
+        "EXPO_PUBLIC_REVENUECAT_KEY": "test_gPeQRprIJNatitkNKsvHdFbzEav"
       }
     },
     "preview": {
+      "node": "24.13.1",
       "distribution": "internal",
       "channel": "preview",
       "android": { "buildType": "apk", "resourceClass": "medium" },
       "ios": { "resourceClass": "m-medium" },
       "env": {
-        "EXPO_PUBLIC_NF_API_BASE_URL": "https://staging.api.nightfuel.app",
+        "EXPO_PUBLIC_NF_API_BASE_URL": "https://staging.api.zeitra.app",
         "EXPO_PUBLIC_APP_ENV": "preview",
-        "EXPO_PUBLIC_SENTRY_DSN": "",
-        "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false"
+        "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false",
+        "EXPO_PUBLIC_REVENUECAT_KEY": "test_gPeQRprIJNatitkNKsvHdFbzEav"
       }
     },
     "production": {
+      "node": "24.13.1",
       "autoIncrement": true,
       "channel": "production",
       "distribution": "store",
-      "ios": {
-        "bundleIdentifier": "com.nightfuel.app",
-        "resourceClass": "m-medium"
-      },
-      "android": {
-        "package": "com.nightfuel.app",
-        "buildType": "app-bundle",
-        "resourceClass": "medium"
-      },
+      "ios": { "resourceClass": "m-medium" },
+      "android": { "buildType": "app-bundle", "resourceClass": "medium" },
       "env": {
-        "EXPO_PUBLIC_NF_API_BASE_URL": "https://api.nightfuel.app",
+        "EXPO_PUBLIC_NF_API_BASE_URL": "https://api.zeitra.app",
         "EXPO_PUBLIC_APP_ENV": "production",
-        "EXPO_PUBLIC_SENTRY_DSN": "",
-        "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false"
+        "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false",
+        "EXPO_PUBLIC_REVENUECAT_KEY": "test_gPeQRprIJNatitkNKsvHdFbzEav"
+      }
+    },
+    "apk": {
+      "node": "24.13.1",
+      "channel": "production",
+      "distribution": "internal",
+      "android": { "buildType": "apk", "resourceClass": "medium" },
+      "env": {
+        "EXPO_PUBLIC_NF_API_BASE_URL": "https://api.zeitra.app",
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false",
+        "EXPO_PUBLIC_REVENUECAT_KEY": "test_gPeQRprIJNatitkNKsvHdFbzEav"
       }
     }
   },

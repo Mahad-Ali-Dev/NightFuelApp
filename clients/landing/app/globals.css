@@ -1,0 +1,643 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   ZEITRA — premium dark design system (self-contained; 21st.dev idiom).
+   No legacy ../styles.css import — everything the redesign needs is here:
+   Tailwind v4 @theme tokens + base styles + reusable utility classes.
+   ============================================================================ */
+
+/* ============================================================================
+   Runtime theme variables.
+
+   Semantic tokens are declared as *plain* CSS custom properties (not @theme) so
+   they can hold different values per theme: :root carries the LIGHT palette and
+   .dark carries the DARK palette. next-themes toggles the `.dark` class on
+   <html>, which swaps every value below at runtime.
+
+   @theme inline (further down) then aliases the Tailwind --color-* tokens to
+   these vars, so utilities like text-[var(--color-foreground)], bg-popover,
+   text-muted-foreground, ring-ring, border, etc. all resolve in BOTH themes.
+   ============================================================================ */
+
+:root {
+  /* ---- LIGHT palette (primary, polished experience) ---------------------- */
+  /* Surfaces — near-white, neutral and airy; the lime accent supplies all the
+     color so the base stays gallery-clean. */
+  --background: #fafbf9;   /* app base — near-white */
+  --foreground: #101418;   /* primary text (near-black ink) */
+  --ink: #0a0c12;          /* on-lime text — stays dark in both themes */
+
+  --panel: #ffffff;        /* solid glass panel (pure white in light) */
+  --panel-2: #ffffff;      /* lighter glass panel — pure white for crisp cards */
+  --card: #ffffff;
+  --card-foreground: #0b0e14;
+  --popover: #ffffff;
+  --popover-foreground: #0b0e14;
+
+  --secondary: #eef2e8;
+  --secondary-foreground: #0b0e14;
+  --muted: #e9eee2;
+  --muted-foreground: #566173; /* AA on the light base */
+
+  /* Accents — lime is deliberately identical in both themes */
+  --primary: #a8cc3c;
+  --primary-foreground: #0a0c12;
+  --lime: #a8cc3c;
+  --lime-light: #c5e06b;
+  --lime-dark: #7c9c26;        /* deepened so lime-on-white text has AA contrast */
+  --cyan: #059e84;             /* deepened for contrast on light */
+  --accent: #a8cc3c;
+  --accent-foreground: #0a0c12;
+  --destructive: #d64545;
+
+  /* Lines / focus — a touch stronger than pure alpha-black so borders read as
+     intentional hairlines, not smudges. */
+  --border: rgba(15, 23, 20, 0.09);
+  --border-strong: rgba(15, 23, 20, 0.15);
+  --input: rgba(15, 23, 20, 0.14);
+  --ring: #a8cc3c;
+
+  /* Ambient glow stops — restrained tints so glows read as light, airy washes
+     rather than dark muddy blobs on white. Single-accent palette: the "cyan"
+     stop is intentionally just a fainter lime so no second hue ever appears. */
+  --glow-lime: rgba(168, 204, 60, 0.14);
+  --glow-cyan: rgba(168, 204, 60, 0.07);
+  --page-glow-opacity: 0.5;
+
+  /* GitHub-style lime heat scale (light: empty is a faint ink tint) */
+  --contribution-empty: rgba(11, 14, 20, 0.06);
+  --contribution-level-1: rgba(168, 204, 60, 0.35);
+  --contribution-level-2: rgba(168, 204, 60, 0.60);
+  --contribution-level-3: #a8cc3c;
+  --contribution-level-4: #86a72a;
+
+  /* Surface tint used by glass / grid / dot textures. In LIGHT it is an INK
+     wash (dark lines on a light surface); in DARK it is a white wash. */
+  --hairline: rgba(11, 14, 20, 0.045);
+  --hairline-strong: rgba(11, 14, 20, 0.075);
+  /* Glass: a crisp frosted-white card that lifts off the base with a soft,
+     directional shadow — the signature light-theme surface. */
+  --glass-tint-top: rgba(255, 255, 255, 0.9);
+  --glass-tint-bottom: rgba(255, 255, 255, 0.72);
+  --glass-inset: rgba(255, 255, 255, 0.9);
+  --glass-shadow: rgba(20, 30, 24, 0.16);
+
+  /* Surface used by translucent controls (nav, secondary button) that used to
+     rely on white/[0.0x] — swap to a subtle ink wash so they're visible on
+     light. Dark overrides this to a white wash. */
+  --control-surface: rgba(15, 23, 20, 0.04);
+  --control-surface-hover: rgba(15, 23, 20, 0.07);
+}
+
+.dark {
+  /* ---- DARK palette (the current/default look) --------------------------- */
+  /* Surfaces */
+  --background: #0a0c12;
+  --foreground: #f2f4f7;
+  --ink: #0a0c12;
+
+  /* Neutral charcoal surfaces — no green/blue tint; lime is the only hue. */
+  --panel: #101216;
+  --panel-2: #15181d;
+  --card: #15181d;
+  --card-foreground: #f2f4f7;
+  --popover: #101216;
+  --popover-foreground: #f2f4f7;
+
+  --secondary: #15181d;
+  --secondary-foreground: #f2f4f7;
+  --muted: #1c2026;
+  --muted-foreground: #99a1ac; /* AA on the dark base */
+
+  /* Accents */
+  --primary: #a8cc3c;
+  --primary-foreground: #0a0c12;
+  --lime: #a8cc3c;
+  --lime-light: #c5e06b;
+  --lime-dark: #93b82e;
+  --cyan: #a8cc3c; /* single-accent: 'cyan' resolves to lime */
+  --accent: #a8cc3c;
+  --accent-foreground: #0a0c12;
+  --destructive: #ff5c5c;
+
+  /* Lines / focus */
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #a8cc3c;
+
+  /* Ambient glow stops — single accent, restrained */
+  --glow-lime: rgba(168, 204, 60, 0.16);
+  --glow-cyan: rgba(168, 204, 60, 0.08);
+  --page-glow-opacity: 0.24;
+
+  /* Translucent control surfaces — white wash on the dark base. */
+  --control-surface: rgba(255, 255, 255, 0.03);
+  --control-surface-hover: rgba(255, 255, 255, 0.07);
+
+  /* Lime heat scale (dark: empty is a faint white tint) */
+  --contribution-empty: rgba(255, 255, 255, 0.05);
+  --contribution-level-1: rgba(168, 204, 60, 0.30);
+  --contribution-level-2: rgba(168, 204, 60, 0.55);
+  --contribution-level-3: #a8cc3c;
+  --contribution-level-4: #c5e06b;
+
+  /* Surface tint — white wash on the dark base. */
+  --hairline: rgba(255, 255, 255, 0.04);
+  --hairline-strong: rgba(255, 255, 255, 0.06);
+  --glass-tint-top: rgba(255, 255, 255, 0.045);
+  --glass-tint-bottom: rgba(255, 255, 255, 0.015);
+  --glass-inset: rgba(255, 255, 255, 0.05);
+  --glass-shadow: rgba(0, 0, 0, 0.7);
+}
+
+@theme inline {
+  /* Alias Tailwind's --color-* tokens onto the runtime semantic vars above so
+     every existing text-[var(--color-*)] / bg-popover / text-muted-foreground /
+     ring-ring / border token resolves correctly in BOTH themes. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-lime: var(--lime);
+  --color-lime-light: var(--lime-light);
+  --color-lime-dark: var(--lime-dark);
+  --color-cyan: var(--cyan);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* --neutral-300 mapped to muted-foreground for background-beams' radial. */
+  --color-neutral-300: var(--muted-foreground);
+
+  /* ---- Radii ------------------------------------------------------------- */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-2xl: 34px;
+
+  /* ---- Type -------------------------------------------------------------- */
+  --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-barlow-condensed), var(--font-barlow), sans-serif;
+}
+
+/* ============================================================================
+   Base
+   ============================================================================ */
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* Ambient page tint — a faint dark radial vignette so the base never reads flat. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, var(--glow-lime), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, var(--glow-cyan), transparent 55%);
+  opacity: var(--page-glow-opacity, 0.28);
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-display);
+  line-height: 1.04;
+  letter-spacing: -0.015em;
+  font-weight: 700;
+  color: var(--color-foreground);
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--color-lime);
+  color: var(--color-ink);
+}
+
+/* Focus visibility — accessible, brand-tinted. */
+:where(a, button, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-lime);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Skip link */
+.skip-link {
+  position: fixed;
+  left: 16px;
+  top: -60px;
+  z-index: 100;
+  background: var(--color-lime);
+  color: var(--color-ink);
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  transition: top 0.2s ease;
+}
+.skip-link:focus {
+  top: 16px;
+}
+
+/* Custom scrollbar (desktop, cosmetic) */
+@media (pointer: fine) {
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track { background: var(--color-background); }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: 999px;
+    border: 3px solid var(--color-background);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-muted-foreground); }
+}
+
+/* ============================================================================
+   Reusable utility classes (the shared vocabulary for every section)
+   ============================================================================ */
+
+/* --- Layout ------------------------------------------------------------- */
+
+/* Centered max-width gutter. Every section body sits in one of these. */
+.container-x {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 20px;
+  position: relative;
+  z-index: 1;
+}
+@media (min-width: 768px) {
+  .container-x { padding-inline: 32px; }
+}
+
+/* Consistent responsive vertical rhythm for a section. */
+.section {
+  position: relative;
+  padding-block: 72px;
+}
+@media (min-width: 768px) {
+  .section { padding-block: 104px; }
+}
+@media (min-width: 1024px) {
+  .section { padding-block: 128px; }
+}
+
+/* --- Glass surface ------------------------------------------------------ */
+.glass {
+  background:
+    linear-gradient(180deg, var(--glass-tint-top), var(--glass-tint-bottom)),
+    var(--color-panel-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    0 1px 0 0 var(--glass-inset) inset,
+    0 24px 60px -30px var(--glass-shadow);
+}
+
+/* --- Glass panel (alias used by the supplied experience-hero cells) ------ */
+/* experience-hero renders on a fixed near-black 3D canvas in BOTH themes, so
+   this panel intentionally keeps a translucent light-on-dark treatment; it must
+   remain legible over the shader regardless of the active site theme. */
+.glass-panel {
+  position: relative;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 24px 60px -30px rgba(0, 0, 0, 0.8);
+}
+
+/* --- Gradient hairline border (masked ring, doesn't fill the tile) ------ */
+.gradient-border {
+  position: relative;
+  border-radius: var(--radius-xl);
+}
+.gradient-border::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(168, 204, 60, 0.38),
+    var(--hairline-strong) 60%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* --- Ambient radial glow (place behind hero / CTA) ---------------------- */
+.glow {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(circle at center, var(--glow-lime), transparent 70%);
+}
+.glow-cyan {
+  background: radial-gradient(circle at center, var(--glow-cyan), transparent 70%);
+}
+
+/* --- Background textures ------------------------------------------------ */
+.grid-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--hairline) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--hairline) 1px, transparent 1px);
+  background-size: 64px 64px;
+  /* fade the grid toward the edges so it never reads as a hard mesh */
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 78%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 78%);
+}
+.dot-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(var(--hairline-strong) 1px, transparent 1px);
+  background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 20%, transparent 75%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 20%, transparent 75%);
+}
+
+/* --- Gradient text ------------------------------------------------------ */
+.gradient-text {
+  /* single-hue accent: lime deepening to lime-dark — clean, no second color */
+  background: linear-gradient(100deg, var(--color-lime), var(--color-lime-dark));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* keep a solid fallback so text never vanishes if clip is unsupported */
+  -webkit-text-fill-color: transparent;
+}
+
+/* --- Scroll reveal (CSS fallback; framer-motion drives the primitive) --- */
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal.in,
+.reveal[data-in="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+/* --- Marquee keyframes (Marquee primitive references these) ------------- */
+@keyframes marquee-x {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee-x var(--marquee-duration, 32s) linear infinite;
+}
+.marquee-mask {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+
+/* --- Outlined display text (experience-hero "YOUR FUEL.") --------------- */
+/* Transparent fill + a 1px stroke. experience-hero always sits on a near-black
+   3D canvas (both themes), so this uses --text-outline-color which defaults to
+   the foreground but is pinned white inside that hero. */
+.text-outline {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--text-outline-color, var(--color-foreground));
+  -webkit-text-fill-color: transparent;
+}
+/* experience-hero renders on a fixed dark canvas regardless of site theme. */
+.text-outline {
+  --text-outline-color: #ffffff;
+}
+/* Light-theme variant: dark ink stroke so the outlined display reads on the
+   bright hero base. */
+.text-outline-light {
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(11, 14, 20, 0.9);
+  -webkit-text-fill-color: transparent;
+}
+
+/* --- Light command-deck cell (experience-hero, light theme) ------------- */
+/* A crisp frosted-white glass tile that lifts off the bright hero base with a
+   soft shadow + hairline — the light-first counterpart to .glass-panel. */
+.glass-panel-light {
+  position: relative;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(11, 14, 20, 0.08);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.9) inset,
+    0 24px 50px -28px rgba(20, 30, 24, 0.35);
+}
+
+/* --- Loading progress pulse (experience-hero command cell + progress bars) */
+@keyframes loading-pulse {
+  0%   { width: 20%; opacity: 0.6; }
+  50%  { width: 85%; opacity: 1; }
+  100% { width: 20%; opacity: 0.6; }
+}
+.animate-loading {
+  animation: loading-pulse 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+/* ============================================================================
+   Legacy compatibility shims
+   A few remaining pages (guide, 404) still use the pre-redesign class names
+   (.container / .eyebrow / .grad / .btn). Map them onto the new tokens so those
+   pages stay readable now that styles.css is gone.
+   ============================================================================ */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin-inline: auto;
+  padding-inline: 20px;
+  position: relative;
+  z-index: 1;
+}
+@media (min-width: 768px) {
+  .container { padding-inline: 32px; }
+}
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border-strong);
+  background: rgba(168, 204, 60, 0.08);
+  color: var(--color-lime);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.grad {
+  background: linear-gradient(100deg, var(--color-lime), var(--color-lime-dark));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  padding-inline: 24px;
+  border-radius: 999px;
+  font-weight: 700;
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn-primary {
+  background: var(--color-lime);
+  color: var(--color-ink);
+}
+.btn-ghost {
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-foreground);
+  background: var(--hairline);
+}
+
+/* ============================================================================
+   Legal / long-form prose
+   Styles the HTML produced by renderLegal() (privacy & terms markdown) and any
+   long-form article body. Scoped so it only affects .legal-prose containers.
+   ============================================================================ */
+.legal-prose {
+  color: var(--color-foreground);
+  font-size: 16px;
+  line-height: 1.75;
+}
+.legal-prose > * + * { margin-top: 1.1em; }
+.legal-prose h1 {
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  margin-bottom: 0.25em;
+}
+.legal-prose h2 {
+  font-size: clamp(1.35rem, 2.4vw, 1.7rem);
+  margin-top: 2em;
+  padding-top: 1.4em;
+  border-top: 1px solid var(--color-border);
+}
+.legal-prose h3 { font-size: 1.2rem; margin-top: 1.6em; }
+.legal-prose p,
+.legal-prose li { color: var(--color-muted-foreground); }
+.legal-prose strong { color: var(--color-foreground); font-weight: 600; }
+.legal-prose a {
+  color: var(--color-lime);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(168, 204, 60, 0.4);
+}
+.legal-prose a:hover { text-decoration-color: var(--color-lime); }
+.legal-prose ul,
+.legal-prose ol { padding-left: 1.4em; }
+.legal-prose ul { list-style: disc; }
+.legal-prose ol { list-style: decimal; }
+.legal-prose li { margin-top: 0.4em; }
+.legal-prose li::marker { color: var(--color-lime); }
+.legal-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  padding: 0.15em 0.4em;
+  border-radius: 6px;
+  background: var(--color-muted);
+  color: var(--color-foreground);
+}
+.legal-prose blockquote {
+  border-left: 3px solid var(--color-lime);
+  padding-left: 1em;
+  color: var(--color-muted-foreground);
+  font-style: italic;
+}
+.legal-prose hr { border: 0; border-top: 1px solid var(--color-border); margin-block: 2em; }
+.legal-prose table { width: 100%; border-collapse: collapse; }
+.legal-prose th,
+.legal-prose td {
+  border: 1px solid var(--color-border);
+  padding: 10px 12px;
+  text-align: left;
+}
+.legal-prose th { color: var(--color-foreground); font-weight: 600; }
+
+/* ============================================================================
+   Reduced motion
+   ============================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .reveal { opacity: 1; transform: none; }
+  .animate-marquee { animation: none; }
+}

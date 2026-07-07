@@ -1,7 +1,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { createShiftSchema, getShiftsQuerySchema, updateShiftSchema } from './schemas';
+import { createShiftSchema, getShiftsRouteQuerySchema, updateShiftSchema } from './schemas';
 import { ShiftService } from './shift.service';
 import { z } from 'zod';
 
@@ -23,8 +23,11 @@ export const shiftRoutes = async (fastify: FastifyInstance, opts: { shiftService
                 const result = await service.createShift(request.body, userId);
                 reply.code(201).send(result);
             } catch (err: any) {
+                // Redaction: createShift only ever surfaces Prisma/DB errors
+                // here (the body is already Zod-validated upstream), so the raw
+                // err.message must not reach the client. Logged server-side.
                 request.log.error(err);
-                reply.code(400).send({ error: err.message });
+                reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -34,21 +37,19 @@ export const shiftRoutes = async (fastify: FastifyInstance, opts: { shiftService
         {
             onRequest: [(fastify as any).authenticate],
             schema: {
-                querystring: getShiftsQuerySchema.omit({ userId: true }),
+                querystring: getShiftsRouteQuerySchema,
             },
         },
         async (request, reply) => {
             try {
                 // @ts-ignore
                 const userId = request.user.userId;
-                console.log('[GET /] query:', JSON.stringify(request.query), 'userId:', userId);
                 const result = await service.getShifts(request.query, userId);
-                console.log('[GET /] found', result.length, 'shifts');
                 reply.send(result);
             } catch (err: any) {
-                console.error('[GET /] ERROR:', err.message);
+                // Redaction: structured server-side log only; generic client body.
                 request.log.error(err);
-                reply.code(400).send({ error: err.message });
+                reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -70,7 +71,7 @@ export const shiftRoutes = async (fastify: FastifyInstance, opts: { shiftService
                 reply.send(result);
             } catch (err: any) {
                 request.log.error(err);
-                reply.code(400).send({ error: err.message });
+                reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -95,7 +96,7 @@ export const shiftRoutes = async (fastify: FastifyInstance, opts: { shiftService
                 reply.send(result);
             } catch (err: any) {
                 request.log.error(err);
-                reply.code(400).send({ error: err.message });
+                reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -117,7 +118,11 @@ export const shiftRoutes = async (fastify: FastifyInstance, opts: { shiftService
                 reply.send(result);
             } catch (err: any) {
                 request.log.error(err);
-                reply.code(400).send({ error: err.message });
+                // Preserve the one safe business error (404); redact everything else.
+                if (typeof err?.message === 'string' && err.message.includes('not found')) {
+                    return reply.code(404).send({ error: 'Shift not found' });
+                }
+                reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );
@@ -138,7 +143,7 @@ export const shiftRoutes = async (fastify: FastifyInstance, opts: { shiftService
                 reply.code(204).send();
             } catch (err: any) {
                 request.log.error(err);
-                reply.code(400).send({ error: err.message });
+                reply.code(500).send({ error: 'An unexpected error occurred' });
             }
         }
     );

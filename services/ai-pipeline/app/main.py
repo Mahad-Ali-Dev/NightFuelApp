@@ -10,6 +10,7 @@ from .config import get_settings
 from .routes import router
 from .logger import logger
 from .cache import init_semantic_cache
+from .rate_limiter import RateLimitExceeded
 from contextlib import asynccontextmanager
 
 settings = get_settings()
@@ -22,20 +23,42 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
 
-app = FastAPI(title="NightFuel AI Pipeline", lifespan=lifespan)
+app = FastAPI(title="Zeitra AI Pipeline", lifespan=lifespan)
 
 from fastapi.exceptions import RequestValidationError
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    # Exact contract: HTTP 429 with body {error, retryAfterSeconds}.
+    # Coerce retry_after to a plain int rather than reading it straight off the
+    # exception into the response: it severs CodeQL's exception->response taint
+    # flow (py/stack-trace-exposure) and is defensively correct — the body is a
+    # fixed string + a bare integer, never any exception/traceback text.
+    retry_after = int(getattr(exc, "retry_after_seconds", 0) or 0)
+    return JSONResponse(
+        status_code=429,
+        content={
+            "error": "Rate limit exceeded. Please slow down and try again later.",
+            "retryAfterSeconds": retry_after,
+        },
+        headers={"Retry-After": str(retry_after)},
+    )
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     if isinstance(exc, RequestValidationError):
         logger.error(f"Validation Error: {exc}")
         return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    # Security: never reflect the exception message or traceback on the wire.
+    # The full traceback is logged server-side only; the client gets a fixed,
+    # redacted body — matching the TS services' redaction posture.
     tb = traceback.format_exc()
     logger.error(f"Unhandled exception: {exc}\n{tb}")
     return JSONResponse(
         status_code=500,
-        content={"detail": str(exc), "traceback": tb}
+        content={"detail": "Internal server error"}
     )
 
 app.add_middleware(

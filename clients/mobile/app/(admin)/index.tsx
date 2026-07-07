@@ -1,13 +1,17 @@
 import React from 'react';
-import { Alert, View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
+import { Alert, View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 
 import { useTheme } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getStats, getUsers, toggleBanUser } from '@/api/admin';
 import { Card } from '@/components/ui/Card';
+import { Skeleton, SkeletonCard, EmptyState } from '@/components/ui';
+import { spacing as sp, borderRadius as br } from '@/theme/spacing';
+import { withAlpha } from '@/theme/utils';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function AdminDashboardScreen() {
@@ -16,12 +20,12 @@ export default function AdminDashboardScreen() {
     const router = useRouter();
     const queryClient = useQueryClient();
 
-    const { data: stats, isLoading: isStatsLoading, refetch: refetchStats } = useQuery({
+    const { data: stats, isLoading: isStatsLoading, isError: isStatsError, isFetching: isFetchingStats, refetch: refetchStats } = useQuery({
         queryKey: ['admin-stats'],
         queryFn: getStats,
     });
 
-    const { data: users, isLoading: isUsersLoading, refetch: refetchUsers } = useQuery({
+    const { data: users, isLoading: isUsersLoading, isError: isUsersError, isFetching: isFetchingUsers, refetch: refetchUsers } = useQuery({
         queryKey: ['admin-users'],
         queryFn: () => getUsers(undefined, 20),
     });
@@ -39,28 +43,64 @@ export default function AdminDashboardScreen() {
         refetchUsers();
     };
 
+    const header = (
+        <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
+            <TouchableOpacity activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
+            </TouchableOpacity>
+            <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18, marginLeft: spacing.lg }]}>Admin Dashboard</Text>
+        </View>
+    );
+
     if (isStatsLoading || isUsersLoading) {
         return (
-            <View style={[styles.center, { backgroundColor: colors.background.primary }]}>
-                <ActivityIndicator size="large" color={colors.accent.cyan} />
+            <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+                {header}
+                <ScrollView contentContainerStyle={{ padding: spacing.lg }} showsVerticalScrollIndicator={false}>
+                    <Skeleton width={140} height={22} style={{ marginBottom: spacing.md }} />
+                    <View style={styles.statsGrid}>
+                        {Array.from({ length: 4 }).map((_, i) => (
+                            <SkeletonCard key={i} height={120} radius={borderRadius.xl} style={{ width: '48%', marginBottom: 0 }} />
+                        ))}
+                    </View>
+                    <Skeleton width={140} height={22} style={{ marginTop: spacing['3xl'], marginBottom: spacing.lg }} />
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <SkeletonCard key={i} height={88} radius={borderRadius.lg} style={{ marginBottom: spacing.md }} />
+                    ))}
+                </ScrollView>
             </View>
         );
     }
 
-    const isLoading = isStatsLoading || isUsersLoading;
+    if (isStatsError || isUsersError) {
+        return (
+            <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
+                {header}
+                <View style={styles.center}>
+                    <EmptyState
+                        icon="cloud-offline-outline"
+                        title="Couldn't load the dashboard"
+                        subtitle="Something went wrong fetching admin data. Check your connection and try again."
+                        actionLabel="Try Again"
+                        onAction={handleRefresh}
+                    />
+                </View>
+            </View>
+        );
+    }
+
+    // Pull-to-refresh: reflect the actual refetch state (isLoading is always
+    // false here — the initial-load case early-returns above).
+    const isRefreshing = isFetchingStats || isFetchingUsers;
 
     return (
         <View style={[styles.container, { paddingTop: insets.top, backgroundColor: colors.background.primary }]}>
-            <View style={[styles.header, { borderBottomColor: colors.border.default }]}>
-                <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name="arrow-back" size={24} color={colors.text.primary} />
-                </TouchableOpacity>
-                <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18, marginLeft: 16 }]}>Admin Dashboard</Text>
-            </View>
+            <StatusBar style="light" />
+            {header}
 
             <ScrollView
                 contentContainerStyle={{ padding: spacing.lg }}
-                refreshControl={<RefreshControl refreshing={isLoading} onRefresh={handleRefresh} tintColor={colors.accent.cyan} />}
+                refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.accent.cyan} />}
             >
                 {/* Stats Grid */}
                 <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18, marginBottom: 12 }]}>Platform Stats</Text>
@@ -85,34 +125,60 @@ export default function AdminDashboardScreen() {
                         <Text style={[typography.display, { color: colors.text.primary, fontSize: 28, marginTop: 8 }]}>{stats?.premiumUsers || 0}</Text>
                         <Text style={[typography.caption, { color: colors.text.secondary }]}>Premium</Text>
                     </Card>
+                    <Card style={[styles.statCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                        <Ionicons name="ribbon" size={24} color={colors.accent.lime} />
+                        <Text style={[typography.display, { color: colors.text.primary, fontSize: 28, marginTop: 8 }]}>{stats?.coaches ?? 0}</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary }]}>
+                            Coaches{stats?.availableCoaches != null ? ` · ${stats.availableCoaches} live` : ''}
+                        </Text>
+                    </Card>
+                    <Card style={[styles.statCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                        <Ionicons name="ban" size={24} color={colors.warning} />
+                        <Text style={[typography.display, { color: colors.text.primary, fontSize: 28, marginTop: 8 }]}>{stats?.bannedUsers ?? 0}</Text>
+                        <Text style={[typography.caption, { color: colors.text.secondary }]}>Banned</Text>
+                    </Card>
                 </View>
 
+                {/* Coach applications review queue */}
+                <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/(admin)/coaches' as any)} accessibilityRole="button" accessibilityLabel="Review coach applications" style={{ marginTop: spacing.lg }}>
+                    <Card style={[styles.actionRow, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+                        <Ionicons name="ribbon" size={20} color={colors.accent.lime} />
+                        <Text style={[typography.body, { color: colors.text.primary, flex: 1, marginLeft: 12 }]}>Coach applications</Text>
+                        <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} />
+                    </Card>
+                </TouchableOpacity>
+
                 {/* User List */}
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 32, marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing['3xl'], marginBottom: spacing.lg }}>
                     <Text style={[typography.heading, { color: colors.text.primary, fontSize: 18 }]}>Recent Users</Text>
-                    <TouchableOpacity>
-                        <Ionicons name="search" size={20} color={colors.text.secondary} />
-                    </TouchableOpacity>
                 </View>
+
+                {users && users.length === 0 ? (
+                    <EmptyState
+                        icon="people-outline"
+                        title="No users yet"
+                        subtitle="New members will appear here as they join the platform."
+                    />
+                ) : null}
 
                 {users?.map((u) => (
                     <Card key={u.id} style={[styles.userRow, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
                         <View style={styles.userInfo}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <Text style={[typography.heading, { color: colors.text.primary, fontSize: 16 }]}>{u.displayName}</Text>
-                                <View style={[styles.badge, { backgroundColor: u.tier === 'PRO' ? colors.accent.cyan + '20' : colors.background.tertiary }]}>
+                                <View style={[styles.badge, { backgroundColor: u.tier === 'PRO' ? withAlpha(colors.accent.cyan, 0.125) : colors.background.tertiary }]}>
                                     <Text style={[typography.caption, { color: u.tier === 'PRO' ? colors.accent.cyan : colors.text.secondary }]}>{u.tier}</Text>
                                 </View>
                             </View>
                             <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>
                                 Active {formatDistanceToNow(new Date(u.lastActiveAt), { addSuffix: true })}
                             </Text>
-                            <Text style={[typography.caption, { color: colors.text.tertiary }]}>
+                            <Text style={[typography.caption, { color: colors.text.secondary }]}>
                                 Joined {new Date(u.createdAt).toLocaleDateString()}
                             </Text>
                         </View>
-                        <TouchableOpacity
-                            style={[styles.banBtn, { backgroundColor: u.status === 'BANNED' ? colors.error + '20' : colors.background.tertiary }]}
+                        <TouchableOpacity activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityRole="button" accessibilityLabel="Toggle user ban"
+                            style={[styles.banBtn, { backgroundColor: u.status === 'BANNED' ? withAlpha(colors.error, 0.125) : colors.background.tertiary }]}
                             onPress={() => toggleBanMutation.mutate(u.userId)}
                             disabled={toggleBanMutation.isPending}
                         >
@@ -131,42 +197,49 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 16,
+        paddingHorizontal: sp.xl,
+        paddingVertical: sp.lg,
         borderBottomWidth: 1,
     },
     statsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 12,
+        gap: sp.md,
+    },
+    actionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: sp.lg,
+        borderRadius: br.lg,
+        borderWidth: 1,
     },
     statCard: {
         width: '48%',
-        padding: 16,
+        padding: sp.lg,
         borderWidth: 1,
-        borderRadius: 16,
+        borderRadius: br.xl,
     },
     userRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 16,
-        marginBottom: 12,
+        padding: sp.lg,
+        marginBottom: sp.md,
         borderWidth: 1,
-        borderRadius: 12,
+        borderRadius: br.lg,
     },
     userInfo: {
         flex: 1,
     },
     badge: {
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: 4,
-        marginLeft: 8,
+        paddingHorizontal: sp.xs + 2,
+        paddingVertical: sp.xxs,
+        borderRadius: br.sm,
+        marginLeft: sp.sm,
     },
     banBtn: {
-        padding: 10,
-        borderRadius: 8,
-        marginLeft: 12,
+        padding: sp.sm + 2,
+        borderRadius: br.md,
+        marginLeft: sp.md,
     }
 });

@@ -24,7 +24,7 @@ export function Card({
   if (variant === 'glass') {
     return (
       <LinearGradient
-        colors={['rgba(22,27,34,0.7)', 'rgba(13,17,23,0.85)']}
+        colors={colors.gradients.card}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[
@@ -37,6 +37,14 @@ export function Card({
         ]}
         {...props}
       >
+        {/* Faint top highlight for a frosted-glass sheen */}
+        <LinearGradient
+          colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={styles.sheen}
+          pointerEvents="none"
+        />
         {children}
       </LinearGradient>
     );
@@ -68,5 +76,12 @@ const styles = StyleSheet.create({
     borderRadius: br.xl,
     borderWidth: 1,
     overflow: 'hidden',
+  },
+  sheen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 56,
   },
 });

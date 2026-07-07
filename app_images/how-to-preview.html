@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — How-to</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .rnd{width:38px;height:38px;border-radius:50%;background:#15181Fcc;border:1px solid var(--bd);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center}
+  .chip{background:var(--cd);border:1px solid var(--bd);color:var(--tx);font-size:12px;font-weight:500;padding:7px 13px;border-radius:20px}
+  .step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--bd)}
+  .num{width:27px;height:27px;border-radius:50%;background:#1c2a0e;border:1px solid #2e3a16;color:var(--lm);font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll">
+    <!-- full-bleed demo hero -->
+    <div style="position:relative;height:312px;background:linear-gradient(150deg,#2b303a,#14171e 62%,#0f1014)">
+      <img src="ready/muscle-legs-male.png" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);height:266px;width:auto;object-fit:contain;opacity:0.9">
+      <div style="position:absolute;inset:0;background:linear-gradient(180deg,#0A0C1266 0%,transparent 30%,#0A0C12a0 74%,var(--bg) 100%)"></div>
+
+      <!-- status bar -->
+      <div style="position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+      <!-- back-chevron header -->
+      <div style="position:absolute;top:42px;left:0;right:0;display:flex;justify-content:space-between;align-items:center;padding:0 16px"><div class="rnd"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:20px"></i></div><div class="rnd"><i class="ti ti-bookmark" style="color:var(--tx);font-size:19px"></i></div></div>
+
+      <!-- play demo affordance -->
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:62px;height:62px;border-radius:50%;background:#0A0C1280;backdrop-filter:blur(8px);border:1.5px solid var(--lm);box-shadow:0 0 18px #C2F03C44;display:flex;align-items:center;justify-content:center"><i class="ti ti-player-play" style="color:var(--lm);font-size:26px"></i></div>
+
+      <!-- title overlay -->
+      <div style="position:absolute;bottom:18px;left:20px;right:20px">
+        <div style="color:var(--mu);font-size:13px;font-weight:500">Exercise 2 of 8</div>
+        <div style="color:#fff;font-size:26px;font-weight:600;letter-spacing:-0.5px;margin-top:2px">Goblet squats</div>
+      </div>
+    </div>
+
+    <!-- muscle chips -->
+    <div style="display:flex;gap:8px;padding:18px 18px 0"><span class="chip">Quads</span><span class="chip">Glutes</span><span class="chip">Core</span></div>
+
+    <!-- Ria voice row -->
+    <div style="padding:16px 18px 0"><div class="zc" style="padding:13px 14px;display:flex;align-items:center;gap:13px">
+      <div style="width:44px;height:44px;border-radius:50%;overflow:hidden;flex-shrink:0;border:1.5px solid #2e3a16"><img src="logo_app.png" style="width:100%;height:100%;object-fit:cover"></div>
+      <div style="flex:1"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Hear it from Ria</div><div style="color:var(--mu);font-size:12.5px;font-weight:500;margin-top:1px">Play the spoken walkthrough</div></div>
+      <div style="width:40px;height:40px;border-radius:50%;background:var(--lm);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-volume" style="color:#13200a;font-size:20px"></i></div>
+    </div></div>
+
+    <!-- steps -->
+    <div style="color:var(--tx);font-size:18px;font-weight:600;letter-spacing:-0.3px;padding:24px 18px 2px">How to do it</div>
+    <div style="padding:0 18px">
+      <div class="step"><div class="num">1</div><div style="color:var(--tx);font-size:14px;font-weight:400;line-height:1.55">Hold a dumbbell vertically against your chest, feet shoulder-width apart.</div></div>
+      <div class="step"><div class="num">2</div><div style="color:var(--tx);font-size:14px;font-weight:400;line-height:1.55">Push your hips back and bend your knees, keeping your chest tall and heels down.</div></div>
+      <div class="step"><div class="num">3</div><div style="color:var(--tx);font-size:14px;font-weight:400;line-height:1.55">Lower until thighs are parallel, then drive through your heels to stand.</div></div>
+      <div class="step" style="border:none"><div class="num">4</div><div style="color:var(--tx);font-size:14px;font-weight:400;line-height:1.55">Keep the weight close and core braced the whole time. Breathe out on the way up.</div></div>
+    </div>
+    <div style="height:108px"></div>
+  </div>
+
+  <!-- sticky action bar -->
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:13px 18px 24px;background:linear-gradient(180deg,transparent,var(--bg) 28%);display:flex;align-items:center;gap:14px;z-index:20">
+    <div style="text-align:center;flex-shrink:0"><div style="color:var(--tx);font-size:20px;font-weight:600;line-height:1;letter-spacing:-0.4px">12</div><div style="color:var(--mu);font-size:11px;font-weight:500;margin-top:2px">reps</div></div>
+    <div style="flex:1;background:var(--lm);color:#13200a;font-size:15px;font-weight:600;padding:15px;border-radius:16px;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:-0.2px"><i class="ti ti-check" style="font-size:17px"></i>Done — next</div>
+  </div>
+</div>
+</body>
+</html>

@@ -18,7 +18,6 @@ export type OnboardingRoutes = {
     '(onboarding)/sleep-schedule': undefined;
     '(onboarding)/metrics-goals': undefined;
     '(onboarding)/dietary-needs': undefined;
-    '(onboarding)/environment': undefined;
     '(onboarding)/ai-optimization': undefined;
     '(onboarding)/profile-summary': undefined;
     '(onboarding)/permissions': undefined;
@@ -42,7 +41,6 @@ export type TabRoutes = {
 export type ModalRoutes = {
     '(modals)/ai-coach': undefined;
     '(modals)/active-workout': { routineId?: string };
-    '(modals)/meal-detail': { mealId: string };
     '(modals)/build-plate': { planMealIndex?: number };
     '(modals)/premium': undefined;
 };

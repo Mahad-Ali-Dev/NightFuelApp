@@ -26,6 +26,26 @@ export interface CancelSubscriptionInput {
   userId: string;
 }
 
+export interface BindIapTransactionInput {
+  /** Apple originalTransactionId / Google orderId-or-purchaseToken — stable across renewals. */
+  originalTransactionId: string;
+  userId: string;
+  platform: 'ios' | 'android';
+  productId: string;
+  tier: SubscriptionTier;
+}
+
+/**
+ * Outcome of binding a validated IAP receipt to an account.
+ *   - 'bound'       — first redemption: the binding was created for this user.
+ *   - 'reaffirmed'  — the receipt is already bound to THIS user (idempotent re-validate).
+ *   - 'conflict'    — the receipt is already bound to a DIFFERENT user (replay/sharing — REJECT).
+ */
+export type BindIapTransactionResult =
+  | { status: 'bound' }
+  | { status: 'reaffirmed' }
+  | { status: 'conflict'; boundUserId: string };
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -172,6 +192,78 @@ export class SubscriptionService {
     }
 
     return buildLimitsResponse(sub.tier, sub.status);
+  }
+
+  // ── bindIapTransaction ──────────────────────────────────────────────────────
+  /**
+   * Bind a validated IAP receipt to exactly one account (CRITICAL #1 — receipt
+   * replay / sharing). Keyed by the platform's STABLE cross-renewal identifier
+   * (Apple originalTransactionId / Google orderId-or-purchaseToken).
+   *
+   * Contract — the caller (routes.ts) MUST resolve this BEFORE calling
+   * upgradeTier and act on the status:
+   *   - 'bound'      → first redemption; proceed to upgradeTier.
+   *   - 'reaffirmed' → same user re-validated the same receipt; idempotent,
+   *                    proceed to upgradeTier (a no-op re-affirm of their tier).
+   *   - 'conflict'   → receipt already belongs to ANOTHER user; the caller MUST
+   *                    reject and MUST NOT upgrade — this is the shared/replayed
+   *                    receipt case.
+   *
+   * Race safety: two users submitting the same receipt concurrently both miss the
+   * initial findUnique, then both try to create. The DB UNIQUE on
+   * original_transaction_id lets exactly one win; the loser's create throws Prisma
+   * P2002, which we catch and re-resolve to the now-existing owner — yielding
+   * 'reaffirmed' (same user, e.g. a client retry) or 'conflict' (different user).
+   */
+  async bindIapTransaction(
+    input: BindIapTransactionInput,
+  ): Promise<BindIapTransactionResult> {
+    const { originalTransactionId, userId, platform, productId, tier } = input;
+
+    const existing = await this.prisma.iAPTransaction.findUnique({
+      where: { originalTransactionId },
+    });
+
+    if (existing) {
+      if (existing.userId === userId) {
+        this.logger.info({ userId, originalTransactionId }, 'subscription.service: IAP receipt re-affirmed by owner');
+        return { status: 'reaffirmed' };
+      }
+      this.logger.warn(
+        { userId, boundUserId: existing.userId, originalTransactionId },
+        'subscription.service: IAP receipt already redeemed by another account — rejecting',
+      );
+      return { status: 'conflict', boundUserId: existing.userId };
+    }
+
+    try {
+      await this.prisma.iAPTransaction.create({
+        data: { originalTransactionId, userId, platform, productId, tier },
+      });
+      this.logger.info({ userId, originalTransactionId, tier }, 'subscription.service: IAP receipt bound to account');
+      return { status: 'bound' };
+    } catch (err: unknown) {
+      // P2002 = unique constraint violation: a concurrent request bound this
+      // receipt first. Re-resolve the winning owner to decide reaffirm vs conflict.
+      if (
+        err &&
+        typeof err === 'object' &&
+        (err as { code?: string }).code === 'P2002'
+      ) {
+        const winner = await this.prisma.iAPTransaction.findUnique({
+          where: { originalTransactionId },
+        });
+        if (winner && winner.userId === userId) {
+          return { status: 'reaffirmed' };
+        }
+        this.logger.warn(
+          { userId, boundUserId: winner?.userId, originalTransactionId },
+          'subscription.service: IAP receipt bound by another account in a race — rejecting',
+        );
+        return { status: 'conflict', boundUserId: winner?.userId ?? 'unknown' };
+      }
+      throw err;
+    }
   }
 
   // ── upgradeTier ─────────────────────────────────────────────────────────────
@@ -395,5 +487,142 @@ export class SubscriptionService {
 
     // array (aiModels): always "allowed" in the sense that the tier has models
     return { allowed: true, tier, value };
+  }
+
+  // ── purgeUser (GDPR) ────────────────────────────────────────────────────────
+  /**
+   * GDPR purge — PERMANENTLY delete EVERY subscription-service row owned by
+   * `userId`.
+   *
+   * This service has exactly three user-owned tables (verified against
+   * prisma/schema.prisma — every model carries a `user_id` and no other
+   * user-id-bearing columns exist):
+   *   • subscriptions       — owned via user_id (Subscription.userId)
+   *   • subscription_events — owned via user_id (SubscriptionEvent.userId)
+   *   • iap_transactions    — owned via user_id (IAPTransaction.userId)
+   *
+   * All three deletes run inside a single $transaction so the purge is
+   * all-or-nothing.
+   *
+   * IDEMPOTENT: deleteMany never throws on zero rows, so purging a user with no
+   * data returns all-zero counts and re-purging is a safe no-op.
+   */
+  async purgeUser(
+    userId: string,
+  ): Promise<{ subscriptions: number; subscription_events: number; iap_transactions: number }> {
+    const [subscriptions, subscriptionEvents, iapTransactions] = await this.prisma.$transaction([
+      this.prisma.subscription.deleteMany({ where: { userId } }),
+      this.prisma.subscriptionEvent.deleteMany({ where: { userId } }),
+      this.prisma.iAPTransaction.deleteMany({ where: { userId } }),
+    ]);
+
+    this.logger.info(
+      {
+        userId,
+        subscriptions: subscriptions.count,
+        subscription_events: subscriptionEvents.count,
+        iap_transactions: iapTransactions.count,
+      },
+      'subscription.service: purgeUser done',
+    );
+
+    return {
+      subscriptions: subscriptions.count,
+      subscription_events: subscriptionEvents.count,
+      iap_transactions: iapTransactions.count,
+    };
+  }
+
+  // ── exportUser (GDPR data export / Right of Access) ──────────────────────────
+  /**
+   * GDPR data export — READ-ONLY counterpart of purgeUser (Right of Access).
+   *
+   * Returns EVERY subscription-service row owned by `userId` across the EXACT
+   * SAME three user-owned tables purgeUser erases, keyed by table name, so export
+   * and erasure stay in sync:
+   *   • subscriptions       — owned via user_id (Subscription.userId)
+   *   • subscription_events — owned via user_id (SubscriptionEvent.userId)
+   *   • iap_transactions    — owned via user_id (IAPTransaction.userId)
+   *
+   * READ-ONLY & IDEMPOTENT: only findMany — no writes. A user with no rows yields
+   * empty arrays (still resolves), and re-running yields identical output.
+   *
+   * SECURITY (never export secrets/credentials):
+   *   • subscriptions — stripe_customer_id / stripe_sub_id / stripe_connect_id are
+   *     Stripe object REFERENCES, not credentials (no Stripe secret/restricted key
+   *     is ever stored in this service), so they are safe to include as-is for the
+   *     data subject's own record. There are NO password/token/secret/raw-key
+   *     columns anywhere in this service's schema.
+   *   • iap_transactions — the bound original_transaction_id is the data subject's
+   *     OWN store transaction id (their data), but the raw Apple/Google receipt
+   *     blob is NEVER persisted by this service, so nothing secret can leak. We
+   *     return it as-is for the subject's own record.
+   *
+   * BOUNDING: each table is capped at ROW_LIMIT rows (newest-first). For a single
+   * user these tables are tiny (one subscription row; events/iap are append-only
+   * but per-user low-volume), but the cap + truncation flags keep one user's
+   * export from ever being unbounded. `_meta` reports any truncation.
+   */
+  async exportUser(userId: string): Promise<{
+    subscriptions: unknown[];
+    subscription_events: unknown[];
+    iap_transactions: unknown[];
+    _meta: {
+      subscriptionsTruncated: boolean;
+      subscriptionEventsTruncated: boolean;
+      iapTransactionsTruncated: boolean;
+      rowLimit: number;
+    };
+  }> {
+    const ROW_LIMIT = 50_000;
+    // Fetch one extra row per table to detect truncation without a separate count.
+    const take = ROW_LIMIT + 1;
+
+    const [subscriptions, subscriptionEvents, iapTransactions] = await Promise.all([
+      this.prisma.subscription.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take,
+      }),
+      this.prisma.subscriptionEvent.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take,
+      }),
+      this.prisma.iAPTransaction.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take,
+      }),
+    ]);
+
+    const subscriptionsTruncated = subscriptions.length > ROW_LIMIT;
+    const subscriptionEventsTruncated = subscriptionEvents.length > ROW_LIMIT;
+    const iapTransactionsTruncated = iapTransactions.length > ROW_LIMIT;
+
+    this.logger.info(
+      {
+        userId,
+        subscriptions: subscriptions.length,
+        subscription_events: subscriptionEvents.length,
+        iap_transactions: iapTransactions.length,
+        subscriptionsTruncated,
+        subscriptionEventsTruncated,
+        iapTransactionsTruncated,
+      },
+      'subscription.service: exportUser done',
+    );
+
+    return {
+      subscriptions: subscriptions.slice(0, ROW_LIMIT),
+      subscription_events: subscriptionEvents.slice(0, ROW_LIMIT),
+      iap_transactions: iapTransactions.slice(0, ROW_LIMIT),
+      _meta: {
+        subscriptionsTruncated,
+        subscriptionEventsTruncated,
+        iapTransactionsTruncated,
+        rowLimit: ROW_LIMIT,
+      },
+    };
   }
 }

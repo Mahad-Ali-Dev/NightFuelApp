@@ -12,6 +12,30 @@ import {
 } from '@nightfuel/types';
 import { createLogger } from '@nightfuel/config';
 import { NotificationService } from './notification.service';
+import { PushService } from './push.service';
+
+/** Payload published by chat-service on `chat:message-sent` (a raw string channel, NOT a Channels constant). */
+interface ChatMessageSentPayload {
+    recipientId: string;
+    conversationId: string;
+    textPreview: string;
+    /** Sender's display identity (added 2026-07: title/avatar for a real-feeling push). */
+    senderName?: string;
+    senderAvatarUrl?: string;
+}
+
+// BUG #6: channel exercise-service publishes when an AI workout routine is
+// generated. There is no @nightfuel/types Channels constant for it (that package
+// is owned elsewhere), so — exactly like `chat:message-sent` — the publisher
+// (exercise-service/src/index.ts) and this subscriber agree on the SAME raw
+// string literal. KEEP THESE TWO IN SYNC.
+const WORKOUT_GENERATED_CHANNEL = 'nightfuel:exercise:routine-generated';
+
+/** Payload published by exercise-service on WORKOUT_GENERATED_CHANNEL. */
+interface WorkoutGeneratedPayload {
+    routineId?: string;
+    title?: string;
+}
 
 const logger = createLogger('notification-service:events');
 
@@ -24,6 +48,35 @@ function broadcastToUser(fastify: any, userId: string, notification: any): void 
     }
 }
 
+/**
+ * BUG #10: fan a notification out to the user's registered Expo/Web push tokens.
+ * Previously only COACH_MESSAGE called pushService.sendToUser, so the other seven
+ * notification types created an in-app row + Socket.IO broadcast but NEVER a real
+ * device push. This wraps pushService.sendToUser so a push-provider failure (no
+ * tokens, expired token, Expo/APNs/FCM outage, missing creds) can NEVER break the
+ * already-persisted in-app notification — the error is swallowed and logged.
+ *
+ * OWNER: real delivery additionally requires push credentials at runtime
+ * (VAPID keys for web; EAS dev build + APNs/FCM via EXPO_ACCESS_TOKEN for native).
+ * Without them sendToUser still no-ops safely; see owner_actions.
+ */
+async function safePush(
+    pushService: PushService,
+    userId: string,
+    payload: { title: string; body: string; data?: Record<string, unknown>; deepLink?: string },
+): Promise<void> {
+    try {
+        await pushService.sendToUser(userId, {
+            title: payload.title,
+            body: payload.body,
+            url: payload.deepLink,
+            data: { ...(payload.data ?? {}), ...(payload.deepLink ? { deepLink: payload.deepLink } : {}) },
+        });
+    } catch (err) {
+        logger.warn({ err, userId }, '[push] sendToUser failed (non-fatal) — in-app notification already created');
+    }
+}
+
 // ─── Subscriber setup ─────────────────────────────────────────────────────────
 
 /**
@@ -33,6 +86,7 @@ function broadcastToUser(fastify: any, userId: string, notification: any): void 
 export function setupEventSubscribers(
     eventBus: EventBus,
     notificationService: NotificationService,
+    pushService: PushService,
     fastify: any,
 ): void {
     // ── plan:plan-generated → PLAN_READY ─────────────────────────────────────
@@ -44,17 +98,63 @@ export function setupEventSubscribers(
             if (!userId) return;
             try {
                 const dateLabel = (payload.planDate ?? '').split('T')[0] || 'today';
+                const deepLink = '/plan';
                 const n = await notificationService.createNotificationIfEnabled({
                     userId,
                     type: 'PLAN_READY',
                     title: 'Your NightFuel plan is ready!',
                     body: `Your AI-powered plan for ${dateLabel} is ready. Tap to view.`,
-                    data: { planId: payload.planId, planDate: dateLabel, eventId },
+                    data: { planId: payload.planId, planDate: dateLabel, deepLink, eventId },
                 });
                 broadcastToUser(fastify, userId, n);
+                // BUG #10: also push to the device.
+                await safePush(pushService, userId, {
+                    title: 'Your plan is ready',
+                    body: `Your AI-powered plan for ${dateLabel} is ready. Tap to view.`,
+                    data: { planId: payload.planId, planDate: dateLabel },
+                    deepLink,
+                });
                 logger.info({ userId, planDate: dateLabel }, 'PLAN_READY notification sent');
             } catch (err) {
                 logger.error({ err, eventId }, 'Failed to send PLAN_READY notification');
+                throw err;
+            }
+        }
+    });
+
+    // ── exercise:routine-generated → PLAN_READY (workout) ────────────────────
+    // BUG #6: the freshly-onboarded user's AI workout routine finished generating.
+    // Mirror the meal-plan PLAN_READY: create an in-app notification, broadcast on
+    // Socket.IO, and push to the device. Raw string channel (no Channels constant)
+    // kept in sync with exercise-service's publish.
+    eventBus.subscribeDurable<WorkoutGeneratedPayload>({
+        stream: WORKOUT_GENERATED_CHANNEL,
+        group: 'notification-service',
+        handler: async (event: NightFuelEvent<WorkoutGeneratedPayload>) => {
+            const { userId, payload, eventId } = event;
+            if (!userId) return;
+            try {
+                const deepLink = '/workouts';
+                const routineTitle = payload?.title?.trim() || 'workout routine';
+                const body = `Your AI ${routineTitle} is ready. Tap to start training.`;
+                const n = await notificationService.createNotificationIfEnabled({
+                    userId,
+                    type: 'PLAN_READY',
+                    title: 'Your workout plan is ready!',
+                    body,
+                    data: { routineId: payload?.routineId, deepLink, eventId },
+                });
+                broadcastToUser(fastify, userId, n);
+                // BUG #10: also push to the device.
+                await safePush(pushService, userId, {
+                    title: 'Your workout plan is ready!',
+                    body,
+                    data: { routineId: payload?.routineId },
+                    deepLink,
+                });
+                logger.info({ userId, routineId: payload?.routineId }, 'PLAN_READY (workout) notification sent');
+            } catch (err) {
+                logger.error({ err, eventId }, 'Failed to send PLAN_READY (workout) notification');
                 throw err;
             }
         }
@@ -77,6 +177,12 @@ export function setupEventSubscribers(
                     data: { shiftDate: dateLabel, shiftType: payload.shiftType, eventId },
                 });
                 broadcastToUser(fastify, userId, n);
+                // BUG #10: also push to the device.
+                await safePush(pushService, userId, {
+                    title: 'Shift logged',
+                    body: `Shift for ${dateLabel} saved. Your plan is being generated...`,
+                    data: { shiftDate: dateLabel, shiftType: payload.shiftType },
+                });
                 logger.info({ userId, shiftDate: dateLabel }, 'SHIFT_ALERT notification sent');
             } catch (err) {
                 logger.error({ err, eventId }, 'Failed to send SHIFT_ALERT notification');
@@ -93,14 +199,21 @@ export function setupEventSubscribers(
             const { userId, payload, eventId } = event;
             if (!userId) return;
             try {
+                const body = `${payload.totalCalories} kcal recorded — ${payload.mealsLogged ?? 'a'} meal(s) logged today.`;
                 const n = await notificationService.createNotificationIfEnabled({
                     userId,
                     type: 'MEAL_REMINDER',
                     title: 'Meal logged',
-                    body: `${payload.totalCalories} kcal recorded — ${payload.mealsLogged ?? 'a'} meal(s) logged today.`,
+                    body,
                     data: { mealLogId: payload.mealLogId, mealType: payload.mealType, eventId },
                 });
                 broadcastToUser(fastify, userId, n);
+                // BUG #10: also push to the device.
+                await safePush(pushService, userId, {
+                    title: 'Meal logged',
+                    body,
+                    data: { mealLogId: payload.mealLogId, mealType: payload.mealType },
+                });
                 logger.info({ userId, mealLogId: payload.mealLogId }, 'MEAL_REMINDER notification sent');
             } catch (err) {
                 logger.error({ err, eventId }, 'Failed to send MEAL_REMINDER notification');
@@ -117,14 +230,21 @@ export function setupEventSubscribers(
             const { userId, payload, eventId } = event;
             if (!userId) return;
             try {
+                const body = `${payload.title} (${payload.durationMins} min) logged. Great work!`;
                 const n = await notificationService.createNotificationIfEnabled({
                     userId,
                     type: 'WORKOUT_REMINDER',
                     title: 'Workout complete!',
-                    body: `${payload.title} (${payload.durationMins} min) logged. Great work!`,
+                    body,
                     data: { workoutId: payload.workoutId, type: payload.type, eventId },
                 });
                 broadcastToUser(fastify, userId, n);
+                // BUG #10: also push to the device.
+                await safePush(pushService, userId, {
+                    title: 'Workout complete!',
+                    body,
+                    data: { workoutId: payload.workoutId, type: payload.type },
+                });
                 logger.info({ userId, workoutId: payload.workoutId }, 'WORKOUT_REMINDER notification sent');
             } catch (err) {
                 logger.error({ err, eventId }, 'Failed to send WORKOUT_REMINDER notification');
@@ -147,14 +267,21 @@ export function setupEventSubscribers(
                 const alignText = score !== null && score !== undefined
                     ? ` Circadian alignment: ${score}/100.`
                     : '';
+                const body = `You slept ${hrs}h ${mins}m (quality: ${payload.quality ?? '?'}/10).${alignText}`;
                 const n = await notificationService.createNotificationIfEnabled({
                     userId,
                     type: 'SLEEP_REMINDER',
                     title: 'Sleep session recorded',
-                    body: `You slept ${hrs}h ${mins}m (quality: ${payload.quality ?? '?'}/10).${alignText}`,
+                    body,
                     data: { sleepSessionId: payload.sleepSessionId, durationMins: payload.durationMins, eventId },
                 });
                 broadcastToUser(fastify, userId, n);
+                // BUG #10: also push to the device.
+                await safePush(pushService, userId, {
+                    title: 'Sleep session recorded',
+                    body,
+                    data: { sleepSessionId: payload.sleepSessionId, durationMins: payload.durationMins },
+                });
                 logger.info({ userId, sleepSessionId: payload.sleepSessionId }, 'SLEEP_REMINDER notification sent');
             } catch (err) {
                 logger.error({ err, eventId }, 'Failed to send SLEEP_REMINDER notification');
@@ -172,15 +299,17 @@ export function setupEventSubscribers(
             if (!userId) return;
             try {
                 const isNewRecord = payload.isNewRecord;
+                const title = isNewRecord
+                    ? `New streak record: ${payload.currentStreak} days!`
+                    : `${payload.currentStreak}-day streak!`;
+                const body = isNewRecord
+                    ? `You've hit a new personal best — ${payload.longestStreak} days of adherence!`
+                    : `Keep it up! You've been adherent for ${payload.currentStreak} consecutive days.`;
                 const n = await notificationService.createNotificationIfEnabled({
                     userId,
                     type: 'STREAK_UPDATE',
-                    title: isNewRecord
-                        ? `New streak record: ${payload.currentStreak} days!`
-                        : `${payload.currentStreak}-day streak!`,
-                    body: isNewRecord
-                        ? `You've hit a new personal best — ${payload.longestStreak} days of adherence!`
-                        : `Keep it up! You've been adherent for ${payload.currentStreak} consecutive days.`,
+                    title,
+                    body,
                     data: {
                         currentStreak: payload.currentStreak,
                         longestStreak: payload.longestStreak,
@@ -189,6 +318,16 @@ export function setupEventSubscribers(
                     },
                 });
                 broadcastToUser(fastify, userId, n);
+                // BUG #10: also push to the device.
+                await safePush(pushService, userId, {
+                    title,
+                    body,
+                    data: {
+                        currentStreak: payload.currentStreak,
+                        longestStreak: payload.longestStreak,
+                        isNewRecord,
+                    },
+                });
                 logger.info({ userId, currentStreak: payload.currentStreak, isNewRecord }, 'STREAK_UPDATE notification sent');
             } catch (err) {
                 logger.error({ err, eventId }, 'Failed to send STREAK_UPDATE notification');
@@ -208,14 +347,21 @@ export function setupEventSubscribers(
                 const pct = payload.calorieTarget > 0
                     ? Math.round((payload.calorieActual / payload.calorieTarget) * 100)
                     : 0;
+                const body = `You've hit ${pct}% of your calorie goal — great adherence!`;
                 const n = await notificationService.createNotificationIfEnabled({
                     userId,
                     type: 'ADHERENCE_ALERT',
                     title: "You're on track today!",
-                    body: `You've hit ${pct}% of your calorie goal — great adherence!`,
+                    body,
                     data: { date: payload.date, pct, eventId },
                 });
                 broadcastToUser(fastify, userId, n);
+                // BUG #10: also push to the device.
+                await safePush(pushService, userId, {
+                    title: "You're on track today!",
+                    body,
+                    data: { date: payload.date, pct },
+                });
                 logger.info({ userId, date: payload.date, pct }, 'ADHERENCE_ALERT notification sent');
             } catch (err) {
                 logger.error({ err, eventId }, 'Failed to send ADHERENCE_ALERT notification');
@@ -224,14 +370,292 @@ export function setupEventSubscribers(
         }
     });
 
+    // ── chat:message-sent → COACH_MESSAGE (recipient) + push ─────────────────
+    // NOTE: 'chat:message-sent' is a raw string channel matching chat-service's
+    // publish — it is NOT a @nightfuel/types Channels constant. The envelope
+    // `userId` is the SENDER; the person we notify is `payload.recipientId`.
+    // Real push delivery additionally requires an EAS dev build + APNs/FCM
+    // credentials (user-gated); this subscriber only wires the plumbing.
+    eventBus.subscribeDurable<ChatMessageSentPayload>({
+        stream: 'chat:message-sent',
+        group: 'notification-service',
+        handler: async (event: NightFuelEvent<ChatMessageSentPayload>) => {
+            const { payload, eventId } = event;
+            const recipientId = payload?.recipientId;
+            const conversationId = payload?.conversationId;
+            if (!recipientId || !conversationId) return;
+            try {
+                // chat-service publishes the SENDER as the envelope userId. The
+                // mobile thread screen (/messages/[id]) resolves a conversation from
+                // the PEER userId via startConversation(), so deep-link to the sender
+                // — NOT the conversationId (which the screen treats as a userId).
+                const deepLink = event.userId ? `/messages/${event.userId}` : `/messages/${conversationId}`;
+                const body = payload.textPreview ?? '';
+                // Sender identity (when the publisher resolved it): the push tray
+                // shows "Mahad Ali" as the title — like a real messenger — and the
+                // avatar rides in `data` for in-app notification rendering.
+                const senderName = payload.senderName?.trim();
+                const title = senderName || 'New message';
+                const identity = {
+                    senderName: senderName ?? null,
+                    senderAvatarUrl: payload.senderAvatarUrl ?? null,
+                };
+                const n = await notificationService.createNotificationIfEnabled({
+                    userId: recipientId,
+                    type: 'COACH_MESSAGE',
+                    title,
+                    body,
+                    data: { conversationId, deepLink, eventId, ...identity },
+                });
+                await pushService.sendToUser(recipientId, {
+                    title,
+                    body,
+                    url: deepLink,
+                    data: { conversationId, deepLink, ...identity },
+                });
+                broadcastToUser(fastify, recipientId, n);
+                logger.info({ recipientId, conversationId }, 'COACH_MESSAGE (chat) notification sent');
+            } catch (err) {
+                logger.error({ err, eventId }, 'Failed to send chat-message notification');
+                throw err;
+            }
+        }
+    });
+
+    // ── Social events (community-service) → SYSTEM notifications + push ──────
+    // Raw string channels shared with community-service's emitSocial() — same
+    // convention as `chat:message-sent`. KEEP THE LITERALS IN SYNC. Every
+    // payload carries actorName/actorAvatarUrl (best-effort resolved by the
+    // publisher) so the tray reads "Sara liked your post" with a real avatar
+    // riding in `data` for in-app rendering. Type SYSTEM (no enum migration);
+    // `data.kind` disambiguates for the client.
+
+    interface SocialBasePayload {
+        actorName?: string;
+        actorAvatarUrl?: string;
+    }
+    interface PostLikedPayload extends SocialBasePayload {
+        recipientId: string;
+        postId: string;
+        postPreview?: string;
+    }
+    interface PostCommentedPayload extends SocialBasePayload {
+        recipientId: string;
+        postId: string;
+        commentPreview?: string;
+        postPreview?: string;
+    }
+    interface UserFollowedPayload extends SocialBasePayload {
+        recipientId: string;
+    }
+    interface PostCreatedPayload extends SocialBasePayload {
+        recipientIds: string[];
+        postId: string;
+        postPreview?: string;
+    }
+
+    /** Shared "notify one user about a social action" helper. */
+    const sendSocial = async (opts: {
+        recipientId: string;
+        title: string;
+        body: string;
+        deepLink: string;
+        kind: string;
+        eventId: string;
+        actorName?: string;
+        actorAvatarUrl?: string;
+        extra?: Record<string, unknown>;
+    }): Promise<void> => {
+        const data = {
+            deepLink: opts.deepLink,
+            kind: opts.kind,
+            eventId: opts.eventId,
+            actorName: opts.actorName ?? null,
+            actorAvatarUrl: opts.actorAvatarUrl ?? null,
+            ...(opts.extra ?? {}),
+        };
+        const n = await notificationService.createNotificationIfEnabled({
+            userId: opts.recipientId,
+            type: 'SYSTEM',
+            title: opts.title,
+            body: opts.body,
+            data,
+        });
+        await pushService.sendToUser(opts.recipientId, {
+            title: opts.title,
+            body: opts.body,
+            url: opts.deepLink,
+            data,
+        });
+        broadcastToUser(fastify, opts.recipientId, n);
+    };
+
+    eventBus.subscribeDurable<PostLikedPayload>({
+        stream: 'community:post-liked',
+        group: 'notification-service',
+        handler: async (event: NightFuelEvent<PostLikedPayload>) => {
+            const { payload, eventId } = event;
+            if (!payload?.recipientId || !payload.postId) return;
+            try {
+                await sendSocial({
+                    recipientId: payload.recipientId,
+                    title: `${payload.actorName ?? 'Someone'} liked your post`,
+                    body: payload.postPreview ?? '',
+                    deepLink: `/(community)/${payload.postId}`,
+                    kind: 'post-liked',
+                    eventId,
+                    actorName: payload.actorName,
+                    actorAvatarUrl: payload.actorAvatarUrl,
+                    extra: { postId: payload.postId },
+                });
+            } catch (err) {
+                logger.error({ err, eventId }, 'Failed to send post-liked notification');
+                throw err;
+            }
+        },
+    });
+
+    eventBus.subscribeDurable<PostCommentedPayload>({
+        stream: 'community:post-commented',
+        group: 'notification-service',
+        handler: async (event: NightFuelEvent<PostCommentedPayload>) => {
+            const { payload, eventId } = event;
+            if (!payload?.recipientId || !payload.postId) return;
+            try {
+                await sendSocial({
+                    recipientId: payload.recipientId,
+                    title: `${payload.actorName ?? 'Someone'} commented on your post`,
+                    body: payload.commentPreview ?? '',
+                    deepLink: `/(community)/${payload.postId}`,
+                    kind: 'post-commented',
+                    eventId,
+                    actorName: payload.actorName,
+                    actorAvatarUrl: payload.actorAvatarUrl,
+                    extra: { postId: payload.postId },
+                });
+            } catch (err) {
+                logger.error({ err, eventId }, 'Failed to send post-commented notification');
+                throw err;
+            }
+        },
+    });
+
+    eventBus.subscribeDurable<UserFollowedPayload>({
+        stream: 'community:user-followed',
+        group: 'notification-service',
+        handler: async (event: NightFuelEvent<UserFollowedPayload>) => {
+            const { payload, eventId } = event;
+            const followerId = event.userId; // envelope userId = the actor
+            if (!payload?.recipientId) return;
+            try {
+                await sendSocial({
+                    recipientId: payload.recipientId,
+                    title: `${payload.actorName ?? 'Someone'} started following you`,
+                    body: 'Tap to see their profile.',
+                    deepLink: followerId
+                        ? `/(community)/userProfile?userId=${followerId}`
+                        : '/(tabs)/community',
+                    kind: 'user-followed',
+                    eventId,
+                    actorName: payload.actorName,
+                    actorAvatarUrl: payload.actorAvatarUrl,
+                    extra: { followerId: followerId ?? null },
+                });
+            } catch (err) {
+                logger.error({ err, eventId }, 'Failed to send user-followed notification');
+                throw err;
+            }
+        },
+    });
+
+    eventBus.subscribeDurable<PostCreatedPayload>({
+        stream: 'community:post-created',
+        group: 'notification-service',
+        handler: async (event: NightFuelEvent<PostCreatedPayload>) => {
+            const { payload, eventId } = event;
+            const recipients = Array.isArray(payload?.recipientIds) ? payload.recipientIds : [];
+            if (!payload?.postId || recipients.length === 0) return;
+            try {
+                // Sequential fan-out keeps DB/push pressure smooth; the publisher
+                // caps the list (500) so worst case stays bounded.
+                for (const recipientId of recipients) {
+                    if (!recipientId || recipientId === event.userId) continue;
+                    await sendSocial({
+                        recipientId,
+                        title: `${payload.actorName ?? 'Someone'} shared a new post`,
+                        body: payload.postPreview ?? '',
+                        deepLink: `/(community)/${payload.postId}`,
+                        kind: 'post-created',
+                        eventId,
+                        actorName: payload.actorName,
+                        actorAvatarUrl: payload.actorAvatarUrl,
+                        extra: { postId: payload.postId },
+                    });
+                }
+            } catch (err) {
+                logger.error({ err, eventId }, 'Failed to fan out post-created notifications');
+                throw err;
+            }
+        },
+    });
+
+    // ── cycle:period-approaching → discreet reminder push ────────────────────
+    // Published by user-service's daily sweep (uncertainty-aware: irregular
+    // cycles never trigger it). COPY IS DELIBERATELY DISCREET — push previews
+    // land on lock screens, so the title says only "Cycle update"; the detail
+    // lives in the body and the deep-linked screen.
+    interface PeriodApproachingPayload {
+        recipientId: string;
+        daysUntil: number;
+        expectedDate: string;
+    }
+    eventBus.subscribeDurable<PeriodApproachingPayload>({
+        stream: 'cycle:period-approaching',
+        group: 'notification-service',
+        handler: async (event: NightFuelEvent<PeriodApproachingPayload>) => {
+            const { payload, eventId } = event;
+            if (!payload?.recipientId) return;
+            try {
+                const days = payload.daysUntil === 1 ? 'tomorrow' : `in about ${payload.daysUntil} days`;
+                const deepLink = '/(performance)/cycle';
+                const body = `Your next period is likely ${days}. Ria can ease your plan — tap to see.`;
+                const data = { deepLink, kind: 'period-approaching', eventId, expectedDate: payload.expectedDate };
+                const n = await notificationService.createNotificationIfEnabled({
+                    userId: payload.recipientId,
+                    type: 'SYSTEM',
+                    title: 'Cycle update',
+                    body,
+                    data,
+                });
+                await pushService.sendToUser(payload.recipientId, {
+                    title: 'Cycle update',
+                    body,
+                    url: deepLink,
+                    data,
+                });
+                broadcastToUser(fastify, payload.recipientId, n);
+            } catch (err) {
+                logger.error({ err, eventId }, 'Failed to send period-approaching notification');
+                throw err;
+            }
+        },
+    });
+
     const subscribedChannels = [
         Channels.Plan.PlanGenerated,
+        WORKOUT_GENERATED_CHANNEL,
         Channels.Shift.ShiftCreated,
         Channels.Meal.MealLogged,
         Channels.Exercise.WorkoutLogged,
         Channels.Sleep.SessionLogged,
         Channels.Progress.StreakUpdated,
         Channels.Progress.DailyUpdated,
+        'chat:message-sent',
+        'community:post-liked',
+        'community:post-commented',
+        'community:user-followed',
+        'community:post-created',
+        'cycle:period-approaching',
     ];
 
     logger.info({ channels: subscribedChannels }, 'notification-service: all event subscribers registered');

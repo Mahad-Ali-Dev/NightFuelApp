@@ -5,11 +5,30 @@ import { randomUUID } from 'crypto';
 import { createLogger } from '@nightfuel/config';
 import fs from 'fs';
 import path from 'path';
-import { UpdateProfileBody, UpdatePreferencesBody, UpdateOnboardingBody } from './schemas';
+import { UpdateProfileBody, UpdatePreferencesBody, UpdateOnboardingBody, UpdatePrivacyBody } from './schemas';
 import { calculateBMI, calculateBMR, calculateTDEE, calculateAge } from './utils/calculators';
+import { computeCyclePhase, CyclePhaseInput } from './utils/cyclePhase';
+import {
+    computeCycleStatsFromLogs,
+    buildCycleHistory,
+    PeriodLogInput,
+} from './utils/cycleHistory';
+import { computeCycleForecast, ForecastInput } from './utils/cycleForecast';
+import {
+    generateShareCode,
+    sanitizeSharedCycleSummary,
+    SharedCycleSummary,
+    DEFAULT_CYCLE_SHARE_SCOPES,
+} from './utils/cycleShare';
+import { LogPeriodBody } from './schemas';
 
 const logger = createLogger('user-service:service');
 
+// The `isPrivate` + menstrual-cycle columns are now part of the generated Prisma
+// `UserProfile` (schema.prisma + prisma generate own them), so the old "compile
+// before generate" shims are removed: re-declaring `cycleTrackingEnabled?: boolean`
+// (optional) over the generated required `boolean` made this interface
+// "incorrectly extend" UserProfile (TS2430), which broke `tsc`/Build Check.
 export interface ProfileWithPreferences extends UserProfile {
     preferences: UserPreferences | null;
 }
@@ -106,6 +125,85 @@ export class UserService {
         }
     }
 
+    // Public profile shape returned by GET /v1/users/public/:userId and the
+    // POST /v1/users/public/batch endpoint. Exactly the fields the route exposes.
+    public static readonly PUBLIC_PROFILE_FIELDS = {
+        userId: true,
+        displayName: true,
+        avatarUrl: true,
+        timezone: true,
+        isPrivate: true,
+    } as const;
+
+    /**
+     * Lean read for the PUBLIC profile surface (GET /v1/users/public/:userId and
+     * the /public/batch endpoint).
+     *
+     * PERF (MEDIUM #9): unlike getProfileWithPreferences, this does NOT call
+     * ensureProfileExists() (no userProfile.count() + no auto-create on a public
+     * read) and selects ONLY the public fields — never the full over-fetched row
+     * with preferences/status. A missing profile simply returns null (the route
+     * maps it to 404); a public read must never provision a profile as a side
+     * effect.
+     */
+    async getPublicProfile(userId: string): Promise<{
+        id: string;
+        displayName: string;
+        avatarUrl: string | null;
+        timezone: string;
+        isPrivate: boolean;
+    } | null> {
+        const row = await this.prisma.userProfile.findUnique({
+            where: { userId },
+            // select only the public fields (cast: isPrivate predates the
+            // checked-in generated client — same shim precedent as elsewhere).
+            select: UserService.PUBLIC_PROFILE_FIELDS as any,
+        });
+        if (!row) return null;
+
+        const p = row as any;
+        return {
+            id: p.userId,
+            displayName: p.displayName,
+            avatarUrl: p.avatarUrl ?? null,
+            timezone: p.timezone,
+            isPrivate: p.isPrivate ?? false,
+        };
+    }
+
+    /**
+     * Batch variant of getPublicProfile for the community feed author resolver
+     * (HIGH #4). Resolves up to `ids.length` user ids in a SINGLE query and
+     * returns a map keyed by userId. Ids with no profile are simply absent from
+     * the map (mirrors the single-id 404 → "no author" degrade). Caller is
+     * responsible for bounding the id count (the route caps it).
+     */
+    async getPublicProfilesBatch(ids: string[]): Promise<
+        Array<{
+            id: string;
+            displayName: string;
+            avatarUrl: string | null;
+            timezone: string;
+            isPrivate: boolean;
+        }>
+    > {
+        const uniqueIds = [...new Set(ids.filter((id) => !!id))];
+        if (uniqueIds.length === 0) return [];
+
+        const rows = await this.prisma.userProfile.findMany({
+            where: { userId: { in: uniqueIds } },
+            select: UserService.PUBLIC_PROFILE_FIELDS as any,
+        });
+
+        return (rows as any[]).map((p) => ({
+            id: p.userId,
+            displayName: p.displayName,
+            avatarUrl: p.avatarUrl ?? null,
+            timezone: p.timezone,
+            isPrivate: p.isPrivate ?? false,
+        }));
+    }
+
     /**
      * Fetch a user's full profile including their preferences.
      * Auto-provisions defaults if missing.
@@ -123,13 +221,56 @@ export class UserService {
             return null;
         }
 
-        return profile as ProfileWithPreferences;
+        // Cast via unknown: the runtime row carries isPrivate (schema + migration
+        // own the column), but the checked-in generated client predates it, so a
+        // direct cast doesn't statically overlap until `prisma generate` re-runs.
+        return profile as unknown as ProfileWithPreferences;
     }
 
+    /**
+     * Fetch the materialized UserStatus, RECOMPUTING the derived cyclePhase at
+     * READ time from the stored profile inputs.
+     *
+     * WHY (staleness fix, mirrors F23's read-time streak fix): cyclePhase was only
+     * recomputed on profile UPDATE, so it went stale across days — a user who
+     * logged a period and then didn't touch their profile for a week would keep
+     * showing the phase computed a week ago. computeCyclePhase is PURE and takes
+     * `now`, so we re-derive it here against the current day and RETURN the fresh
+     * value. Persist-on-read is optional (we skip the extra write on the hot read
+     * path); returning the freshly-computed value is the requirement.
+     *
+     * Non-tracking / degraded users derive UNKNOWN exactly as before — this is a
+     * no-op for them. If the profile/status can't be loaded we fall back to the
+     * stored row untouched (best-effort, never throws on the read path).
+     */
     async getStatus(userId: string) {
-        return this.prisma.userStatus.findUnique({
-            where: { userId }
+        const status = await this.prisma.userStatus.findUnique({
+            where: { userId },
         });
+        if (!status) return status;
+
+        try {
+            const profile = await this.prisma.userProfile.findUnique({ where: { userId } });
+            if (!profile) return status;
+
+            const p = profile as any;
+            const freshPhase = computeCyclePhase({
+                cycleTrackingEnabled: p.cycleTrackingEnabled,
+                biologicalSex: p.biologicalSex,
+                hormonalContraception: p.hormonalContraception,
+                cycleRegularity: p.cycleRegularity,
+                avgCycleLengthDays: p.avgCycleLengthDays,
+                avgPeriodLengthDays: p.avgPeriodLengthDays,
+                lastPeriodStartDate: p.lastPeriodStartDate,
+            });
+
+            // Return a copy with the freshly-derived phase; don't mutate the row in
+            // a way that would be persisted by an accidental later write.
+            return { ...status, cyclePhase: freshPhase } as typeof status;
+        } catch (err) {
+            logger.warn({ userId, err }, 'Read-time cyclePhase recompute failed; returning stored status');
+            return status;
+        }
     }
 
     /**
@@ -152,6 +293,18 @@ export class UserService {
             data.dateOfBirth = dob ? new Date(dob) : null;
         }
 
+        // ── Menstrual-cycle tracking inputs ──────────────────────────────────
+        if (body.cycleTrackingEnabled !== undefined) data.cycleTrackingEnabled = body.cycleTrackingEnabled;
+        if (body.avgCycleLengthDays !== undefined) data.avgCycleLengthDays = body.avgCycleLengthDays;
+        if (body.avgPeriodLengthDays !== undefined) data.avgPeriodLengthDays = body.avgPeriodLengthDays;
+        if (body.cycleRegularity !== undefined) data.cycleRegularity = body.cycleRegularity;
+        if (body.hormonalContraception !== undefined) data.hormonalContraception = body.hormonalContraception;
+        if (body.lastPeriodStartDate !== undefined) {
+            // Same YYYY-MM-DD -> UTC-midnight Date pattern as dateOfBirth above.
+            const lpd = body.lastPeriodStartDate;
+            data.lastPeriodStartDate = lpd ? new Date(lpd) : null;
+        }
+
         // Upsert: auto-create the profile if the user-registered Redis event
         // hasn't been processed yet (race condition: user can reach onboarding
         // "Finish & Sync" before the async event round-trip completes).
@@ -168,17 +321,29 @@ export class UserService {
                 },
                 update: data,
             }).catch(err => {
-                const errorLog = {
-                    timestamp: new Date().toISOString(),
-                    userId,
-                    err,
-                    data
-                };
-                fs.appendFileSync(
-                    path.join(process.cwd(), 'prisma-error.log'),
-                    JSON.stringify(errorLog, null, 2) + '\n---\n'
-                );
-                logger.error({ userId, err, data }, 'Prisma error');
+                // Dev-only debug file dump — never write to disk in production
+                // (cwd may be read-only in the container, and the error data
+                // contains PII). The structured logger.error below is the
+                // production diagnostic.
+                //
+                // SECURITY (HIGH #9): NEVER log the `data` payload. It carries
+                // GDPR Art.9 special-category fields (menstrual-cycle / period /
+                // health). We log only userId, the error, and the NAMES of the
+                // fields that were being written (never their values) so the
+                // diagnostic is still useful without leaking PII.
+                if (process.env.NODE_ENV !== 'production') {
+                    const errorLog = {
+                        timestamp: new Date().toISOString(),
+                        userId,
+                        err,
+                        fields: Object.keys(data),
+                    };
+                    fs.appendFileSync(
+                        path.join(process.cwd(), 'prisma-error.log'),
+                        JSON.stringify(errorLog, null, 2) + '\n---\n'
+                    );
+                }
+                logger.error({ userId, err, fields: Object.keys(data) }, 'Prisma error');
                 throw err;
             });
 
@@ -186,10 +351,53 @@ export class UserService {
 
             // Auto-recalculate baseline metrics
             await this.recalculateBaselines(userId);
+            // Auto-recalculate the derived menstrual-cycle phase (UNKNOWN for all
+            // non-tracking users — no behavioural change for them).
+            await this.recalculateCyclePhase(userId);
 
             return profile;
         } catch (err: any) {
-            logger.error({ userId, err, data }, 'Failed to upsert user profile');
+            // SECURITY (HIGH #9): do NOT log `data` — it contains GDPR Art.9
+            // special-category fields. Log userId + err + the field NAMES only.
+            logger.error({ userId, err, fields: Object.keys(data) }, 'Failed to upsert user profile');
+            throw err;
+        }
+    }
+
+    /**
+     * Update only the account-visibility flag (public/private profile).
+     * Backs PATCH /v1/users/me — the social public/private contract that
+     * community-service & chat-service compose against.
+     *
+     * Race-safe mirror of updateProfile: only assigns isPrivate when the body
+     * actually carries it (a PATCH may omit it), then writes via a plain
+     * `update`. If the profile row doesn't exist yet (Prisma P2025 — same
+     * registration-event lag window updateProfile guards), we surface the
+     * canonical 'Profile not found' string so the route maps it to the fixed
+     * 404 literal. getProfileWithPreferences selects the full row (incl.
+     * isPrivate), so callers see the persisted value.
+     */
+    async updatePrivacy(userId: string, body: UpdatePrivacyBody): Promise<UserProfile> {
+        const data: Record<string, unknown> = {};
+        if (body.isPrivate !== undefined) data.isPrivate = body.isPrivate;
+
+        try {
+            const profile = await this.prisma.userProfile.update({
+                where: { userId },
+                data,
+            });
+
+            logger.info({ userId }, 'User privacy updated');
+            return profile;
+        } catch (err: any) {
+            // P2025 = "Record to update not found" — translate to the canonical
+            // generic so the route emits its fixed 'Profile not found' literal
+            // (never echo err.message verbatim — see error-redaction suite).
+            if (err?.code === 'P2025') {
+                logger.warn({ userId }, 'Privacy update on missing profile');
+                throw new Error('Profile not found');
+            }
+            logger.error({ userId, err }, 'Failed to update user privacy');
             throw err;
         }
     }
@@ -270,23 +478,11 @@ export class UserService {
 
             return prefs;
         } catch (err: any) {
-            const errorLog = {
-                method: 'updatePreferences',
-                timestamp: new Date().toISOString(),
-                userId,
-                err: {
-                    message: err.message,
-                    stack: err.stack,
-                    code: err.code,
-                    meta: err.meta
-                },
-                body
-            };
-            fs.appendFileSync(
-                'c:\\Users\\saras\\Downloads\\NightFule\\prisma-error.log',
-                JSON.stringify(errorLog, null, 2) + '\n---\n'
-            );
-            logger.error({ userId, err, body }, 'Failed to update user preferences');
+            // SECURITY (MEDIUM #14): do NOT log the raw request `body` — it
+            // carries health-adjacent fields (allergies, injury-safe mode,
+            // dietary preference). Log userId + err + the NAMES of the fields
+            // being written (never their values).
+            logger.error({ userId, err, fields: Object.keys(body ?? {}) }, 'Failed to update user preferences');
             throw err;
         }
     }
@@ -311,14 +507,20 @@ export class UserService {
                 onboardingCompleted: body.completed,
             },
         }).catch(err => {
-            const errorLog = {
-                method: 'updateOnboarding',
-                timestamp: new Date().toISOString(),
-                userId,
-                err,
-                // No 'data' object to log here, as updateOnboarding directly uses body.step/completed
-            };
-            fs.appendFileSync(path.join(process.cwd(), 'prisma-error.log'), JSON.stringify(errorLog, null, 2) + '\n---\n');
+            // Dev-only debug file dump — never write to disk in production
+            // (cwd may be read-only in the container). The structured
+            // logger.error is the production diagnostic.
+            if (process.env.NODE_ENV !== 'production') {
+                const errorLog = {
+                    method: 'updateOnboarding',
+                    timestamp: new Date().toISOString(),
+                    userId,
+                    err,
+                    // No 'data' object to log here, as updateOnboarding directly uses body.step/completed
+                };
+                fs.appendFileSync(path.join(process.cwd(), 'prisma-error.log'), JSON.stringify(errorLog, null, 2) + '\n---\n');
+            }
+            logger.error({ userId, err }, 'Prisma error');
             throw err;
         });
 
@@ -336,10 +538,14 @@ export class UserService {
                 },
             };
 
-            fs.appendFileSync(
-                path.join(process.cwd(), 'event-out.log'),
-                `[${new Date().toISOString()}] Publishing to ${Channels.User.OnboardingCompleted} for user ${userId}\n`
-            );
+            // Dev-only audit trail of outbound events — the real publish below
+            // is the source of truth; never write to disk in production.
+            if (process.env.NODE_ENV !== 'production') {
+                fs.appendFileSync(
+                    path.join(process.cwd(), 'event-out.log'),
+                    `[${new Date().toISOString()}] Publishing to ${Channels.User.OnboardingCompleted} for user ${userId}\n`
+                );
+            }
 
             await this.eventBus.publish(Channels.User.OnboardingCompleted, event);
         }
@@ -407,12 +613,59 @@ export class UserService {
     }
 
     /**
+     * Internal helper to derive & persist the menstrual-cycle phase.
+     *
+     * Sibling of recalculateBaselines: loads the profile, runs the PURE,
+     * fully-gated computeCyclePhase over the raw cycle inputs, and writes the
+     * result to UserStatus.cyclePhase via the existing updateUserStatus upsert.
+     *
+     * Non-tracking users (cycleTrackingEnabled=false — the default) always derive
+     * UNKNOWN, so this is a no-op-equivalent for them: it only ever writes the
+     * 'UNKNOWN' sentinel, which downstream services treat as "no phase-syncing".
+     */
+    private async recalculateCyclePhase(userId: string): Promise<void> {
+        try {
+            const profile = await this.prisma.userProfile.findUnique({
+                where: { userId },
+            });
+            if (!profile) return;
+
+            // The generated Prisma client may predate the cycle columns (the
+            // schema + migration own the runtime columns; `prisma generate`
+            // catches the types up). Read through `any` so this compiles before
+            // regeneration — mirrors the isPrivate shim precedent.
+            const p = profile as any;
+            const input: CyclePhaseInput = {
+                cycleTrackingEnabled: p.cycleTrackingEnabled,
+                biologicalSex: p.biologicalSex,
+                hormonalContraception: p.hormonalContraception,
+                cycleRegularity: p.cycleRegularity,
+                avgCycleLengthDays: p.avgCycleLengthDays,
+                avgPeriodLengthDays: p.avgPeriodLengthDays,
+                lastPeriodStartDate: p.lastPeriodStartDate,
+            };
+
+            const cyclePhase = computeCyclePhase(input);
+
+            await this.updateUserStatus(userId, {
+                cyclePhase,
+                lastUpdatedBy: 'user-service:cycle-phase',
+            });
+
+            logger.debug({ userId, cyclePhase }, 'Recalculated cycle phase');
+        } catch (err) {
+            logger.error({ userId, err }, 'Failed to recalculate cycle phase');
+        }
+    }
+
+    /**
      * Update the materialized UserStatus (Digital Twin).
      */
     async updateUserStatus(userId: string, data: {
         fatigueScore?: number;
         circadianPeakTime?: string | null;
         circadianLowTime?: string | null;
+        cyclePhase?: string | null;
         adherenceRate?: number;
         currentStreak?: number;
         currentTdee?: number;
@@ -420,13 +673,17 @@ export class UserService {
         lastUpdatedBy: string;
     }): Promise<void> {
         try {
+            // Cast create/update to `any`: `cyclePhase` is a new column the
+            // checked-in generated client may predate (schema + migration own the
+            // runtime column; `prisma generate` catches the types up). Same shim
+            // precedent as isPrivate / the ProfileWithPreferences cast.
             const status = await this.prisma.userStatus.upsert({
                 where: { userId },
                 create: {
                     userId,
                     ...data,
-                },
-                update: data,
+                } as any,
+                update: data as any,
             });
 
             await this.eventBus.publish<UserStatusUpdatedPayload>(Channels.User.StatusUpdated, {
@@ -453,12 +710,43 @@ export class UserService {
     }
 
     /**
-     * Internal helper to fetch all users for background workers
+     * Internal helper to fetch users for background workers (e.g. plan-service's
+     * daily-regeneration worker).
+     *
+     * PERF (HIGH #3): this used to do an UNBOUNDED userProfile.findMany() with no
+     * `take`, loading EVERY profile into memory on every 60s poll. It is now
+     * CURSOR-PAGINATED: each call returns at most `limit` rows ordered by the
+     * stable `userId` cursor plus a `nextCursor` to continue from. The worker
+     * pages through batches until `nextCursor` is null, so behaviour is
+     * equivalent (it still processes all users) but every query is bounded.
+     *
+     * @param opts.cursor  exclusive userId to resume after (omit for the first page)
+     * @param opts.limit   page size (1..MAX_INTERNAL_PAGE_LIMIT, default 500)
      */
-    async getAllUsersInternal(): Promise<Array<{ userId: string, timezone: string }>> {
-        return this.prisma.userProfile.findMany({
-            select: { userId: true, timezone: true }
+    async getAllUsersInternal(opts?: { cursor?: string; limit?: number }): Promise<{
+        users: Array<{ userId: string; timezone: string }>;
+        nextCursor: string | null;
+    }> {
+        const MAX_LIMIT = 1000;
+        const DEFAULT_LIMIT = 500;
+        const rawLimit = opts?.limit ?? DEFAULT_LIMIT;
+        const limit = Math.min(Math.max(1, Math.floor(rawLimit)), MAX_LIMIT);
+
+        const users = await this.prisma.userProfile.findMany({
+            select: { userId: true, timezone: true },
+            orderBy: { userId: 'asc' },
+            take: limit,
+            // Skip the cursor row itself when resuming a page.
+            ...(opts?.cursor
+                ? { cursor: { userId: opts.cursor }, skip: 1 }
+                : {}),
         });
+
+        // A full page MAY have more rows; a short page is the last page.
+        const nextCursor =
+            users.length === limit ? users[users.length - 1].userId : null;
+
+        return { users, nextCursor };
     }
 
     // ── Admin Methods ────────────────────────────────────────────────────────────
@@ -472,12 +760,14 @@ export class UserService {
         bannedUsers: number;
         newUsersThisWeek: number;
         premiumUsers: number;
+        coaches: number;
+        availableCoaches: number;
     }> {
         const now = new Date();
         const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-        const [totalUsers, activeToday, newUsersThisWeek] = await Promise.all([
+        const [totalUsers, activeToday, newUsersThisWeek, coaches, availableCoaches] = await Promise.all([
             this.prisma.userProfile.count(),
             this.prisma.userProfile.count({
                 where: { updatedAt: { gte: oneDayAgo } },
@@ -485,17 +775,23 @@ export class UserService {
             this.prisma.userProfile.count({
                 where: { createdAt: { gte: oneWeekAgo } },
             }),
+            // Coach metrics live in user-service's own DB (coach_profiles), so
+            // these are REAL counts — no cross-service call needed.
+            this.prisma.coachProfile.count(),
+            this.prisma.coachProfile.count({ where: { isAvailable: true } }),
         ]);
 
-        // We don't have a dedicated "banned" or "premium" flag on UserProfile,
-        // so we return 0 for now — these can be wired up when auth-service
-        // exposes status queries or a subscription table is available.
+        // Real banned count from auth-service (best-effort: 0 if unreachable).
+        // premium still needs a subscription source (later phase).
+        const banned = await this.authBannedIds();
         return {
             totalUsers,
             activeToday,
-            bannedUsers: 0,
+            bannedUsers: banned.count,
             newUsersThisWeek,
             premiumUsers: 0,
+            coaches,
+            availableCoaches,
         };
     }
 
@@ -527,11 +823,14 @@ export class UserService {
             take: limit,
         });
 
+        // Real account status from auth-service (BANNED vs ACTIVE), best-effort.
+        const banned = await this.authBannedIds();
+        const bannedSet = new Set(banned.ids);
         return profiles.map((p) => ({
             id: p.id,
             userId: p.userId,
             displayName: p.displayName,
-            status: 'ACTIVE', // placeholder until auth-service exposes account status
+            status: bannedSet.has(p.userId) ? 'BANNED' : 'ACTIVE',
             tier: (p as any).preferences?.primaryGoal === 'GENERAL_HEALTH' ? 'FREE' : 'PRO',
             createdAt: p.createdAt,
             lastActiveAt: p.updatedAt,
@@ -542,39 +841,245 @@ export class UserService {
      * Placeholder for ban/unban toggle.
      * The actual disable logic requires coordination with auth-service.
      */
-    async toggleBanUser(targetUserId: string): Promise<{ success: boolean; message: string }> {
-        // Verify user exists
-        const profile = await this.prisma.userProfile.findUnique({
-            where: { userId: targetUserId },
-        });
-
+    async toggleBanUser(targetUserId: string): Promise<{ success: boolean; message: string; banned: boolean }> {
+        const profile = await this.prisma.userProfile.findUnique({ where: { userId: targetUserId } });
         if (!profile) {
             throw new Error('User not found');
         }
+        // REAL ban (was a stub): flip the auth-service `banned` flag, which blocks
+        // the account's login. Existing access tokens still expire on their own.
+        const next = !(await this.authIsBanned(targetUserId));
+        await this.authSetBanned(targetUserId, next);
+        logger.info({ targetUserId, banned: next }, 'Ban toggled via auth-service');
+        return { success: true, banned: next, message: next ? 'User banned' : 'User unbanned' };
+    }
 
-        // TODO: call auth-service to actually disable/enable the account
-        logger.info({ targetUserId }, 'Ban toggle requested (stub — requires auth-service integration)');
+    // ── Coach applications (apply → admin review → role promotion) ───────────
 
-        return {
-            success: true,
-            message: `Ban toggle for user ${targetUserId} recorded. Auth-service integration pending.`,
+    /**
+     * Submit (or re-submit) a coach application. One row per user; re-applying
+     * after a rejection overwrites the prior row back to PENDING. Blocked if the
+     * user is already an active coach.
+     */
+    async submitCoachApplication(
+        userId: string,
+        data: { bio?: string; specializations?: string[]; certifications?: string[]; monthlyRateUsd?: number | null },
+    ): Promise<{ status: string }> {
+        const profile = await this.prisma.coachProfile.findUnique({ where: { userId } });
+        if (profile?.isAvailable) return { status: 'ALREADY_COACH' };
+        const payload = {
+            bio: data.bio ?? null,
+            specializations: data.specializations ?? [],
+            certifications: data.certifications ?? [],
+            monthlyRateUsd: data.monthlyRateUsd ?? null,
         };
+        const app = await this.prisma.coachApplication.upsert({
+            where: { userId },
+            create: { userId, status: 'PENDING', ...payload },
+            update: { status: 'PENDING', rejectionReason: null, reviewedAt: null, reviewedBy: null, ...payload },
+        });
+        return { status: app.status };
+    }
+
+    /** The caller's own coach application (or null). */
+    async getMyCoachApplication(userId: string) {
+        return this.prisma.coachApplication.findUnique({ where: { userId } });
+    }
+
+    /** Admin: list applications (optionally by status), newest first, with applicant name/avatar. */
+    async listCoachApplications(status?: string) {
+        const apps = await this.prisma.coachApplication.findMany({
+            where: status ? { status } : {},
+            orderBy: { createdAt: 'desc' },
+            take: 100,
+        });
+        const profiles = await this.prisma.userProfile.findMany({
+            where: { userId: { in: apps.map((a) => a.userId) } },
+            select: { userId: true, displayName: true, avatarUrl: true },
+        });
+        const byId = new Map(profiles.map((p) => [p.userId, p]));
+        return apps.map((a) => ({
+            ...a,
+            displayName: byId.get(a.userId)?.displayName ?? null,
+            avatarUrl: byId.get(a.userId)?.avatarUrl ?? null,
+        }));
+    }
+
+    /**
+     * Admin: approve → activate the CoachProfile from the application AND promote
+     * the user's auth role to COACH (cross-service). The role change runs FIRST so
+     * a transient auth-service failure leaves the application PENDING (admin
+     * retries) instead of a half-approved state. Every step is idempotent.
+     */
+    async approveCoachApplication(id: string, adminUserId: string): Promise<{ ok: boolean }> {
+        const app = await this.prisma.coachApplication.findUnique({ where: { id } });
+        if (!app) throw Object.assign(new Error('Application not found'), { statusCode: 404 });
+
+        await this.promoteUserRole(app.userId, 'COACH');
+
+        await this.prisma.coachProfile.upsert({
+            where: { userId: app.userId },
+            create: {
+                userId: app.userId,
+                specializations: app.specializations,
+                bio: app.bio,
+                certifications: app.certifications,
+                isAvailable: true,
+                monthlyRateUsd: app.monthlyRateUsd,
+            },
+            update: {
+                specializations: app.specializations,
+                bio: app.bio,
+                certifications: app.certifications,
+                isAvailable: true,
+                monthlyRateUsd: app.monthlyRateUsd,
+            },
+        });
+        await this.prisma.coachApplication.update({
+            where: { id },
+            data: { status: 'APPROVED', reviewedBy: adminUserId, reviewedAt: new Date(), rejectionReason: null },
+        });
+        return { ok: true };
+    }
+
+    /** Admin: reject an application with an optional reason. */
+    async rejectCoachApplication(id: string, adminUserId: string, reason?: string): Promise<{ ok: boolean }> {
+        const app = await this.prisma.coachApplication.findUnique({ where: { id } });
+        if (!app) throw Object.assign(new Error('Application not found'), { statusCode: 404 });
+        await this.prisma.coachApplication.update({
+            where: { id },
+            data: { status: 'REJECTED', reviewedBy: adminUserId, reviewedAt: new Date(), rejectionReason: reason ?? null },
+        });
+        return { ok: true };
+    }
+
+    /** Promote/demote a user's auth role over the auth-service internal channel. */
+    /** Base URL + headers for auth-service /internal/* calls (X-Internal-Token). */
+    private authInternal() {
+        return {
+            base: process.env['AUTH_SERVICE_URL'] ?? 'http://auth-service:3001',
+            headers: { 'content-type': 'application/json', 'x-internal-token': process.env['INTERNAL_SERVICE_TOKEN'] ?? '' },
+        };
+    }
+
+    private async promoteUserRole(userId: string, role: string): Promise<void> {
+        const { base, headers } = this.authInternal();
+        const res = await fetch(`${base}/v1/auth/internal/user/${userId}/role`, { method: 'PATCH', headers, body: JSON.stringify({ role }) });
+        if (!res.ok) throw new Error(`auth-service role update failed (${res.status})`);
+    }
+
+    /** Ban/unban a user via auth-service (the real ban — blocks their login). */
+    private async authSetBanned(userId: string, banned: boolean): Promise<void> {
+        const { base, headers } = this.authInternal();
+        const res = await fetch(`${base}/v1/auth/internal/user/${userId}/ban`, { method: 'PATCH', headers, body: JSON.stringify({ banned }) });
+        if (!res.ok) throw new Error(`auth-service ban update failed (${res.status})`);
+    }
+
+    private async authIsBanned(userId: string): Promise<boolean> {
+        const { base, headers } = this.authInternal();
+        const res = await fetch(`${base}/v1/auth/internal/user/${userId}/ban`, { headers });
+        if (!res.ok) throw new Error(`auth-service ban check failed (${res.status})`);
+        const data = (await res.json()) as { banned?: boolean };
+        return Boolean(data.banned);
+    }
+
+    /** Banned user ids + count. Best-effort: returns empty if auth is unreachable
+     * (so the admin dashboard degrades gracefully rather than 500-ing). */
+    private async authBannedIds(): Promise<{ ids: string[]; count: number }> {
+        try {
+            const { base, headers } = this.authInternal();
+            const res = await fetch(`${base}/v1/auth/internal/banned-ids`, { headers });
+            if (!res.ok) return { ids: [], count: 0 };
+            return (await res.json()) as { ids: string[]; count: number };
+        } catch {
+            return { ids: [], count: 0 };
+        }
     }
 
     /**
      * Fetch all students (clients) for a specific coach.
      */
     async getStudents(coachUserId: string) {
-        return this.prisma.coachClientRelation.findMany({
-            where: {
-                coachUserId,
-                status: 'ACCEPTED'
-            },
-            include: {
-                // Fetch the client's profile and status for the coach to review
-                // profile: { include: { status: true } } // This would depend on Prisma schema structure
-            }
+        const relations = await this.prisma.coachClientRelation.findMany({
+            where: { coachUserId, status: 'ACCEPTED' },
+            orderBy: { startedAt: 'desc' },
         });
+        // clientUserId is a plain id (no Prisma relation to UserProfile), so join
+        // the client profiles manually — this is what was missing, leaving the
+        // coach dashboard showing blank names/avatars.
+        return this.attachClientProfiles(relations);
+    }
+
+    /** Join the client display name + avatar onto a list of relations. */
+    private async attachClientProfiles<T extends { clientUserId: string }>(relations: T[]) {
+        const profiles = await this.prisma.userProfile.findMany({
+            where: { userId: { in: relations.map((r) => r.clientUserId) } },
+            select: { userId: true, displayName: true, avatarUrl: true },
+        });
+        const byId = new Map(profiles.map((p) => [p.userId, p]));
+        return relations.map((r) => ({
+            ...r,
+            displayName: byId.get(r.clientUserId)?.displayName ?? null,
+            avatarUrl: byId.get(r.clientUserId)?.avatarUrl ?? null,
+        }));
+    }
+
+    // ── Coach ↔ client relationship lifecycle ────────────────────────────────
+
+    /** A client requests a coach → PENDING relation (idempotent on the pair). */
+    async requestCoach(clientUserId: string, coachUserId: string): Promise<{ status: string }> {
+        if (clientUserId === coachUserId) throw Object.assign(new Error('Cannot coach yourself'), { statusCode: 400 });
+        const coach = await this.prisma.coachProfile.findUnique({ where: { userId: coachUserId } });
+        if (!coach) throw Object.assign(new Error('Not a coach'), { statusCode: 404 });
+        const rel = await this.prisma.coachClientRelation.upsert({
+            where: { coachUserId_clientUserId: { coachUserId, clientUserId } },
+            create: { coachUserId, clientUserId, status: 'PENDING' },
+            update: { status: 'PENDING', endedAt: null },
+        });
+        return { status: rel.status };
+    }
+
+    /** A coach's incoming PENDING requests, with the requesting client's profile. */
+    async getCoachRequests(coachUserId: string) {
+        const relations = await this.prisma.coachClientRelation.findMany({
+            where: { coachUserId, status: 'PENDING' },
+            orderBy: { createdAt: 'desc' },
+        });
+        return this.attachClientProfiles(relations);
+    }
+
+    /** A coach accepts/declines a request. Only the owning coach may. */
+    async respondToCoachRequest(relationId: string, coachUserId: string, accept: boolean): Promise<{ ok: boolean }> {
+        const rel = await this.prisma.coachClientRelation.findUnique({ where: { id: relationId } });
+        if (!rel || rel.coachUserId !== coachUserId) throw Object.assign(new Error('Request not found'), { statusCode: 404 });
+        await this.prisma.coachClientRelation.update({
+            where: { id: relationId },
+            data: accept ? { status: 'ACCEPTED', startedAt: new Date() } : { status: 'DECLINED', endedAt: new Date() },
+        });
+        return { ok: true };
+    }
+
+    /** A client's current (ACCEPTED) coach + their coach profile, or null. */
+    async getMyCoach(clientUserId: string) {
+        const rel = await this.prisma.coachClientRelation.findFirst({
+            where: { clientUserId, status: 'ACCEPTED' },
+            orderBy: { startedAt: 'desc' },
+        });
+        if (!rel) return null;
+        const [profile, coachProfile] = await Promise.all([
+            this.prisma.userProfile.findUnique({ where: { userId: rel.coachUserId }, select: { displayName: true, avatarUrl: true } }),
+            this.prisma.coachProfile.findUnique({ where: { userId: rel.coachUserId } }),
+        ]);
+        return {
+            ...rel,
+            coach: {
+                userId: rel.coachUserId,
+                displayName: profile?.displayName ?? null,
+                avatarUrl: profile?.avatarUrl ?? null,
+                specializations: coachProfile?.specializations ?? [],
+                bio: coachProfile?.bio ?? null,
+            },
+        };
     }
 
     /**
@@ -602,5 +1107,649 @@ export class UserService {
                 activeProtocolId: protocolId
             }
         });
+    }
+
+    // ── Menstrual-cycle: period logging + history + forecast ──────────────────
+
+    /** Load a user's PeriodLog rows (oldest-first), as pure-helper inputs. */
+    private async loadPeriodLogs(userId: string): Promise<PeriodLogInput[]> {
+        // PeriodLog is a new model the checked-in generated client may predate
+        // (schema + migration own the runtime table; `prisma generate` catches the
+        // types up). Access through `any`, same shim precedent as the cycle columns.
+        const rows = await (this.prisma as any).periodLog.findMany({
+            where: { userId },
+            orderBy: { startDate: 'asc' },
+        });
+        return (rows ?? []).map((r: any) => ({ startDate: r.startDate, endDate: r.endDate }));
+    }
+
+    /**
+     * Log a period start (+ optional end), then RECOMPUTE the user's learned cycle
+     * stats FROM their full logged history and the derived phase.
+     *
+     * Flow:
+     *   1. Append a PeriodLog row.
+     *   2. computeCycleStatsFromLogs(history) — learns avgCycleLength /
+     *      avgPeriodLength / regularity / lastPeriodStartDate from the USER'S OWN
+     *      data (never the static 28/14 template once history exists).
+     *   3. Persist those learned values onto UserProfile (only fields the helper
+     *      could actually derive — null results never clobber a stored value).
+     *   4. recalculateCyclePhase -> UserStatus.cyclePhase.
+     *
+     * Gated to the caller's own userId by the route. Returns the fresh stats.
+     */
+    async logPeriod(userId: string, body: LogPeriodBody) {
+        await this.ensureProfileExists(userId);
+
+        // IDEMPOTENCY (data-integrity LOW #9): a double-submit of the same period
+        // start must not duplicate a row (duplicate starts skew the learned
+        // averages). createMany({ skipDuplicates: true }) no-ops against the
+        // @@unique([userId, startDate]) constraint instead of throwing, so a
+        // re-submit silently keeps the single existing row and we still recompute
+        // + return the current stats below.
+        await (this.prisma as any).periodLog.createMany({
+            data: [{
+                userId,
+                startDate: new Date(body.startDate),
+                endDate: body.endDate ? new Date(body.endDate) : null,
+            }],
+            skipDuplicates: true,
+        });
+
+        const logs = await this.loadPeriodLogs(userId);
+        const stats = computeCycleStatsFromLogs(logs);
+
+        // Persist learned values. Only write fields the history could derive, so a
+        // single log (no computable gap) never wipes a user's stored cycle length.
+        const data: Record<string, unknown> = {};
+        if (stats.lastPeriodStartDate) data.lastPeriodStartDate = stats.lastPeriodStartDate;
+        if (stats.avgCycleLengthDays != null) data.avgCycleLengthDays = stats.avgCycleLengthDays;
+        if (stats.avgPeriodLengthDays != null) data.avgPeriodLengthDays = stats.avgPeriodLengthDays;
+        if (stats.cycleRegularity !== 'UNKNOWN') data.cycleRegularity = stats.cycleRegularity;
+
+        if (Object.keys(data).length > 0) {
+            await this.prisma.userProfile.update({ where: { userId }, data: data as any });
+        }
+
+        // Re-derive the phase against the freshly-learned inputs.
+        await this.recalculateCyclePhase(userId);
+
+        logger.info({ userId, loggedCycleCount: stats.loggedCycleCount }, 'Period logged + cycle stats recomputed');
+        return {
+            ...stats,
+            lastPeriodStartDate: stats.lastPeriodStartDate
+                ? stats.lastPeriodStartDate.toISOString().slice(0, 10)
+                : null,
+        };
+    }
+
+    /**
+     * Return the user's cycle history: each past cycle with its length + period
+     * length, plus the learned averages / variability. PURE-derived from logs.
+     */
+    async getCycleHistory(userId: string) {
+        const logs = await this.loadPeriodLogs(userId);
+        const stats = computeCycleStatsFromLogs(logs);
+        return {
+            cycles: buildCycleHistory(logs),
+            averages: {
+                avgCycleLengthDays: stats.avgCycleLengthDays,
+                avgPeriodLengthDays: stats.avgPeriodLengthDays,
+                cycleLengthStdDev: stats.cycleLengthStdDev,
+                cycleRegularity: stats.cycleRegularity,
+                loggedCycleCount: stats.loggedCycleCount,
+            },
+        };
+    }
+
+    /**
+     * Build the uncertainty-aware cycle forecast/calendar for a window. Combines
+     * the stored profile inputs with the LEARNED history signals (SD, logged
+     * count, regularity) and the set of actual logged days (for logged-vs-
+     * predicted), then defers to the pure computeCycleForecast.
+     *
+     * @param months  half-window in months (default 1) -> [today - m, today + m].
+     */
+    async getCycleForecast(userId: string, months = 1) {
+        const profile = await this.prisma.userProfile.findUnique({ where: { userId } });
+        const logs = await this.loadPeriodLogs(userId);
+        const stats = computeCycleStatsFromLogs(logs);
+
+        const p = (profile ?? {}) as any;
+
+        // Prefer LEARNED values from history where available; else the stored
+        // template inputs. cycleRegularity prefers a learned IRREGULAR signal.
+        const input: ForecastInput = {
+            cycleTrackingEnabled: p.cycleTrackingEnabled,
+            biologicalSex: p.biologicalSex,
+            hormonalContraception: p.hormonalContraception,
+            cycleRegularity:
+                stats.cycleRegularity !== 'UNKNOWN' ? stats.cycleRegularity : p.cycleRegularity,
+            avgCycleLengthDays: stats.avgCycleLengthDays ?? p.avgCycleLengthDays,
+            avgPeriodLengthDays: stats.avgPeriodLengthDays ?? p.avgPeriodLengthDays,
+            lastPeriodStartDate: stats.lastPeriodStartDate ?? p.lastPeriodStartDate,
+            cycleLengthStdDev: stats.cycleLengthStdDev,
+            loggedCycleCount: stats.loggedCycleCount,
+            loggedPeriodDates: this.expandLoggedDates(logs),
+        };
+
+        const now = new Date();
+        const windowStart = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, now.getUTCDate()),
+        );
+        const windowEnd = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + months, now.getUTCDate()),
+        );
+
+        return computeCycleForecast(input, windowStart, windowEnd, now);
+    }
+
+    // ── Partner cycle-sharing (Period P3 tail) ────────────────────────────────
+    // A user GENERATES an opaque, revocable code that lets a partner read a
+    // SANITIZED, summary-only view of their cycle (current phase + next-period /
+    // fertile-window PREDICTIONS) — never the raw symptom / activity / notes logs.
+    // All four methods use the `(prisma as any).cycleShare` shim (same precedent as
+    // periodLog / cycleSymptomLog / pillLog: the checked-in generated client may
+    // predate the model; `prisma db push` + `prisma generate` own the runtime).
+
+    /** Owner-facing view of their OWN share row (safe to return to the owner). */
+    private toOwnerShareView(share: any) {
+        return {
+            code: share.code as string,
+            scopes: (share.scopes as string[]) ?? DEFAULT_CYCLE_SHARE_SCOPES,
+            createdAt: share.createdAt as Date,
+            active: share.revokedAt == null,
+        };
+    }
+
+    /** The owner's current ACTIVE (non-revoked) share, or null if none exists. */
+    async getActiveCycleShare(userId: string) {
+        const share = await (this.prisma as any).cycleShare.findFirst({
+            where: { userId, revokedAt: null },
+            orderBy: { createdAt: 'desc' },
+        });
+        return share ? this.toOwnerShareView(share) : null;
+    }
+
+    /**
+     * Generate a partner-share code for the caller. IDEMPOTENT by design: if an
+     * active share already exists we RETURN IT rather than minting a second one —
+     * so tapping "generate" twice never silently invalidates a code already handed
+     * to a partner, and a user never accumulates multiple live codes. To rotate a
+     * code the client revokes then generates. Retries on the (astronomically
+     * unlikely) unique-code collision.
+     */
+    async createCycleShare(userId: string) {
+        await this.ensureProfileExists(userId);
+
+        const existing = await (this.prisma as any).cycleShare.findFirst({
+            where: { userId, revokedAt: null },
+            orderBy: { createdAt: 'desc' },
+        });
+        if (existing) return this.toOwnerShareView(existing);
+
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                const created = await (this.prisma as any).cycleShare.create({
+                    data: { userId, code: generateShareCode(), scopes: DEFAULT_CYCLE_SHARE_SCOPES },
+                });
+                logger.info({ userId }, 'Cycle share created');
+                return this.toOwnerShareView(created);
+            } catch (err: any) {
+                // P2002 = unique-code collision: regenerate and retry a few times.
+                if (err?.code === 'P2002' && attempt < 4) continue;
+                throw err;
+            }
+        }
+        throw new Error('Failed to generate a unique share code');
+    }
+
+    /**
+     * Revoke the caller's active share(s) (soft-delete: stamps revokedAt). The
+     * public resolver matches `revokedAt: null`, so this INSTANTLY and permanently
+     * kills the code. Idempotent — revoking with nothing active succeeds (count 0).
+     */
+    async revokeCycleShare(userId: string) {
+        const res = await (this.prisma as any).cycleShare.updateMany({
+            where: { userId, revokedAt: null },
+            data: { revokedAt: new Date() },
+        });
+        logger.info({ userId, revoked: res.count }, 'Cycle share(s) revoked');
+        return { revoked: res.count > 0, count: res.count as number };
+    }
+
+    /**
+     * Resolve a partner-presented code -> the owner's SANITIZED cycle summary, or
+     * null if the code is unknown or revoked (route -> 404). Reuses getStatus (for
+     * the current phase) + getCycleForecast (for the predictions) and runs the
+     * result through the ALLOW-LIST sanitizer, which copies out ONLY the safe
+     * summary fields. This path NEVER reads CycleSymptomLog, so the raw symptom /
+     * discharge / sexual-activity / notes data is structurally unreachable here.
+     */
+    async resolveSharedCycleSummary(code: string): Promise<SharedCycleSummary | null> {
+        const share = await (this.prisma as any).cycleShare.findFirst({
+            where: { code, revokedAt: null },
+        });
+        if (!share) return null;
+
+        const ownerId = share.userId as string;
+        const [status, forecast, profile] = await Promise.all([
+            this.getStatus(ownerId),
+            this.getCycleForecast(ownerId, 1),
+            this.prisma.userProfile.findUnique({ where: { userId: ownerId } }),
+        ]);
+
+        return sanitizeSharedCycleSummary({
+            displayName: (profile as any)?.displayName ?? null,
+            cyclePhase: (status as any)?.cyclePhase ?? null,
+            forecast,
+            scopes: share.scopes as string[] | null,
+        });
+    }
+
+    /**
+     * Upsert the per-day symptom quick-log (mood / cramps / energy / flow /
+     * notes). One row per user per calendar day — re-logging the same day
+     * merges the new fields over the old (partial updates supported).
+     */
+    async logCycleSymptoms(userId: string, body: {
+        date?: string;
+        mood?: number;
+        cramps?: number;
+        energy?: number;
+        flow?: string;
+        notes?: string;
+        symptoms?: string[];
+        discharge?: string;
+        activity?: string;
+        water?: number;
+        bbt?: number;
+        weight?: number;
+        ovulationTest?: string;
+    }) {
+        await this.ensureProfileExists(userId);
+        const day = new Date(`${body.date ?? new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+
+        // Same `any` shim precedent as periodLog (checked-in generated client
+        // may predate the model; schema + db push own the runtime table).
+        const fields: Record<string, unknown> = {};
+        if (body.mood != null) fields.mood = body.mood;
+        if (body.cramps != null) fields.cramps = body.cramps;
+        if (body.energy != null) fields.energy = body.energy;
+        if (body.flow != null) fields.flow = body.flow;
+        if (body.notes != null) fields.notes = body.notes;
+        // Period P1: expanded logging. `symptoms` is set-replaced (the client
+        // always sends the full selected set for the day), the rest are scalar.
+        if (body.symptoms != null) fields.symptoms = body.symptoms.slice(0, 40);
+        if (body.discharge != null) fields.discharge = body.discharge;
+        if (body.activity != null) fields.activity = body.activity;
+        if (body.water != null) fields.water = body.water;
+        // Period P3: advanced fertility logging.
+        if (body.bbt != null) fields.bbt = body.bbt;
+        if (body.weight != null) fields.weight = body.weight;
+        if (body.ovulationTest != null) fields.ovulationTest = body.ovulationTest;
+
+        const row = await (this.prisma as any).cycleSymptomLog.upsert({
+            where: { userId_date: { userId, date: day } },
+            create: { userId, date: day, ...fields },
+            update: fields,
+        });
+        logger.info({ userId }, 'Cycle symptoms logged');
+        return row;
+    }
+
+    /** Symptom rows for the trailing `days` window (default 35), newest first. */
+    async getCycleSymptoms(userId: string, days = 35) {
+        const cutoff = new Date(Date.now() - days * 86_400_000);
+        const rows = await (this.prisma as any).cycleSymptomLog.findMany({
+            where: { userId, date: { gte: cutoff } },
+            orderBy: { date: 'desc' },
+        });
+        return { symptoms: rows ?? [] };
+    }
+
+    /**
+     * Update the user's cycle HEALTH settings (Period P2): pregnancy mode +
+     * birth-control / pill config. All fields optional (partial update). Turning
+     * pregnancy mode ON pauses cycle predictions at the read layer. Date strings
+     * are YYYY-MM-DD → UTC-midnight (matching the rest of the cycle date math).
+     * `as any` shim: the checked-in generated client may predate these columns;
+     * the schema + db push own the runtime table (same precedent as periodLog).
+     */
+    async updateCycleHealth(userId: string, body: {
+        pregnancyMode?: boolean;
+        pregnancyDueDate?: string | null;
+        pregnancyStartDate?: string | null;
+        tryingToConceive?: boolean;
+        birthControlMethod?: string | null;
+        pillReminderEnabled?: boolean;
+        pillReminderTime?: string | null;
+        pillPackStartDate?: string | null;
+    }) {
+        await this.ensureProfileExists(userId);
+        const toDate = (v?: string | null) => (v == null ? null : new Date(`${v}T00:00:00.000Z`));
+        const data: Record<string, unknown> = {};
+        if (body.pregnancyMode != null) data.pregnancyMode = body.pregnancyMode;
+        if (body.tryingToConceive != null) data.tryingToConceive = body.tryingToConceive;
+        if (body.pregnancyDueDate !== undefined) data.pregnancyDueDate = toDate(body.pregnancyDueDate);
+        if (body.pregnancyStartDate !== undefined) data.pregnancyStartDate = toDate(body.pregnancyStartDate);
+        if (body.birthControlMethod !== undefined) data.birthControlMethod = body.birthControlMethod;
+        if (body.pillReminderEnabled != null) data.pillReminderEnabled = body.pillReminderEnabled;
+        if (body.pillReminderTime !== undefined) data.pillReminderTime = body.pillReminderTime;
+        if (body.pillPackStartDate !== undefined) data.pillPackStartDate = toDate(body.pillPackStartDate);
+
+        const row = await (this.prisma as any).userProfile.update({ where: { userId }, data });
+        logger.info({ userId }, 'Cycle health settings updated');
+        return row;
+    }
+
+    /** Upsert today's (or a given day's) pill adherence log (TAKEN|SKIPPED|LATE). */
+    async logPill(userId: string, body: { date?: string; status: string }) {
+        await this.ensureProfileExists(userId);
+        const day = new Date(`${body.date ?? new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+        const row = await (this.prisma as any).pillLog.upsert({
+            where: { userId_date: { userId, date: day } },
+            create: { userId, date: day, status: body.status },
+            update: { status: body.status },
+        });
+        logger.info({ userId }, 'Pill logged');
+        return row;
+    }
+
+    /** Pill-log rows for the trailing `days` window (default 35), newest first. */
+    async getPillLogs(userId: string, days = 35) {
+        const cutoff = new Date(Date.now() - days * 86_400_000);
+        const rows = await (this.prisma as any).pillLog.findMany({
+            where: { userId, date: { gte: cutoff } },
+            orderBy: { date: 'desc' },
+        });
+        return { pills: rows ?? [] };
+    }
+
+    /**
+     * Daily "period approaching" reminder sweep. For every FEMALE profile with
+     * tracking on and learned cycle inputs, when the next expected period start
+     * is 1–2 days out, publish `cycle:period-approaching` (notification-service
+     * turns it into a discreet push) and stamp lastPeriodReminderAt so each
+     * cycle nudges at most once (≥14-day cooldown).
+     *
+     * UNCERTAINTY-AWARE by design: profiles whose LEARNED regularity is
+     * IRREGULAR are skipped — we never send a confident-sounding reminder off a
+     * forecast the model itself flags as unreliable.
+     */
+    async sweepPeriodReminders(): Promise<{ checked: number; reminded: number }> {
+        const now = new Date();
+        const cooldownBefore = new Date(now.getTime() - 14 * 86_400_000);
+
+        const profiles = await (this.prisma as any).userProfile.findMany({
+            where: {
+                cycleTrackingEnabled: true,
+                biologicalSex: 'FEMALE',
+                lastPeriodStartDate: { not: null },
+                NOT: { cycleRegularity: 'IRREGULAR' },
+                OR: [
+                    { lastPeriodReminderAt: null },
+                    { lastPeriodReminderAt: { lt: cooldownBefore } },
+                ],
+            },
+            select: {
+                userId: true,
+                lastPeriodStartDate: true,
+                avgCycleLengthDays: true,
+            },
+            take: 1000,
+        });
+
+        let reminded = 0;
+        for (const p of profiles as Array<{
+            userId: string;
+            lastPeriodStartDate: Date;
+            avgCycleLengthDays: number | null;
+        }>) {
+            const cycleLen = p.avgCycleLengthDays ?? 28;
+            const nextStart = new Date(p.lastPeriodStartDate.getTime() + cycleLen * 86_400_000);
+            const daysUntil = Math.ceil((nextStart.getTime() - now.getTime()) / 86_400_000);
+            if (daysUntil < 1 || daysUntil > 2) continue;
+
+            try {
+                await this.eventBus.publish('cycle:period-approaching', {
+                    eventId: randomUUID(),
+                    eventType: 'cycle.period-approaching',
+                    producedAt: now.toISOString(),
+                    producerService: 'user-service',
+                    correlationId: randomUUID(),
+                    userId: p.userId,
+                    payload: {
+                        recipientId: p.userId,
+                        daysUntil,
+                        expectedDate: nextStart.toISOString().slice(0, 10),
+                    },
+                });
+                await this.prisma.userProfile.update({
+                    where: { userId: p.userId },
+                    data: { lastPeriodReminderAt: now } as any,
+                });
+                reminded += 1;
+            } catch (err) {
+                // Best-effort per user — one failure never aborts the sweep.
+                logger.warn({ err, userId: p.userId }, 'period-reminder publish failed');
+            }
+        }
+
+        if (profiles.length > 0) {
+            logger.info({ checked: profiles.length, reminded }, 'Period reminder sweep done');
+        }
+        return { checked: profiles.length, reminded };
+    }
+
+    // ── GDPR account deletion (own-data purge + event) ────────────────────────
+
+    /**
+     * Authoritatively purge EVERY user-service-OWNED row for this userId, in a
+     * single transaction. Backs the own-data step of the DELETE /v1/users/me
+     * orchestrator.
+     *
+     * The set of tables comes straight from the user-service ownership inventory:
+     *   user_profiles            (user_id)
+     *   user_preferences         (user_id)
+     *   coach_profiles           (user_id)
+     *   coach_client_relations   (coach_user_id, client_user_id)  ← TWO ownership
+     *                                                                columns; the
+     *                                                                user may be on
+     *                                                                EITHER side, so
+     *                                                                we delete both.
+     *   period_logs              (user_id)   ← GDPR Art.9 special-category health
+     *   user_statuses            (user_id)
+     *
+     * IDEMPOTENT: every delete is a `deleteMany` (returns { count }, never throws
+     * on zero matches), so purging a user with no rows succeeds with all counts 0,
+     * and purging the same user twice is safe. All deletes run inside ONE
+     * interactive transaction so the own-data purge is atomic — the user is never
+     * left half-deleted within this service.
+     *
+     * Children are deleted before parents (coach_client_relations before
+     * coach_profiles; the rest are independent) so the counts are accurate
+     * regardless of FK-cascade behaviour.
+     */
+    async purgeOwnUserData(userId: string): Promise<{
+        userId: string;
+        deletedCounts: Record<string, number>;
+    }> {
+        const p = this.prisma as any;
+        const [
+            coachClientRelations,
+            periodLogs,
+            cycleSymptomLogs,
+            pillLogs,
+            cycleShares,
+            userStatuses,
+            userPreferences,
+            coachProfiles,
+            userProfiles,
+        ] = await this.prisma.$transaction([
+            // coach_client_relations: the user can be the coach OR the client.
+            p.coachClientRelation.deleteMany({
+                where: { OR: [{ coachUserId: userId }, { clientUserId: userId }] },
+            }),
+            p.periodLog.deleteMany({ where: { userId } }),
+            // cycle_symptom_logs: GDPR Art.9 special-category health data.
+            p.cycleSymptomLog.deleteMany({ where: { userId } }),
+            // pill_logs: GDPR Art.9 special-category health data.
+            p.pillLog.deleteMany({ where: { userId } }),
+            // cycle_shares: partner-share grants pointing at this user's cycle. Must
+            // be purged so a revoked-or-active code can never outlive the account.
+            p.cycleShare.deleteMany({ where: { userId } }),
+            this.prisma.userStatus.deleteMany({ where: { userId } }),
+            this.prisma.userPreferences.deleteMany({ where: { userId } }),
+            p.coachProfile.deleteMany({ where: { userId } }),
+            // Parent profile last.
+            this.prisma.userProfile.deleteMany({ where: { userId } }),
+        ]);
+
+        const deletedCounts: Record<string, number> = {
+            coach_client_relations: coachClientRelations.count,
+            period_logs: periodLogs.count,
+            cycle_symptom_logs: cycleSymptomLogs.count,
+            pill_logs: pillLogs.count,
+            cycle_shares: cycleShares.count,
+            user_statuses: userStatuses.count,
+            user_preferences: userPreferences.count,
+            coach_profiles: coachProfiles.count,
+            user_profiles: userProfiles.count,
+        };
+
+        logger.info({ userId, deletedCounts }, 'Purged user-service own data (GDPR)');
+        return { userId, deletedCounts };
+    }
+
+    // ── GDPR data export (own-data gather, read-only) ─────────────────────────
+
+    /**
+     * Read-only twin of purgeOwnUserData: gather EVERY user-service-OWNED row for
+     * this userId into a single plain object, for the GDPR data-portability bundle
+     * (GET /v1/users/me/export). Mirrors EXACTLY the ownership inventory that the
+     * deletion orchestrator purges, so "what we delete" and "what we export" can
+     * never drift apart:
+     *   user_profiles            (user_id)
+     *   user_preferences         (user_id)
+     *   coach_profiles           (user_id)
+     *   coach_client_relations   (coach_user_id OR client_user_id)  ← both sides
+     *   period_logs              (user_id)   ← GDPR Art.9 special-category health
+     *   user_statuses            (user_id)   ← incl. the read-time-fresh cyclePhase
+     *
+     * Plus the read-only DERIVED cycle views the user can see in-app (history +
+     * forecast), so the export is a faithful, portable snapshot of their data.
+     *
+     * NO secrets/credentials live in user-service (it holds no password — auth
+     * owns that), so nothing here needs redaction; auth's own /export excludes
+     * the credential material.
+     *
+     * Best-effort per section: a failure gathering one section is captured as
+     * { error } in that slot rather than failing the whole own-data gather, so
+     * the bundle is as complete as possible (the route still fans out either way).
+     */
+    async gatherOwnUserData(userId: string): Promise<Record<string, unknown>> {
+        const p = this.prisma as any;
+
+        // Run the independent reads concurrently; each is individually guarded so
+        // one failing query degrades only its own slot.
+        const safe = async <T>(label: string, fn: () => Promise<T>): Promise<T | { error: string }> => {
+            try {
+                return await fn();
+            } catch (err: any) {
+                logger.error({ userId, section: label, err }, 'Failed to gather own-data section for export');
+                return { error: err?.message ?? 'gather failed' };
+            }
+        };
+
+        const [profile, preferences, status, coachProfile, coachClientRelations, periodLogs, cycleSymptomLogs, pillLogs, cycleShares, cycleHistory, cycleForecast] =
+            await Promise.all([
+                safe('profile', () => this.prisma.userProfile.findUnique({ where: { userId } })),
+                safe('preferences', () => this.prisma.userPreferences.findUnique({ where: { userId } })),
+                // getStatus recomputes the read-time-fresh cyclePhase.
+                safe('status', () => this.getStatus(userId)),
+                safe('coachProfile', () => p.coachProfile.findUnique({ where: { userId } })),
+                safe('coachClientRelations', () =>
+                    this.prisma.coachClientRelation.findMany({
+                        where: { OR: [{ coachUserId: userId }, { clientUserId: userId }] },
+                    }),
+                ),
+                safe('periodLogs', () =>
+                    p.periodLog.findMany({ where: { userId }, orderBy: { startDate: 'asc' } }),
+                ),
+                safe('cycleSymptomLogs', () =>
+                    p.cycleSymptomLog.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
+                ),
+                safe('pillLogs', () =>
+                    p.pillLog.findMany({ where: { userId }, orderBy: { date: 'asc' } }),
+                ),
+                // cycle_shares: the user's OWN partner-share grants (their data, so
+                // the code IS included in their own portable export).
+                safe('cycleShares', () =>
+                    p.cycleShare.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+                ),
+                // Read-only derived views the user sees in-app.
+                safe('cycleHistory', () => this.getCycleHistory(userId)),
+                safe('cycleForecast', () => this.getCycleForecast(userId, 1)),
+            ]);
+
+        return {
+            userId,
+            profile,
+            preferences,
+            status,
+            coachProfile,
+            coachClientRelations,
+            periodLogs,
+            cycleSymptomLogs,
+            pillLogs,
+            cycleShares,
+            cycleHistory,
+            cycleForecast,
+        };
+    }
+
+    /**
+     * Best-effort USER_DELETED event for any async consumers (caches, search
+     * indexes, analytics). NEVER throws — the account deletion is already
+     * authoritative without it; a bus hiccup must not fail the user's request.
+     */
+    async emitUserDeleted(userId: string): Promise<void> {
+        try {
+            await this.eventBus.publish(Channels.Auth.UserDeleted, {
+                eventId: randomUUID(),
+                eventType: 'user.deleted',
+                producedAt: new Date().toISOString(),
+                producerService: 'user-service',
+                correlationId: randomUUID(),
+                userId,
+                payload: { userId, deletedAt: new Date().toISOString() },
+            });
+            logger.info({ userId }, 'USER_DELETED event emitted');
+        } catch (err) {
+            // Best-effort: log and move on. Consumers can also reconcile from the
+            // per-service purge that already ran.
+            logger.error({ userId, err }, 'Failed to emit USER_DELETED event (best-effort)');
+        }
+    }
+
+    /** Expand each logged period (start..end inclusive) into a flat ISO date set. */
+    private expandLoggedDates(logs: PeriodLogInput[]): string[] {
+        const out = new Set<string>();
+        const MS = 24 * 60 * 60 * 1000;
+        for (const l of logs) {
+            const s = l.startDate instanceof Date ? l.startDate : new Date(l.startDate);
+            if (Number.isNaN(s.getTime())) continue;
+            const startMs = Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate());
+            const e = l.endDate ? (l.endDate instanceof Date ? l.endDate : new Date(l.endDate)) : null;
+            const endMs =
+                e && !Number.isNaN(e.getTime())
+                    ? Date.UTC(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate())
+                    : startMs;
+            for (let ms = startMs; ms <= endMs && ms - startMs < 60 * MS; ms += MS) {
+                out.add(new Date(ms).toISOString().slice(0, 10));
+            }
+        }
+        return Array.from(out);
     }
 }

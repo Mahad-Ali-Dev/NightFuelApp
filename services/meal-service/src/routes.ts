@@ -1,8 +1,28 @@
 
 import { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
-import { MealService } from './meal.service';
+import { MealService, PHASE_NUTRIENT_MAP, DEFAULT_PHASE_FOODS_LIMIT, MAX_PHASE_FOODS_LIMIT } from './meal.service';
 import { mealSearchParamsSchema, mealSearchResponseSchema, logMealBodySchema, logMealResponseSchema, getMealLogsQuerySchema } from './schemas';
 import { z } from 'zod';
+
+// The four valid cycle phases (the keys of PHASE_NUTRIENT_MAP), upper-cased.
+// Derived from the service-side map so the route and service can never drift.
+const CYCLE_PHASES = Object.keys(PHASE_NUTRIENT_MAP) as Array<keyof typeof PHASE_NUTRIENT_MAP>;
+
+// ── Input upper bounds ──────────────────────────────────────────────────────
+// Generous caps so every currently-valid app payload still passes; only
+// absurd/abusive values are rejected with the standard 400. Mirrors the named
+// `MAX_*` style in sleep-service/src/index.ts and the .max() bounds in
+// exercise-service/src/index.ts.
+const MAX_FILTER_LEN = 120;        // food-search region / foodGroup filter string
+const MAX_RECIPE_DESC_LEN = 2000;  // recipe description free text
+const MAX_INGREDIENTS = 100;       // ingredients per recipe
+const MAX_INGREDIENT_NAME_LEN = 200; // a single ingredient's name
+const MAX_INGREDIENT_AMOUNT_LEN = 60; // a single ingredient's amount (e.g. "1 1/2")
+const MAX_INGREDIENT_UNIT_LEN = 40;  // a single ingredient's unit (e.g. "tablespoons")
+const MAX_INSTRUCTIONS = 100;      // instruction steps per recipe
+const MAX_INSTRUCTION_LEN = 1000;  // a single instruction step
+const MAX_TAGS = 50;               // tags per recipe
+const MAX_TAG_LEN = 60;            // a single tag
 
 export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = async (fastify, options) => {
     const { mealService } = options;
@@ -26,9 +46,12 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
     fastify.get('/search', {
         schema: {
             querystring: z.object({
-                q:            z.string().min(1).max(100),
-                region:       z.string().optional(),
-                foodGroup:    z.string().optional(),
+                // Optional: a `foodGroup`-only request (no query) is valid — it
+                // browses a whole group (the service skips the name filter when q
+                // is short/empty, always bounded by `limit`).
+                q:            z.string().max(100).optional(),
+                region:       z.string().max(MAX_FILTER_LEN).optional(),
+                foodGroup:    z.string().max(MAX_FILTER_LEN).optional(),
                 isVegan:      z.enum(['true', 'false']).optional(),
                 isGlutenFree: z.enum(['true', 'false']).optional(),
                 isHalal:      z.enum(['true', 'false']).optional(),
@@ -39,7 +62,7 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const { q, region, foodGroup, isVegan, isGlutenFree, isHalal, source, limit } = request.query as any;
-        const results = await mealService.searchFoods(q, {
+        const results = await mealService.searchFoods(q ?? '', {
             region,
             foodGroup,
             isVegan:      isVegan      !== undefined ? isVegan === 'true'      : undefined,
@@ -66,6 +89,40 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
     });
 
     /**
+     * GET /v1/meals/phase-foods?phase=<PHASE>&limit=<n>
+     *
+     * Cycle "best foods for your phase" suggestions. PHASE is one of
+     * MENSTRUAL | FOLLICULAR | OVULATORY | LUTEAL (case-insensitive). Returns the
+     * foods richest in that phase's focus micronutrient (iron / folate / zinc /
+     * magnesium), ranked desc, as full FoodItem rows (image + macros + micros).
+     *
+     * Response: { phase, focusNutrient, focusLabel, rationale, foods: FoodItem[] }
+     *
+     * Validation matches /search: a zod querystring schema (so an unknown/invalid
+     * phase is rejected with the standard 400). `limit` defaults to 6 and is
+     * clamped to 1..12. NON-PRESCRIPTIVE — wellness suggestions, never medical advice.
+     */
+    fastify.get('/phase-foods', {
+        schema: {
+            querystring: z.object({
+                // Case-insensitive: upper-case then require a known phase. An
+                // unknown phase fails validation -> Fastify replies 400.
+                phase: z.string()
+                    .transform((s) => s.trim().toUpperCase())
+                    .pipe(z.enum(CYCLE_PHASES as [string, ...string[]])),
+                limit: z.coerce.number().int()
+                    .min(1).max(MAX_PHASE_FOODS_LIMIT)
+                    .default(DEFAULT_PHASE_FOODS_LIMIT),
+            }),
+        },
+        preHandler: [(fastify as any).authenticate]
+    }, async (request, reply) => {
+        const { phase, limit } = request.query as any;
+        const result = await mealService.getPhaseFoods(phase, limit);
+        return reply.status(200).send(result);
+    });
+
+    /**
      * GET /v1/meals/food-groups
      * List all available food groups (for filter UI dropdowns).
      * Returns: ['Aquatic foods', 'Baking goods', 'Fruits', ...]
@@ -86,9 +143,21 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const userId = (request.user as any).id || (request.user as any).userId;
-        const { mealType, foodItems } = request.body;
+        const { mealType, foodItems, planMealId, idempotencyKey } = request.body;
 
-        const mealLog = await mealService.logMeal(userId, mealType, foodItems);
+        // Idempotency key (HIGH #6): prefer the validated body field, then fall
+        // back to the standard `Idempotency-Key` request header so clients can
+        // supply it either way. A retry/double-tap re-sending the same key for
+        // the same user is deduped by the service onto the existing row.
+        const headerKey = request.headers['idempotency-key'];
+        const idemKey = idempotencyKey
+            ?? (typeof headerKey === 'string' && headerKey.length > 0 && headerKey.length <= 200
+                ? headerKey
+                : undefined);
+
+        // planMealId is optional (validated by logMealBodySchema); when present
+        // it links this log to the planned protocol slot it was logged from.
+        const mealLog = await mealService.logMeal(userId, mealType, foodItems, planMealId, idemKey);
         return reply.status(201).send(mealLog as any);
     });
 
@@ -106,6 +175,18 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
         return reply.status(200).send(logs as any);
     });
 
+    // DELETE /logs/:id — remove one of the user's OWN meal logs (chat Undo +
+    // mis-log correction). Scoped by userId in the service; a missing/other-user
+    // id returns { deleted: false } rather than erroring.
+    fastify.delete('/logs/:id', {
+        preHandler: [(fastify as any).authenticate],
+    }, async (request, reply) => {
+        const userId = (request.user as any).id || (request.user as any).userId;
+        const { id } = request.params as { id: string };
+        const result = await mealService.deleteMealLog(userId, id);
+        return reply.status(200).send(result);
+    });
+
     // ── GET /v1/meals/grocery-list ────────────────────────────────────────────
     // Generates a grocery list based on the user's active plan.
     fastify.get('/grocery-list', {
@@ -120,15 +201,20 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
             const list = await mealService.generateGroceryList(userId, date);
             return reply.status(200).send(list);
         } catch (err: any) {
+            // Redaction: the wrapped err.message can carry a raw upstream/fetch
+            // error (plan-service URL, network detail). Log it server-side and
+            // return a fixed, non-leaky business message. Status unchanged (400).
             request.log.error(err);
-            return reply.status(400).send({ error: err.message });
+            return reply.status(400).send({ error: 'Could not find an active plan to generate a grocery list from.' });
         }
     });
 
     // ── Recipes ───────────────────────────────────────────────────────────────
 
     fastify.get('/recipes', {
-        schema: { querystring: z.object({ tags: z.string().optional(), limit: z.coerce.number().default(20) }) },
+        // Bound the free-form tag string and clamp limit to a sane range so it
+        // can't reach Prisma `take` as a negative or absurd value.
+        schema: { querystring: z.object({ tags: z.string().max(100).optional(), limit: z.coerce.number().int().min(1).max(100).default(20) }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const { tags, limit } = request.query as any;
@@ -149,7 +235,7 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
         schema: {
             body: z.object({
                 title:          z.string().min(1).max(200),
-                description:    z.string().optional(),
+                description:    z.string().max(MAX_RECIPE_DESC_LEN).optional(),
                 prepTimeMins:   z.number().int().min(0).default(0),
                 cookTimeMins:   z.number().int().min(0).default(0),
                 servings:       z.number().int().min(1).default(1),
@@ -158,12 +244,12 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
                 carbs:          z.number().min(0).default(0),
                 fat:            z.number().min(0).default(0),
                 ingredients:    z.array(z.object({
-                    name:   z.string().min(1),
-                    amount: z.string().min(1),
-                    unit:   z.string().optional(),
-                })).default([]),
-                instructions:   z.array(z.string().min(1)).default([]),
-                tags:           z.array(z.string()).default([]),
+                    name:   z.string().min(1).max(MAX_INGREDIENT_NAME_LEN),
+                    amount: z.string().min(1).max(MAX_INGREDIENT_AMOUNT_LEN),
+                    unit:   z.string().max(MAX_INGREDIENT_UNIT_LEN).optional(),
+                })).max(MAX_INGREDIENTS).default([]),
+                instructions:   z.array(z.string().min(1).max(MAX_INSTRUCTION_LEN)).max(MAX_INSTRUCTIONS).default([]),
+                tags:           z.array(z.string().max(MAX_TAG_LEN)).max(MAX_TAGS).default([]),
                 image:          z.string().url().optional(),
             }),
         },
@@ -175,7 +261,7 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
     // ── Fasting ───────────────────────────────────────────────────────────────
 
     fastify.get('/fasting', {
-        schema: { querystring: z.object({ limit: z.coerce.number().default(10) }) },
+        schema: { querystring: z.object({ limit: z.coerce.number().int().min(1).max(100).default(10) }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const userId = (request.user as any).id || (request.user as any).userId;
@@ -184,7 +270,8 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
     });
 
     fastify.post('/fasting/start', {
-        schema: { body: z.object({ targetHours: z.number().min(1).default(16) }) },
+        // Upper bound: a fasting target above ~1 week (168h) is not plausible.
+        schema: { body: z.object({ targetHours: z.number().min(1).max(168).default(16) }) },
         preHandler: [(fastify as any).authenticate]
     }, async (request, reply) => {
         const userId = (request.user as any).id || (request.user as any).userId;
@@ -199,7 +286,13 @@ export const mealRoutes: FastifyPluginAsyncZod<{ mealService: MealService }> = a
         try {
             return reply.send(await mealService.endFasting(userId));
         } catch (err: any) {
-            return reply.code(400).send({ error: err.message });
+            // The only user-facing error here is the "no active fast" business
+            // case; preserve that safe copy and redact anything unexpected.
+            request.log.error(err);
+            if (typeof err?.message === 'string' && err.message.includes('No active fast')) {
+                return reply.code(400).send({ error: 'No active fast found' });
+            }
+            return reply.code(500).send({ error: 'An unexpected error occurred' });
         }
     });
 };

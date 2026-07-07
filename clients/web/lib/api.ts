@@ -11,6 +11,10 @@ export const api = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
+    // HIGH #1: send/receive the httpOnly refresh cookie (nf_refresh) on the
+    // same-origin /api/auth/* calls (login / refresh / logout). The browser
+    // stores that cookie itself; JS never sees it, so an XSS cannot steal it.
+    withCredentials: true,
 });
 
 export const shiftApi = axios.create({
@@ -173,6 +177,15 @@ export const getMyProfile = () => userApi.get('/me');
 export const updateMyProfile = (data: any) => userApi.patch('/me', data);
 export const getPublicProfile = (userId: string) => userApi.get(`/public/${userId}`);
 
+// ── GDPR (HIGH #2/#3) ─────────────────────────────────────────────────────────
+// Right to erasure (Art. 17): permanently delete the signed-in user's account
+// and all platform data. user-service fans the purge out to every service.
+export const deleteAccount = () => userApi.delete('/me');
+
+// Right of access / portability (Art. 15/20): export the signed-in user's data
+// as a single JSON document aggregated across all services.
+export const exportData = () => userApi.get('/me/export');
+
 export const sleepApi = axios.create({
     baseURL: '/api/sleep',
     headers: { 'Content-Type': 'application/json' },
@@ -191,27 +204,42 @@ export const chatApi = axios.create({
 // SSR guard — localStorage and window are only available in the browser
 const isBrowser = typeof window !== 'undefined';
 
-// Helper to set tokens + session indicator cookie (used by middleware for route protection)
-export const setTokens = (accessToken: string, refreshToken: string) => {
+// HIGH #1 — token storage model:
+//   - REFRESH token: NEVER touches JS. It lives ONLY in the httpOnly `nf_refresh`
+//     cookie set by auth-service on login/refresh; the browser replays it on the
+//     /api/auth/* calls (withCredentials). An XSS cannot read it.
+//   - ACCESS token: short-lived (30m), kept ONLY in this in-memory module
+//     variable — NOT in localStorage and NOT persisted by the Zustand store. A
+//     full page reload drops it; the response interceptor then silently calls
+//     /refresh (which uses the cookie) to mint a fresh one. This removes the
+//     persistent-takeover XSS vector (no long-lived secret in JS-readable storage).
+let accessTokenInMemory: string | null = null;
+
+// Set the in-memory access token + the non-secret `nf_auth` session-hint cookie
+// (read by proxy.ts for route gating only — it carries NO token). The refresh
+// token is intentionally NOT handled here: it is owned by the httpOnly cookie.
+export const setTokens = (accessToken: string) => {
+    accessTokenInMemory = accessToken;
     if (!isBrowser) return;
-    localStorage.setItem('accessToken', accessToken);
-    localStorage.setItem('refreshToken', refreshToken);
-    // Session cookie — not httpOnly (client-readable), used as a middleware hint only.
-    // The actual security is enforced by JWT validation on the backend for every API call.
+    // Session hint cookie — client-readable, used by the edge proxy as a "looks
+    // logged in" signal only. Real security is server-side JWT validation.
     const maxAge = 60 * 60 * 24 * 7; // 7 days
     document.cookie = `nf_auth=1; path=/; max-age=${maxAge}; SameSite=Strict`;
 };
 
 export const clearTokens = () => {
+    accessTokenInMemory = null;
     if (!isBrowser) return;
+    // Drop any legacy tokens a previous build may have left in localStorage so an
+    // upgrade doesn't leave the old XSS-stealable secrets sitting around.
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
-    // Clear the session cookie
+    // Clear the session-hint cookie. The httpOnly refresh cookie is cleared
+    // server-side by the /logout handler (JS cannot clear an httpOnly cookie).
     document.cookie = 'nf_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict';
 };
 
-export const getAccessToken = () => isBrowser ? localStorage.getItem('accessToken') : null;
-export const getRefreshToken = () => isBrowser ? localStorage.getItem('refreshToken') : null;
+export const getAccessToken = () => accessTokenInMemory;
 
 // Request interceptor to add token
 const authInterceptor = (config: any) => {
@@ -273,19 +301,19 @@ const errorInterceptor = async (error: any) => {
         originalRequest._retry = true;
         isRefreshing = true;
 
-        const refreshToken = getRefreshToken();
-
-        if (!refreshToken) {
-            return Promise.reject(error);
-        }
-
         try {
-            const response = await axios.post(`${AUTH_API_URL}/refresh`, {
-                refreshToken,
-            });
+            // HIGH #1: the refresh token is in the httpOnly nf_refresh cookie, not
+            // in JS. Send an empty body with withCredentials so the browser
+            // attaches the cookie; auth-service reads it, rotates it, and re-sets
+            // the cookie. We only consume the new ACCESS token from the response.
+            const response = await axios.post(
+                `${AUTH_API_URL}/refresh`,
+                {},
+                { withCredentials: true }
+            );
 
-            const { accessToken: newAccessToken, refreshToken: newRefreshToken } = response.data;
-            setTokens(newAccessToken, newRefreshToken);
+            const { accessToken: newAccessToken } = response.data;
+            setTokens(newAccessToken);
 
             api.defaults.headers.common['Authorization'] = 'Bearer ' + newAccessToken;
             shiftApi.defaults.headers.common['Authorization'] = 'Bearer ' + newAccessToken;

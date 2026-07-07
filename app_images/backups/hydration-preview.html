@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Hydration</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--cy:#4FC9E8;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .sec{color:var(--tx);font-size:16px;font-weight:600}
+  .nbtn{width:36px;height:36px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll" style="padding-bottom:96px">
+    <!-- status bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+    <!-- back header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 0">
+      <div style="display:flex;align-items:center;gap:10px"><div class="nbtn"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:18px"></i></div><span style="color:var(--tx);font-size:18px;font-weight:600;letter-spacing:-0.3px">Hydration</span></div>
+      <div class="nbtn"><i class="ti ti-settings" style="color:var(--mu);font-size:17px"></i></div>
+    </div>
+
+    <!-- sub-title -->
+    <div style="padding:10px 18px 0"><span style="color:var(--mu);font-size:13px">Today</span></div>
+
+    <!-- hero ring -->
+    <div style="display:flex;justify-content:center;padding:14px 0 6px">
+      <div style="position:relative;width:212px;height:212px">
+        <svg viewBox="0 0 212 212" width="212" height="212">
+          <circle cx="106" cy="106" r="90" fill="none" stroke="#252A33" stroke-width="12"/>
+          <circle cx="106" cy="106" r="90" fill="none" stroke="var(--cy)" stroke-width="12" stroke-linecap="round" stroke-dasharray="565" stroke-dashoffset="215" transform="rotate(-90 106 106)"/>
+        </svg>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
+          <i class="ti ti-droplet" style="color:var(--cy);font-size:24px"></i>
+          <div style="display:flex;align-items:baseline;gap:4px;margin-top:8px"><span style="color:var(--tx);font-size:50px;font-weight:700;letter-spacing:-2px;line-height:0.9">1850</span><span style="color:var(--mu);font-size:16px;font-weight:500">ml</span></div>
+          <div style="color:var(--mu);font-size:13px;margin-top:4px">of 3000 ml · 62%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- stat strip -->
+    <div style="padding:14px 16px 0"><div class="zc" style="display:flex;align-items:center;padding:16px 8px">
+      <div style="flex:1;text-align:center"><div style="color:var(--tx);font-size:20px;font-weight:600;letter-spacing:-0.5px">3.0<span style="font-size:13px;color:var(--mu)">L</span></div><div style="color:var(--mu);font-size:12px;margin-top:3px">Goal</div></div>
+      <div style="width:1px;height:30px;background:var(--bd)"></div>
+      <div style="flex:1;text-align:center"><div style="color:var(--tx);font-size:20px;font-weight:600;letter-spacing:-0.5px">1150</div><div style="color:var(--mu);font-size:12px;margin-top:3px">Left ml</div></div>
+      <div style="width:1px;height:30px;background:var(--bd)"></div>
+      <div style="flex:1;text-align:center"><div style="color:var(--tx);font-size:20px;font-weight:600;letter-spacing:-0.5px">8</div><div style="color:var(--mu);font-size:12px;margin-top:3px">Cups</div></div>
+    </div></div>
+
+    <!-- quick add -->
+    <div class="sec" style="padding:22px 18px 10px">Quick add</div>
+    <div style="padding:0 16px;display:flex;gap:11px">
+      <div class="zc" style="flex:1;padding:16px 0;display:flex;flex-direction:column;align-items:center"><i class="ti ti-cup" style="color:var(--cy);font-size:24px"></i><div style="color:var(--tx);font-size:19px;font-weight:600;letter-spacing:-0.4px;margin-top:8px">250</div><div style="color:var(--mu);font-size:11px">ml · glass</div></div>
+      <div class="zc" style="flex:1;padding:16px 0;display:flex;flex-direction:column;align-items:center"><i class="ti ti-bottle" style="color:var(--cy);font-size:24px"></i><div style="color:var(--tx);font-size:19px;font-weight:600;letter-spacing:-0.4px;margin-top:8px">500</div><div style="color:var(--mu);font-size:11px">ml · bottle</div></div>
+      <div class="zc" style="flex:1;padding:16px 0;display:flex;flex-direction:column;align-items:center"><i class="ti ti-flask" style="color:var(--cy);font-size:24px"></i><div style="color:var(--tx);font-size:19px;font-weight:600;letter-spacing:-0.4px;margin-top:8px">750</div><div style="color:var(--mu);font-size:11px">ml · flask</div></div>
+    </div>
+
+    <!-- today's intake -->
+    <div class="sec" style="padding:22px 18px 10px">Today's intake</div>
+    <div style="padding:0 16px"><div class="zc" style="padding:18px 20px">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px">
+        <i class="ti ti-droplet" style="color:var(--cy);font-size:24px"></i>
+        <i class="ti ti-droplet" style="color:var(--cy);font-size:24px"></i>
+        <i class="ti ti-droplet" style="color:var(--cy);font-size:24px"></i>
+        <i class="ti ti-droplet" style="color:var(--cy);font-size:24px"></i>
+        <i class="ti ti-droplet" style="color:var(--cy);font-size:24px"></i>
+        <i class="ti ti-droplet" style="color:var(--cy);font-size:24px"></i>
+        <i class="ti ti-droplet" style="color:var(--cy);font-size:24px"></i>
+        <i class="ti ti-droplet" style="color:#3a3f49;font-size:24px"></i>
+        <i class="ti ti-droplet" style="color:#3a3f49;font-size:24px"></i>
+        <i class="ti ti-droplet" style="color:#3a3f49;font-size:24px"></i>
+        <i class="ti ti-droplet" style="color:#3a3f49;font-size:24px"></i>
+        <i class="ti ti-droplet" style="color:#3a3f49;font-size:24px"></i>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:16px;padding-top:14px;border-top:1px solid var(--bd)"><span style="color:var(--mu);font-size:13px">7 of 12 cups tracked</span><span style="color:var(--cy);font-size:13px;font-weight:600">1850 ml</span></div>
+    </div></div>
+
+    <!-- night-shift tip -->
+    <div style="padding:16px 16px 0"><div class="zc" style="padding:15px;display:flex;align-items:center;gap:13px">
+      <div style="width:42px;height:42px;border-radius:13px;background:#1e222b;border:1px solid var(--bd);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-moon-stars" style="color:#7C9CFF;font-size:20px"></i></div>
+      <div style="color:#dfe3ea;font-size:13px;line-height:1.5;flex:1">Sip steadily across your shift — front-load before 2am so late hydration doesn't disrupt your sleep.</div>
+    </div></div>
+    <div style="height:20px"></div>
+  </div>
+
+  <!-- pinned CTA -->
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;background:linear-gradient(180deg,rgba(10,12,18,0),var(--bg) 32%)">
+    <div style="background:var(--lm);color:#13200a;height:52px;border-radius:15px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px;font-weight:600"><i class="ti ti-plus" style="font-size:19px"></i>Add 250 ml</div>
+  </div>
+</div>
+</body>
+</html>

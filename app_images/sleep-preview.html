@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Sleep</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--tx:#F4F6FB;--mu:#8B919E;--bl:#7C9CFF}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .scroll{height:100%;overflow-y:auto}.scroll::-webkit-scrollbar{display:none}
+  .zc{background:var(--cd);border:1px solid var(--bd);border-radius:16px}
+  .lg{display:flex;align-items:center;gap:6px;color:var(--mu);font-size:11px;font-weight:500}
+  .lg span{width:9px;height:9px;border-radius:3px}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="scroll" style="padding-bottom:24px">
+    <!-- status bar -->
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+    <!-- back-chevron header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px 4px">
+      <div style="width:38px;height:38px;border-radius:50%;background:var(--cd);border:1px solid var(--bd);display:flex;align-items:center;justify-content:center"><i class="ti ti-chevron-left" style="color:var(--tx);font-size:20px"></i></div>
+      <span style="color:var(--tx);font-size:17px;font-weight:600;letter-spacing:-0.3px">Sleep</span>
+      <div style="display:flex;align-items:center;gap:4px;color:var(--mu);font-size:13px;font-weight:500"><i class="ti ti-chevron-left" style="font-size:15px"></i>Today<i class="ti ti-chevron-right" style="font-size:15px"></i></div>
+    </div>
+
+    <!-- last night dashboard -->
+    <div style="padding:14px 18px 0"><div class="zc" style="padding:17px">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between">
+        <div>
+          <div style="color:var(--mu);font-size:13px;font-weight:500">Last night</div>
+          <div style="display:flex;align-items:baseline;gap:3px;margin-top:5px"><span style="color:var(--tx);font-size:42px;font-weight:600;letter-spacing:-1.4px;line-height:1">7</span><span style="color:var(--mu);font-size:17px;font-weight:600">h</span><span style="color:var(--tx);font-size:42px;font-weight:600;letter-spacing:-1.4px;line-height:1">12</span><span style="color:var(--mu);font-size:17px;font-weight:600">m</span></div>
+        </div>
+        <div style="text-align:right">
+          <div style="display:inline-flex;align-items:center;gap:6px;background:#1c2436;color:var(--bl);font-size:12px;font-weight:600;padding:5px 12px;border-radius:20px"><i class="ti ti-circle-check" style="font-size:14px"></i>Good</div>
+          <div style="color:var(--mu);font-size:12px;font-weight:500;margin-top:9px">00:48 → 08:00</div>
+        </div>
+      </div>
+      <!-- stage bar (calm blue secondary) -->
+      <div style="display:flex;height:14px;border-radius:6px;overflow:hidden;margin-top:18px"><div style="width:26%;background:#3a4150"></div><div style="width:42%;background:#565d6b"></div><div style="width:22%;background:var(--bl)"></div><div style="width:10%;background:#262932"></div></div>
+      <div style="display:flex;gap:14px;margin-top:11px"><span class="lg"><span style="background:#3a4150"></span>Deep</span><span class="lg"><span style="background:#565d6b"></span>Light</span><span class="lg"><span style="background:var(--bl)"></span>REM</span><span class="lg"><span style="background:#262932"></span>Awake</span></div>
+    </div></div>
+
+    <!-- this week -->
+    <div style="color:var(--tx);font-size:18px;font-weight:600;letter-spacing:-0.3px;padding:24px 18px 11px">This week</div>
+    <div style="padding:0 18px"><div class="zc" style="padding:17px 16px">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;height:98px">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:7px"><div style="width:20px;height:62px;background:#1e222b;border-radius:5px"></div><span style="color:var(--mu);font-size:11px;font-weight:500">M</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:7px"><div style="width:20px;height:74px;background:#1e222b;border-radius:5px"></div><span style="color:var(--mu);font-size:11px;font-weight:500">T</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:7px"><div style="width:20px;height:56px;background:#1e222b;border-radius:5px"></div><span style="color:var(--mu);font-size:11px;font-weight:500">W</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:7px"><div style="width:20px;height:82px;background:#1e222b;border-radius:5px"></div><span style="color:var(--mu);font-size:11px;font-weight:500">T</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:7px"><div style="width:20px;height:68px;background:#1e222b;border-radius:5px"></div><span style="color:var(--mu);font-size:11px;font-weight:500">F</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:7px"><div style="width:20px;height:72px;background:var(--lm);border-radius:5px"></div><span style="color:var(--lm);font-size:11px;font-weight:600">S</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:7px"><div style="width:20px;height:50px;background:#1e222b;border-radius:5px"></div><span style="color:var(--mu);font-size:11px;font-weight:500">S</span></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:14px;padding-top:14px;border-top:1px solid var(--bd)"><span style="color:var(--mu);font-size:13px;font-weight:500">Avg this week</span><span style="color:var(--tx);font-size:14px;font-weight:600">6h 54m</span></div>
+    </div></div>
+
+    <!-- shift window tip -->
+    <div style="padding:18px 18px 0"><div class="zc" style="display:flex;gap:14px;align-items:flex-start;padding:15px">
+      <div style="width:46px;height:46px;border-radius:13px;background:#1c2436;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-moon-stars" style="color:var(--bl);font-size:24px"></i></div>
+      <div style="flex:1"><div style="color:var(--tx);font-size:15px;font-weight:600;letter-spacing:-0.2px">Your shift sleep window</div><div style="color:var(--mu);font-size:13px;line-height:1.5;font-weight:500;margin-top:3px">Aim for <b style="color:var(--lm);font-weight:600">08:00–15:00</b> after tonight's shift. Keep the room dark — Ria will dim your reminders by 07:30.</div></div>
+    </div></div>
+    <div style="height:24px"></div>
+  </div>
+</div>
+</body>
+</html>

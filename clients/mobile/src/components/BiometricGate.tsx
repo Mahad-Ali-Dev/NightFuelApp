@@ -121,14 +121,15 @@ export function BiometricGate({ prompt, children, onSkip }: BiometricGateProps) 
 
       <TouchableOpacity
         onPress={retry}
-        style={[styles.btn, { backgroundColor: colors.accent.coral, borderRadius: borderRadius.lg, marginTop: spacing.xl }]}
+        activeOpacity={0.85}
+        style={[styles.btn, { backgroundColor: colors.accent.coralDark, borderRadius: borderRadius.lg, marginTop: spacing.xl }]}
       >
-        <Text style={[typography.subhead, { color: '#fff', fontWeight: '700' }]}>Try again</Text>
+        <Text style={[typography.subhead, styles.ctaLabel]}>Try again</Text>
       </TouchableOpacity>
 
       {onSkip && (
-        <TouchableOpacity onPress={onSkip} style={{ marginTop: spacing.md }}>
-          <Text style={[typography.caption, { color: colors.text.tertiary, fontWeight: '600' }]}>Cancel</Text>
+        <TouchableOpacity onPress={onSkip} style={{ marginTop: spacing.md }} activeOpacity={0.85}>
+          <Text style={[typography.caption, { color: colors.text.secondary, fontWeight: '600' }]}>Cancel</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -138,4 +139,13 @@ export function BiometricGate({ prompt, children, onSkip }: BiometricGateProps) 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   btn: { paddingHorizontal: 28, paddingVertical: 14 },
+  // textShadow lifts the white label clear of the coralDark fill for AA,
+  // matching the shared CtaButton recipe.
+  ctaLabel: {
+    color: '#fff',
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
 });

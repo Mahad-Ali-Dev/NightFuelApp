@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zeitra — Goals</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3/dist/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#05060a;font-family:'Saira',-apple-system,sans-serif;display:flex;justify-content:center;padding:24px 12px;min-height:100vh}
+  :root{--bg:#0A0C12;--cd:#15181F;--bd:#252A33;--lm:#C2F03C;--ink:#13200a;--tx:#F4F6FB;--mu:#8B919E}
+  .frame{width:340px;background:var(--bg);border-radius:40px;border:8px solid #1b1e25;overflow:hidden;position:relative;height:760px}
+  .opt{display:flex;align-items:center;gap:14px;background:var(--cd);border:1px solid var(--bd);border-radius:16px;padding:12px 15px;margin-top:12px}
+  .opt .ic{width:46px;height:46px;border-radius:13px;background:#1e222b;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden}
+  .opt .ic img{width:40px;height:40px;object-fit:contain}
+  .opt .nm{flex:1;color:var(--tx);font-size:16px;font-weight:600;letter-spacing:-0.2px}
+  .sel{border:1.5px solid var(--lm);box-shadow:0 0 14px #C2F03C44;background:linear-gradient(150deg,#2b303a,#14171e)}
+  .ck{width:26px;height:26px;border-radius:50%;background:var(--lm);color:var(--ink);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .em{width:26px;height:26px;border-radius:50%;border:1.5px solid #353b46;flex-shrink:0}
+</style>
+</head>
+<body>
+<div class="frame">
+  <!-- status bar -->
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 20px 2px;color:var(--mu);font-size:11px"><span style="color:var(--tx);font-weight:500">9:41</span><span style="display:flex;gap:7px"><i class="ti ti-antenna-bars-5"></i><i class="ti ti-wifi"></i><i class="ti ti-battery-3"></i></span></div>
+
+  <!-- nav + progress -->
+  <div style="display:flex;align-items:center;gap:14px;padding:14px 20px 0">
+    <i class="ti ti-chevron-left" style="color:var(--tx);font-size:22px"></i>
+    <div style="flex:1;display:flex;gap:6px"><div style="flex:1;height:5px;border-radius:3px;background:var(--lm)"></div><div style="flex:1;height:5px;border-radius:3px;background:var(--lm)"></div><div style="flex:1;height:5px;border-radius:3px;background:var(--lm)"></div><div style="flex:1;height:5px;border-radius:3px;background:#1e222b"></div></div>
+    <span style="color:var(--mu);font-size:13px;font-weight:500">3/4</span>
+  </div>
+
+  <div style="padding:26px 20px 0">
+    <div style="color:var(--tx);font-size:27px;font-weight:700;line-height:1.15;letter-spacing:-0.6px">What brings you<br>to Zeitra?</div>
+    <div style="color:var(--mu);font-size:15px;font-weight:400;margin-top:10px">Pick all that fit — we'll shape your plan around them.</div>
+
+    <div class="opt sel"><div class="ic"><img src="ready/goal-muscle-gain.png"></div><span class="nm">Build muscle</span><div class="ck"><i class="ti ti-check" style="font-size:16px"></i></div></div>
+    <div class="opt sel"><div class="ic"><img src="ready/goal-endurance.png"></div><span class="nm">More energy on shift</span><div class="ck"><i class="ti ti-check" style="font-size:16px"></i></div></div>
+    <div class="opt"><div class="ic"><img src="ready/goal-fat-loss.png"></div><span class="nm">Lose fat</span><div class="em"></div></div>
+    <div class="opt sel"><div class="ic"><img src="ready/circadian-sleep.png"></div><span class="nm">Sleep better</span><div class="ck"><i class="ti ti-check" style="font-size:16px"></i></div></div>
+    <div class="opt"><div class="ic"><img src="ready/goal-general-health.png"></div><span class="nm">Stay consistent</span><div class="em"></div></div>
+  </div>
+
+  <div style="position:absolute;bottom:0;left:0;right:0;padding:18px 20px 30px;background:linear-gradient(180deg,transparent,var(--bg) 32%)"><div style="background:var(--lm);color:var(--ink);font-size:16px;font-weight:600;padding:17px;border-radius:15px;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px">Continue<i class="ti ti-arrow-right" style="font-size:18px"></i></div></div>
+</div>
+</body>
+</html>

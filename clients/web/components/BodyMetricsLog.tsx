@@ -213,7 +213,7 @@ export function BodyMetricsLog() {
                     <Button
                         type="submit"
                         disabled={isPending}
-                        className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-6 rounded-xl transition-all shadow-lg shadow-brand-500/20"
+                        className="w-full bg-brand-500 hover:bg-brand-600 text-background font-bold py-6 rounded-xl transition-all shadow-lg shadow-brand-500/20"
                     >
                         {isPending ? (
                             <Loader2 className="h-5 w-5 animate-spin" />

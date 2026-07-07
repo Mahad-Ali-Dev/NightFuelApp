@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '@/theme';
 import { useQuery } from '@tanstack/react-query';
 import { getWeeklyStats } from '@/api/progress';
@@ -25,13 +25,44 @@ function StatCard({ label, value, icon, color }: {
 export function WeeklyRecap() {
   const { colors, typography } = useTheme();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['weekly-stats'],
     queryFn: getWeeklyStats,
     staleTime: 10 * 60 * 1000,
   });
 
-  if (isLoading || !data) {
+  if (isLoading) {
+    return (
+      <View style={[styles.placeholder, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+        <Ionicons name="stats-chart" size={36} color={colors.text.tertiary} />
+        <Text style={[typography.body, { color: colors.text.secondary, marginTop: 8, textAlign: 'center' }]}>
+          Log activity to see your weekly recap.
+        </Text>
+      </View>
+    );
+  }
+
+  if (isError) {
+    return (
+      <View style={[styles.placeholder, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
+        <Ionicons name="cloud-offline-outline" size={36} color={colors.text.tertiary} />
+        <Text style={[typography.body, { color: colors.text.secondary, marginTop: 8, textAlign: 'center' }]}>
+          Couldn't load weekly recap.
+        </Text>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Retry loading weekly recap"
+          onPress={() => refetch()}
+          style={[styles.retryBtn, { borderColor: colors.accent.coral }]}
+          activeOpacity={0.85}
+        >
+          <Text style={[typography.caption, { color: colors.accent.coral, fontWeight: 'bold' }]}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!data) {
     return (
       <View style={[styles.placeholder, { backgroundColor: colors.background.secondary, borderColor: colors.border.default }]}>
         <Ionicons name="stats-chart" size={36} color={colors.text.tertiary} />
@@ -44,10 +75,10 @@ export function WeeklyRecap() {
 
   return (
     <View style={styles.grid}>
-      <StatCard label="Days Logged" value={String(data.daysLogged)} icon="calendar" color={colors.accent.coral} />
-      <StatCard label="Streak" value={`${data.streakDays}d`} icon="flame" color={colors.accent.amber} />
-      <StatCard label="Avg Calories" value={`${Math.round(data.avgCalories)}`} icon="restaurant" color={colors.accent.emerald} />
-      <StatCard label="Avg Score" value={`${Math.round(data.avgScore)}%`} icon="star" color={colors.accent.cyan} />
+      <StatCard label="Days Logged" value={String(data.daysLogged ?? 0)} icon="calendar" color={colors.accent.coral} />
+      <StatCard label="Streak" value={`${data.streakDays ?? 0}d`} icon="flame" color={colors.accent.amber} />
+      <StatCard label="Avg Calories" value={`${Math.round(data.avgCalories || 0)}`} icon="restaurant" color={colors.accent.emerald} />
+      <StatCard label="Avg Score" value={`${Math.round(data.avgScore || 0)}%`} icon="star" color={colors.accent.cyan} />
     </View>
   );
 }
@@ -63,5 +94,9 @@ const styles = StyleSheet.create({
   placeholder: {
     padding: 40, borderRadius: 24, borderWidth: 1, borderStyle: 'dashed',
     alignItems: 'center', justifyContent: 'center',
+  },
+  retryBtn: {
+    marginTop: 14, paddingHorizontal: 20, paddingVertical: 8,
+    borderRadius: 20, borderWidth: 1,
   },
 });

@@ -6,12 +6,11 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
     ChevronLeft, Ruler, Eye, Bell, Volume2, Palette, Globe2,
-    Moon, Sun, Monitor, Shield, Share2, Vibrate, Heart
+    Moon, Sun, Monitor, Share2, Vibrate, Heart
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { userApi } from '@/lib/api';
-import { toast } from 'sonner';
 
 interface Settings {
     units: 'metric' | 'imperial';

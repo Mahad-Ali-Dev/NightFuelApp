@@ -5,11 +5,10 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronLeft, Ruler, Plus, History,
-    TrendingDown, TrendingUp, Minus, Save, User, Loader2
+    TrendingDown, TrendingUp, Minus, Save, Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { logBodyMetrics, getBodyMetrics } from '@/lib/api';
@@ -134,7 +133,7 @@ export default function BodyMeasurementsPage() {
                     {!isAdding && (
                         <Button
                             onClick={() => setIsAdding(true)}
-                            className="bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold"
+                            className="bg-brand-500 hover:bg-brand-600 text-background rounded-xl font-bold"
                         >
                             <Plus size={16} className="mr-1.5" /> Log Check-in
                         </Button>
@@ -186,7 +185,7 @@ export default function BodyMeasurementsPage() {
                                 <Button variant="ghost" onClick={() => setIsAdding(false)} className="text-neutral-400 hover:text-white rounded-xl">
                                     Cancel
                                 </Button>
-                                <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold">
+                                <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-brand-500 hover:bg-brand-600 text-background rounded-xl font-bold">
                                     <Save size={16} className="mr-1.5" /> {saveMutation.isPending ? 'Saving...' : 'Save Measurements'}
                                 </Button>
                             </div>
@@ -218,8 +217,8 @@ export default function BodyMeasurementsPage() {
                                                     <AreaChart data={chartData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
                                                         <defs>
                                                             <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="5%" stopColor="#f97316" stopOpacity={0.3} />
-                                                                <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                                                                <stop offset="5%" stopColor="#a8cc3c" stopOpacity={0.3} />
+                                                                <stop offset="95%" stopColor="#a8cc3c" stopOpacity={0} />
                                                             </linearGradient>
                                                             <linearGradient id="colorWaist" x1="0" y1="0" x2="0" y2="1">
                                                                 <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
@@ -233,7 +232,7 @@ export default function BodyMeasurementsPage() {
                                                             contentStyle={{ backgroundColor: '#171717', borderColor: '#ffffff10', borderRadius: '12px' }}
                                                             itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
                                                         />
-                                                        <Area yAxisId="left" type="monotone" dataKey="weight" name="Weight (kg)" stroke="#f97316" strokeWidth={3} fillOpacity={1} fill="url(#colorWeight)" />
+                                                        <Area yAxisId="left" type="monotone" dataKey="weight" name="Weight (kg)" stroke="#a8cc3c" strokeWidth={3} fillOpacity={1} fill="url(#colorWeight)" />
                                                         <Area yAxisId="right" type="monotone" dataKey="waist" name="Waist (cm)" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#colorWaist)" />
                                                     </AreaChart>
                                                 </ResponsiveContainer>

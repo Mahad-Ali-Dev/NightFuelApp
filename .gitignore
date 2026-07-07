@@ -11,6 +11,8 @@ node_modules
 .env.development.local
 .env.test.local
 .env.production.local
+.env.replicate
+.env.replicate*
 
 # Testing
 coverage
@@ -56,6 +58,10 @@ android/app/build
 *.pkg
 
 # Build / install noise
+# Blanket: never track *.log — runtime/diag/event logs can capture real user PII
+# and secrets (F22: committed diag/prisma-error/event logs leaked emails, UUIDs,
+# health data and the prod DB host). Keep them out of git entirely.
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -77,3 +83,43 @@ val_err.txt
 venv/
 __pycache__/
 *.pyc
+
+# demo-url content-check cache (populated by networked runs; keep the dir, ignore the data)
+scripts/.cache/demo-urls/*
+!scripts/.cache/demo-urls/.gitkeep
+
+
+# Exercise demo videos — large binaries (several GB across muscle groups).
+# Belong on a CDN/bucket, NOT git. The small catalog JSON/xlsx + build scripts
+# ARE tracked. Add videos to git-LFS or a bucket; reference them via videoUrl.
+exercises/**/*.mp4
+exercises/**/*.mov
+exercises/**/*.webm
+exercises/**/*.MP4
+
+replicate-token.txt
+
+app_images/
+_gen-tiles.js
+_gen.log
+_gen2.log
+
+# ── Bloat lockout (2026-07-03): screenshots + generated assets never belong in
+# the repo. Exercise VIDEOS are covered above; add images + the loose dirs here.
+Screenshots/
+current_state/
+docs/store-assets/
+exercises/**/*.png
+exercises/**/*.jpg
+exercises/**/*.jpeg
+exercises/**/*.gif
+exercises/**/*.webp
+
+# The exercise image directories ARE the ~345MB (46M+45M+... per group) — ignore
+# the dirs wholesale (extension patterns missed uppercase/mixed types). The
+# *_catalog.json data stays tracked; the rest of exercises/ is generation scratch.
+exercises/**/images/
+exercises/**/*.bak
+exercises/_*
+exercises/exercises_images_urls/
+exercises/missing-exercise-images.*

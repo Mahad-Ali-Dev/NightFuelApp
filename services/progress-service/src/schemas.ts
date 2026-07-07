@@ -57,6 +57,7 @@ export const statsResponseSchema = z.object({
     avgProteinActual: z.number().nonnegative(),
     avgCarbsActual: z.number().nonnegative(),
     avgFatActual: z.number().nonnegative(),
+    avgHydrationActual: z.number().nonnegative(),
     totalMealsLogged: z.number().int().nonnegative(),
 });
 

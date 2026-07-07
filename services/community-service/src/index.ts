@@ -6,11 +6,27 @@ import { z } from 'zod';
 import fastifyCors from '@fastify/cors';
 import fastifyHelmet from '@fastify/helmet';
 import { CommunityService } from './community.service';
+import { AuthorResolver } from './author-resolver';
+import { RedisEventBus } from '@nightfuel/events';
+import { registerMultipartCollector } from './uploads';
 import routes from './routes';
 
 const envSchema = z.object({
     COMMUNITY_PORT: z.string().default('3013'),
-    JWT_SECRET: z.string(),
+    JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+    USER_SERVICE_URL: z.string().default('http://user-service:3009'),
+    // Comma-separated list of allowed web origins. Optional: when unset we fail
+    // CLOSED with an empty allowlist (no cross-origin browser access) rather than
+    // reflecting the request origin. Never use '*' with credentials.
+    CORS_ORIGIN: z.string().optional(),
+    // F34 #5 / GDPR purge: shared secret the server-to-server-only
+    // /v1/community/internal/* routes verify via the makeInternalAuthGuard
+    // preHandler. Defaulted to '' so boot doesn't break in dev; an empty expected
+    // token fails CLOSED (the guard 404s every request until the token is set).
+    INTERNAL_SERVICE_TOKEN: z.string().default(''),
+    // Social-event publishing (post-liked / commented / followed / created) —
+    // consumed by notification-service for in-app + push fan-out.
+    REDIS_URL: z.string().default('redis://redis:6379'),
 });
 
 const config = loadConfig(envSchema);
@@ -25,15 +41,33 @@ fastify.setValidatorCompiler(validatorCompiler);
 fastify.setSerializerCompiler(serializerCompiler);
 fastify.withTypeProvider<ZodTypeProvider>();
 
+// BUG #3: collect multipart/form-data bodies as a Buffer so POST
+// /v1/community/upload can read the raw image bytes (no @fastify/multipart dep).
+// Registered before routes so the parser is in place when the upload route runs.
+registerMultipartCollector(fastify);
+
 fastify.register(fastifyHelmet);
-fastify.register(fastifyCors, { origin: true });
+// Explicit allowlist from CORS_ORIGIN (comma-separated). When unset the list is
+// empty, so the browser is told no cross-origin is allowed (fail CLOSED). Never
+// '*' and never reflect the request origin.
+const corsOrigins = config.CORS_ORIGIN
+    ? config.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean)
+    : [];
+fastify.register(fastifyCors, { origin: corsOrigins });
 
 fastify.get('/health', async () => {
     return { status: 'ok', service: 'community-service' };
 });
 
-const communityService = new CommunityService(prisma);
-fastify.register(routes, { communityService, jwtSecret: config.JWT_SECRET });
+const authorResolver = new AuthorResolver(config.JWT_SECRET, config.USER_SERVICE_URL);
+// Best-effort social-event bus (additive third arg — see CommunityService ctor).
+const eventBus = new RedisEventBus(config.REDIS_URL);
+const communityService = new CommunityService(prisma, authorResolver, eventBus);
+fastify.register(routes, {
+    communityService,
+    jwtSecret: config.JWT_SECRET,
+    internalServiceToken: config.INTERNAL_SERVICE_TOKEN,
+});
 
 
 const start = async () => {

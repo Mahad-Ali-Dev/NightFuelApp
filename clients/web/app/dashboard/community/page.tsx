@@ -1,14 +1,13 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { communityApi, createCommunityPost, deleteCommunityPost, updateCommunityPost } from '@/lib/api';
 import { useAuth } from '@/context/auth-context';
 import {
     Users, Heart, MessageSquare, Share2,
-    MoreHorizontal, Flame, Trophy, Crown,
+    Flame, Trophy, Crown,
     Image as ImageIcon, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,7 +29,6 @@ function formatTimeAgo(dateStr: string): string {
 }
 
 export default function CommunityFeedPage() {
-    const router = useRouter();
     const queryClient = useQueryClient();
     const { user } = useAuth();
 
@@ -145,7 +143,7 @@ export default function CommunityFeedPage() {
                         <h1 className="text-3xl font-black text-white flex items-center gap-3">
                             <Users className="text-brand-500" /> Community
                         </h1>
-                        <p className="text-neutral-400 text-sm mt-0.5">Connect with other NightFuel athletes</p>
+                        <p className="text-neutral-400 text-sm mt-0.5">Connect with other Zeitra athletes</p>
                     </div>
                     <div className="flex gap-3">
                         <Link href="/dashboard/community/challenges">
@@ -205,7 +203,7 @@ export default function CommunityFeedPage() {
                                         <Button
                                             onClick={handlePost}
                                             disabled={!newPostText.trim() || createPostMutation.isPending}
-                                            className="bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold px-6 py-1 h-8 text-xs disabled:opacity-50"
+                                            className="bg-brand-500 hover:bg-brand-600 text-background rounded-xl font-bold px-6 py-1 h-8 text-xs disabled:opacity-50"
                                         >
                                             {createPostMutation.isPending ? 'Posting...' : 'Post'}
                                         </Button>
@@ -269,7 +267,7 @@ export default function CommunityFeedPage() {
                                         />
                                         <div className="flex justify-end gap-2">
                                             <Button size="sm" variant="ghost" onClick={() => setEditingPostId(null)} className="h-7 text-xs text-neutral-400 hover:text-white">Cancel</Button>
-                                            <Button size="sm" onClick={() => updateMutation.mutate({ postId: post.id, content: editContent })} className="h-7 text-xs bg-brand-500 hover:bg-brand-600 text-white px-4">Save</Button>
+                                            <Button size="sm" onClick={() => updateMutation.mutate({ postId: post.id, content: editContent })} className="h-7 text-xs bg-brand-500 hover:bg-brand-600 text-background px-4">Save</Button>
                                         </div>
                                     </div>
                                 ) : (

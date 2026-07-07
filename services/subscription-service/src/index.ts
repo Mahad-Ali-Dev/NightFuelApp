@@ -16,12 +16,14 @@ import jwt from '@fastify/jwt';
 import rateLimit from '@fastify/rate-limit';
 import { PrismaClient } from './generated/prisma';
 import Redis from 'ioredis';
-import pino from 'pino';
+import type { Logger } from 'pino';
+import { createLogger, sendUnauthorized, registerFastifyErrorHandler } from '@nightfuel/config';
 
 import { SubscriptionService } from './subscription.service';
 import { subscriptionRoutes } from './routes';
 import { setupEventSubscribers, type EventBus } from './events';
 import { registerStripeRoutes } from './stripe';
+import { registerRevenueCatWebhook } from './revenuecat';
 
 
 
@@ -37,22 +39,54 @@ function requireEnv(name: string): string {
   return value;
 }
 
+// JWT_SECRET sets the forgery floor for every access token this service trusts.
+// A weak/short secret would let tokens be forged, so we require >=32 chars and
+// fail CLOSED at boot rather than booting silently on a forgeable secret —
+// mirrors auth-service (the token issuer) and the other services in this group.
+function requireSecret(name: string, minLength: number): string {
+  const value = requireEnv(name);
+  if (value.length < minLength) {
+    throw new Error(`Environment variable ${name} must be at least ${minLength} characters`);
+  }
+  return value;
+}
+
 const PORT = parseInt(process.env['SUB_PORT'] ?? '3010', 10);
-const JWT_SECRET = requireEnv('JWT_SECRET');
+const JWT_SECRET = requireSecret('JWT_SECRET', 32);
 const REDIS_URL = requireEnv('REDIS_URL');
 const LOG_LEVEL = process.env['LOG_LEVEL'] ?? 'info';
 
+// Shared server-to-server token (X-Internal-Token) gating the GDPR purge route
+// DELETE /v1/subscriptions/internal/user/:userId. Read like user-service /
+// plan-service. Defaulted to '' so boot doesn't break in dev; the guard fails
+// CLOSED on an empty token (every internal request 404s) so prod MUST set it.
+const INTERNAL_SERVICE_TOKEN = process.env['INTERNAL_SERVICE_TOKEN'] ?? '';
+
+// Comma-separated list of allowed web origins. When unset we fail CLOSED with an
+// empty allowlist (no cross-origin browser access) rather than falling back to
+// '*' — a wildcard origin with credentials:true is forbidden by the browser and
+// reflects every site's requests. Never '*' with credentials.
+const CORS_ORIGINS = process.env['CORS_ORIGIN']
+  ? process.env['CORS_ORIGIN'].split(',').map((o) => o.trim()).filter(Boolean)
+  : [];
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Logger (pino — used both as the root logger and passed into Fastify)
+// Logger (shared @nightfuel/config createLogger — used both as the root logger
+// and passed into Fastify). Converged onto the single shared factory so the
+// logger contract (level via LOG_LEVEL, ISO timestamp, uppercase level
+// formatter) can't drift back into a hand-rolled per-service construction.
+//
+// The cast reconciles the shared factory's pino `Logger` (compiled against
+// @nightfuel/config's own nested pino copy — the monorepo dep-nesting gotcha)
+// with this service's root-hoisted pino `Logger`, which Fastify's `logger:`
+// option and the SubscriptionService / event-subscriber / stripe params are all
+// typed against. pino's self-referential `child`/`onChild` generics make the two
+// nominally distinct across the module boundary (the nested copy's type omits
+// `msgPrefix`); the runtime object is a real pino logger and fully satisfies
+// every call site. Casting once here keeps all four downstream usages cast-free.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const rootLogger = pino({
-  level: LOG_LEVEL,
-  transport:
-    process.env['NODE_ENV'] !== 'production'
-      ? { target: 'pino-pretty', options: { colorize: true, translateTime: 'SYS:standard' } }
-      : undefined,
-});
+const rootLogger = createLogger('subscription-service') as unknown as Logger;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Redis EventBus adapter
@@ -105,7 +139,7 @@ export async function buildApp(): Promise<ReturnType<typeof Fastify>> {
   });
 
   await app.register(cors, {
-    origin: process.env['CORS_ORIGIN']?.split(',') ?? '*',
+    origin: CORS_ORIGINS,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -130,17 +164,17 @@ export async function buildApp(): Promise<ReturnType<typeof Fastify>> {
   });
 
   // Decorate `fastify.authenticate` — a preHandler that verifies the Bearer token.
+  // The shared `sendUnauthorized` helper (packages/config/src/auth-errors.ts) is
+  // the only place that owns the 401 body — keeping it canonical avoids per-service
+  // drift and stops jwtVerify()'s typed FST_JWT_* error shapes from leaking on the
+  // wire. The real cause is logged via `request.log.error` inside the helper.
   app.decorate(
     'authenticate',
     async function authenticate(request: any, reply: any) {
       try {
         await request.jwtVerify();
       } catch (err) {
-        reply.status(401).send({
-          statusCode: 401,
-          error: 'Unauthorized',
-          message: 'A valid Bearer token is required.',
-        });
+        return sendUnauthorized(reply, request, err);
       }
     },
   );
@@ -183,24 +217,43 @@ export async function buildApp(): Promise<ReturnType<typeof Fastify>> {
   await setupEventSubscribers(eventBus, subscriptionService, rootLogger);
 
   // ── Routes ──────────────────────────────────────────────────────────────────
-  await app.register(subscriptionRoutes, { subscriptionService, eventBus });
+  await app.register(subscriptionRoutes, {
+    subscriptionService,
+    eventBus,
+    internalServiceToken: INTERNAL_SERVICE_TOKEN,
+  });
 
   // ── Stripe Checkout + Webhook routes ────────────────────────────────────────
   registerStripeRoutes(app, subscriptionService, rootLogger);
 
+  // ── RevenueCat webhook (store purchases → backend tier sync) ─────────────────
+  // Authoritative source for mobile IAP: RevenueCat verifies the receipt and
+  // POSTs here so server-enforced Pro features stay in sync. Auth via the
+  // REVENUECAT_WEBHOOK_AUTH shared header secret (fail-closed when unset).
+  registerRevenueCatWebhook(app, subscriptionService, eventBus, rootLogger);
+
   // ── Global error handler ────────────────────────────────────────────────────
-  app.setErrorHandler((error, request, reply) => {
-    const statusCode = error.statusCode ?? 500;
-    rootLogger.error(
-      { err: error, url: request.url, method: request.method },
-      'index: unhandled route error',
-    );
-    reply.status(statusCode).send({
-      statusCode,
-      error: error.name ?? 'Internal Server Error',
-      message: error.message ?? 'An unexpected error occurred.',
-    });
-  });
+  // Converged onto the shared @nightfuel/config redactor (wraps the pure
+  // buildErrorResponse — see __tests__/error-redaction.test.ts for the locked
+  // shape). Contract:
+  //   • The structured logger.error line inside the helper STILL captures the
+  //     full error object server-side (stack, Prisma details, conn-string
+  //     fragments).
+  //   • On the wire we NEVER reflect error.message or error.stack on the 500
+  //     branch — it returns a fixed generic body.
+  //   • On the <500 branch we reflect error.message only for Fastify-generated
+  //     validation errors; every other 4xx gets the generic 'Bad request'.
+  // The cast reconciles this service's pino `Logger` (resolved from the
+  // root-hoisted pino) with the structurally-identical one @nightfuel/config
+  // was compiled against (its own nested pino copy — the monorepo dep-nesting
+  // gotcha). pino's self-referential `child`/`onChild` generics make the two
+  // nominally distinct across the module boundary, so we cast to the helper's
+  // own expected parameter type. Runtime is unchanged — the helper only ever
+  // calls logger.error(obj, msg), which rootLogger fully supports.
+  registerFastifyErrorHandler(
+    app,
+    rootLogger as unknown as Parameters<typeof registerFastifyErrorHandler>[1],
+  );
 
   // ── 404 handler ─────────────────────────────────────────────────────────────
   app.setNotFoundHandler((request, reply) => {

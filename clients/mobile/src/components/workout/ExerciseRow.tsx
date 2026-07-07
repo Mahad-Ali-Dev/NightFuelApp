@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '@/theme';
 
 interface ExerciseRowProps {
     name: string;
@@ -12,7 +13,9 @@ interface ExerciseRowProps {
     onPress?: () => void;
 }
 
-export function ExerciseRow({ name, sets, reps, weight, isCompleted, isActive, onPress }: ExerciseRowProps) {
+function ExerciseRowComponent({ name, sets, reps, weight, isCompleted, isActive, onPress }: ExerciseRowProps) {
+    const { colors } = useTheme();
+    const styles = useMemo(() => makeStyles(colors), [colors]);
     return (
         <TouchableOpacity style={[styles.row, isActive && styles.rowActive]} onPress={onPress} activeOpacity={0.7}>
             <View style={[styles.indicator, isCompleted ? styles.completed : isActive ? styles.active : styles.pending]} />
@@ -23,21 +26,27 @@ export function ExerciseRow({ name, sets, reps, weight, isCompleted, isActive, o
             {isCompleted ? (
                 <Ionicons name="checkmark-circle" size={22} color="#00D4AA" />
             ) : (
-                <Ionicons name="chevron-forward" size={18} color="#484F58" />
+                <Ionicons name="chevron-forward" size={18} color={colors.text.tertiary} />
             )}
         </TouchableOpacity>
     );
 }
 
-const styles = StyleSheet.create({
-    row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#161B22' },
+/**
+ * Memoized: primitive props plus a stable `onPress`. Designed to render in
+ * exercise lists, so skipping unchanged rows on parent re-render is a win.
+ */
+export const ExerciseRow = React.memo(ExerciseRowComponent);
+
+const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
+    row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: colors.background.secondary },
     rowActive: { backgroundColor: '#1C212820' },
     indicator: { width: 4, height: 32, borderRadius: 2, marginRight: 14 },
     completed: { backgroundColor: '#00D4AA' },
-    active: { backgroundColor: '#FF6B35' },
-    pending: { backgroundColor: '#2D3748' },
+    active: { backgroundColor: '#A8CC3C' },
+    pending: { backgroundColor: colors.border.light },
     info: { flex: 1 },
     name: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
-    nameCompleted: { color: '#8B949E', textDecorationLine: 'line-through' },
-    meta: { color: '#8B949E', fontSize: 12, marginTop: 2 },
+    nameCompleted: { color: colors.text.secondary, textDecorationLine: 'line-through' },
+    meta: { color: colors.text.secondary, fontSize: 12, marginTop: 2 },
 });

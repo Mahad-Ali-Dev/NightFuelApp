@@ -229,7 +229,7 @@ export default function AdminDashboardPage() {
                         onClick={() => setTab(t)}
                         className={cn(
                             'px-5 py-2 rounded-lg text-sm font-medium capitalize transition-all',
-                            tab === t ? 'bg-brand-500 text-white shadow' : 'text-neutral-500 hover:text-white',
+                            tab === t ? 'bg-brand-500 text-background shadow' : 'text-neutral-500 hover:text-white',
                         )}
                     >
                         {t}
@@ -529,7 +529,7 @@ export default function AdminDashboardPage() {
                                 notifSent
                                     ? 'bg-green-500/20 border border-green-500/20 text-green-400 cursor-default'
                                     : notifTitle.trim() && notifBody.trim()
-                                        ? 'bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-500/25'
+                                        ? 'bg-brand-500 hover:bg-brand-600 text-background shadow-lg shadow-brand-500/25'
                                         : 'bg-white/5 border border-white/10 text-neutral-600 cursor-not-allowed',
                             )}
                         >
