@@ -237,15 +237,31 @@ export default function PpgCameraView({ collecting, onSample, onError, style }: 
           const pixelStep = Math.max(1, Math.floor(validPixels / READS_PER_FRAME));
           let sum = 0;
           let count = 0;
+          let mn = 255;
+          let mx = 0;
           for (let row = 0; row < height; row += 1) {
             const rowStart = row * stride;
             for (let col = 0; col < width; col += pixelStep) {
-              sum += data[rowStart + col]!;
+              const val = data[rowStart + col]!;
+              sum += val;
               count += 1;
+              if (val < mn) mn = val;
+              if (val > mx) mx = val;
             }
           }
           if (count > 0) {
-            latest.value = sum / count;
+            const meanLuma = sum / count;
+            // FINGER-PRESENCE GATE. A fingertip fully covering the lens+flash blocks
+            // ambient light and fills the frame with one flash-lit surface, so the
+            // frame is bright-ish and fairly UNIFORM (small luma spread). A hand
+            // waved in front, or the camera pointed at a room, is a SCENE — deep
+            // shadows to highlights → a wide spread (max-min ≫ mean). We emit the
+            // sentinel -1 for non-finger frames so the estimator refuses to
+            // fabricate a heart rate from motion/ambient (the reported "reads a fake
+            // BPM when you wave your arm" bug). Threshold is relative to the mean so
+            // it holds across bright/dim torches and lighting.
+            const covered = meanLuma > 12 && mx - mn < meanLuma * 1.2;
+            latest.value = covered ? meanLuma : -1;
             frameTick.value = frameTick.value + 1;
           }
         }

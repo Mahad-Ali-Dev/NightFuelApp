@@ -133,8 +133,17 @@ export default function HeartRateMeasureScreen() {
   const finalize = useCallback(() => {
     // Drop the warm-up window (AGC/white-balance settle) before estimating.
     const start = captureStartRef.current;
-    const usable = samplesRef.current.filter((s) => s.t - start >= WARMUP_MS);
-    const est = estimateBpm(usable);
+    const windowed = samplesRef.current.filter((s) => s.t - start >= WARMUP_MS);
+    // The frame processor emits v = -1 for frames where a fingertip was NOT covering
+    // the lens+flash (uniform-frame gate — see PpgCameraView). If the finger was off
+    // for much of the window, refuse to estimate rather than fabricate a heart rate
+    // from a waved hand / ambient light. Otherwise estimate only from covered frames.
+    const covered = windowed.filter((s) => s.v >= 0);
+    const coverage = windowed.length > 0 ? covered.length / windowed.length : 0;
+    const est: BpmEstimate =
+      coverage < 0.6
+        ? { bpm: null, confidence: 0, quality: 'poor', beats: 0, sampleRateHz: 0 }
+        : estimateBpm(covered);
     setResult(est);
     setPhase('result');
     Haptics.notificationAsync(
@@ -166,7 +175,7 @@ export default function HeartRateMeasureScreen() {
       setProgress(Math.min(1, elapsed / CAPTURE_MS));
       setRemaining(Math.max(0, Math.ceil((CAPTURE_MS - elapsed) / 1000)));
 
-      const recent = samplesRef.current.slice(-150);
+      const recent = samplesRef.current.filter((s) => s.v >= 0).slice(-150);
       if (recent.length >= 8) {
         const fs = estimateSampleRate(recent);
         setWaveform(bandpassFilter(recent.map((s) => s.v), fs).slice(-120));
