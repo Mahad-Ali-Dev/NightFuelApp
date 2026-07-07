@@ -117,7 +117,20 @@ export function registerRevenueCatWebhook(
         return reply.status(401).send({ statusCode: 401, error: 'Unauthorized', message: 'Invalid webhook signature' });
       }
 
-      const body = request.body as { event?: RevenueCatEvent } | undefined;
+      // This service registers a Stripe raw-body content-type parser scoped to any
+      // route whose url contains "/webhook" — which includes THIS path — so
+      // request.body can arrive as a raw Buffer instead of parsed JSON. Handle both.
+      const rawBody = request.body as unknown;
+      let body: { event?: RevenueCatEvent } | undefined;
+      if (Buffer.isBuffer(rawBody)) {
+        try {
+          body = JSON.parse(rawBody.toString('utf8'));
+        } catch {
+          return reply.status(400).send({ statusCode: 400, error: 'Bad Request', message: 'Invalid JSON body' });
+        }
+      } else {
+        body = rawBody as { event?: RevenueCatEvent } | undefined;
+      }
       const event = body?.event;
       const type = event?.type;
       if (!event || !type) {

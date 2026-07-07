@@ -58,6 +58,13 @@ async function buildApp(
   eventBus: ReturnType<typeof buildStubEventBus>,
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
+  // Mirror prod: the Stripe integration registers a raw-body content-type parser
+  // scoped to any route containing "/webhook", so the RevenueCat handler receives
+  // request.body as a Buffer (not parsed JSON). Reproduce that here so the suite
+  // exercises the Buffer path the handler must tolerate.
+  app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, payload, done) => {
+    done(null, payload);
+  });
   // registerRevenueCatWebhook reads REVENUECAT_WEBHOOK_AUTH at CALL time, so the
   // env must be set before this runs.
   registerRevenueCatWebhook(app, svc as any, eventBus as any, noopLogger as any);
