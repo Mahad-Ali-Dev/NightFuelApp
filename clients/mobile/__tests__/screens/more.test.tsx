@@ -150,6 +150,9 @@ function renderScreen() {
 const NAV_ROWS: { label: string; route: string }[] = [
     { label: 'My Profile & Preferences', route: '/(tabs)/profile' },
     { label: 'Manage Subscription', route: '/(settings)/subscription' },
+    { label: 'Health & Vitals', route: '/(performance)' },
+    { label: 'Heart Rate', route: '/(performance)/heart-rate' },
+    { label: 'Sleep & Circadian', route: '/(tabs)/circadian' },
     { label: 'Analytics Dashboard', route: '/(tabs)/analytics' },
     { label: 'Achievements & Badges', route: '/(community)/achievements' },
     { label: 'AI Workout Planner', route: '/(exercises)/ai-planner' },
@@ -214,7 +217,7 @@ describe('More tab — every settings row is functional or honestly disabled', (
         }
 
         // Every navigation row was exercised.
-        expect(NAV_ROWS).toHaveLength(9);
+        expect(NAV_ROWS).toHaveLength(12);
     });
 
     it('the Support rows are real links: pressing each opens the canonical Zeitra url via Linking.openURL (the former silent no-op is fixed)', () => {

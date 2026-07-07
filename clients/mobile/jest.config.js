@@ -70,6 +70,16 @@ module.exports = {
       // the measure screen shows the honest "needs a build" state in the gate.
       [`^react-native-vision-camera${END}`]: '<rootDir>/src/mocks/react-native-vision-camera-stub.js',
       [`^react-native-vision-camera-worklets${END}`]: '<rootDir>/src/mocks/react-native-vision-camera-stub.js',
+      // react-native-reanimated v4's SHIPPED jest mock (`react-native-reanimated/mock`)
+      // is broken: its src/mock.ts imports runtime values from ./index, which eagerly
+      // initializes react-native-worklets whose native part isn't present under jest →
+      // "WorkletsError: Native part of Worklets doesn't seem to be initialized". Seven
+      // suites do `jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'))`,
+      // whose local jest.mock overrides the automatic <rootDir>/__mocks__ manual mock.
+      // Redirect the `/mock` subpath to that same hand-rolled, worklets-free mock so
+      // those suites get a working reanimated without editing each test. (The bare
+      // `react-native-reanimated` import is handled by <rootDir>/__mocks__ automatically.)
+      [`^react-native-reanimated/mock${END}`]: '<rootDir>/src/mocks/reanimated-mock.js',
       [`^@/(.*)${END}`]: '<rootDir>/src/$1',
     };
   })(),
