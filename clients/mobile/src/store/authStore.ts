@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as SecureStore from 'expo-secure-store';
 import * as authApi from '@/api/auth';
+import { configureRevenueCat, logOutRevenueCat } from '@/lib/purchases/revenueCat';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -138,6 +139,10 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
         isLoading: false,
         role: user.role,
       });
+      // Tie the RevenueCat identity to this user so their subscription follows
+      // them across devices and the webhook maps purchases to the backend user.
+      // Fire-and-forget + no-op when the native SDK isn't present (Expo Go/tests).
+      void configureRevenueCat(user.id);
     } catch (error: any) {
       set({ isLoading: false });
       throw new Error(error.response?.data?.error || error.response?.data?.message || error.message);
@@ -170,6 +175,10 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
         isLoading: false,
         role: user.role,
       });
+      // Tie the RevenueCat identity to this user so their subscription follows
+      // them across devices and the webhook maps purchases to the backend user.
+      // Fire-and-forget + no-op when the native SDK isn't present (Expo Go/tests).
+      void configureRevenueCat(user.id);
     } catch (error: any) {
       set({ isLoading: false });
       throw new Error(error.response?.data?.error || error.response?.data?.message || error.message);
@@ -190,6 +199,7 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
       // the device "logged out" from the user's perspective.
     } finally {
       await clearTokens();
+      void logOutRevenueCat();
       set({
         user: null,
         isAuthenticated: false,
@@ -227,6 +237,7 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
           isLoading: false,
           role: user.role,
         });
+        void configureRevenueCat(user.id);
       } catch (err: any) {
         // Distinguish "token bad" from "couldn't reach server / server 5xx".
         // - 401: the apiClient interceptor will have already tried (and failed)

@@ -12,7 +12,8 @@
       "ios": { "simulator": true, "resourceClass": "m-medium" },
       "android": { "resourceClass": "medium" },
       "env": {
-        "EXPO_PUBLIC_APP_ENV": "development"
+        "EXPO_PUBLIC_APP_ENV": "development",
+        "EXPO_PUBLIC_REVENUECAT_KEY": "test_gPeQRprIJNatitkNKsvHdFbzEav"
       }
     },
     "preview": {
@@ -24,7 +25,8 @@
       "env": {
         "EXPO_PUBLIC_NF_API_BASE_URL": "https://staging.api.zeitra.app",
         "EXPO_PUBLIC_APP_ENV": "preview",
-        "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false"
+        "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false",
+        "EXPO_PUBLIC_REVENUECAT_KEY": "test_gPeQRprIJNatitkNKsvHdFbzEav"
       }
     },
     "production": {
@@ -37,7 +39,8 @@
       "env": {
         "EXPO_PUBLIC_NF_API_BASE_URL": "https://api.zeitra.app",
         "EXPO_PUBLIC_APP_ENV": "production",
-        "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false"
+        "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false",
+        "EXPO_PUBLIC_REVENUECAT_KEY": "test_gPeQRprIJNatitkNKsvHdFbzEav"
       }
     },
     "apk": {
@@ -48,7 +51,8 @@
       "env": {
         "EXPO_PUBLIC_NF_API_BASE_URL": "https://api.zeitra.app",
         "EXPO_PUBLIC_APP_ENV": "production",
-        "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false"
+        "EXPO_PUBLIC_API_STRIP_V1_PREFIX": "false",
+        "EXPO_PUBLIC_REVENUECAT_KEY": "test_gPeQRprIJNatitkNKsvHdFbzEav"
       }
     }
   },
