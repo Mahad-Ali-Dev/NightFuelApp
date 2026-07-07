@@ -14,7 +14,7 @@
  *   - LOADING branch: isLoading → the skeleton is shown and NEITHER the plan grid
  *     ("Choose Your Plan") NOR the error surface is rendered;
  *   - ERROR branch: getStatus failed (isError) → the screen shows the
- *     "Couldn't load your subscription" surface whose "Try Again" CtaButton calls
+ *     "Couldn’t load your subscription" surface whose "Try Again" CtaButton calls
  *     the query's `refetch` — and the Free-defaulted plan grid is NOT rendered
  *     (the bug this item fixes: an undefined `sub` must NOT silently fall back to
  *     Free-as-current and nudge a paying user to re-purchase);
@@ -111,6 +111,13 @@ jest.mock('@/lib/sentry', () => ({
   captureException: jest.fn(),
 }));
 
+// Billing now runs through RevenueCat; the screen imports restorePurchases from
+// the isolated purchases module. Mock it so the native react-native-purchases SDK
+// never loads under jest (Restore isn't exercised in these read-side tests).
+jest.mock('@/lib/purchases/revenueCat', () => ({
+  restorePurchases: jest.fn().mockResolvedValue(false),
+}));
+
 // Decorative glyphs → plain <Text> surfacing the icon name (mirrors the suite).
 jest.mock('@expo/vector-icons', () => {
   const { Text: RNText } = require('react-native');
@@ -137,6 +144,15 @@ jest.mock('expo-linear-gradient', () => {
 jest.mock('@/components/SafeBlurView', () => {
   const RN = require('react-native');
   return { SafeBlurView: ({ children, ...props }: any) => <RN.View {...props}>{children}</RN.View> };
+});
+
+// PressableScale imports react-native-reanimated (worklets) at module load, which
+// throws a WorkletsError under jest (native part uninitialized). Stub it to a
+// plain Pressable — the manage screen's Restore / Manage / terms controls stay
+// pressable and the reanimated import graph never loads. Mirrors food-photo.test.
+jest.mock('@/components/ui/PressableScale', () => {
+  const RN = require('react-native');
+  return { PressableScale: ({ children, ...props }: any) => <RN.Pressable {...props}>{children}</RN.Pressable> };
 });
 
 // ── Imports (run AFTER the hoisted mocks above) ──────────────────────────────
@@ -183,7 +199,7 @@ describe('SubscriptionScreenContent', () => {
     // While loading we render NEITHER the loaded plan grid…
     expect(screen.queryByText('Choose Your Plan')).toBeNull();
     // …NOR the error surface / its retry control.
-    expect(screen.queryByText("Couldn't load your subscription")).toBeNull();
+    expect(screen.queryByText("Couldn’t load your subscription")).toBeNull();
     expect(screen.queryByText('Try Again')).toBeNull();
   });
 
@@ -194,7 +210,7 @@ describe('SubscriptionScreenContent', () => {
     renderScreen();
 
     // The honest connection-error copy is present…
-    expect(screen.getByText("Couldn't load your subscription")).toBeTruthy();
+    expect(screen.getByText("Couldn’t load your subscription")).toBeTruthy();
 
     // …and CRUCIALLY the Free-defaulted plan grid is NOT rendered. This is the
     // bug being fixed: a failed getStatus left `sub` undefined and silently
@@ -209,32 +225,40 @@ describe('SubscriptionScreenContent', () => {
     // The retry control is the coral CtaButton (accessibilityRole "button", a11y
     // label "Retry loading your subscription status"), wired to the query's
     // refetch — pressing it calls refetch exactly once, and only that.
-    const retry = screen.getByRole('button', { name: 'Retry loading your subscription status' });
+    const retry = screen.getByRole('button', { name: 'Try again' });
     expect(retry).toBeTruthy();
 
     fireEvent.press(retry);
     expect(mockRefetch).toHaveBeenCalledTimes(1);
   });
 
-  // ── (c) LOADED — resolved tier 'PRO' shows the Pro "CURRENT PLAN" badge ─────
-  test('resolved { tier: "PRO" } → plan grid renders with the Pro CURRENT PLAN badge', () => {
-    mockStatus.data = { tier: 'PRO', active: true, features: [] };
+  // ── (c) LOADED (PRO) — current-plan hero + ACTIVE status + Manage CTA ───────
+  test('resolved { tier: "PRO", active: true } → Pro plan, ACTIVE status, Manage CTA', () => {
+    mockStatus.data = { tier: 'PRO', active: true };
 
     renderScreen();
 
-    // The loaded grid (not the loading/error branch) is shown. The plans
-    // section header is tier-aware: a PAID tier (PRO here) shows "Change Plan"
-    // (a free user would see "Choose Your Plan"), so assert the paid-tier copy.
-    expect(screen.getByText('Change Plan')).toBeTruthy();
-    // …the error surface is absent…
-    expect(screen.queryByText("Couldn't load your subscription")).toBeNull();
-    // …and the active tier (PRO) surfaces its "CURRENT PLAN" badge. Because the
-    // server says PRO, the Free card is NOT the active one (it would show its
-    // "Downgrade to Free" CTA instead), proving the tier flows from the resolved
-    // status, not the 'free' default.
-    expect(screen.getByText('CURRENT PLAN')).toBeTruthy();
-    // The recommended badge is suppressed on the active card, so the only badge
-    // is CURRENT PLAN (exactly one).
-    expect(screen.getAllByText('CURRENT PLAN').length).toBe(1);
+    // The current-plan hero shows the Pro plan name…
+    expect(screen.getByText('Pro')).toBeTruthy();
+    // …with the ACTIVE status pill (paid + active)…
+    expect(screen.getByText('ACTIVE')).toBeTruthy();
+    // …and the primary action is "Manage Subscription" (a paying user manages,
+    // never re-purchases): the "Upgrade to Pro" CTA is NOT shown.
+    expect(screen.getByText('Manage Subscription')).toBeTruthy();
+    expect(screen.queryByText('Upgrade to Pro')).toBeNull();
+    // …and the error surface is absent.
+    expect(screen.queryByText("Couldn’t load your subscription")).toBeNull();
+  });
+
+  // ── (d) LOADED (FREE) — the upgrade CTA routes to the RevenueCat paywall ────
+  test('resolved { tier: "FREE" } → Free plan + "Upgrade to Pro" CTA', () => {
+    mockStatus.data = { tier: 'FREE', active: false };
+
+    renderScreen();
+
+    expect(screen.getByText('Free')).toBeTruthy();
+    expect(screen.getByText('FREE')).toBeTruthy();
+    expect(screen.getByText('Upgrade to Pro')).toBeTruthy();
+    expect(screen.queryByText('Manage Subscription')).toBeNull();
   });
 });
